@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Box, Backdrop } from '@mui/material';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -24,23 +24,18 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
   };
   
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Mobile Backdrop */}
-      {isMobile && isSidebarOpen && (
-        <Backdrop
-          open={true}
-          onClick={closeAllMenus}
-          sx={{
-            zIndex: (theme) => theme.zIndex.drawer - 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          }}
-        />
-      )}
+    <Box sx={{ 
+      display: 'flex', 
+      height: '100vh', 
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
+      {/* Backdrop: Removed to avoid duplicate overlays; Drawer provides its own backdrop on mobile. */}
 
       {/* Left Vertical Navigation */}
       
-  {/* Sidebar */}
-  {showSidebar && (isMobile || (!isMobile && isSidebarOpen)) && <Sidebar />}
+      {/* Sidebar - Mobile: Drawer ควบคุม open ด้วย isSidebarOpen, Desktop: แสดงถ้า isSidebarOpen = true */}
+      {showSidebar && <Sidebar />}
       {customSidebar}
       
       {/* Main Content Area */}
@@ -51,6 +46,7 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
         ml: getMarginLeft(),
         transition: 'margin-left 0.3s ease',
         minWidth: 0, // ป้องกัน overflow ใน mobile
+        overflow: 'hidden', // ป้องกัน horizontal scroll
       }}>
         <Header />
         
@@ -62,6 +58,8 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
             overflow: 'auto',
             minHeight: 0, // ป้องกัน layout ยืด
             pt: { xs: '56px', sm: '64px' },
+            // เพิ่ม webkit scrolling สำหรับ iOS
+            WebkitOverflowScrolling: 'touch',
           }}
         >
           {/* Breadcrumbs */}

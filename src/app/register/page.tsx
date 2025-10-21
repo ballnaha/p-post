@@ -126,13 +126,13 @@ export default function RegisterPage() {
         },
       }}
     >
-      <Box sx={{ width: '100%', maxWidth: 620, px: 3, position: 'relative', zIndex: 1 }}>
+      <Box sx={{ width: '100%', maxWidth: 720, px: 3, position: 'relative', zIndex: 1 }}>
         {/* Register Form */}
         <Paper
           elevation={0}
           sx={{
             p: { xs: 3, sm: 5 },
-            borderRadius: 4,
+            borderRadius: 1,
             backgroundColor: alpha('#ffffff', 0.9),
             backdropFilter: 'blur(20px)',
             border: `1px solid ${alpha('#ffffff', 0.3)}`,
@@ -178,7 +178,7 @@ export default function RegisterPage() {
                 fontSize: '0.95rem'
               }}
             >
-              สร้างบัญชีผู้ใช้สำหรับระบบ Logistic
+              สร้างบัญชีผู้ใช้สำหรับระบบ
             </Typography>
           </Box>
 
@@ -207,7 +207,7 @@ export default function RegisterPage() {
                   disabled={loading}
                   sx={{ 
                     '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
+                      borderRadius: 1,
                       backgroundColor: alpha('#ffffff', 0.8),
                       backdropFilter: 'blur(8px)',
                       '& fieldset': {
@@ -242,7 +242,7 @@ export default function RegisterPage() {
                   disabled={loading}
                   sx={{ 
                     '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
+                      borderRadius: 1,
                       backgroundColor: alpha('#ffffff', 0.8),
                       backdropFilter: 'blur(8px)',
                       '& fieldset': {
@@ -278,7 +278,7 @@ export default function RegisterPage() {
               sx={{ 
                 mb: 2.5,
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: alpha('#ffffff', 0.8),
                   backdropFilter: 'blur(8px)',
                   '& fieldset': {
@@ -315,7 +315,7 @@ export default function RegisterPage() {
               sx={{ 
                 mb: 2.5,
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: alpha('#ffffff', 0.8),
                   backdropFilter: 'blur(8px)',
                   '& fieldset': {
@@ -352,7 +352,7 @@ export default function RegisterPage() {
               sx={{ 
                 mb: 2.5,
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: alpha('#ffffff', 0.8),
                   backdropFilter: 'blur(8px)',
                   '& fieldset': {
@@ -393,7 +393,7 @@ export default function RegisterPage() {
               sx={{ 
                 mb: 3.5,
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: alpha('#ffffff', 0.8),
                   backdropFilter: 'blur(8px)',
                   '& fieldset': {

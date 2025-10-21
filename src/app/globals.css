@@ -124,9 +124,25 @@ body {
 .MuiDialog-root,
 .MuiMenu-root,
 .MuiPopover-root,
-button:hover,
-a:hover {
+.MuiCard-root,
+.MuiPaper-root,
+button,
+a {
   transition: all 0.2s ease !important;
+}
+
+/* Ensure smooth scrolling on mobile */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for iOS scroll issues */
+body {
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 a {

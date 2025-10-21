@@ -1,5 +1,5 @@
 'use client';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -26,15 +26,24 @@ import {
   Close as CloseIcon,
   ExpandLess,
   ExpandMore,
+  CloudUpload as ImportIcon,
+  Badge as BadgeIcon,
 } from '@mui/icons-material';
 import { useNavigation } from './NavigationContext';
 import { usePathname, useRouter } from 'next/navigation';
 const drawerWidth = 250;
 
 const Sidebar: React.FC = () => {
-  const { isMobile, isSidebarOpen, isSidebarCollapsed, closeAllMenus } = useNavigation();
+  const { isMobile, isSidebarOpen, isSidebarCollapsed, closeAllMenus, isTransitioningToMobile } = useNavigation();
   const router = useRouter();
   const pathname = usePathname();
+
+  // ปิด sidebar อัตโนมัติเมื่อเปลี่ยนหน้าใน mobile
+  useEffect(() => {
+    if (isMobile && isSidebarOpen) {
+      closeAllMenus();
+    }
+  }, [pathname]); // เมื่อ pathname เปลี่ยน
 
   type MenuItem = {
     label: string;
@@ -55,6 +64,23 @@ const Sidebar: React.FC = () => {
       title: 'Main', key: 'group-main',
       items: [
         { label: 'Dashboard', href: '/', icon: <HomeIcon sx={{ fontSize: 20 }} />, key: 'dashboard' },
+      ]
+    },
+    {
+      title: 'Police Personnel', key: 'group-personnel',
+      items: [
+        { 
+          label: 'Personnel List', 
+          href: '/police-personnel', 
+          icon: <BadgeIcon sx={{ fontSize: 20 }} />, 
+          key: 'police-list' 
+        },
+        { 
+          label: 'Import Data', 
+          href: '/police-personnel/import', 
+          icon: <ImportIcon sx={{ fontSize: 20 }} />, 
+          key: 'police-import' 
+        },
       ]
     },
     {
@@ -207,9 +233,11 @@ const Sidebar: React.FC = () => {
       <Drawer
         variant="temporary"
         anchor="left"
-        open={isSidebarOpen}
+        open={isSidebarOpen && !isTransitioningToMobile}
         onClose={closeAllMenus}
-        ModalProps={{ keepMounted: true }}
+        // Don't keep modal mounted and don't let Modal manage body scroll
+        ModalProps={{ keepMounted: false, disableScrollLock: true }}
+        hideBackdrop={false}
         sx={{
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
@@ -229,6 +257,11 @@ const Sidebar: React.FC = () => {
   }
 
   // Desktop: ใช้ Fixed position
+  // ซ่อนถ้า sidebar ปิด (isSidebarOpen = false)
+  if (!isSidebarOpen) {
+    return null;
+  }
+
   return (
     <Box
       sx={{

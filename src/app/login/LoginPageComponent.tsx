@@ -121,7 +121,7 @@ function LoginPage() {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundImage: 'url(/images/login_bg2.png)',
+              backgroundImage: 'url(/images/bg_login_1.png)',
               backgroundPosition: 'center',
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
@@ -253,7 +253,7 @@ function LoginPage() {
               sx={{ 
                 mb: 2.5,
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: alpha('#ffffff', 0.8),
                   backdropFilter: 'blur(8px)',
                   '& fieldset': {
@@ -289,7 +289,7 @@ function LoginPage() {
               sx={{ 
                 mb: 3.5,
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: alpha('#ffffff', 0.8),
                   backdropFilter: 'blur(8px)',
                   '& fieldset': {
@@ -424,7 +424,7 @@ function LoginPage() {
               fontWeight: 400
             }}
             >
-              © 2025 Poonsub Can Logistic Record
+              © 2025 Police Position Management System.
           </Typography>
         </Box>
         </Box>

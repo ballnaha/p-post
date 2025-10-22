@@ -11,28 +11,28 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  email     String?  @unique
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
+  email     String?   @unique
   password  String
   firstName String?
   lastName  String?
-  role      String   @default("user")
-  isActive  Boolean  @default(true)
+  role      String    @default("user")
+  isActive  Boolean   @default(true)
   lastLogin DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 // POS Code Master (ข้อมูล Master รหัสตำแหน่ง)
 model PosCodeMaster {
-  id                    Int       @id @map("pos_code_id")           // รหัสตำแหน่ง
-  name                  String    @map("pos_code_name")             // ชื่อตำแหน่ง
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  
+  id        Int      @id @map("pos_code_id") // รหัสตำแหน่ง
+  name      String   @map("pos_code_name") // ชื่อตำแหน่ง
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relation
-  personnel             PolicePersonnel[]
+  personnel PolicePersonnel[]
 
   @@map("pos_code_master")
 }
@@ -42,44 +42,44 @@ model PosCodeMaster {
 // - ตำแหน่งที่มีคนดำรง: มีชื่อ-สกุล + เลขบัตรประชาชน
 // - ตำแหน่งว่าง: มีข้อมูลตำแหน่ง แต่ไม่มีชื่อคน
 model PolicePersonnel {
-  id                    String    @id @default(cuid())
-
+  id             String         @id @default(cuid())
+  noId           Int?           @map("no_id")
   // ข้อมูลตำแหน่ง (Position Information)
-  posCodeId             Int?      @map("pos_code")                  // รหัสตำแหน่ง (FK to PosCodeMaster)
-  posCodeMaster         PosCodeMaster? @relation(fields: [posCodeId], references: [id])
-  position              String?                                     // ตำแหน่ง
-  positionNumber        String?   @map("position_number")           // เลขตำแหน่ง
-  unit                  String?                                     // หน่วย
-  actingAs              String?   @map("acting_as")                 // ทำหน้าที่
-  
+  posCodeId      Int?           @map("pos_code") // รหัสตำแหน่ง (FK to PosCodeMaster)
+  posCodeMaster  PosCodeMaster? @relation(fields: [posCodeId], references: [id])
+  position       String? // ตำแหน่ง
+  positionNumber String?        @map("position_number") // เลขตำแหน่ง
+  unit           String? // หน่วย
+  actingAs       String?        @map("acting_as") // ทำหน้าที่
+
   // ข้อมูลบุคคลที่ดำรงตำแหน่ง (Person Information - Optional for vacant positions)
-  seniority             Int?      @map("seniority")                // อาวุโส
-  rank                  String?                                     // ยศ
-  fullName              String?   @map("full_name")                 // ชื่อสกุล (optional - ว่างถ้าไม่มีคนดำรง)
-  nationalId            String?   @map("national_id")               // เลขบัตรประชาชน (optional)
-  birthDate             DateTime? @map("birth_date")                // วันเกิด
-  age                   Int?                                        // อายุ
-  education             String?                                     // คุณวุฒิ
-  
+  seniority  String? @map("seniority") // อาวุโส
+  rank       String? // ยศ
+  fullName   String? @map("full_name") // ชื่อสกุล (optional - ว่างถ้าไม่มีคนดำรง)
+  nationalId String? @map("national_id") // เลขบัตรประชาชน (optional)
+  birthDate  String? @map("birth_date") // วันเกิด
+  age        String? // อายุ
+  education  String? // คุณวุฒิ
+
   // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
-  lastAppointment       DateTime? @map("last_appointment")          // แต่งตั้งครั้งสุดท้าย
-  currentRankSince      DateTime? @map("current_rank_since")        // ระดับนี้เมื่อ
-  enrollmentDate        DateTime? @map("enrollment_date")           // บรรจุ
-  retirementDate        DateTime? @map("retirement_date")           // เกษียณ
-  yearsOfService        Int?      @map("years_of_service")          // จำนวนปี
-  
+  lastAppointment  String? @map("last_appointment") // แต่งตั้งครั้งสุดท้าย
+  currentRankSince String? @map("current_rank_since") // ระดับนี้เมื่อ
+  enrollmentDate   String? @map("enrollment_date") // บรรจุ
+  retirementDate   String? @map("retirement_date") // เกษียณ
+  yearsOfService   String? @map("years_of_service") // จำนวนปี
+
   // ข้อมูลการฝึกอบรม (Training Information)
-  trainingLocation      String?   @map("training_location")         // ตท. (ตำแหน่งการฝึกอบรม)
-  trainingCourse        String?   @map("training_course")           // นรต. (นายร้อยตำรวจ)
-  
+  trainingLocation String? @map("training_location") // ตท. (ตำแหน่งการฝึกอบรม)
+  trainingCourse   String? @map("training_course") // นรต. (นายร้อยตำรวจ)
+
   // หมายเหตุ
-  notes                 String?   @db.Text                          // หมายเหตุ/เงื่อนไข
-  
+  notes String? @db.Text // หมายเหตุ/เงื่อนไข
+
   // Metadata
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  createdBy             String?   @map("created_by")                // ผู้สร้างข้อมูล
-  updatedBy             String?   @map("updated_by")                // ผู้แก้ไขข้อมูล
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by") // ผู้สร้างข้อมูล
+  updatedBy String?  @map("updated_by") // ผู้แก้ไขข้อมูล
 
   @@index([posCodeId])
   @@index([nationalId])

@@ -75,9 +75,17 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: user }, { status: 201 });
   } catch (e: any) {
+    console.error('Create user error:', e);
     if (e.code === 'P2002') {
-      return NextResponse.json({ error: 'Username or email already exists' }, { status: 409 });
+      // ตรวจสอบว่า field ไหนที่ซ้ำ
+      if (e.meta?.target?.includes('username')) {
+        return NextResponse.json({ error: 'Username นี้ถูกใช้งานแล้ว กรุณาเลือก Username อื่น' }, { status: 409 });
+      } else if (e.meta?.target?.includes('email')) {
+        return NextResponse.json({ error: 'อีเมลนี้ถูกใช้งานแล้ว' }, { status: 409 });
+      } else {
+        return NextResponse.json({ error: 'ข้อมูลนี้ถูกใช้งานแล้ว' }, { status: 409 });
+      }
     }
-    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+    return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการสร้างผู้ใช้งาน' }, { status: 500 });
   }
 }

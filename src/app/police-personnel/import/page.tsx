@@ -22,6 +22,7 @@ import {
   Divider,
   IconButton,
   Collapse,
+  CircularProgress,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -40,6 +41,7 @@ export default function ImportPolicePersonnelPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [showInstructions, setShowInstructions] = useState(true);
+  const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,6 +71,7 @@ export default function ImportPolicePersonnelPage() {
     setLoading(true);
     setError('');
     setResult(null);
+    setProgress({ current: 0, total: 0, percentage: 0 });
 
     try {
       const formData = new FormData();
@@ -79,16 +82,59 @@ export default function ImportPolicePersonnelPage() {
         body: formData,
       });
 
-      const data = await response.json();
+      // อ่าน response เป็น stream เพื่อรับ progress updates
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      if (data.success) {
-        setResult(data.results);
-        setFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.trim().startsWith('data: ')) {
+              try {
+                const jsonStr = line.substring(6); // Remove 'data: ' prefix
+                const data = JSON.parse(jsonStr);
+                
+                if (data.type === 'progress') {
+                  setProgress({
+                    current: data.current,
+                    total: data.total,
+                    percentage: Math.round((data.current / data.total) * 100)
+                  });
+                } else if (data.type === 'complete') {
+                  setResult(data.results);
+                  setFile(null);
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                  }
+                } else if (data.type === 'error') {
+                  setError(data.error || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
+                }
+              } catch (e) {
+                console.error('Error parsing progress data:', e);
+              }
+            }
+          }
         }
       } else {
-        setError(data.error || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
+        // Fallback to regular JSON response
+        const data = await response.json();
+        if (data.success) {
+          setResult(data.results);
+          setFile(null);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        } else {
+          setError(data.error || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
@@ -115,7 +161,7 @@ export default function ImportPolicePersonnelPage() {
 
   return (
     <Layout>
-      <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+      <Box sx={{ mx: 'auto' }}>
         {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
@@ -164,18 +210,30 @@ export default function ImportPolicePersonnelPage() {
               <Divider sx={{ my: 2 }} />
 
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                รูปแบบคอลัมน์ใน Excel:
+                รูปแบบคอลัมน์ใน Excel (เรียงตามลำดับที่กำหนด):
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 {[
-                  'รหัสตำแหน่ง', 'ตำแหน่ง', 'เลขตำแหน่ง', 'หน่วย', 'ทำหน้าที่',
-                  'อาวุโส', 'ยศ', 'ชื่อ-สกุล', 'เลขบัตรประชาชน', 'วันเกิด',
-                  'อายุ', 'คุณวุฒิ', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ',
-                  'เกษียณ', 'จำนวนปี', 'ตท', 'นรต', 'หมายเหตุ'
-                ].map((column) => (
-                  <Chip key={column} label={column} size="small" variant="outlined" />
+                  'อาวุโส', 'ยศ', 'ชื่อ สกุล','ID', 'POSCODE', 'ตำแหน่ง', 
+                  'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ', 
+                  'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ', 
+                  'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข'
+                ].map((column, index) => (
+                  <Chip 
+                    key={column} 
+                    label={`${index + 1}. ${column}`} 
+                    size="small" 
+                    variant="outlined" 
+                  />
                 ))}
               </Box>
+              
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>หมายเหตุ:</strong> กรุณาเรียงคอลัมน์ในไฟล์ Excel ตามลำดับที่แสดงข้างต้น 
+                  (1-20) เพื่อให้การนำเข้าข้อมูลเป็นไปอย่างถูกต้อง
+                </Typography>
+              </Alert>
             </Collapse>
           </CardContent>
         </Card>
@@ -240,12 +298,30 @@ export default function ImportPolicePersonnelPage() {
             </Box>
           )}
 
+          {/* Progress Bar */}
           {loading && (
             <Box sx={{ mt: 3 }}>
-              <LinearProgress />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-                กำลังประมวลผลข้อมูล กรุณารอสักครู่...
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <CircularProgress size={24} />
+                <Typography variant="body2" color="text.secondary">
+                  กำลังประมวลผล...
+                </Typography>
+              </Box>
+              <LinearProgress 
+                variant={progress.total > 0 ? "determinate" : "indeterminate"} 
+                value={progress.percentage} 
+                sx={{ height: 8, borderRadius: 1 }}
+              />
+              {progress.total > 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    ประมวลผลแล้ว: {progress.current.toLocaleString()} / {progress.total.toLocaleString()} รายการ
+                  </Typography>
+                  <Typography variant="body2" color="primary" fontWeight={600}>
+                    {progress.percentage}%
+                  </Typography>
+                </Box>
+              )}
             </Box>
           )}
         </Paper>

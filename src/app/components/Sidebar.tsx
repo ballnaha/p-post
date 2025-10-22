@@ -84,16 +84,10 @@ const Sidebar: React.FC = () => {
       ]
     },
     {
-      title: 'Access', key: 'group-access',
+      title: 'Admin', key: 'group-admin',
       items: [
-        { label: 'Users', href: '/users', icon: <PersonAddIcon sx={{ fontSize: 20 }} />, key: 'users' },
-        {
-          label: 'Auth', icon: <LoginIcon sx={{ fontSize: 20 }} />, key: 'auth',
-          children: [
-            { label: 'Login', href: '/login', icon: <LoginIcon sx={{ fontSize: 18 }} />, key: 'auth-login' },
-            { label: 'Register', href: '/register', icon: <PersonAddIcon sx={{ fontSize: 18 }} />, key: 'auth-register' },
-          ]
-        },
+        { label: 'จัดการผู้ใช้งาน', href: '/users', icon: <PersonAddIcon sx={{ fontSize: 20 }} />, key: 'users' },
+        
       ]
     },
     {
@@ -120,7 +114,14 @@ const Sidebar: React.FC = () => {
   const toggleExpand = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   const isActive = (href?: string) => !!href && pathname === href;
-  const isParentActive = (item: MenuItem) => item.children?.some(c => pathname === c.href) || (item.href ? pathname.startsWith(item.href) : false);
+  const isParentActive = (item: MenuItem) => {
+    // ถ้ามี children ให้เช็คว่า child ตัวใดตัวหนึ่งตรงกับ pathname
+    if (item.children?.some(c => pathname === c.href)) {
+      return true;
+    }
+    // ถ้าไม่มี children และมี href ให้เช็คว่าตรงกัน exact
+    return false;
+  };
 
   // สร้าง content สำหรับ sidebar
   const sidebarContent = (
@@ -130,7 +131,7 @@ const Sidebar: React.FC = () => {
       <Box sx={{ flex: 1, overflow: 'auto', px: 1, pb: 2 , pt: 2}}>
         {menuGroups.map((group, gi) => (
           <Box key={group.key} sx={{ mb: 1.5 }}>
-            <Typography variant="overline" sx={{ color: '#9CA3AF', px: 1, letterSpacing: 0.8 }}>
+            <Typography variant="overline" sx={{ color: '#9CA3AF', px: 1, letterSpacing: 0.8, fontSize: '0.7rem' }}>
               {group.title}
             </Typography>
             <List sx={{ mt: 0.5 }}>
@@ -155,17 +156,21 @@ const Sidebar: React.FC = () => {
                     borderRadius: 2,
                     mx: 1,
                     mb: hasChildren ? 0 : 0.5,
-                    '&:hover': { backgroundColor: '#F9FAFB' },
-                    '&.Mui-selected': { backgroundColor: '#EEF2FF', border: '1px solid #E0E7FF' },
-                    '&.Mui-selected:hover': { backgroundColor: '#E5E7FF' },
+                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+                    '&.Mui-selected': { 
+                      backgroundColor: 'rgba(99, 102, 241, 0.15)', 
+                      borderLeft: '3px solid #6366F1',
+                      paddingLeft: '13px',
+                    },
+                    '&.Mui-selected:hover': { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
                   }}
                 >
-                  <ListItemIcon sx={{ minWidth: 36, color: active ? '#4F46E5' : '#9CA3AF' }}>
+                  <ListItemIcon sx={{ minWidth: 36, color: active ? '#818CF8' : '#9CA3AF' }}>
                     {item.icon}
                   </ListItemIcon>
                   <ListItemText
                     primary={
-                      <Typography sx={{ fontSize: 14, color: active ? '#111827' : '#374151' }}>
+                      <Typography sx={{ fontSize: 14, color: active ? '#E5E7EB' : '#D1D5DB', fontWeight: active ? 700 : 500 }}>
                         {item.label}
                       </Typography>
                     }
@@ -175,7 +180,7 @@ const Sidebar: React.FC = () => {
 
                 {hasChildren && (
                   <Collapse in={open} timeout="auto" unmountOnExit>
-                    <List component="div" disablePadding sx={{ mb: 0.5, borderLeft: '1px dashed #E5E7EB', ml: 2 }}>
+                    <List component="div" disablePadding sx={{ mb: 0.5, borderLeft: '1px dashed #4B5563', ml: 2 }}>
                       {item.children!.map((child) => {
                         const childActive = isActive(child.href);
                         return (
@@ -192,19 +197,23 @@ const Sidebar: React.FC = () => {
                               borderRadius: 2,
                               mx: 2,
                               mb: 0.5,
-                              '&:hover': { backgroundColor: '#F9FAFB' },
-                              '&.Mui-selected': { backgroundColor: '#EEF2FF', border: '1px solid #E0E7FF' },
-                              '&.Mui-selected:hover': { backgroundColor: '#E5E7FF' },
+                              '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+                              '&.Mui-selected': { 
+                                backgroundColor: 'rgba(99, 102, 241, 0.15)', 
+                                borderLeft: '3px solid #6366F1',
+                                paddingLeft: '13px',
+                              },
+                              '&.Mui-selected:hover': { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
                             }}
                           >
                             {child.icon && (
-                              <ListItemIcon sx={{ minWidth: 32, color: childActive ? '#4F46E5' : '#9CA3AF' }}>
+                              <ListItemIcon sx={{ minWidth: 32, color: childActive ? '#818CF8' : '#9CA3AF' }}>
                                 {child.icon}
                               </ListItemIcon>
                             )}
                             <ListItemText
                               primary={
-                                <Typography sx={{ fontSize: 13, color: childActive ? '#111827' : '#4B5563' }}>
+                                <Typography sx={{ fontSize: 13, color: childActive ? '#E5E7EB' : '#D1D5DB', fontWeight: childActive ? 700 : 500 }}>
                                   {child.label}
                                 </Typography>
                               }
@@ -219,7 +228,7 @@ const Sidebar: React.FC = () => {
             );
               })}
             </List>
-            {gi < menuGroups.length - 1 && <Divider sx={{ my: 1.25 }} />}
+            {gi < menuGroups.length - 1 && <Divider sx={{ my: 1.25, backgroundColor: '#374151' }} />}
           </Box>
         ))}
       </Box>
@@ -242,9 +251,9 @@ const Sidebar: React.FC = () => {
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: drawerWidth,
-            backgroundColor: '#ffffff',
-            color: '#111827',
-            borderRight: '1px solid #e5e7eb',
+            backgroundColor: '#1F2937',
+            color: '#F9FAFB',
+            borderRight: '1px solid #374151',
             display: 'flex',
             flexDirection: 'column',
             pt: { xs: '56px', sm: '64px' },
@@ -267,9 +276,9 @@ const Sidebar: React.FC = () => {
       sx={{
         width: isSidebarCollapsed ? 72 : drawerWidth,
         height: { xs: 'calc(100vh - 56px)', sm: 'calc(100vh - 64px)' },
-  backgroundColor: '#ffffff',
-  color: '#111827',
-  borderRight: '1px solid #e5e7eb',
+  backgroundColor: '#1F2937',
+  color: '#F9FAFB',
+  borderRight: '1px solid #374151',
         position: 'fixed',
         left: 0, // ติดซ้ายสุดเพราะไม่มี vertical nav แล้ว
         top: { xs: 56, sm: 64 },
@@ -311,9 +320,9 @@ const Sidebar: React.FC = () => {
                       
                       minHeight: 48,
                       justifyContent: 'center',
-                      '&:hover': { backgroundColor: '#F9FAFB' },
+                      '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
                       '&.Mui-selected': { backgroundColor: 'transparent' },                     
-                      '&.Mui-selected:hover': { backgroundColor: '#F9FAFB' },
+                      '&.Mui-selected:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
                       '&::before': activeCollapsed ? {
                         content: '""',
                         position: 'absolute',
@@ -322,11 +331,11 @@ const Sidebar: React.FC = () => {
                         bottom: 6,
                         width: 3,
                         borderRadius: 2,
-                        backgroundColor: '#4F46E5',
+                        backgroundColor: '#6366F1',
                       } : {},
                     }}
                   >
-                    <ListItemIcon sx={{ minWidth: 0, color: activeCollapsed ? '#4F46E5' : '#9CA3AF', '& svg': { fontSize: 22 } }}>
+                    <ListItemIcon sx={{ minWidth: 0, color: activeCollapsed ? '#818CF8' : '#9CA3AF', '& svg': { fontSize: 22 } }}>
                       {item.icon}
                     </ListItemIcon>
                   </ListItemButton>

@@ -112,11 +112,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Disable page transition animations */
-* {
-  animation: none !important;
-  transition: none !important;
-}
 
 /* Re-enable specific transitions that should work */
 .MuiDrawer-root,

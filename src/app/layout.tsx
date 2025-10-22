@@ -6,8 +6,8 @@ import ClientSnackbarProvider from "../components/ClientSnackbarProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ระบบจัดการ",
-  description: "ระบบจัดการพื้นฐาน",
+  title: "Police Position Management System",
+  description: "ระบบจัดการ",
 };
 
 export default function RootLayout({

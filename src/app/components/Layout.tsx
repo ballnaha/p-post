@@ -44,7 +44,6 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
         flexDirection: 'column', 
         flexGrow: 1,
         ml: getMarginLeft(),
-        transition: 'margin-left 0.3s ease',
         minWidth: 0, // ป้องกัน overflow ใน mobile
         overflow: 'hidden', // ป้องกัน horizontal scroll
       }}>

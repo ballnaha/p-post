@@ -15,19 +15,60 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
+    const positionFilter = searchParams.get('position') || 'all';
+    const unitFilter = searchParams.get('unit') || 'all';
+    const rankFilter = searchParams.get('rank') || 'all';
 
     const skip = (page - 1) * limit;
 
     // สร้าง where clause สำหรับค้นหา
     const where: any = {};
-    if (search) {
+    
+    // เพิ่ม position filter - ตรวจสอบจาก rank แทน fullName
+    if (positionFilter === 'vacant') {
       where.OR = [
+        { rank: { equals: null } },
+        { rank: { equals: '' } }
+      ];
+    } else if (positionFilter === 'occupied') {
+      where.AND = [
+        { rank: { not: null } },
+        { rank: { not: '' } }
+      ];
+    }
+    
+    // เพิ่ม unit filter
+    if (unitFilter !== 'all') {
+      if (where.AND) {
+        where.AND.push({ unit: { equals: unitFilter } });
+      } else {
+        where.AND = [{ unit: { equals: unitFilter } }];
+      }
+    }
+    
+    // เพิ่ม rank filter
+    if (rankFilter !== 'all') {
+      if (where.AND) {
+        where.AND.push({ rank: { equals: rankFilter } });
+      } else {
+        where.AND = [{ rank: { equals: rankFilter } }];
+      }
+    }
+    
+    if (search) {
+      const searchConditions = [
         { fullName: { contains: search } },
         { position: { contains: search } },
-        { unit: { contains: search } },
-        { rank: { contains: search } },
         { nationalId: { contains: search } },
+        { positionNumber: { contains: search } },
       ];
+      
+      if (where.AND || where.OR) {
+        // ถ้ามี filter อื่นแล้ว ให้เพิ่ม search เข้าไป
+        where.AND = where.AND ? [...where.AND, { OR: searchConditions }] : [{ OR: searchConditions }];
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     // ดึงข้อมูล
@@ -36,7 +77,7 @@ export async function GET(request: NextRequest) {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { noId: 'asc' } as any, // Type workaround - will be fixed after TS server restart
         include: {
           posCodeMaster: true,
         },

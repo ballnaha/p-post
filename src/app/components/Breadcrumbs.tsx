@@ -21,6 +21,7 @@ import {
   Assessment as ReportsIcon,
   Assessment as AssessmentIcon,
   Inventory as InventoryIcon,
+  ImportExport as ImportIcon,
 } from '@mui/icons-material';
 
 interface BreadcrumbItem {
@@ -53,42 +54,22 @@ const Breadcrumbs: React.FC = () => {
       const isLast = index === segments.length - 1;
 
       switch (segment) {
-        case 'vehicles':
+        case 'police-personnel':
           breadcrumbs.push({
-            label: 'จัดการรถ',
-            href: isLast ? undefined : '/vehicles',
-            icon: <VehicleIcon sx={{ fontSize: 16 }} />,
+            label: 'บุคลากรตำรวจ',
+            href: isLast ? undefined : '/police-personnel',
+            icon: <PersonIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
           });
           break;
 
-        case 'fuel-records':
+        case 'import':
           breadcrumbs.push({
-            label: 'บันทึกการเติมน้ำมัน',
-            href: isLast ? undefined : '/fuel-records',
-            icon: <FuelIcon sx={{ fontSize: 16 }} />,
+            label: 'นำเข้าข้อมูล',
+            href: isLast ? undefined : '/police-personnel/import',
+            icon: <ImportIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
           });
-          break;
-
-        case 'customers':
-          breadcrumbs.push({
-            label: 'ลูกค้า',
-            href: isLast ? undefined : '/customers',
-            icon: <CustomerIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-          break;
-
-        case 'auto-distance':
-          if (segments.includes('customers')) {
-            breadcrumbs.push({
-              label: 'คำนวณระยะทางอัตโนมัติ',
-              href: isLast ? undefined : '/customers/auto-distance',
-              icon: <RouteOutlinedIcon sx={{ fontSize: 16 }} />,
-              isActive: isLast,
-            });
-          }
           break;
 
         case 'users':
@@ -99,34 +80,7 @@ const Breadcrumbs: React.FC = () => {
             isActive: isLast,
           });
           break;
-
-        case 'drivers':
-          breadcrumbs.push({
-            label: 'คนขับรถ',
-            href: isLast ? undefined : '/drivers',
-            icon: <PersonIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-          break;
         
-        case 'trip-records':
-          breadcrumbs.push({
-            label: 'บันทึกการเดินทาง',
-            href: isLast ? undefined : '/trip-records',
-            icon: <RouteOutlinedIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-          break;
-
-        case 'evaluation':
-          breadcrumbs.push({
-            label: 'แบบประเมิน',
-            href: isLast ? undefined : '/evaluation',
-            icon: <AssessmentIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-          break;
-
         case 'reports':
           breadcrumbs.push({
             label: 'รายงาน',
@@ -135,86 +89,6 @@ const Breadcrumbs: React.FC = () => {
             isActive: false,
           });
           break;
-
-        case 'by-vehicle':
-          if (segments.includes('trip-records')) {
-            breadcrumbs.push({
-              label: 'รายงานการเดินทางตามรถ',
-              href: isLast ? undefined : '/reports/trip-records/by-vehicle',
-              icon: <ReportsIcon sx={{ fontSize: 16 }} />,
-              isActive: isLast,
-            });
-          }
-          break;
-
-        case 'all-vehicle':
-          if (segments.includes('trip-records')) {
-            breadcrumbs.push({
-              label: 'รายงานรถทั้งหมด',
-              href: isLast ? undefined : '/reports/trip-records/all-vehicle',
-              icon: <ReportsIcon sx={{ fontSize: 16 }} />,
-              isActive: isLast,
-            });
-          }
-          break;
-        
-        case 'reports-fuel-records':
-          if (segments.includes('reports')) {
-            breadcrumbs.push({
-              label: 'รายงานการเติมน้ำมัน',
-              href: isLast ? undefined : '/reports/fuel-records',
-              icon: <ReportsIcon sx={{ fontSize: 16 }} />,
-              isActive: isLast,
-            });
-          }
-          break;
-        
-        case 'reports-driver':
-          if (segments.includes('reports')) {
-            breadcrumbs.push({
-              label: 'รายงานคนขับรถ',
-              href: isLast ? undefined : '/reports/reports-driver',
-              icon: <ReportsIcon sx={{ fontSize: 16 }} />,
-              isActive: isLast,
-            });
-          }
-          break;
-
-        case 'items':
-          breadcrumbs.push({
-            label: 'พัสดุ',
-            href: isLast ? undefined : '/items',
-            icon: <InventoryIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-          break;
-        
-        case 'report':
-          breadcrumbs.push({
-            label: 'รายงานแบบประเมิน',
-            href: isLast ? undefined : '/evaluation/report',
-            icon: <ReportsIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-          break;
-
-        case 'allowance':
-          breadcrumbs.push({
-            label: 'ค่าเบี้ยเลี้ยง',
-            href: isLast ? undefined : '/settings/allowance',
-            icon: <ReportsIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-          break;
-
-        case 'distance-rate':
-          breadcrumbs.push({
-            label: 'ค่าระยะทาง',
-            href: isLast ? undefined : '/settings/distance-rate',
-            icon: <ReportsIcon sx={{ fontSize: 16 }} />,
-            isActive: isLast,
-          });
-        break;
 
         case 'settings':
           breadcrumbs.push({

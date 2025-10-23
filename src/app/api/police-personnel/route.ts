@@ -16,8 +16,10 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
     const positionFilter = searchParams.get('position') || 'all';
+    const positionTypeFilter = searchParams.get('positionType') || 'all';
     const unitFilter = searchParams.get('unit') || 'all';
     const rankFilter = searchParams.get('rank') || 'all';
+    const swapFilter = searchParams.get('swapFilter') || 'all';
 
     const skip = (page - 1) * limit;
 
@@ -26,15 +28,44 @@ export async function GET(request: NextRequest) {
     
     // เพิ่ม position filter - ตรวจสอบจาก rank แทน fullName
     if (positionFilter === 'vacant') {
-      where.OR = [
-        { rank: { equals: null } },
-        { rank: { equals: '' } }
+      // ตำแหน่งว่างทั่วไป - ไม่มี rank และไม่มีคำว่า "ว่าง (กันตำแหน่ง)"
+      where.AND = [
+        {
+          OR: [
+            { rank: { equals: null } },
+            { rank: { equals: '' } }
+          ]
+        },
+        {
+          OR: [
+            { fullName: { equals: null } },
+            { fullName: { equals: '' } },
+            {
+              AND: [
+                { fullName: { not: null } },
+                { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } }
+              ]
+            }
+          ]
+        }
       ];
     } else if (positionFilter === 'occupied') {
       where.AND = [
         { rank: { not: null } },
         { rank: { not: '' } }
       ];
+    } else if (positionFilter === 'reserved') {
+      // ตำแหน่งว่าง (กันตำแหน่ง) - มีคำว่า "ว่าง (กันตำแหน่ง)" ใน fullName
+      where.fullName = { contains: 'ว่าง (กันตำแหน่ง)' };
+    }
+    
+    // เพิ่ม position type filter (ตำแหน่ง - ผกก., รอง ผกก. เป็นต้น)
+    if (positionTypeFilter !== 'all') {
+      if (where.AND) {
+        where.AND.push({ position: { startsWith: positionTypeFilter } });
+      } else {
+        where.AND = [{ position: { startsWith: positionTypeFilter } }];
+      }
     }
     
     // เพิ่ม unit filter
@@ -58,9 +89,9 @@ export async function GET(request: NextRequest) {
     if (search) {
       const searchConditions = [
         { fullName: { contains: search } },
-        { position: { contains: search } },
         { nationalId: { contains: search } },
         { positionNumber: { contains: search } },
+        { position: { contains: search } },
       ];
       
       if (where.AND || where.OR) {
@@ -71,27 +102,90 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // ถ้ามี swap filter ต้อง query ทั้งหมดก่อน แล้วค่อย paginate
+    const shouldQueryAll = swapFilter !== 'all';
+    
     // ดึงข้อมูล
-    const [personnel, total] = await Promise.all([
-      prisma.policePersonnel.findMany({
-        where,
+    let personnelQuery = prisma.policePersonnel.findMany({
+      where,
+      ...(shouldQueryAll ? {} : {
         skip,
         take: limit,
-        orderBy: { noId: 'asc' } as any, // Type workaround - will be fixed after TS server restart
-        include: {
-          posCodeMaster: true,
-        },
       }),
+      orderBy: { noId: 'asc' } as any,
+      include: {
+        posCodeMaster: true,
+      },
+    });
+
+    const [personnel, total] = await Promise.all([
+      personnelQuery,
       prisma.policePersonnel.count({ where }),
     ]);
 
+    // Filter based on swap lists (server-side after fetching)
+    let filteredPersonnel = personnel;
+    
+    if (swapFilter !== 'all') {
+      const currentYear = new Date().getFullYear() + 543;
+      const personnelIds = personnel.map(p => p.id);
+
+      if (swapFilter === 'in-swap') {
+        const swapList = await prisma.swapList.findMany({
+          where: {
+            year: currentYear,
+            originalPersonnelId: { in: personnelIds }
+          },
+          select: { originalPersonnelId: true }
+        });
+        const swapIds = new Set(swapList.map(s => s.originalPersonnelId).filter(Boolean));
+        filteredPersonnel = personnel.filter(p => swapIds.has(p.id));
+      } else if (swapFilter === 'in-threeway') {
+        const threeWayList = await prisma.threeWaySwap.findMany({
+          where: {
+            year: currentYear,
+            originalPersonnelId: { in: personnelIds }
+          },
+          select: { originalPersonnelId: true }
+        });
+        const threeWayIds = new Set(threeWayList.map(s => s.originalPersonnelId).filter(Boolean));
+        filteredPersonnel = personnel.filter(p => threeWayIds.has(p.id));
+      } else if (swapFilter === 'in-vacant') {
+        const vacantList = await prisma.vacantPosition.findMany({
+          where: {
+            year: currentYear,
+            originalPersonnelId: { in: personnelIds }
+          },
+          select: { originalPersonnelId: true }
+        });
+        const vacantIds = new Set(vacantList.map(s => s.originalPersonnelId).filter(Boolean));
+        filteredPersonnel = personnel.filter(p => vacantIds.has(p.id));
+      }
+      
+      // ทำ pagination หลังจาก filter แล้ว
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedPersonnel = filteredPersonnel.slice(startIndex, endIndex);
+      
+      return NextResponse.json({
+        success: true,
+        data: paginatedPersonnel,
+        pagination: {
+          page,
+          limit,
+          total: filteredPersonnel.length,
+          totalPages: Math.ceil(filteredPersonnel.length / limit),
+        },
+      });
+    }
+
     return NextResponse.json({
       success: true,
-      data: personnel,
+      data: filteredPersonnel,
       pagination: {
         page,
         limit,
-        total,
+        total: total,
         totalPages: Math.ceil(total / limit),
       },
     });

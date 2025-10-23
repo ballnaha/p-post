@@ -28,6 +28,9 @@ import {
   ExpandMore,
   CloudUpload as ImportIcon,
   Badge as BadgeIcon,
+  SwapHoriz as SwapIcon,
+  ChangeHistory as ThreeWayIcon,
+  EventAvailable as VacantIcon,
 } from '@mui/icons-material';
 import { useNavigation } from './NavigationContext';
 import { usePathname, useRouter } from 'next/navigation';
@@ -80,6 +83,24 @@ const Sidebar: React.FC = () => {
           href: '/police-personnel/import', 
           icon: <ImportIcon sx={{ fontSize: 20 }} />, 
           key: 'police-import' 
+        },
+        { 
+          label: 'สลับตำแหน่ง', 
+          href: '/police-personnel/swap', 
+          icon: <SwapIcon sx={{ fontSize: 20 }} />, 
+          key: 'swap-list' 
+        },
+        { 
+          label: 'สามเส้า', 
+          href: '/police-personnel/three-way-swap', 
+          icon: <ThreeWayIcon sx={{ fontSize: 20 }} />, 
+          key: 'three-way-swap' 
+        },
+        { 
+          label: 'ตำแหน่งว่าง', 
+          href: '/police-personnel/vacant-position', 
+          icon: <VacantIcon sx={{ fontSize: 20 }} />, 
+          key: 'vacant-position' 
         },
       ]
     },

@@ -1,0 +1,105 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+
+/**
+ * GET /api/swap-transactions
+ * ดึงรายการผลการสลับตำแหน่งทั้งหมด
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const year = searchParams.get('year');
+    const status = searchParams.get('status');
+    
+    const where: any = {};
+    if (year) where.year = parseInt(year);
+    if (status) where.status = status;
+
+    const transactions = await prisma.swapTransaction.findMany({
+      where,
+      include: {
+        swapDetails: {
+          orderBy: { fullName: 'asc' }
+        }
+      },
+      orderBy: [
+        { year: 'desc' },
+        { swapDate: 'desc' }
+      ]
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: transactions
+    });
+  } catch (error: any) {
+    console.error('Error fetching swap transactions:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/swap-transactions
+ * สร้างผลการสลับตำแหน่งใหม่
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { year, swapDate, swapType, notes, approvedBy, approvedDate, documentNumber, swapDetails } = body;
+
+    // Validate
+    if (!year || !swapDate || !swapDetails || swapDetails.length < 2) {
+      return NextResponse.json(
+        { success: false, error: 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 2 คนที่สลับตำแหน่ง' },
+        { status: 400 }
+      );
+    }
+
+    // Create transaction with details
+    const transaction = await prisma.swapTransaction.create({
+      data: {
+        year,
+        swapDate: new Date(swapDate),
+        swapType: swapType || 'two-way',
+        status: 'completed',
+        notes,
+        approvedBy,
+        approvedDate: approvedDate ? new Date(approvedDate) : null,
+        documentNumber,
+        swapDetails: {
+          create: swapDetails.map((detail: any) => ({
+            personnelId: detail.personnelId,
+            nationalId: detail.nationalId,
+            fullName: detail.fullName,
+            rank: detail.rank,
+            fromPosition: detail.fromPosition,
+            fromPositionNumber: detail.fromPositionNumber,
+            fromUnit: detail.fromUnit,
+            toPosition: detail.toPosition,
+            toPositionNumber: detail.toPositionNumber,
+            toUnit: detail.toUnit,
+            notes: detail.notes
+          }))
+        }
+      },
+      include: {
+        swapDetails: true
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: transaction,
+      message: 'บันทึกผลการสลับตำแหน่งสำเร็จ'
+    });
+  } catch (error: any) {
+    console.error('Error creating swap transaction:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' },
+      { status: 500 }
+    );
+  }
+}

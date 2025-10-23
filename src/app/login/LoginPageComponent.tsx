@@ -223,7 +223,7 @@ function LoginPage() {
                 letterSpacing: '-0.02em'
               }}
             >
-              Logistic Record
+              P-POST
             </Typography>
             <Typography 
               variant="body1" 
@@ -233,7 +233,7 @@ function LoginPage() {
                 fontSize: '0.95rem'
               }}
             >
-              เข้าสู่ระบบ
+              Police Position Management System
             </Typography>
           </Box>
 

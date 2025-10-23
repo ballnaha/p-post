@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { year, swapDate, swapType, notes, approvedBy, approvedDate, documentNumber, swapDetails } = body;
+    const { year, swapDate, swapType, groupName, groupNumber, notes, swapDetails } = body;
 
     // Validate
     if (!year || !swapDate || !swapDetails || swapDetails.length < 2) {
@@ -64,11 +64,10 @@ export async function POST(request: NextRequest) {
         year,
         swapDate: new Date(swapDate),
         swapType: swapType || 'two-way',
+        groupName,
+        groupNumber,
         status: 'completed',
         notes,
-        approvedBy,
-        approvedDate: approvedDate ? new Date(approvedDate) : null,
-        documentNumber,
         swapDetails: {
           create: swapDetails.map((detail: any) => ({
             personnelId: detail.personnelId,

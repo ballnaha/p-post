@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -59,10 +59,10 @@ interface SwapTransaction {
   year: number;
   swapDate: string;
   swapType: string;
+  groupName?: string;
+  groupNumber?: string;
   status: string;
   notes?: string;
-  approvedBy?: string;
-  documentNumber?: string;
   swapDetails: SwapDetail[];
   createdAt: string;
 }
@@ -269,19 +269,16 @@ export default function SwapListPage() {
               <TableHead>
                 <TableRow sx={{ bgcolor: 'primary.main' }}>
                   <TableCell sx={{ color: 'white', width: 50 }} />
+                  <TableCell sx={{ color: 'white' }}>เลขกลุ่ม</TableCell>
+                  <TableCell sx={{ color: 'white' }}>ชื่อกลุ่ม</TableCell>
                   <TableCell sx={{ color: 'white' }}>วันที่สลับ</TableCell>
-                  <TableCell sx={{ color: 'white' }}>ประเภท</TableCell>
-                  <TableCell sx={{ color: 'white' }}>จำนวนคน</TableCell>
-                  <TableCell sx={{ color: 'white' }}>เลขที่เอกสาร</TableCell>
-                  <TableCell sx={{ color: 'white' }}>ผู้อนุมัติ</TableCell>
-                  <TableCell sx={{ color: 'white' }}>สถานะ</TableCell>
                   <TableCell sx={{ color: 'white', width: 80 }} align="center">จัดการ</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.map((row) => (
-                  <>
-                    <TableRow key={row.id} hover>
+                  <React.Fragment key={row.id}>
+                    <TableRow hover>
                       <TableCell>
                         <IconButton
                           size="small"
@@ -291,24 +288,21 @@ export default function SwapListPage() {
                         </IconButton>
                       </TableCell>
                       <TableCell>
+                        <Typography variant="body2" fontWeight={600} color="primary">
+                          {row.groupNumber || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>
+                          {row.groupName || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
                         {new Date(row.swapDate).toLocaleDateString('th-TH', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric'
                         })}
-                      </TableCell>
-                      <TableCell>{getSwapTypeLabel(row.swapType)}</TableCell>
-                      <TableCell>
-                        <Chip label={`${row.swapDetails.length} คน`} size="small" color="info" />
-                      </TableCell>
-                      <TableCell>{row.documentNumber || '-'}</TableCell>
-                      <TableCell>{row.approvedBy || '-'}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={getStatusLabel(row.status)}
-                          color={getStatusColor(row.status) as any}
-                          size="small"
-                        />
                       </TableCell>
                       <TableCell align="center">
                         <IconButton
@@ -322,7 +316,7 @@ export default function SwapListPage() {
                     
                     {/* Expanded Detail Row */}
                     <TableRow>
-                      <TableCell colSpan={8} sx={{ p: 0 }}>
+                      <TableCell colSpan={5} sx={{ p: 0 }}>
                         <Collapse in={expandedRows.has(row.id)} timeout="auto" unmountOnExit>
                           <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
                             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -374,7 +368,7 @@ export default function SwapListPage() {
                         </Collapse>
                       </TableCell>
                     </TableRow>
-                  </>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>

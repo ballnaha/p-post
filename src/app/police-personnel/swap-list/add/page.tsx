@@ -11,12 +11,28 @@ import {
   Autocomplete,
   Stack,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Chip,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs, { Dayjs } from 'dayjs';
+import 'dayjs/locale/th';
 import {
   ArrowBack as ArrowBackIcon,
   Save as SaveIcon,
   SwapHoriz as SwapHorizIcon,
   Person as PersonIcon,
+  Info as InfoIcon,
+  Close as CloseIcon,
+  Badge as BadgeIcon,
+  CalendarToday as CalendarIcon,
+  School as EducationIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter } from 'next/navigation';
@@ -33,6 +49,17 @@ interface PolicePersonnel {
   nationalId?: string;
   age?: string;
   yearsOfService?: string;
+  // Extended fields for dialog
+  seniority?: string;
+  birthDate?: string;
+  education?: string;
+  lastAppointment?: string;
+  currentRankSince?: string;
+  enrollmentDate?: string;
+  retirementDate?: string;
+  trainingLocation?: string;
+  trainingCourse?: string;
+  actingAs?: string;
 }
 
 export default function AddSwapTransactionPage() {
@@ -41,76 +68,170 @@ export default function AddSwapTransactionPage() {
   const [loading, setLoading] = useState(false);
   const [personnelOptions, setPersonnelOptions] = useState<PolicePersonnel[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [swappedPersonnelIds, setSwappedPersonnelIds] = useState<Set<string>>(new Set());
   
   // Personnel selections
   const [personnelA, setPersonnelA] = useState<PolicePersonnel | null>(null);
   const [personnelB, setPersonnelB] = useState<PolicePersonnel | null>(null);
   
+  // Dialog state
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedPersonnelDetail, setSelectedPersonnelDetail] = useState<PolicePersonnel | null>(null);
+  
   // Form data
   const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
-  const [swapDate, setSwapDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [swapDate, setSwapDate] = useState<Dayjs | null>(dayjs());
   const [notes, setNotes] = useState('');
+  const [groupNumber, setGroupNumber] = useState<string>('');
 
   useEffect(() => {
-    fetchPersonnelOptions('');
+    const fetchData = async () => {
+      const swappedIds = await fetchNextGroupNumber();
+      await fetchPersonnelOptions(swappedIds);
+    };
+    fetchData();
   }, []);
 
-  const fetchPersonnelOptions = async (searchTerm: string) => {
+  const fetchNextGroupNumber = async (): Promise<Set<string>> => {
+    try {
+      const currentYear = new Date().getFullYear() + 543;
+      const response = await fetch(`/api/swap-transactions?year=${currentYear}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch swap transactions');
+      }
+      
+      const result = await response.json();
+      const transactions = result.data || [];
+      const count = Array.isArray(transactions) ? transactions.length : 0;
+      const nextNumber = String(count + 1).padStart(3, '0');
+      setGroupNumber(`${currentYear}/${nextNumber}`);
+      
+      // Extract personnel IDs who already swapped in this year
+      const swappedIds = new Set<string>();
+      if (Array.isArray(transactions)) {
+        transactions.forEach((transaction: any) => {
+          if (Array.isArray(transaction.swapDetails)) {
+            transaction.swapDetails.forEach((detail: any) => {
+              if (detail.personnelId) {
+                swappedIds.add(detail.personnelId);
+              }
+            });
+          }
+        });
+      }
+      setSwappedPersonnelIds(swappedIds);
+      return swappedIds;
+    } catch (error) {
+      console.error('Error fetching group number:', error);
+      // Fallback to default
+      const currentYear = new Date().getFullYear() + 543;
+      setGroupNumber(`${currentYear}/001`);
+      return new Set<string>();
+    }
+  };
+
+  const fetchPersonnelOptions = async (excludeIds?: Set<string>) => {
     try {
       setSearchLoading(true);
-      const response = await fetch(
-        `/api/police-personnel/search-names?query=${encodeURIComponent(searchTerm)}`
-      );
+      // Fetch from swap-list API to get personnel who are in the current year's swap list
+      const currentYear = new Date().getFullYear() + 543;
+      const response = await fetch(`/api/swap-list?year=${currentYear}`);
 
       if (!response.ok) {
-        throw new Error('Failed to fetch personnel');
+        throw new Error('Failed to fetch swap list');
       }
 
-      const data = await response.json();
-      // Filter only personnel with rank (not vacant positions)
-      setPersonnelOptions(data.filter((p: PolicePersonnel) => p.rank));
+      const json = await response.json();
+      const list: PolicePersonnel[] = Array.isArray(json?.data) ? json.data : [];
+      // Filter only personnel with rank and who haven't swapped yet this year
+      const idsToExclude = excludeIds || swappedPersonnelIds;
+      setPersonnelOptions(
+        list.filter((p: PolicePersonnel) => 
+          !!p.rank && !idsToExclude.has(p.id)
+        )
+      );
     } catch (error) {
-      console.error('Error fetching personnel:', error);
+      console.error('Error fetching swap list:', error);
     } finally {
       setSearchLoading(false);
     }
   };
 
   const handlePersonnelSearch = (event: React.SyntheticEvent, value: string) => {
-    if (value.length >= 2) {
-      fetchPersonnelOptions(value);
-    }
+    // Search is now client-side since we already have all swap list data
+    // Filter happens in the Autocomplete component itself
+  };
+
+  const handleShowDetail = (personnel: PolicePersonnel) => {
+    setSelectedPersonnelDetail(personnel);
+    setDetailDialogOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setDetailDialogOpen(false);
+    setSelectedPersonnelDetail(null);
   };
 
   const handleSelectPersonnelA = (newValue: PolicePersonnel | null) => {
     setPersonnelA(newValue);
-    // Reset B if position doesn't match
-    if (personnelB && newValue && personnelB.position !== newValue.position) {
-      setPersonnelB(null);
-    }
+    // No need to reset B anymore since position doesn't need to match
   };
 
   const handleSelectPersonnelB = (newValue: PolicePersonnel | null) => {
     setPersonnelB(newValue);
   };
 
-  // Filter options for B based on A's position
+  // Filter options for B - no need to check same position
   const optionsForB = personnelA
     ? personnelOptions.filter(
         (p) =>
           p.id !== personnelA.id &&
-          p.position === personnelA.position &&
           p.rank // Ensure has rank
       )
     : [];
 
-  const canSwap = personnelA && personnelB && personnelA.position === personnelB.position;
+  const canSwap = personnelA && personnelB;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!canSwap) {
-      toast.error('กรุณาเลือกบุคลากร 2 คนที่มีตำแหน่งเท่ากัน');
+    // Validation
+    if (!personnelA || !personnelB) {
+      toast.error('กรุณาเลือกบุคลากร 2 คน');
+      return;
+    }
+
+    if (!year) {
+      toast.error('กรุณาระบุประจำปีให้ถูกต้อง');
+      return;
+    }
+
+    if (!swapDate) {
+      toast.error('กรุณาเลือกวันที่ทำการสลับ');
+      return;
+    }
+
+    if (!groupNumber || groupNumber.trim() === '') {
+      toast.error('ไม่พบเลขกลุ่ม กรุณาลองใหม่อีกครั้ง');
+      return;
+    }
+
+    // Validate personnel A
+    if (!personnelA.id || !personnelA.fullName || !personnelA.position || !personnelA.unit) {
+      toast.error('ข้อมูลบุคลากร A ไม่ครบถ้วน');
+      return;
+    }
+
+    // Validate personnel B
+    if (!personnelB.id || !personnelB.fullName || !personnelB.position || !personnelB.unit) {
+      toast.error('ข้อมูลบุคลากร B ไม่ครบถ้วน');
+      return;
+    }
+
+    // Check if trying to swap with the same person
+    if (personnelA.id === personnelB.id) {
+      toast.error('ไม่สามารถสลับกับบุคลากรคนเดียวกันได้');
       return;
     }
 
@@ -154,8 +275,10 @@ export default function AddSwapTransactionPage() {
         },
         body: JSON.stringify({
           year,
-          swapDate,
+          swapDate: swapDate ? swapDate.format('YYYY-MM-DD') : new Date().toISOString().split('T')[0],
           swapType: 'two-way',
+          groupName: groupName, // ชื่อกลุ่ม
+          groupNumber: groupNumber, // เลขกลุ่ม
           notes: notes || `การสลับตำแหน่ง: ${groupName}`,
           swapDetails,
         }),
@@ -195,7 +318,7 @@ export default function AddSwapTransactionPage() {
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                เลือกบุคลากร 2 คน ที่มีตำแหน่งเท่ากัน เพื่อบันทึกการสลับหน่วยงานกัน
+                เลือกบุคลากร 2 คน เพื่อบันทึกการสลับหน่วยงานกัน
               </Typography>
             </Box>
             <Button
@@ -207,16 +330,41 @@ export default function AddSwapTransactionPage() {
             </Button>
           </Box>
 
-          <Alert severity="info" sx={{ mt: 2 }}>
-            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-              <strong>เงื่อนไขการสลับตำแหน่ง:</strong>
-            </Typography>
-            <Typography variant="body2" sx={{ fontSize: '0.813rem', mt: 0.5 }}>
-              ✅ ต้องมีผู้ดำรงตำแหน่งทั้งคู่ (ไม่ใช่ตำแหน่งว่าง)<br />
-              ✅ <strong>ตำแหน่งต้องเท่ากัน</strong> (เช่น ผบ.หมู่ ⟷ ผบ.หมู่)<br />
-              ⚠️ ยศไม่จำเป็นต้องเท่ากัน
-            </Typography>
-          </Alert>
+          {/* Group Number Display */}
+          <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+              <TextField
+                label="เลขกลุ่ม"
+                value={groupNumber}
+                disabled
+                size="small"
+                helperText="เลขกลุ่มจะถูกสร้างอัตโนมัติ"
+              />
+              <TextField
+                label="ประจำปี *"
+                type="number"
+                value={year || ''}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value;
+                  setYear(value === '' ? 0 : parseInt(value) || 0);
+                }}
+                required
+                inputProps={{ min: 2500, max: 2700 }}
+                size="small"
+              />
+              <DatePicker
+                label="วันที่ทำการสลับ *"
+                value={swapDate}
+                onChange={(newValue) => setSwapDate(newValue)}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    required: true,
+                  },
+                }}
+              />
+            </Box>
+          </LocalizationProvider>
         </Paper>
 
         {/* Main Form */}
@@ -273,16 +421,19 @@ export default function AddSwapTransactionPage() {
 
                 {personnelA && (
                   <Box sx={{ mt: 2 }}>
-                    <Divider sx={{ mb: 2 }} />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Divider sx={{ flexGrow: 1 }} />
+                      <IconButton 
+                        size="small" 
+                        color="primary"
+                        onClick={() => handleShowDetail(personnelA)}
+                        sx={{ ml: 1 }}
+                      >
+                        <InfoIcon />
+                      </IconButton>
+                    </Box>
                     <Stack spacing={1.5}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">ยศ</Typography>
-                        <Typography variant="body2" fontWeight={600}>{personnelA.rank}</Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">ชื่อ-สกุล</Typography>
-                        <Typography variant="body2" fontWeight={600}>{personnelA.fullName}</Typography>
-                      </Box>
+                      
                       <Box>
                         <Typography variant="caption" color="text.secondary">ตำแหน่ง</Typography>
                         <Typography variant="body2" fontWeight={600} color="primary.main">
@@ -360,23 +511,26 @@ export default function AddSwapTransactionPage() {
                   )}
                   noOptionsText={
                     personnelA 
-                      ? `ไม่พบบุคลากรที่มีตำแหน่ง "${personnelA.position}"` 
+                      ? "ไม่พบบุคลากร" 
                       : "เลือกบุคลากร A ก่อน"
                   }
                 />
 
                 {personnelB && (
                   <Box sx={{ mt: 2 }}>
-                    <Divider sx={{ mb: 2 }} />
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Divider sx={{ flexGrow: 1 }} />
+                      <IconButton 
+                        size="small" 
+                        color="primary"
+                        onClick={() => handleShowDetail(personnelB)}
+                        sx={{ ml: 1 }}
+                      >
+                        <InfoIcon />
+                      </IconButton>
+                    </Box>
                     <Stack spacing={1.5}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">ยศ</Typography>
-                        <Typography variant="body2" fontWeight={600}>{personnelB.rank}</Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">ชื่อ-สกุล</Typography>
-                        <Typography variant="body2" fontWeight={600}>{personnelB.fullName}</Typography>
-                      </Box>
+                      
                       <Box>
                         <Typography variant="caption" color="text.secondary">ตำแหน่ง</Typography>
                         <Typography variant="body2" fontWeight={600} color="primary.main">
@@ -416,52 +570,31 @@ export default function AddSwapTransactionPage() {
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Typography variant="body2">
-                    • <strong>{personnelA.fullName}</strong> จาก <strong>{personnelA.unit}</strong> → ไป <strong style={{ color: 'green' }}>{personnelB.unit}</strong>
+                    • <strong>{personnelA.fullName}</strong> จาก <strong>{personnelA.position}</strong> → ไป <strong style={{ color: 'green' }}>{personnelB.position}</strong>
                   </Typography>
                   <Typography variant="body2">
-                    • <strong>{personnelB.fullName}</strong> จาก <strong>{personnelB.unit}</strong> → ไป <strong style={{ color: 'green' }}>{personnelA.unit}</strong>
+                    • <strong>{personnelB.fullName}</strong> จาก <strong>{personnelB.position}</strong> → ไป <strong style={{ color: 'green' }}>{personnelA.position}</strong>
                   </Typography>
                 </Box>
               </Alert>
             )}
           </Paper>
 
-          {/* Additional Information */}
+          {/* Notes Section */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" fontWeight={600} mb={3}>
-              ข้อมูลเพิ่มเติม
+              หมายเหตุ
             </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <TextField
-                label="ปีงบประมาณ พ.ศ. *"
-                type="number"
-                value={year}
-                onChange={(e) => setYear(parseInt(e.target.value))}
-                required
-                inputProps={{ min: 2500, max: 2700 }}
-                size="small"
-              />
-
-              <TextField
-                label="วันที่ทำการสลับ *"
-                type="date"
-                value={swapDate}
-                onChange={(e) => setSwapDate(e.target.value)}
-                required
-                InputLabelProps={{ shrink: true }}
-                size="small"
-              />
-
-              <TextField
-                label="หมายเหตุ"
-                multiline
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
-                size="small"
-              />
-            </Box>
+            <TextField
+              label="หมายเหตุ"
+              multiline
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+              size="small"
+              fullWidth
+            />
           </Paper>
 
           {/* Submit Buttons */}
@@ -484,6 +617,199 @@ export default function AddSwapTransactionPage() {
             </Button>
           </Box>
         </form>
+
+        {/* Personnel Detail Dialog */}
+        <Dialog 
+          open={detailDialogOpen} 
+          onClose={handleCloseDetail}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            py: 1.5,
+            px: 2
+          }}>
+            <PersonIcon fontSize="small" />
+            <Box component="span" sx={{ fontWeight: 600, fontSize: '1.25rem' }}>
+              รายละเอียดบุคลากร
+            </Box>
+            {selectedPersonnelDetail && (
+              <Chip 
+                label={selectedPersonnelDetail.rank ? 'มีผู้ดำรง' : 'ตำแหน่งว่าง'} 
+                color={selectedPersonnelDetail.rank ? 'success' : 'default'} 
+                size="small" 
+                sx={{ ml: 'auto', height: 24, fontSize: '0.75rem' }}
+              />
+            )}
+          </DialogTitle>
+          
+          <DialogContent sx={{ p: 2 , mt: 2}}>
+            {selectedPersonnelDetail && (
+              <Box>
+                {/* Header Section - ชื่อและตำแหน่ง */}
+                <Box sx={{ p: 2, mb: 2, bgcolor: 'primary.main', color: 'white', borderRadius: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.25, fontSize: '1.125rem' }}>
+                    {selectedPersonnelDetail.rank || ''} {selectedPersonnelDetail.fullName || 'ตำแหน่งว่าง'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ opacity: 0.9, fontSize: '0.938rem' }}>
+                    {selectedPersonnelDetail.position} • {selectedPersonnelDetail.unit || '-'}
+                  </Typography>
+                </Box>
+
+                {/* Content Sections */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
+                  
+                  {/* Left Column */}
+                  <Box>
+                    {/* ข้อมูลตำแหน่ง */}
+                    <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
+                        <BadgeIcon fontSize="small" />
+                        ข้อมูลตำแหน่ง
+                      </Typography>
+                      <Divider sx={{ mb: 1 }} />
+                      <Stack spacing={0.75} divider={<Divider />}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center'  }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ID</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.noId || '-'}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.positionNumber || '-'}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ตำแหน่ง</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.position || '-'}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ทำหน้าที่</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.actingAs || '-'}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หน่วย</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.unit || '-'}</Typography>
+                        </Box>
+                      </Stack>
+                    </Paper>
+
+                    {/* ข้อมูลบุคคล */}
+                    {selectedPersonnelDetail.rank && (
+                      <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'success.50', borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
+                          <PersonIcon fontSize="small" />
+                          ข้อมูลบุคคล
+                        </Typography>
+                        <Divider sx={{ mb: 1 }} />
+                        <Stack spacing={0.75} divider={<Divider />}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ชื่อ-สกุล</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.fullName || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ยศ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.rank || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อาวุโส</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.seniority || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อายุ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.age || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>วันเกิด</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.birthDate || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขบัตรประชาชน</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{selectedPersonnelDetail.nationalId || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>คุณวุฒิ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.education || '-'}</Typography>
+                          </Box>
+                        </Stack>
+                      </Paper>
+                    )}
+                  </Box>
+
+                  {/* Right Column */}
+                  <Box>
+                    {/* ข้อมูลการแต่งตั้ง */}
+                    {selectedPersonnelDetail.rank && (
+                      <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'info.50', borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'info.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
+                          <CalendarIcon fontSize="small" />
+                          ข้อมูลการแต่งตั้ง
+                        </Typography>
+                        <Divider sx={{ mb: 1 }} />
+                        <Stack spacing={0.75} divider={<Divider />}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>แต่งตั้งครั้งสุดท้าย</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.lastAppointment || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ระดับนี้เมื่อ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.currentRankSince || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>บรรจุ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.enrollmentDate || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เกษียณ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.retirementDate || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>จำนวนปี</Typography>
+                            <Typography variant="body2" fontWeight={600} color="info.main" sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.yearsOfService ? `${selectedPersonnelDetail.yearsOfService} ปี` : '-'}</Typography>
+                          </Box>
+                        </Stack>
+                      </Paper>
+                    )}
+
+                    {/* ข้อมูลการฝึกอบรม */}
+                    {(selectedPersonnelDetail.trainingLocation || selectedPersonnelDetail.trainingCourse) && (
+                      <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'warning.50', borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
+                          <EducationIcon fontSize="small" />
+                          ข้อมูลการฝึกอบรม
+                        </Typography>
+                        <Divider sx={{ mb: 1 }} />
+                        <Stack spacing={0.75} divider={<Divider />}>
+                          {selectedPersonnelDetail.trainingLocation && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>สถานที่ฝึกอบรม</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.trainingLocation}</Typography>
+                            </Box>
+                          )}
+                          {selectedPersonnelDetail.trainingCourse && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หลักสูตร (นรต.)</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnelDetail.trainingCourse}</Typography>
+                            </Box>
+                          )}
+                        </Stack>
+                      </Paper>
+                    )}
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </DialogContent>
+          
+          <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
+            <Button onClick={handleCloseDetail} variant="contained" size="medium" sx={{ minWidth: 100, fontWeight: 600 }}>
+              ปิด
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Layout>
   );

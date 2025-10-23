@@ -86,7 +86,7 @@ const Sidebar: React.FC = () => {
         },
         { 
           label: 'สลับตำแหน่ง', 
-          href: '/police-personnel/swap', 
+          href: '/police-personnel/swap-list', 
           icon: <SwapIcon sx={{ fontSize: 20 }} />, 
           key: 'swap-list' 
         },

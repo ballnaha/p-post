@@ -89,29 +89,6 @@ model PolicePersonnel {
   @@map("police_personnel")
 }
 
-// Swap Group (กลุ่มสลับตำแหน่ง)
-// เก็บข้อมูลกลุ่มการสลับตำแหน่ง แต่ละกลุ่มจะมีรายชื่อบุคคลที่จะสลับตำแหน่งกัน
-model SwapGroup {
-  id          String   @id @default(cuid())
-  name        String // ชื่อกลุ่ม เช่น "กลุ่มสลับตำแหน่ง สน.บางรัก - สน.ปทุมวัน"
-  year        Int // ปีที่สลับตำแหน่ง (พ.ศ.)
-  description String?  @db.Text // รายละเอียดเพิ่มเติม
-  status      String   @default("draft") // draft, approved, completed
-  
-  // Metadata
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy String?  @map("created_by")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedBy String?  @map("updated_by")
-
-  // Relations
-  members SwapList[] @relation("SwapGroupMembers")
-
-  @@index([year])
-  @@index([status])
-  @@map("swap_group")
-}
-
 // Swap List (รายการที่เลือกไว้สำหรับสลับตำแหน่ง)
 // เก็บสำเนาข้อมูลบุคลากรทั้งหมดไว้ เพราะ police_personnel มีการนำเข้าใหม่ทุกปีและข้อมูลเดิมจะถูกลบ
 // ดังนั้นต้องเก็บ snapshot ของข้อมูลในขณะที่เพิ่มเข้า swap list
@@ -119,10 +96,6 @@ model SwapList {
   id    String @id @default(cuid())
   year  Int // ปีที่เลือก (พ.ศ.)
   notes String? @db.Text // หมายเหตุเพิ่มเติมสำหรับการ swap
-
-  // เชื่อมโยงกับ SwapGroup
-  swapGroupId String? @map("swap_group_id")
-  swapGroup   SwapGroup? @relation("SwapGroupMembers", fields: [swapGroupId], references: [id], onDelete: Cascade)
 
   // ข้อมูลอ้างอิง (สำหรับเชื่อมโยงกับข้อมูลปัจจุบัน ถ้ามี)
   originalPersonnelId String? @map("original_personnel_id") // ID เดิมจาก police_personnel
@@ -162,8 +135,7 @@ model SwapList {
   updatedBy String?  @map("updated_by")
 
   // Index สำหรับการค้นหา
-  @@index([originalPersonnelId, year, swapGroupId])
-  @@index([swapGroupId])
+  @@index([originalPersonnelId, year])
   @@index([year])
   @@index([nationalId])
   @@index([rank])
@@ -287,11 +259,10 @@ model SwapTransaction {
   year             Int // ปีที่ทำการสลับ (พ.ศ.)
   swapDate         DateTime // วันที่ทำการสลับ
   swapType         String   @default("two-way") // two-way, three-way, multi-way
+  groupName        String?  @map("group_name") // ชื่อกลุ่ม เช่น "นาย A ⟷ นาย B"
+  groupNumber      String?  @map("group_number") // เลขกลุ่ม เช่น "2568/001"
   status           String   @default("completed") // completed, pending, cancelled
   notes            String?  @db.Text // หมายเหตุ
-  approvedBy       String? // ผู้อนุมัติ
-  approvedDate     DateTime? // วันที่อนุมัติ
-  documentNumber   String?  @unique // เลขที่เอกสาร/คำสั่ง
   
   // Relations
   swapDetails SwapTransactionDetail[]

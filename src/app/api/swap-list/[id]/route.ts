@@ -55,7 +55,7 @@ export async function PUT(
     }
 
     // กรองข้อมูลที่ต้องการอัพเดท (ไม่รวม relation objects และ auto-generated fields)
-    const { year, notes, id, posCodeMaster, createdAt, updatedAt, createdBy, updatedBy, swapGroupId, ...personnelData } = body;
+    const { year, notes, id, posCodeMaster, createdAt, updatedAt, createdBy, updatedBy, ...personnelData } = body;
 
     // อัพเดทข้อมูล
     const updated = await prisma.swapList.update({

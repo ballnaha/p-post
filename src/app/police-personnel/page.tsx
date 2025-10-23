@@ -1221,7 +1221,7 @@ export default function PolicePersonnelPage() {
             </Box>
           </Box>
 
-          {/* Search by Name - Autocomplete + Filter รายการ */}
+          {/* Search by Name - Autocomplete + Filter รายการ + สถานะตำแหน่ง */}
           <Box sx={{ mt: 3, display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
             <Autocomplete
               size="small"
@@ -1239,7 +1239,7 @@ export default function PolicePersonnelPage() {
               loading={loadingNames}
               loadingText="กำลังค้นหา..."
               noOptionsText={nameInputValue.length < 1 ? "พิมพ์เพื่อค้นหา..." : "ไม่พบข้อมูล"}
-              sx={{ flex: { xs: 1, sm: '0 0 80%' } }}
+              sx={{ flex: { xs: 1, sm: '0 0 60%' } }}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -1259,6 +1259,20 @@ export default function PolicePersonnelPage() {
                 />
               )}
             />
+
+            <FormControl size="small" sx={{ flex: { xs: 1, sm: '0 0 20%' }, minWidth: 150 }}>
+              <InputLabel>สถานะตำแหน่ง</InputLabel>
+              <Select
+                value={positionFilter}
+                label="สถานะตำแหน่ง"
+                onChange={(e) => handlePositionFilterChange(e.target.value as 'all' | 'occupied' | 'vacant' | 'reserved')}
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                <MenuItem value="occupied">มีผู้ดำรง</MenuItem>
+                <MenuItem value="vacant">ตำแหน่งว่าง</MenuItem>
+                <MenuItem value="reserved">ตำแหน่งว่าง (กันตำแหน่ง)</MenuItem>
+              </Select>
+            </FormControl>
 
             <FormControl size="small" sx={{ flex: { xs: 1, sm: '0 0 20%' }, minWidth: 150 }}>
               <InputLabel>รายการ</InputLabel>
@@ -1292,20 +1306,6 @@ export default function PolicePersonnelPage() {
                 ),
               }}
             />
-            
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>สถานะตำแหน่ง</InputLabel>
-              <Select
-                value={positionFilter}
-                label="สถานะตำแหน่ง"
-                onChange={(e) => handlePositionFilterChange(e.target.value as 'all' | 'occupied' | 'vacant' | 'reserved')}
-              >
-                <MenuItem value="all">ทั้งหมด</MenuItem>
-                <MenuItem value="occupied">มีผู้ดำรง</MenuItem>
-                <MenuItem value="vacant">ตำแหน่งว่าง</MenuItem>
-                <MenuItem value="reserved">ตำแหน่งว่าง (กันตำแหน่ง)</MenuItem>
-              </Select>
-            </FormControl>
 
             <Autocomplete
               size="small"
@@ -1666,10 +1666,10 @@ export default function PolicePersonnelPage() {
               <Box>
                 {/* Header Section - ชื่อและตำแหน่ง */}
                 <Box sx={{ p: 2, mb: 2, bgcolor: 'primary.main', color: 'white', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.25, fontSize: '1.063rem' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.25, fontSize: '1.125rem' }}>
                     {selectedPersonnel.rank || null} {selectedPersonnel.fullName || 'ตำแหน่งว่าง'}
                   </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  <Typography variant="body2" sx={{ opacity: 0.9, fontSize: '0.938rem' }}>
                     {selectedPersonnel.position} • {selectedPersonnel.unit || '-'}
                   </Typography>
                 </Box>
@@ -1681,26 +1681,27 @@ export default function PolicePersonnelPage() {
                   <Box>
                     {/* ข้อมูลตำแหน่ง */}
                     <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
                         <BadgeIcon fontSize="small" />
                         ข้อมูลตำแหน่ง
                       </Typography>
+                      <Divider sx={{ mb: 1 }} />
                       <Stack spacing={0.75} divider={<Divider />}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center'  }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>ID</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.noId || '-'}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ID</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.noId || '-'}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>เลขตำแหน่ง</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.positionNumber || '-'}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.positionNumber || '-'}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>ทำหน้าที่</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.actingAs || '-'}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ทำหน้าที่</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.actingAs || '-'}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>หน่วย</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.unit || '-'}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หน่วย</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.unit || '-'}</Typography>
                         </Box>
                       </Stack>
                     </Paper>
@@ -1708,38 +1709,39 @@ export default function PolicePersonnelPage() {
                     {/* ข้อมูลบุคคล */}
                     {selectedPersonnel.rank && (
                       <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'success.50', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
                           <PersonIcon fontSize="small" />
                           ข้อมูลบุคคล
                         </Typography>
+                        <Divider sx={{ mb: 1 }} />
                         <Stack spacing={0.75} divider={<Divider />}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>ชื่อ-สกุล</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.fullName || '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ชื่อ-สกุล</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.fullName || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>ยศ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.rank || '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ยศ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.rank || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>อาวุโส</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.seniority || '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อาวุโส</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.seniority || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>อายุ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.age ? `${selectedPersonnel.age}` : '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อายุ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.age ? `${selectedPersonnel.age}` : '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>วันเกิด</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{formatDate(selectedPersonnel.birthDate)}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>วันเกิด</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.birthDate)}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>เลขบัตรประชาชน</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.813rem' }}>{selectedPersonnel.nationalId || '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขบัตรประชาชน</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{selectedPersonnel.nationalId || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>คุณวุฒิ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.education || '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>คุณวุฒิ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.education || '-'}</Typography>
                           </Box>
                         </Stack>
                       </Paper>
@@ -1751,30 +1753,31 @@ export default function PolicePersonnelPage() {
                     {/* ข้อมูลการแต่งตั้ง */}
                     {selectedPersonnel.rank && (
                       <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'info.50', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'info.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'info.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
                           <CalendarIcon fontSize="small" />
                           ข้อมูลการแต่งตั้ง
                         </Typography>
+                        <Divider sx={{ mb: 1 }} />
                         <Stack spacing={0.75} divider={<Divider />}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>แต่งตั้งครั้งสุดท้าย</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{formatDate(selectedPersonnel.lastAppointment)}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>แต่งตั้งครั้งสุดท้าย</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.lastAppointment)}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>ระดับนี้เมื่อ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{formatDate(selectedPersonnel.currentRankSince)}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ระดับนี้เมื่อ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.currentRankSince)}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>บรรจุ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{formatDate(selectedPersonnel.enrollmentDate)}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>บรรจุ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.enrollmentDate)}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>เกษียณ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.retirementDate || '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เกษียณ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.retirementDate || '-'}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>จำนวนปี</Typography>
-                            <Typography variant="body2" fontWeight={600} color="info.main" sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.yearsOfService ? `${selectedPersonnel.yearsOfService} ปี` : '-'}</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>จำนวนปี</Typography>
+                            <Typography variant="body2" fontWeight={600} color="info.main" sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.yearsOfService ? `${selectedPersonnel.yearsOfService} ปี` : '-'}</Typography>
                           </Box>
                         </Stack>
                       </Paper>
@@ -1783,21 +1786,22 @@ export default function PolicePersonnelPage() {
                     {/* ข้อมูลการฝึกอบรม */}
                     {(selectedPersonnel.trainingLocation || selectedPersonnel.trainingCourse) && (
                       <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'warning.50', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
                           <EducationIcon fontSize="small" />
                           ข้อมูลการฝึกอบรม
                         </Typography>
+                        <Divider sx={{ mb: 1 }} />
                         <Stack spacing={0.75} divider={<Divider />}>
                           {selectedPersonnel.trainingLocation && (
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>สถานที่ฝึกอบรม</Typography>
-                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.trainingLocation}</Typography>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>สถานที่ฝึกอบรม</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.trainingLocation}</Typography>
                             </Box>
                           )}
                           {selectedPersonnel.trainingCourse && (
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.813rem' }}>หลักสูตร (นรต.)</Typography>
-                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.813rem' }}>{selectedPersonnel.trainingCourse}</Typography>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หลักสูตร (นรต.)</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.trainingCourse}</Typography>
                             </Box>
                           )}
                         </Stack>
@@ -1809,10 +1813,10 @@ export default function PolicePersonnelPage() {
                 {/* หมายเหตุ - Full Width */}
                 {selectedPersonnel.notes && (
                   <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'grey.100', borderRadius: 1, border: 1, borderColor: 'grey.300' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.75 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.75, fontSize: '0.938rem' }}>
                       หมายเหตุ
                     </Typography>
-                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: 'text.secondary', display: 'block', fontSize: '0.813rem' }}>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: 'text.secondary', display: 'block', fontSize: '0.875rem' }}>
                       {selectedPersonnel.notes}
                     </Typography>
                   </Paper>

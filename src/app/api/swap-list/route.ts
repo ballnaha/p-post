@@ -64,12 +64,11 @@ export async function POST(request: NextRequest) {
     const currentYear = new Date().getFullYear() + 543;
     const swapYear = year || currentYear;
 
-    // ตรวจสอบว่ามีในรายการแล้วหรือไม่ (ไม่สนใจ group เพราะยังไม่มีระบบ group)
+    // ตรวจสอบว่ามีในรายการแล้วหรือไม่
     const existing = await prisma.swapList.findFirst({
       where: {
         originalPersonnelId: personnel.id,
-        year: swapYear,
-        swapGroupId: null // เฉพาะรายการที่ไม่ได้อยู่ในกลุ่ม
+        year: swapYear
       }
     });
 
@@ -85,7 +84,6 @@ export async function POST(request: NextRequest) {
       data: {
         year: swapYear,
         notes: notes || null,
-        swapGroupId: null, // ยังไม่มีการกำหนดกลุ่ม
         
         // เก็บ ID เดิมไว้อ้างอิง
         originalPersonnelId: personnel.id,
@@ -163,12 +161,11 @@ export async function DELETE(request: NextRequest) {
         where: { id: id }
       });
     } else {
-      // ลบด้วย originalPersonnelId + year (ไม่มี group)
+      // ลบด้วย originalPersonnelId + year
       const record = await prisma.swapList.findFirst({
         where: {
           originalPersonnelId: originalPersonnelId,
-          year: year,
-          swapGroupId: null
+          year: year
         }
       });
 

@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
               rank: row['ยศ'] ? String(row['ยศ']) : null,
               fullName: row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']) : null,
               noId: row['ID'] ? parseInt(String(row['ID'])) : null,
-              posCodeId: row['ID/POSCODE'] ? parseInt(String(row['ID/POSCODE'])) : null,
+              posCodeId: (row['POSCODE'] || row['ID/POSCODE']) ? parseInt(String(row['POSCODE'] || row['ID/POSCODE'])) : null,
               position: row['ตำแหน่ง'] ? String(row['ตำแหน่ง']) : null,
               positionNumber: row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']) : null,
               actingAs: row['ทำหน้าที่'] ? String(row['ทำหน้าที่']) : null,

@@ -91,6 +91,68 @@ export async function DELETE(
     //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     // }
 
+    // ดึงข้อมูลบุคลากรก่อน
+    const personnel = await prisma.policePersonnel.findUnique({
+      where: { id }
+    });
+
+    if (!personnel) {
+      return NextResponse.json(
+        { success: false, error: 'ไม่พบข้อมูลบุคลากร' },
+        { status: 404 }
+      );
+    }
+
+    // ตรวจสอบว่าบุคลากรนี้อยู่ใน swap-list, three-way-swap, หรือ vacant-position หรือไม่
+    const errors: string[] = [];
+
+    if (personnel.nationalId) {
+      // ตรวจสอบว่ามีใน swap-list หรือไม่
+      const inSwapList = await prisma.swapList.findFirst({
+        where: { nationalId: personnel.nationalId }
+      });
+      if (inSwapList) {
+        errors.push('อยู่ในรายการ Swap List');
+      }
+
+      // ตรวจสอบว่ามีใน three-way-swap หรือไม่
+      const inThreeWaySwap = await prisma.threeWaySwap.findFirst({
+        where: { nationalId: personnel.nationalId }
+      });
+      if (inThreeWaySwap) {
+        errors.push('อยู่ในรายการ Three Way Swap');
+      }
+
+      // ตรวจสอบว่ามีใน vacant-position หรือไม่
+      const inVacantPosition = await prisma.vacantPosition.findFirst({
+        where: { nationalId: personnel.nationalId }
+      });
+      if (inVacantPosition) {
+        errors.push('อยู่ในรายการ Vacant Position');
+      }
+
+      // ตรวจสอบว่ามีการจับคู่ใน swap_transaction_detail หรือไม่
+      const hasSwapTransaction = await prisma.swapTransactionDetail.findFirst({
+        where: { nationalId: personnel.nationalId }
+      });
+      if (hasSwapTransaction) {
+        errors.push('มีการจับคู่แลกตำแหน่งอยู่ใน Swap Transaction');
+      }
+    }
+
+    // ถ้ามีข้อผิดพลาด ส่งกลับไป
+    if (errors.length > 0) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'ไม่สามารถลบข้อมูลได้',
+          detail: `บุคลากรนี้${errors.join(', ')}. กรุณาลบออกจากรายการเหล่านั้นก่อน`,
+          reasons: errors
+        },
+        { status: 400 }
+      );
+    }
+
     await prisma.policePersonnel.delete({
       where: { id },
     });

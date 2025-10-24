@@ -70,20 +70,8 @@ const Sidebar: React.FC = () => {
       ]
     },
     {
-      title: 'Police Personnel', key: 'group-personnel',
+      title: 'Transactions', key: 'group-transactions',
       items: [
-        { 
-          label: 'Personnel List', 
-          href: '/police-personnel', 
-          icon: <BadgeIcon sx={{ fontSize: 20 }} />, 
-          key: 'police-list' 
-        },
-        { 
-          label: 'Import Data', 
-          href: '/police-personnel/import', 
-          icon: <ImportIcon sx={{ fontSize: 20 }} />, 
-          key: 'police-import' 
-        },
         { 
           label: 'สลับตำแหน่ง', 
           href: '/police-personnel/swap-list', 
@@ -102,6 +90,24 @@ const Sidebar: React.FC = () => {
           icon: <VacantIcon sx={{ fontSize: 20 }} />, 
           key: 'vacant-position' 
         },
+      ]
+    },
+    {
+      title: 'Police Personnel', key: 'group-personnel',
+      items: [
+        { 
+          label: 'Personnel List', 
+          href: '/police-personnel', 
+          icon: <BadgeIcon sx={{ fontSize: 20 }} />, 
+          key: 'police-list' 
+        },
+        { 
+          label: 'Import Data', 
+          href: '/police-personnel/import', 
+          icon: <ImportIcon sx={{ fontSize: 20 }} />, 
+          key: 'police-import' 
+        },
+        
       ]
     },
     {
@@ -146,10 +152,39 @@ const Sidebar: React.FC = () => {
 
   // สร้าง content สำหรับ sidebar
   const sidebarContent = (
-    <>
-
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden', // Parent ไม่ overflow
+      }}
+    >
       {/* Menu List + Submenus */}
-      <Box sx={{ flex: 1, overflow: 'auto', px: 1, pb: 2 , pt: 2}}>
+      <Box 
+        sx={{ 
+          flex: 1, 
+          overflowY: 'auto', // เปิด scroll แนวตั้ง
+          overflowX: 'hidden', // ปิด scroll แนวนอน
+          px: 1, 
+          pb: 2, 
+          pt: 2,
+          // Custom scrollbar
+          '&::-webkit-scrollbar': {
+            width: '6px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: 'rgba(156, 163, 175, 0.3)',
+            borderRadius: '3px',
+            '&:hover': {
+              backgroundColor: 'rgba(156, 163, 175, 0.5)',
+            },
+          },
+        }}
+      >
         {menuGroups.map((group, gi) => (
           <Box key={group.key} sx={{ mb: 1.5 }}>
             <Typography variant="overline" sx={{ color: '#9CA3AF', px: 1, letterSpacing: 0.8, fontSize: '0.7rem' }}>
@@ -253,8 +288,7 @@ const Sidebar: React.FC = () => {
           </Box>
         ))}
       </Box>
-      
-    </>
+    </Box>
   );
 
   // Mobile: ใช้ Drawer (เปิดจากซ้าย)
@@ -278,6 +312,7 @@ const Sidebar: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             pt: { xs: '56px', sm: '64px' },
+            overflow: 'hidden', // ป้องกัน overflow ที่ paper
           },
         }}
       >
@@ -297,21 +332,28 @@ const Sidebar: React.FC = () => {
       sx={{
         width: isSidebarCollapsed ? 72 : drawerWidth,
         height: { xs: 'calc(100vh - 56px)', sm: 'calc(100vh - 64px)' },
-  backgroundColor: '#1F2937',
-  color: '#F9FAFB',
-  borderRight: '1px solid #374151',
+        backgroundColor: '#1F2937',
+        color: '#F9FAFB',
+        borderRight: '1px solid #374151',
         position: 'fixed',
-        left: 0, // ติดซ้ายสุดเพราะไม่มี vertical nav แล้ว
+        left: 0,
         top: { xs: 56, sm: 64 },
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
+        overflow: 'hidden', // ป้องกัน overflow ที่ parent
       }}
     >
       {/* Collapsed header spacer removed per request (hide hamburger in sidebar when collapsed) */}
 
       {/* Search and content hidden when collapsed */}
-      <Box sx={{ display: isSidebarCollapsed ? 'none' : 'block', height: '100%', overflow: 'hidden' }}>
+      <Box 
+        sx={{ 
+          display: isSidebarCollapsed ? 'none' : 'flex',
+          flexDirection: 'column',
+          height: '100%', 
+          overflow: 'hidden', // ให้ Box นี้ไม่ overflow
+        }}
+      >
         {sidebarContent}
       </Box>
 

@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn, getSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import {
   Box,
@@ -27,6 +27,15 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [imageError, setImageError] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // ตรวจสอบ error parameter จาก URL
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam === 'unauthorized') {
+      setError('คุณไม่มีสิทธิ์เข้าถึง ต้องเป็น Admin เท่านั้น');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,9 +58,17 @@ function LoginPage() {
       if (result?.error) {
         setError('Username หรือ Password ไม่ถูกต้อง');
       } else if (result?.ok) {
-        // เข้าสู่ระบบสำเร็จ
+        // เข้าสู่ระบบสำเร็จ - ตรวจสอบ role
         const session = await getSession();
         console.log('Login successful:', session);
+        
+        // ตรวจสอบว่าเป็น admin หรือไม่
+        if (session?.user?.role !== 'admin') {
+          setError('คุณไม่มีสิทธิ์เข้าถึงระบบ ต้องเป็น Admin เท่านั้น');
+          setLoading(false);
+          return;
+        }
+        
         router.push('/');
         router.refresh();
       }

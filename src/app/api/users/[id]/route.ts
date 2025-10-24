@@ -4,10 +4,11 @@ import bcrypt from 'bcryptjs';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id, 10);
+    const { id: paramId } = await params;
+    const id = parseInt(paramId, 10);
     const body = await request.json();
     const { username, email, firstName, lastName, role, isActive, password } = body;
 
@@ -52,10 +53,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id, 10);
+    const { id: paramId } = await params;
+    const id = parseInt(paramId, 10);
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (e: any) {

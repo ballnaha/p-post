@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { checkAdminAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    // Optional: Check authentication (uncomment to require login)
-    // const session = await getServerSession(authOptions);
-    // if (!session) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    // }
+    // ตรวจสอบว่าเป็น admin
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.authorized) {
+      return authCheck.response;
+    }
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -20,6 +19,7 @@ export async function GET(request: NextRequest) {
     const unitFilter = searchParams.get('unit') || 'all';
     const rankFilter = searchParams.get('rank') || 'all';
     const swapFilter = searchParams.get('swapFilter') || 'all';
+    const posCodeFilter = searchParams.get('posCode') || 'all';
 
     const skip = (page - 1) * limit;
 
@@ -86,6 +86,18 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // เพิ่ม posCode filter
+    if (posCodeFilter !== 'all') {
+      const posCodeId = parseInt(posCodeFilter);
+      if (!isNaN(posCodeId)) {
+        if (where.AND) {
+          where.AND.push({ posCodeId: { equals: posCodeId } });
+        } else {
+          where.AND = [{ posCodeId: { equals: posCodeId } }];
+        }
+      }
+    }
+    
     if (search) {
       const searchConditions = [
         { fullName: { contains: search } },
@@ -128,38 +140,38 @@ export async function GET(request: NextRequest) {
     
     if (swapFilter !== 'all') {
       const currentYear = new Date().getFullYear() + 543;
-      const personnelIds = personnel.map(p => p.id);
+      const nationalIds = personnel.map(p => p.nationalId).filter(Boolean) as string[];
 
       if (swapFilter === 'in-swap') {
         const swapList = await prisma.swapList.findMany({
           where: {
             year: currentYear,
-            originalPersonnelId: { in: personnelIds }
+            nationalId: { in: nationalIds }
           },
-          select: { originalPersonnelId: true }
+          select: { nationalId: true }
         });
-        const swapIds = new Set(swapList.map(s => s.originalPersonnelId).filter(Boolean));
-        filteredPersonnel = personnel.filter(p => swapIds.has(p.id));
+        const swapNationalIds = new Set(swapList.map(s => s.nationalId).filter(Boolean));
+        filteredPersonnel = personnel.filter(p => p.nationalId && swapNationalIds.has(p.nationalId));
       } else if (swapFilter === 'in-threeway') {
         const threeWayList = await prisma.threeWaySwap.findMany({
           where: {
             year: currentYear,
-            originalPersonnelId: { in: personnelIds }
+            nationalId: { in: nationalIds }
           },
-          select: { originalPersonnelId: true }
+          select: { nationalId: true }
         });
-        const threeWayIds = new Set(threeWayList.map(s => s.originalPersonnelId).filter(Boolean));
-        filteredPersonnel = personnel.filter(p => threeWayIds.has(p.id));
+        const threeWayNationalIds = new Set(threeWayList.map(s => s.nationalId).filter(Boolean));
+        filteredPersonnel = personnel.filter(p => p.nationalId && threeWayNationalIds.has(p.nationalId));
       } else if (swapFilter === 'in-vacant') {
         const vacantList = await prisma.vacantPosition.findMany({
           where: {
             year: currentYear,
-            originalPersonnelId: { in: personnelIds }
+            nationalId: { in: nationalIds }
           },
-          select: { originalPersonnelId: true }
+          select: { nationalId: true }
         });
-        const vacantIds = new Set(vacantList.map(s => s.originalPersonnelId).filter(Boolean));
-        filteredPersonnel = personnel.filter(p => vacantIds.has(p.id));
+        const vacantNationalIds = new Set(vacantList.map(s => s.nationalId).filter(Boolean));
+        filteredPersonnel = personnel.filter(p => p.nationalId && vacantNationalIds.has(p.nationalId));
       }
       
       // ทำ pagination หลังจาก filter แล้ว

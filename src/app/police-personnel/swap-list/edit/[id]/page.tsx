@@ -9,14 +9,10 @@ import {
   Alert,
   CircularProgress,
   Autocomplete,
-  Stack,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   IconButton,
   Chip,
+  Divider,
+  Stack,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -29,13 +25,9 @@ import {
   SwapHoriz as SwapHorizIcon,
   Person as PersonIcon,
   Info as InfoIcon,
-  Close as CloseIcon,
-  Badge as BadgeIcon,
-  CalendarToday as CalendarIcon,
-  School as EducationIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 
@@ -55,7 +47,6 @@ interface PolicePersonnel {
   nationalId?: string;
   age?: string;
   yearsOfService?: string;
-  // Extended fields for dialog
   seniority?: string;
   birthDate?: string;
   education?: string;
@@ -68,13 +59,43 @@ interface PolicePersonnel {
   actingAs?: string;
 }
 
-export default function AddSwapTransactionPage() {
+interface SwapDetail {
+  id?: string;
+  personnelId: string;
+  nationalId?: string;
+  fullName: string;
+  rank?: string;
+  fromPosition?: string;
+  fromPositionNumber?: string;
+  fromUnit?: string;
+  toPosition?: string;
+  toPositionNumber?: string;
+  toUnit?: string;
+  notes?: string;
+}
+
+interface SwapTransaction {
+  id: string;
+  year: number;
+  swapDate: string;
+  swapType: string;
+  groupName?: string;
+  groupNumber?: string;
+  status: string;
+  notes?: string;
+  swapDetails: SwapDetail[];
+  createdAt: string;
+}
+
+export default function EditSwapTransactionPage() {
   const router = useRouter();
+  const params = useParams();
   const toast = useToast();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [transaction, setTransaction] = useState<SwapTransaction | null>(null);
   const [personnelOptions, setPersonnelOptions] = useState<PolicePersonnel[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [swappedPersonnelIds, setSwappedPersonnelIds] = useState<Set<string>>(new Set());
   
   // Personnel selections
   const [personnelA, setPersonnelA] = useState<PolicePersonnel | null>(null);
@@ -89,78 +110,62 @@ export default function AddSwapTransactionPage() {
   const [swapDate, setSwapDate] = useState<Dayjs | null>(dayjs());
   const [notes, setNotes] = useState('');
   const [groupNumber, setGroupNumber] = useState<string>('');
+  const [groupName, setGroupName] = useState<string>('');
 
   useEffect(() => {
-    const fetchData = async () => {
-      const swappedIds = await fetchNextGroupNumber();
-      await fetchPersonnelOptions(swappedIds);
-    };
-    fetchData();
-  }, []);
+    if (params.id) {
+      fetchTransaction();
+    }
+  }, [params.id]);
 
-  const fetchNextGroupNumber = async (): Promise<Set<string>> => {
+  useEffect(() => {
+    if (transaction) {
+      fetchPersonnelOptions();
+    }
+  }, [transaction]);
+
+  // Update notes when personnel A or B changes
+  useEffect(() => {
+    if (personnelA && personnelB) {
+      const updatedNotes = `การสลับตำแหน่ง: ${personnelA.fullName} ⟷ ${personnelB.fullName}`;
+      setNotes(updatedNotes);
+    }
+  }, [personnelA, personnelB]);
+
+  const fetchTransaction = async () => {
     try {
-      const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/swap-transactions?year=${currentYear}`);
-      
+      setLoading(true);
+      const response = await fetch(`/api/swap-transactions/${params.id}`);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch swap transactions');
+        throw new Error('Failed to fetch transaction');
       }
-      
+
       const result = await response.json();
-      const transactions = result.data || [];
+      const data = result.data;
       
-      // Find the maximum group number for this year
-      let maxNumber = 0;
-      if (Array.isArray(transactions)) {
-        transactions.forEach((transaction: any) => {
-          if (transaction.groupNumber) {
-            // Extract number from format "2568/001"
-            const match = transaction.groupNumber.match(/\/(\d+)$/);
-            if (match) {
-              const num = parseInt(match[1], 10);
-              if (num > maxNumber) {
-                maxNumber = num;
-              }
-            }
-          }
-        });
-      }
-      
-      // Next number is max + 1
-      const nextNumber = maxNumber + 1;
-      const formattedNumber = String(nextNumber).padStart(3, '0');
-      setGroupNumber(`${currentYear}/${formattedNumber}`);
-      
-      // Extract personnel IDs who already swapped in this year
-      const swappedIds = new Set<string>();
-      if (Array.isArray(transactions)) {
-        transactions.forEach((transaction: any) => {
-          if (Array.isArray(transaction.swapDetails)) {
-            transaction.swapDetails.forEach((detail: any) => {
-              if (detail.personnelId) {
-                swappedIds.add(detail.personnelId);
-              }
-            });
-          }
-        });
-      }
-      setSwappedPersonnelIds(swappedIds);
-      return swappedIds;
+      setTransaction(data);
+      setYear(data.year);
+      setSwapDate(dayjs(data.swapDate));
+      setNotes(data.notes || '');
+      setGroupNumber(data.groupNumber || '');
+      setGroupName(data.groupName || '');
+
     } catch (error) {
-      console.error('Error fetching group number:', error);
-      // Fallback to default
-      const currentYear = new Date().getFullYear() + 543;
-      setGroupNumber(`${currentYear}/001`);
-      return new Set<string>();
+      console.error('Error fetching transaction:', error);
+      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      router.push('/police-personnel/swap-list');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchPersonnelOptions = async (excludeIds?: Set<string>) => {
+  const fetchPersonnelOptions = async () => {
     try {
       setSearchLoading(true);
-      // Fetch from swap-list API to get personnel who are in the current year's swap list
       const currentYear = new Date().getFullYear() + 543;
+      
+      // 1. Fetch swap-list (available personnel)
       const response = await fetch(`/api/swap-list?year=${currentYear}`);
 
       if (!response.ok) {
@@ -169,23 +174,72 @@ export default function AddSwapTransactionPage() {
 
       const json = await response.json();
       const list: PolicePersonnel[] = Array.isArray(json?.data) ? json.data : [];
-      // Filter only personnel with rank and who haven't swapped yet this year
-      const idsToExclude = excludeIds || swappedPersonnelIds;
+      
+      // 2. Get current transaction's personnel IDs (so we can include them in options)
+      const currentPersonnelIds = transaction?.swapDetails.map(d => d.personnelId) || [];
+      
+      // 3. Fetch all swap transactions to get already swapped IDs
+      const transactionsResponse = await fetch(`/api/swap-transactions?year=${currentYear}`);
+      const transactionsResult = await transactionsResponse.json();
+      const transactions = transactionsResult.data || [];
+      
+      // 4. Build a Set of personnel IDs who have already been swapped (excluding current transaction)
+      const swappedIds = new Set<string>();
+      transactions.forEach((t: any) => {
+        // Skip current transaction being edited
+        if (t.id !== params.id) {
+          if (Array.isArray(t.swapDetails)) {
+            t.swapDetails.forEach((detail: any) => {
+              if (detail.personnelId) {
+                swappedIds.add(detail.personnelId);
+              }
+            });
+          }
+        }
+      });
+
+      // 5. Filter personnel: must have rank AND not already swapped (except current transaction personnel)
       setPersonnelOptions(
         list.filter((p: PolicePersonnel) => 
-          !!p.rank && !idsToExclude.has(p.id)
+          !!p.rank && !swappedIds.has(p.id)
         )
       );
+
+      // 6. Set current personnel from transaction
+      if (transaction && transaction.swapDetails.length >= 2) {
+        const detailA = transaction.swapDetails[0];
+        const detailB = transaction.swapDetails[1];
+
+        // Find matching personnel from options or create from detail
+        const pA = list.find(p => p.id === detailA.personnelId) || {
+          id: detailA.personnelId,
+          fullName: detailA.fullName,
+          rank: detailA.rank,
+          position: detailA.fromPosition,
+          positionNumber: detailA.fromPositionNumber,
+          unit: detailA.fromUnit,
+          nationalId: detailA.nationalId,
+        };
+
+        const pB = list.find(p => p.id === detailB.personnelId) || {
+          id: detailB.personnelId,
+          fullName: detailB.fullName,
+          rank: detailB.rank,
+          position: detailB.fromPosition,
+          positionNumber: detailB.fromPositionNumber,
+          unit: detailB.fromUnit,
+          nationalId: detailB.nationalId,
+        };
+
+        setPersonnelA(pA);
+        setPersonnelB(pB);
+      }
+
     } catch (error) {
       console.error('Error fetching swap list:', error);
     } finally {
       setSearchLoading(false);
     }
-  };
-
-  const handlePersonnelSearch = (event: React.SyntheticEvent, value: string) => {
-    // Search is now client-side since we already have all swap list data
-    // Filter happens in the Autocomplete component itself
   };
 
   const handleShowDetail = (personnel: PolicePersonnel) => {
@@ -200,14 +254,17 @@ export default function AddSwapTransactionPage() {
 
   const handleSelectPersonnelA = (newValue: PolicePersonnel | null) => {
     setPersonnelA(newValue);
-    // No need to reset B anymore since position doesn't need to match
+    // If B is selected and same as new A, clear B
+    if (personnelB && newValue && personnelB.id === newValue.id) {
+      setPersonnelB(null);
+    }
   };
 
   const handleSelectPersonnelB = (newValue: PolicePersonnel | null) => {
     setPersonnelB(newValue);
   };
 
-  // Filter options for B - no need to check same position
+  // Filter options for B - exclude A and ensure has rank
   const optionsForB = personnelA
     ? personnelOptions.filter(
         (p) =>
@@ -221,7 +278,6 @@ export default function AddSwapTransactionPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
     if (!personnelA || !personnelB) {
       toast.error('กรุณาเลือกบุคลากร 2 คน');
       return;
@@ -237,34 +293,15 @@ export default function AddSwapTransactionPage() {
       return;
     }
 
-    if (!groupNumber || groupNumber.trim() === '') {
-      toast.error('ไม่พบเลขกลุ่ม กรุณาลองใหม่อีกครั้ง');
-      return;
-    }
-
-    // Validate personnel A
-    if (!personnelA.id || !personnelA.fullName || !personnelA.position || !personnelA.unit) {
-      toast.error('ข้อมูลบุคลากร A ไม่ครบถ้วน');
-      return;
-    }
-
-    // Validate personnel B
-    if (!personnelB.id || !personnelB.fullName || !personnelB.position || !personnelB.unit) {
-      toast.error('ข้อมูลบุคลากร B ไม่ครบถ้วน');
-      return;
-    }
-
-    // Check if trying to swap with the same person
     if (personnelA.id === personnelB.id) {
       toast.error('ไม่สามารถสลับกับบุคลากรคนเดียวกันได้');
       return;
     }
 
     try {
-      setLoading(true);
+      setSaving(true);
 
-      // สร้างชื่อกลุ่มอัตโนมัติ
-      const groupName = `${personnelA.fullName} ⟷ ${personnelB.fullName}`;
+      const updatedGroupName = `${personnelA.fullName} ⟷ ${personnelB.fullName}`;
 
       const swapDetails = [
         {
@@ -275,9 +312,9 @@ export default function AddSwapTransactionPage() {
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
-          toPosition: personnelB.position, // Same position
+          toPosition: personnelB.position,
           toPositionNumber: personnelB.positionNumber,
-          toUnit: personnelB.unit, // Swap to B's unit
+          toUnit: personnelB.unit,
         },
         {
           personnelId: personnelB.id,
@@ -287,14 +324,14 @@ export default function AddSwapTransactionPage() {
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
-          toPosition: personnelA.position, // Same position
+          toPosition: personnelA.position,
           toPositionNumber: personnelA.positionNumber,
-          toUnit: personnelA.unit, // Swap to A's unit
+          toUnit: personnelA.unit,
         },
       ];
 
-      const response = await fetch('/api/swap-transactions', {
-        method: 'POST',
+      const response = await fetch(`/api/swap-transactions/${params.id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -302,27 +339,37 @@ export default function AddSwapTransactionPage() {
           year,
           swapDate: swapDate ? swapDate.format('YYYY-MM-DD') : new Date().toISOString().split('T')[0],
           swapType: 'two-way',
-          groupName: groupName, // ชื่อกลุ่ม
-          groupNumber: groupNumber, // เลขกลุ่ม
-          notes: notes || `การสลับตำแหน่ง: ${groupName}`,
+          groupName: updatedGroupName,
+          groupNumber: groupNumber,
+          notes: notes || `การสลับตำแหน่ง: ${updatedGroupName}`,
           swapDetails,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to save swap transaction');
+        throw new Error(error.error || 'Failed to update swap transaction');
       }
 
-      toast.success('บันทึกผลการสลับตำแหน่งสำเร็จ');
+      toast.success('อัพเดทผลการสลับตำแหน่งสำเร็จ');
       router.push('/police-personnel/swap-list');
     } catch (error: any) {
-      console.error('Error saving swap transaction:', error);
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      console.error('Error updating swap transaction:', error);
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการอัพเดทข้อมูล');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <Layout>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+          <CircularProgress size={60} />
+        </Box>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -339,11 +386,11 @@ export default function AddSwapTransactionPage() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                  ผลการสลับตำแหน่ง
+                  แก้ไขผลการสลับตำแหน่ง
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                เลือกบุคลากร 2 คน เพื่อบันทึกการสลับหน่วยงานกัน
+                แก้ไขข้อมูลการสลับตำแหน่งระหว่างบุคลากร 2 คน
               </Typography>
             </Box>
             <Button
@@ -355,7 +402,6 @@ export default function AddSwapTransactionPage() {
             </Button>
           </Box>
 
-          {/* Group Number Display */}
           <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
               <TextField
@@ -363,16 +409,12 @@ export default function AddSwapTransactionPage() {
                 value={groupNumber}
                 disabled
                 size="small"
-                helperText="เลขกลุ่มจะถูกสร้างอัตโนมัติ"
               />
               <TextField
                 label="ประจำปี *"
-                type="text"
+                type="number"
                 value={year || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  const value = e.target.value;
-                  setYear(value === '' ? 0 : parseInt(value) || 0);
-                }}
+                onChange={(e) => setYear(parseInt(e.target.value) || 0)}
                 required
                 inputProps={{ min: 2500, max: 2700 }}
                 size="small"
@@ -416,21 +458,20 @@ export default function AddSwapTransactionPage() {
                   <PersonIcon />
                   บุคลากร A
                 </Typography>
-                
+
                 <Autocomplete
-                  fullWidth
-                  size="small"
                   options={personnelOptions}
+                  getOptionLabel={(option) =>
+                    `${option.rank || ''} ${option.fullName || '-'}`
+                  }
                   value={personnelA}
-                  getOptionLabel={(option) => `${option.rank || ''} ${option.fullName || ''} - ${option.position || ''} (${option.unit || ''})`}
                   onChange={(event, newValue) => handleSelectPersonnelA(newValue)}
-                  onInputChange={handlePersonnelSearch}
                   loading={searchLoading}
                   renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label="🔍 เลือกบุคลากร A" 
-                      placeholder="ค้นหา..."
+                    <TextField
+                      {...params}
+                      label="เลือกบุคลากร A *"
+                      placeholder="พิมพ์ชื่อหรือเลขที่"
                       InputProps={{
                         ...params.InputProps,
                         endAdornment: (
@@ -447,11 +488,13 @@ export default function AddSwapTransactionPage() {
                       <Box>
                         <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
                         <Typography variant="body2" color="text.secondary">
+                          {option.posCodeMaster && `POSCODE: ${option.posCodeMaster.id} | `}
                           เลขตำแหน่ง: {option.positionNumber || '-'} | ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
                         </Typography>
                       </Box>
                     </li>
                   )}
+                  noOptionsText="ไม่พบข้อมูล"
                 />
 
                 {personnelA && (
@@ -480,10 +523,10 @@ export default function AddSwapTransactionPage() {
                         {personnelA.posCodeMaster && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">POSCODE</Typography>
+                            
                             <Typography variant="body2" fontWeight={600} color="primary.main">
                               {personnelA.posCodeMaster.id} - {personnelA.posCodeMaster.name}
                             </Typography>
-                            
                           </Box>
                         )}
                         <Box>
@@ -603,7 +646,7 @@ export default function AddSwapTransactionPage() {
                 )}
               </Paper>
 
-              {/* ลูกศรกลาง */}
+              {/* Swap Icon */}
               <Box sx={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -635,20 +678,30 @@ export default function AddSwapTransactionPage() {
                   <PersonIcon />
                   บุคลากร B
                 </Typography>
-                
+
                 <Autocomplete
-                  fullWidth
-                  size="small"
                   options={optionsForB}
+                  getOptionLabel={(option) =>
+                    `${option.rank || ''} ${option.fullName || '-'}`
+                  }
                   value={personnelB}
-                  getOptionLabel={(option) => `${option.rank || ''} ${option.fullName || ''} - ${option.position || ''} (${option.unit || ''})`}
                   onChange={(event, newValue) => handleSelectPersonnelB(newValue)}
                   disabled={!personnelA}
+                  loading={searchLoading}
                   renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label="🔍 เลือกบุคลากร B" 
-                      placeholder={personnelA ? "ค้นหา..." : "เลือก A ก่อน"} 
+                    <TextField
+                      {...params}
+                      label="เลือกบุคลากร B *"
+                      placeholder="พิมพ์ชื่อหรือเลขที่"
+                      InputProps={{
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {searchLoading ? <CircularProgress size={20} /> : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      }}
                     />
                   )}
                   renderOption={(props, option) => (
@@ -656,16 +709,13 @@ export default function AddSwapTransactionPage() {
                       <Box>
                         <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
                         <Typography variant="body2" color="text.secondary">
+                          {option.posCodeMaster && `POSCODE: ${option.posCodeMaster.id} | `}
                           เลขที่: {option.noId || '-'} | ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
                         </Typography>
                       </Box>
                     </li>
                   )}
-                  noOptionsText={
-                    personnelA 
-                      ? "ไม่พบบุคลากร" 
-                      : "เลือกบุคลากร A ก่อน"
-                  }
+                  noOptionsText={!personnelA ? "กรุณาเลือกบุคลากร A ก่อน" : "ไม่พบข้อมูล"}
                 />
 
                 {personnelB && (
@@ -695,8 +745,9 @@ export default function AddSwapTransactionPage() {
                           <Box>
                             <Typography variant="caption" color="text.secondary">POSCODE</Typography>
                             <Typography variant="body2" fontWeight={600} color="primary.main">
-                              {personnelB.posCodeMaster.id} - {personnelB.posCodeMaster.name}
+                                {personnelB.posCodeMaster.id} - {personnelB.posCodeMaster.name}
                             </Typography>
+                            
                           </Box>
                         )}
                         <Box>
@@ -819,61 +870,56 @@ export default function AddSwapTransactionPage() {
 
             {/* Swap Result Preview */}
             {canSwap && (
-              <Alert severity="success" sx={{ mt: 3 }}>
-                <Typography variant="body2" fontWeight={600} mb={1}>
-                  📝 ชื่อกลุ่ม: {personnelA.fullName} ⟷ {personnelB.fullName}
-                </Typography>
-                <Typography variant="body2" fontWeight={600} mb={1}>
-                  ✅ ผลการสลับตำแหน่ง:
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ mt: 3 }}>
+                <Divider sx={{ mb: 2 }}>
+                  <Chip label="ผลการสลับ" color="primary" />
+                </Divider>
+                <Alert severity="success">
                   <Typography variant="body2">
-                    • <strong>{personnelA.fullName}</strong> จาก <strong>{personnelA.position}</strong> → ไป <strong style={{ color: 'green' }}>{personnelB.position}</strong>
+                    <strong>{personnelA?.fullName}</strong> จาก <strong>{personnelA?.position}</strong> → 
+                    ไปที่ <strong>{personnelB?.position}</strong>
                   </Typography>
                   <Typography variant="body2">
-                    • <strong>{personnelB.fullName}</strong> จาก <strong>{personnelB.position}</strong> → ไป <strong style={{ color: 'green' }}>{personnelA.position}</strong>
+                    <strong>{personnelB?.fullName}</strong> จาก <strong>{personnelB?.position}</strong> → 
+                    ไปที่ <strong>{personnelA?.position}</strong>
                   </Typography>
-                </Box>
-              </Alert>
+                </Alert>
+              </Box>
             )}
-          </Paper>
 
-          {/* Notes Section */}
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" fontWeight={600} mb={3}>
-              หมายเหตุ
-            </Typography>
-            <TextField
-              label="หมายเหตุ"
-              multiline
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
-              size="small"
-              fullWidth
-            />
-          </Paper>
+            {/* Notes */}
+            <Box sx={{ mt: 3 }}>
+              <TextField
+                label="หมายเหตุ"
+                multiline
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+                fullWidth
+              />
+            </Box>
 
-          {/* Submit Buttons */}
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              onClick={() => router.back()}
-              disabled={loading}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
-              disabled={loading || !canSwap}
-            >
-              {loading ? 'กำลังบันทึก...' : 'บันทึกผลการสลับ'}
-            </Button>
-          </Box>
+            {/* Submit Buttons */}
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 3 }}>
+              <Button
+                variant="outlined"
+                onClick={() => router.back()}
+                disabled={saving}
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                disabled={saving || !canSwap}
+              >
+                {saving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+              </Button>
+            </Box>
+          </Paper>
         </form>
 
         {/* Personnel Detail Modal - Using Reusable Component */}

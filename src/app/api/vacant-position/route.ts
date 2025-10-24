@@ -31,16 +31,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { year, notes, id, posCodeMaster, createdAt, updatedAt, createdBy, updatedBy, ...personnelData } = body;
+    // กรอง fields ที่ไม่ต้องการออก (id, posCodeMaster, timestamps, originalPersonnelId)
+    const { year, notes, id, posCodeMaster, createdAt, updatedAt, createdBy, updatedBy, originalPersonnelId, ...personnelData } = body;
 
-    // เช็คว่ามีข้อมูลซ้ำหรือไม่
-    if (personnelData.originalPersonnelId) {
-      const existing = await prisma.vacantPosition.findUnique({
+    // เช็คว่ามีข้อมูลซ้ำหรือไม่ (ใช้เลขบัตรประชาชน หรือ position + unit)
+    if (personnelData.nationalId) {
+      const existing = await prisma.vacantPosition.findFirst({
         where: {
-          unique_vacant_personnel_year: {
-            originalPersonnelId: personnelData.originalPersonnelId,
-            year: year,
-          },
+          nationalId: personnelData.nationalId,
+          year: year,
         },
       });
 
@@ -75,24 +74,31 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const originalPersonnelId = searchParams.get('originalPersonnelId');
-    const year = searchParams.get('year');
+    const nationalId = searchParams.get('nationalId');
+    const yearParam = searchParams.get('year');
 
-    if (!originalPersonnelId || !year) {
+    if (!nationalId || !yearParam) {
       return NextResponse.json(
-        { error: 'Missing originalPersonnelId or year' },
+        { error: 'Missing nationalId or year' },
         { status: 400 }
       );
     }
 
-    await prisma.vacantPosition.delete({
+    const year = parseInt(yearParam);
+
+    const deleted = await prisma.vacantPosition.deleteMany({
       where: {
-        unique_vacant_personnel_year: {
-          originalPersonnelId,
-          year: parseInt(year),
-        },
+        nationalId: nationalId,
+        year: year,
       },
     });
+
+    if (deleted.count === 0) {
+      return NextResponse.json(
+        { error: 'Record not found' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({ message: 'Removed from vacant position list' });
   } catch (error) {

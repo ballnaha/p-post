@@ -22,6 +22,7 @@ import {
   Assessment as AssessmentIcon,
   Inventory as InventoryIcon,
   ImportExport as ImportIcon,
+  SwapHoriz as SwapHorizIcon,
 } from '@mui/icons-material';
 
 interface BreadcrumbItem {
@@ -68,6 +69,15 @@ const Breadcrumbs: React.FC = () => {
             label: 'นำเข้าข้อมูล',
             href: isLast ? undefined : '/police-personnel/import',
             icon: <ImportIcon sx={{ fontSize: 16 }} />,
+            isActive: isLast,
+          });
+          break;
+
+        case 'swap-list':
+          breadcrumbs.push({
+            label: 'รายการสลับ',
+            href: isLast ? undefined : '/police-personnel/swap-list',
+            icon: <SwapHorizIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
           });
           break;

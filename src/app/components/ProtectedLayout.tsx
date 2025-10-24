@@ -19,9 +19,9 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
     return <>{children}</>;
   }
 
-  // หน้าอื่นๆ ต้องผ่าน AuthGuard
+  // หน้าอื่นๆ ต้องผ่าน AuthGuard และต้องเป็น admin
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin={true}>
       {children}
     </AuthGuard>
   );

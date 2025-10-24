@@ -67,10 +67,16 @@ import { useTheme, useMediaQuery } from '@mui/material';
 import DataTablePagination from '@/components/DataTablePagination';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
+import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 
 interface PolicePersonnel {
   id: string;
   noId?: string;
+  posCodeId?: number;
+  posCodeMaster?: {
+    id: number;
+    name: string;
+  };
   position?: string;
   positionNumber?: string;
   unit?: string;
@@ -118,9 +124,11 @@ export default function PolicePersonnelPage() {
   const [unitFilter, setUnitFilter] = useState<string>('all');
   const [rankFilter, setRankFilter] = useState<string>('all');
   const [swapFilter, setSwapFilter] = useState<'all' | 'in-swap' | 'in-threeway' | 'in-vacant'>('all');
+  const [posCodeFilter, setPosCodeFilter] = useState<string>('all');
   const [units, setUnits] = useState<string[]>([]);
   const [ranks, setRanks] = useState<string[]>([]);
   const [positionTypes, setPositionTypes] = useState<string[]>([]);
+  const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -152,6 +160,11 @@ export default function PolicePersonnelPage() {
 
   // Vacant Position states
   const [vacantListData, setVacantListData] = useState<Set<string>>(new Set());
+
+  // Loading states สำหรับ icon actions (เก็บ nationalId ของคนที่กำลัง process)
+  const [loadingSwap, setLoadingSwap] = useState<Set<string>>(new Set());
+  const [loadingThreeWay, setLoadingThreeWay] = useState<Set<string>>(new Set());
+  const [loadingVacant, setLoadingVacant] = useState<Set<string>>(new Set());
 
   // Menu states
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -204,6 +217,18 @@ export default function PolicePersonnelPage() {
     }
   };
 
+  const fetchPosCodes = async () => {
+    try {
+      const response = await fetch('/api/police-personnel/pos-codes');
+      const result = await response.json();
+      if (result.success) {
+        setPosCodes(result.data);
+      }
+    } catch (err) {
+      console.error('Error fetching pos codes:', err);
+    }
+  };
+
   // ดึงรายการ Swap List สำหรับปีปัจจุบัน
   const fetchSwapListForCurrentYear = async () => {
     try {
@@ -211,8 +236,13 @@ export default function PolicePersonnelPage() {
       const response = await fetch(`/api/swap-list?year=${currentYear}`);
       const result = await response.json();
       if (result.success) {
-        const personnelIds = new Set<string>(result.data.map((item: any) => item.originalPersonnelId).filter(Boolean));
-        setSwapListData(personnelIds);
+        // ใช้ nationalId แทน originalPersonnelId เพื่อให้ทำงานได้แม้ import ข้อมูลใหม่
+        const nationalIds = new Set<string>(
+          result.data
+            .map((item: any) => item.nationalId)
+            .filter((id: string) => id) // กรองเฉพาะที่มีค่า
+        );
+        setSwapListData(nationalIds);
       }
     } catch (err) {
       console.error('Error fetching swap list:', err);
@@ -223,13 +253,16 @@ export default function PolicePersonnelPage() {
   const fetchThreeWayListForCurrentYear = async () => {
     try {
       const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/three-way-swap?year=${currentYear}`);
+      const response = await fetch(`/api/swap-list?year=${currentYear}&swapType=three-way`);
       const result = await response.json();
       
-      // API ไม่มี success field, ดูจาก array โดยตรง
-      if (Array.isArray(result)) {
-        const personnelIds = new Set<string>(result.map((item: any) => item.originalPersonnelId).filter(Boolean));
-        setThreeWayListData(personnelIds);
+      if (result.success && Array.isArray(result.data)) {
+        const nationalIds = new Set<string>(
+          result.data
+            .map((item: any) => item.nationalId)
+            .filter((id: string) => id)
+        );
+        setThreeWayListData(nationalIds);
       }
     } catch (err) {
       console.error('Error fetching three way swap list:', err);
@@ -244,8 +277,13 @@ export default function PolicePersonnelPage() {
       const result = await response.json();
       
       if (Array.isArray(result)) {
-        const personnelIds = new Set<string>(result.map((item: any) => item.originalPersonnelId).filter(Boolean));
-        setVacantListData(personnelIds);
+        // ใช้ nationalId แทน originalPersonnelId
+        const nationalIds = new Set<string>(
+          result
+            .map((item: any) => item.nationalId)
+            .filter((id: string) => id) // กรองเฉพาะที่มีค่า
+        );
+        setVacantListData(nationalIds);
       }
     } catch (err) {
       console.error('Error fetching vacant position list:', err);
@@ -288,6 +326,7 @@ export default function PolicePersonnelPage() {
     fetchUnits();
     fetchRanks();
     fetchPositionTypes();
+    fetchPosCodes();
     fetchSwapListForCurrentYear();
     fetchThreeWayListForCurrentYear();
     fetchVacantListForCurrentYear();
@@ -299,7 +338,7 @@ export default function PolicePersonnelPage() {
     try {
       const searchParam = nameSearch || search || '';
       const response = await fetch(
-        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&positionType=${positionTypeFilter}&unit=${unitFilter}&rank=${rankFilter}&swapFilter=${swapFilter}`
+        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&positionType=${positionTypeFilter}&unit=${unitFilter}&rank=${rankFilter}&swapFilter=${swapFilter}&posCode=${posCodeFilter}`
       );
       const result = await response.json();
 
@@ -318,7 +357,7 @@ export default function PolicePersonnelPage() {
 
   useEffect(() => {
     fetchData();
-  }, [page, rowsPerPage, positionFilter, positionTypeFilter, unitFilter, rankFilter, nameSearch, swapFilter]);
+  }, [page, rowsPerPage, positionFilter, positionTypeFilter, unitFilter, rankFilter, nameSearch, swapFilter, posCodeFilter]);
 
   const handleSearch = () => {
     setPage(0);
@@ -335,6 +374,7 @@ export default function PolicePersonnelPage() {
     setUnitFilter('all');
     setRankFilter('all');
     setSwapFilter('all');
+    setPosCodeFilter('all');
     setPage(0);
   };
 
@@ -360,6 +400,11 @@ export default function PolicePersonnelPage() {
 
   const handleUnitFilterChange = (value: string) => {
     setUnitFilter(value);
+    setPage(0);
+  };
+
+  const handlePosCodeFilterChange = (value: string) => {
+    setPosCodeFilter(value);
     setPage(0);
   };
 
@@ -473,13 +518,18 @@ export default function PolicePersonnelPage() {
   // Handler สำหรับ Add to Swap
   const handleAddToSwap = (personnel: PolicePersonnel) => {
     // ตรวจสอบว่าอยู่ในรายการอื่นแล้วหรือไม่
-    if (threeWayListData.has(personnel.id)) {
+    if (personnel.nationalId && threeWayListData.has(personnel.nationalId)) {
       toast.error('บุคคลนี้อยู่ในรายการสามเส้าแล้ว กรุณาลบออกจากรายการสามเส้าก่อน');
       return;
     }
-    if (vacantListData.has(personnel.id)) {
+    if (personnel.nationalId && vacantListData.has(personnel.nationalId)) {
       toast.error('บุคคลนี้อยู่ในรายการตำแหน่งว่างแล้ว กรุณาลบออกจากรายการตำแหน่งว่างก่อน');
       return;
+    }
+
+    // เพิ่ม loading state ทันที (เพื่อให้ user รู้ว่ากดแล้ว)
+    if (personnel.nationalId) {
+      setLoadingSwap(prev => new Set(prev).add(personnel.nationalId!));
     }
 
     setSelectedPersonnel(personnel);
@@ -512,6 +562,12 @@ export default function PolicePersonnelPage() {
         setAddToSwapModalOpen(false);
         setSelectedPersonnel(null);
         setSwapNotes('');
+        
+        // อัพเดท state ทันที (ใช้ nationalId)
+        if (selectedPersonnel.nationalId) {
+          setSwapListData(prev => new Set(prev).add(selectedPersonnel.nationalId!));
+        }
+        
         // อัพเดท swap list และ reset page ถ้ากำลัง filter swap list อยู่
         fetchSwapListForCurrentYear();
         if (swapFilter === 'in-swap') {
@@ -525,6 +581,14 @@ export default function PolicePersonnelPage() {
       toast.error('เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
     } finally {
       setIsAddingToSwap(false);
+      // ลบ loading state
+      if (selectedPersonnel?.nationalId) {
+        setLoadingSwap(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(selectedPersonnel.nationalId!);
+          return newSet;
+        });
+      }
     }
   };
 
@@ -532,18 +596,31 @@ export default function PolicePersonnelPage() {
     setAddToSwapModalOpen(false);
     setSelectedPersonnel(null);
     setSwapNotes('');
+    // ลบ loading state เมื่อยกเลิก
+    if (selectedPersonnel?.nationalId) {
+      setLoadingSwap(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(selectedPersonnel.nationalId!);
+        return newSet;
+      });
+    }
   };
 
   // Three Way Swap Handlers
   const handleAddToThreeWay = (personnel: PolicePersonnel) => {
     // ตรวจสอบว่าอยู่ในรายการอื่นแล้วหรือไม่
-    if (swapListData.has(personnel.id)) {
+    if (personnel.nationalId && swapListData.has(personnel.nationalId)) {
       toast.error('บุคคลนี้อยู่ในรายการสลับตำแหน่งแล้ว กรุณาลบออกจากรายการสลับตำแหน่งก่อน');
       return;
     }
-    if (vacantListData.has(personnel.id)) {
+    if (personnel.nationalId && vacantListData.has(personnel.nationalId)) {
       toast.error('บุคคลนี้อยู่ในรายการตำแหน่งว่างแล้ว กรุณาลบออกจากรายการตำแหน่งว่างก่อน');
       return;
+    }
+
+    // เพิ่ม loading state
+    if (personnel.nationalId) {
+      setLoadingThreeWay(prev => new Set(prev).add(personnel.nationalId!));
     }
 
     setSelectedPersonnel(personnel);
@@ -558,22 +635,30 @@ export default function PolicePersonnelPage() {
 
     setIsAddingToThreeWay(true);
     try {
-      const response = await fetch('/api/three-way-swap', {
+      const response = await fetch('/api/swap-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...selectedPersonnel,
-          originalPersonnelId: selectedPersonnel.id,
+          personnel: selectedPersonnel,
           year: selectedThreeWayYear,
+          swapType: 'three-way',
           notes: threeWayNotes || null
         }),
       });
 
-      if (response.ok) {
+      const result = await response.json();
+
+      if (result.success) {
         toast.success('เพิ่มเข้ารายการสามเส้าสำเร็จ');
         setAddToThreeWayModalOpen(false);
         setSelectedPersonnel(null);
         setThreeWayNotes('');
+        
+        // อัพเดท state ทันที
+        if (selectedPersonnel.nationalId) {
+          setThreeWayListData(prev => new Set(prev).add(selectedPersonnel.nationalId!));
+        }
+        
         fetchThreeWayListForCurrentYear();
         if (swapFilter === 'in-threeway') {
           setPage(0); // Reset to first page to see the newly added person
@@ -587,6 +672,14 @@ export default function PolicePersonnelPage() {
       toast.error('เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
     } finally {
       setIsAddingToThreeWay(false);
+      // ลบ loading state
+      if (selectedPersonnel?.nationalId) {
+        setLoadingThreeWay(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(selectedPersonnel.nationalId!);
+          return newSet;
+        });
+      }
     }
   };
 
@@ -594,18 +687,54 @@ export default function PolicePersonnelPage() {
     setAddToThreeWayModalOpen(false);
     setSelectedPersonnel(null);
     setThreeWayNotes('');
+    // ลบ loading state เมื่อยกเลิก
+    if (selectedPersonnel?.nationalId) {
+      setLoadingThreeWay(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(selectedPersonnel.nationalId!);
+        return newSet;
+      });
+    }
   };
 
-  const handleRemoveFromThreeWay = async (personnelId: string) => {
+  const handleRemoveFromThreeWay = async (nationalId: string) => {
+    // เพิ่ม loading state
+    setLoadingThreeWay(prev => new Set(prev).add(nationalId));
+    
     try {
       const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(
-        `/api/three-way-swap?originalPersonnelId=${personnelId}&year=${currentYear}`,
-        { method: 'DELETE' }
-      );
+      
+      // ค้นหา record ใน swap_list
+      const listResponse = await fetch(`/api/swap-list?year=${currentYear}&swapType=three-way`);
+      const listResult = await listResponse.json();
+      
+      if (!listResult.success) {
+        throw new Error('Failed to fetch swap list');
+      }
+      
+      const swapItem = listResult.data.find((item: any) => item.nationalId === nationalId);
+      
+      if (!swapItem) {
+        throw new Error('ไม่พบรายการในระบบ');
+      }
+      
+      // ลบออก
+      const response = await fetch(`/api/swap-list/${swapItem.id}`, {
+        method: 'DELETE'
+      });
 
-      if (response.ok) {
+      const result = await response.json();
+
+      if (result.success) {
         toast.success('ลบออกจากรายการสามเส้าแล้ว');
+        
+        // อัพเดท state ทันที
+        setThreeWayListData(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(nationalId);
+          return newSet;
+        });
+        
         fetchThreeWayListForCurrentYear();
         if (swapFilter === 'in-threeway') {
           setPage(0); // Reset to first page for consistent view
@@ -616,17 +745,27 @@ export default function PolicePersonnelPage() {
     } catch (error) {
       console.error('Remove from three way swap error:', error);
       toast.error('เกิดข้อผิดพลาดในการลบข้อมูล');
+    } finally {
+      // ลบ loading state
+      setLoadingThreeWay(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(nationalId);
+        return newSet;
+      });
     }
   };
 
-  const handleRemoveFromSwap = async (personnelId: string) => {
+  const handleRemoveFromSwap = async (nationalId: string) => {
+    // เพิ่ม loading state
+    setLoadingSwap(prev => new Set(prev).add(nationalId));
+    
     try {
       const currentYear = new Date().getFullYear() + 543;
       const response = await fetch('/api/swap-list', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          originalPersonnelId: personnelId,
+          nationalId: nationalId,  // ใช้ nationalId แทน originalPersonnelId
           year: currentYear
         }),
       });
@@ -635,30 +774,54 @@ export default function PolicePersonnelPage() {
 
       if (result.success) {
         toast.success('ลบออกจากรายการสลับตำแหน่งสำเร็จ');
+        
+        // อัพเดท state ทันที
+        setSwapListData(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(nationalId);
+          return newSet;
+        });
+        
         fetchSwapListForCurrentYear();
         // ถ้ากำลัง filter swap list และลบคนที่อยู่ในหน้าปัจจุบันออก อาจต้อง reset page
         if (swapFilter === 'in-swap') {
           setPage(0); // Reset to first page for consistent view
         }
       } else {
-        toast.error(result.error || 'เกิดข้อผิดพลาดในการลบข้อมูล');
+        // แสดง error message ที่ละเอียดขึ้น
+        const errorMessage = result.detail 
+          ? `${result.error}\n${result.detail}` 
+          : result.error || 'เกิดข้อผิดพลาดในการลบข้อมูล';
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error('Remove from swap error:', error);
       toast.error('เกิดข้อผิดพลาดในการลบข้อมูล');
+    } finally {
+      // ลบ loading state
+      setLoadingSwap(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(nationalId);
+        return newSet;
+      });
     }
   };
 
   // Vacant Position Handlers
   const handleAddToVacant = async (personnel: PolicePersonnel) => {
     // ตรวจสอบว่าอยู่ในรายการอื่นแล้วหรือไม่
-    if (swapListData.has(personnel.id)) {
+    if (personnel.nationalId && swapListData.has(personnel.nationalId)) {
       toast.error('บุคคลนี้อยู่ในรายการสลับตำแหน่งแล้ว กรุณาลบออกจากรายการสลับตำแหน่งก่อน');
       return;
     }
-    if (threeWayListData.has(personnel.id)) {
+    if (personnel.nationalId && threeWayListData.has(personnel.nationalId)) {
       toast.error('บุคคลนี้อยู่ในรายการสามเส้าแล้ว กรุณาลบออกจากรายการสามเส้าก่อน');
       return;
+    }
+
+    // เพิ่ม loading state
+    if (personnel.nationalId) {
+      setLoadingVacant(prev => new Set(prev).add(personnel.nationalId!));
     }
 
     try {
@@ -676,6 +839,12 @@ export default function PolicePersonnelPage() {
 
       if (response.ok) {
         toast.success('เพิ่มเข้ารายการตำแหน่งว่างสำเร็จ');
+        
+        // อัพเดท state ทันที (ใช้ nationalId)
+        if (personnel.nationalId) {
+          setVacantListData(prev => new Set(prev).add(personnel.nationalId!));
+        }
+        
         fetchVacantListForCurrentYear();
         if (swapFilter === 'in-vacant') {
           setPage(0); // Reset to first page to see the newly added person
@@ -687,19 +856,39 @@ export default function PolicePersonnelPage() {
     } catch (error) {
       console.error('Add to vacant position error:', error);
       toast.error('เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
+    } finally {
+      // ลบ loading state
+      if (personnel.nationalId) {
+        setLoadingVacant(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(personnel.nationalId!);
+          return newSet;
+        });
+      }
     }
   };
 
-  const handleRemoveFromVacant = async (personnelId: string) => {
+  const handleRemoveFromVacant = async (nationalId: string) => {
+    // เพิ่ม loading state
+    setLoadingVacant(prev => new Set(prev).add(nationalId));
+    
     try {
       const currentYear = new Date().getFullYear() + 543;
       const response = await fetch(
-        `/api/vacant-position?originalPersonnelId=${personnelId}&year=${currentYear}`,
+        `/api/vacant-position?nationalId=${nationalId}&year=${currentYear}`,
         { method: 'DELETE' }
       );
 
       if (response.ok) {
         toast.success('ลบออกจากรายการตำแหน่งว่างแล้ว');
+        
+        // อัพเดท state ทันที
+        setVacantListData(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(nationalId);
+          return newSet;
+        });
+        
         fetchVacantListForCurrentYear();
         if (swapFilter === 'in-vacant') {
           setPage(0); // Reset to first page for consistent view
@@ -710,6 +899,13 @@ export default function PolicePersonnelPage() {
     } catch (error) {
       console.error('Remove from vacant position error:', error);
       toast.error('เกิดข้อผิดพลาดในการลบข้อมูล');
+    } finally {
+      // ลบ loading state
+      setLoadingVacant(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(nationalId);
+        return newSet;
+      });
     }
   };
 
@@ -836,11 +1032,22 @@ export default function PolicePersonnelPage() {
               <CardContent sx={{ flexGrow: 1, pb: 2 }}>
                 {/* Status Badge */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <BadgeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                      {person.positionNumber || 'ไม่ระบุเลขตำแหน่ง'}
-                    </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <BadgeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        {person.positionNumber || 'ไม่ระบุเลขตำแหน่ง'}
+                      </Typography>
+                    </Box>
+                    {person.posCodeMaster && (
+                      <Chip 
+                        label={`${person.posCodeMaster.id} - ${person.posCodeMaster.name}`} 
+                        size="small" 
+                        color="primary"
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600 }}
+                      />
+                    )}
                   </Box>
                   {person.rank ? (
                     <Chip
@@ -990,7 +1197,7 @@ export default function PolicePersonnelPage() {
 
               <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 {/* Chip แสดงสถานะ Swap List */}
-                {person.rank && swapListData.has(person.id) && (
+                {person.rank && person.nationalId && swapListData.has(person.nationalId) && (
                   <Chip 
                     label="อยู่ใน Swap List" 
                     size="small" 
@@ -999,7 +1206,7 @@ export default function PolicePersonnelPage() {
                   />
                 )}
                 {/* Chip แสดงสถานะ Three Way Swap */}
-                {person.rank && threeWayListData.has(person.id) && (
+                {person.rank && person.nationalId && threeWayListData.has(person.nationalId) && (
                   <Chip 
                     label="อยู่ในสามเส้า" 
                     size="small" 
@@ -1008,7 +1215,7 @@ export default function PolicePersonnelPage() {
                   />
                 )}
                 {/* Chip แสดงสถานะ Vacant Position */}
-                {person.rank && vacantListData.has(person.id) && (
+                {person.rank && person.nationalId && vacantListData.has(person.nationalId) && (
                   <Chip 
                     label="อยู่ในตำแหน่งว่าง" 
                     size="small" 
@@ -1041,16 +1248,17 @@ export default function PolicePersonnelPage() {
                     ) : (
                       // ถ้ามีคน แสดง Swap, สามเส้า, ตำแหน่งว่าง
                       <>
-                        <Tooltip title={swapListData.has(person.id) ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"}>
+                        <Tooltip title={person.nationalId && swapListData.has(person.nationalId) ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"}>
                           <IconButton
                             size="medium"
                             color="info"
-                            onClick={() => swapListData.has(person.id) ? handleRemoveFromSwap(person.id) : handleAddToSwap(person)}
+                            onClick={() => person.nationalId && swapListData.has(person.nationalId) ? handleRemoveFromSwap(person.nationalId) : handleAddToSwap(person)}
+                            disabled={person.nationalId ? loadingSwap.has(person.nationalId) : false}
                             sx={{
                               borderRadius: '50%',
                               width: 32,
                               height: 32,
-                              ...(swapListData.has(person.id) ? {
+                              ...(person.nationalId && swapListData.has(person.nationalId) ? {
                                 // Contained style (เต็มสี)
                                 bgcolor: 'info.main',
                                 color: 'white',
@@ -1064,19 +1272,24 @@ export default function PolicePersonnelPage() {
                               }),
                             }}
                           >
-                            <SwapHorizIcon />
+                            {person.nationalId && loadingSwap.has(person.nationalId) ? (
+                              <CircularProgress size={20} color="inherit" />
+                            ) : (
+                              <SwapHorizIcon />
+                            )}
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title={threeWayListData.has(person.id) ? "ลบออกจากสามเส้า" : "เพิ่มเข้าสามเส้า"}>
+                        <Tooltip title={person.nationalId && threeWayListData.has(person.nationalId) ? "ลบออกจากสามเส้า" : "เพิ่มเข้าสามเส้า"}>
                           <IconButton
                             size="medium"
                             color="warning"
-                            onClick={() => threeWayListData.has(person.id) ? handleRemoveFromThreeWay(person.id) : handleAddToThreeWay(person)}
+                            onClick={() => person.nationalId && threeWayListData.has(person.nationalId) ? handleRemoveFromThreeWay(person.nationalId) : handleAddToThreeWay(person)}
+                            disabled={person.nationalId ? loadingThreeWay.has(person.nationalId) : false}
                             sx={{
                               borderRadius: '50%',
                               width: 32,
                               height: 32,
-                              ...(threeWayListData.has(person.id) ? {
+                              ...(person.nationalId && threeWayListData.has(person.nationalId) ? {
                                 // Contained style (เต็มสี)
                                 bgcolor: 'warning.main',
                                 color: 'white',
@@ -1090,20 +1303,25 @@ export default function PolicePersonnelPage() {
                               }),
                             }}
                           >
-                            <ChangeHistoryIcon />
+                            {person.nationalId && loadingThreeWay.has(person.nationalId) ? (
+                              <CircularProgress size={20} color="inherit" />
+                            ) : (
+                              <ChangeHistoryIcon />
+                            )}
                           </IconButton>
                         </Tooltip>
                         
-                        <Tooltip title={vacantListData.has(person.id) ? "ลบออกจากตำแหน่งว่าง" : "เพิ่มเข้าตำแหน่งว่าง"}>
+                        <Tooltip title={person.nationalId && vacantListData.has(person.nationalId) ? "ลบออกจากตำแหน่งว่าง" : "เพิ่มเข้าตำแหน่งว่าง"}>
                           <IconButton
                             size="medium"
                             color="success"
-                            onClick={() => vacantListData.has(person.id) ? handleRemoveFromVacant(person.id) : handleAddToVacant(person)}
+                            onClick={() => person.nationalId && vacantListData.has(person.nationalId) ? handleRemoveFromVacant(person.nationalId) : handleAddToVacant(person)}
+                            disabled={person.nationalId ? loadingVacant.has(person.nationalId) : false}
                             sx={{
                               borderRadius: '50%',
                               width: 32,
                               height: 32,
-                              ...(vacantListData.has(person.id) ? {
+                              ...(person.nationalId && vacantListData.has(person.nationalId) ? {
                                 // Contained style (เต็มสี)
                                 bgcolor: 'success.main',
                                 color: 'white',
@@ -1117,7 +1335,11 @@ export default function PolicePersonnelPage() {
                               }),
                             }}
                           >
-                            <VacantIcon />
+                            {person.nationalId && loadingVacant.has(person.nationalId) ? (
+                              <CircularProgress size={20} color="inherit" />
+                            ) : (
+                              <VacantIcon />
+                            )}
                           </IconButton>
                         </Tooltip>
                       </>
@@ -1221,8 +1443,8 @@ export default function PolicePersonnelPage() {
             </Box>
           </Box>
 
-          {/* Search by Name - Autocomplete + Filter รายการ + สถานะตำแหน่ง */}
-          <Box sx={{ mt: 3, display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+          {/* Search by Name - Autocomplete + Filter รายการ + สถานะตำแหน่ง + รหัสตำแหน่ง */}
+          <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Autocomplete
               size="small"
               options={nameOptions}
@@ -1239,7 +1461,14 @@ export default function PolicePersonnelPage() {
               loading={loadingNames}
               loadingText="กำลังค้นหา..."
               noOptionsText={nameInputValue.length < 1 ? "พิมพ์เพื่อค้นหา..." : "ไม่พบข้อมูล"}
-              sx={{ flex: { xs: 1, sm: '0 0 60%' } }}
+              sx={{ 
+                flex: { 
+                  xs: '1 1 100%',        // Mobile: full width
+                  sm: '1 1 100%',        // Small tablet: full width
+                  md: '1 1 auto'         // Desktop/iPad landscape: auto flex
+                }, 
+                minWidth: { xs: '100%', sm: '100%', md: 300 } 
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -1260,7 +1489,14 @@ export default function PolicePersonnelPage() {
               )}
             />
 
-            <FormControl size="small" sx={{ flex: { xs: 1, sm: '0 0 20%' }, minWidth: 150 }}>
+            <FormControl size="small" sx={{ 
+              flex: { 
+                xs: '1 1 100%',              // Mobile: full width
+                sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
+                md: '0 1 180px'              // Desktop/iPad landscape: fixed width
+              }, 
+              minWidth: 150 
+            }}>
               <InputLabel>สถานะตำแหน่ง</InputLabel>
               <Select
                 value={positionFilter}
@@ -1270,11 +1506,41 @@ export default function PolicePersonnelPage() {
                 <MenuItem value="all">ทั้งหมด</MenuItem>
                 <MenuItem value="occupied">มีผู้ดำรง</MenuItem>
                 <MenuItem value="vacant">ตำแหน่งว่าง</MenuItem>
-                <MenuItem value="reserved">ตำแหน่งว่าง (กันตำแหน่ง)</MenuItem>
+                <MenuItem value="reserved">ว่าง (กันตำแหน่ง)</MenuItem>
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ flex: { xs: 1, sm: '0 0 20%' }, minWidth: 150 }}>
+            <FormControl size="small" sx={{ 
+              flex: { 
+                xs: '1 1 100%',              // Mobile: full width
+                sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
+                md: '0 1 180px'              // Desktop/iPad landscape: fixed width
+              }, 
+              minWidth: 150 
+            }}>
+              <InputLabel>รหัสตำแหน่ง</InputLabel>
+              <Select
+                value={posCodeFilter}
+                label="รหัสตำแหน่ง"
+                onChange={(e) => handlePosCodeFilterChange(e.target.value)}
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                {posCodes.map((posCode) => (
+                  <MenuItem key={posCode.id} value={posCode.id.toString()}>
+                    {posCode.id} - {posCode.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ 
+              flex: { 
+                xs: '1 1 100%',              // Mobile: full width
+                sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
+                md: '0 1 180px'              // Desktop/iPad landscape: fixed width
+              }, 
+              minWidth: 150 
+            }}>
               <InputLabel>รายการ</InputLabel>
               <Select
                 value={swapFilter}
@@ -1290,14 +1556,22 @@ export default function PolicePersonnelPage() {
           </Box>
 
           {/* Search and Filter */}
-          <Box sx={{ display: 'flex', gap: 2, mt: 3, flexDirection: { xs: 'column', sm: 'row' } }}>
+          <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
+            {/* ช่องค้นหาหลัก - ให้ใหญ่ขึ้นบน iPad */}
             <TextField
-              fullWidth
               size="small"
               placeholder="ค้นหาด้วย เลขบัตรประชาชน , เลขตำแหน่ง..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              sx={{ 
+                flex: { 
+                  xs: '1 1 100%',           // Mobile: full width
+                  sm: '1 1 100%',           // Tablet: full width
+                  md: '1 1 auto'            // Desktop: auto flex
+                },
+                minWidth: { xs: '100%', sm: '100%', md: 300 }
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -1314,7 +1588,14 @@ export default function PolicePersonnelPage() {
               onChange={(event, newValue) => {
                 handlePositionTypeFilterChange(newValue === 'ทั้งหมด' ? 'all' : newValue || 'all');
               }}
-              sx={{ minWidth: 200 }}
+              sx={{ 
+                flex: { 
+                  xs: '1 1 100%',                    // Mobile: full width
+                  sm: '1 1 calc(33.33% - 11px)',     // Tablet: 3 columns
+                  md: '0 1 200px'                    // Desktop: fixed width
+                },
+                minWidth: { xs: '100%', sm: 150, md: 200 }
+              }}
               renderInput={(params) => <TextField {...params} label="ตำแหน่ง" />}
             />
 
@@ -1325,7 +1606,14 @@ export default function PolicePersonnelPage() {
               onChange={(event, newValue) => {
                 handleRankFilterChange(newValue === 'ทั้งหมด' ? 'all' : newValue || 'all');
               }}
-              sx={{ minWidth: 200 }}
+              sx={{ 
+                flex: { 
+                  xs: '1 1 100%',                    // Mobile: full width
+                  sm: '1 1 calc(33.33% - 11px)',     // Tablet: 3 columns
+                  md: '0 1 200px'                    // Desktop: fixed width
+                },
+                minWidth: { xs: '100%', sm: 150, md: 200 }
+              }}
               renderInput={(params) => <TextField {...params} label="ยศ" />}
             />
 
@@ -1336,15 +1624,35 @@ export default function PolicePersonnelPage() {
               onChange={(event, newValue) => {
                 handleUnitFilterChange(newValue === 'ทั้งหมด' ? 'all' : newValue || 'all');
               }}
-              sx={{ minWidth: 200 }}
+              sx={{ 
+                flex: { 
+                  xs: '1 1 100%',                    // Mobile: full width
+                  sm: '1 1 calc(33.33% - 11px)',     // Tablet: 3 columns
+                  md: '0 1 200px'                    // Desktop: fixed width
+                },
+                minWidth: { xs: '100%', sm: 150, md: 200 }
+              }}
               renderInput={(params) => <TextField {...params} label="หน่วย" />}
             />
 
-            <Button variant="contained" onClick={handleSearch} sx={{ minWidth: 100 }}>
+            <Button 
+              variant="contained" 
+              onClick={handleSearch} 
+              sx={{ 
+                minWidth: { xs: '100%', sm: 100, md: 100 },
+                flex: { xs: '1 1 100%', sm: '0 0 auto' }
+              }}
+            >
               ค้นหา
             </Button>
             <Tooltip title="รีเซ็ต">
-              <IconButton onClick={handleReset} color="secondary">
+              <IconButton 
+                onClick={handleReset} 
+                color="secondary"
+                sx={{ 
+                  display: { xs: 'none', sm: 'inline-flex' }  // ซ่อนบน mobile เพื่อประหยัดพื้นที่
+                }}
+              >
                 <ResetIcon />
               </IconButton>
             </Tooltip>
@@ -1432,7 +1740,7 @@ export default function PolicePersonnelPage() {
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
                           {/* Chip แสดงสถานะ Swap List */}
-                          {row.rank && swapListData.has(row.id) && (
+                          {row.rank && row.nationalId && swapListData.has(row.nationalId) && (
                             <Chip 
                               label="อยู่ใน Swap List" 
                               size="small" 
@@ -1441,7 +1749,7 @@ export default function PolicePersonnelPage() {
                             />
                           )}
                           {/* Chip แสดงสถานะ Three Way Swap */}
-                          {row.rank && threeWayListData.has(row.id) && (
+                          {row.rank && row.nationalId && threeWayListData.has(row.nationalId) && (
                             <Chip 
                               label="อยู่ในสามเส้า" 
                               size="small" 
@@ -1450,7 +1758,7 @@ export default function PolicePersonnelPage() {
                             />
                           )}
                           {/* Chip แสดงสถานะ Vacant Position */}
-                          {row.rank && vacantListData.has(row.id) && (
+                          {row.rank && row.nationalId && vacantListData.has(row.nationalId) && (
                             <Chip 
                               label="อยู่ในตำแหน่งว่าง" 
                               size="small" 
@@ -1483,16 +1791,17 @@ export default function PolicePersonnelPage() {
                               ) : (
                                 // ถ้ามีคน แสดง Swap, สามเส้า, ตำแหน่งว่าง
                                 <>
-                                  <Tooltip title={swapListData.has(row.id) ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"}>
+                                  <Tooltip title={row.nationalId && swapListData.has(row.nationalId) ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"}>
                                     <IconButton
                                       size="small"
                                       color="info"
-                                      onClick={() => swapListData.has(row.id) ? handleRemoveFromSwap(row.id) : handleAddToSwap(row)}
+                                      onClick={() => row.nationalId && swapListData.has(row.nationalId) ? handleRemoveFromSwap(row.nationalId) : handleAddToSwap(row)}
+                                      disabled={row.nationalId ? loadingSwap.has(row.nationalId) : false}
                                       sx={{
                                         borderRadius: '50%',
                                         width: 32,
                                         height: 32,
-                                        ...(swapListData.has(row.id) ? {
+                                        ...(row.nationalId && swapListData.has(row.nationalId) ? {
                                           // Contained style (เต็มสี)
                                           bgcolor: 'info.main',
                                           color: 'white',
@@ -1506,19 +1815,24 @@ export default function PolicePersonnelPage() {
                                         }),
                                       }}
                                     >
-                                      <SwapHorizIcon fontSize="small" />
+                                      {row.nationalId && loadingSwap.has(row.nationalId) ? (
+                                        <CircularProgress size={16} color="inherit" />
+                                      ) : (
+                                        <SwapHorizIcon fontSize="small" />
+                                      )}
                                     </IconButton>
                                   </Tooltip>
-                                  <Tooltip title={threeWayListData.has(row.id) ? "ลบออกจากสามเส้า" : "เพิ่มเข้าสามเส้า"}>
+                                  <Tooltip title={row.nationalId && threeWayListData.has(row.nationalId) ? "ลบออกจากสามเส้า" : "เพิ่มเข้าสามเส้า"}>
                                     <IconButton
                                       size="small"
                                       color="warning"
-                                      onClick={() => threeWayListData.has(row.id) ? handleRemoveFromThreeWay(row.id) : handleAddToThreeWay(row)}
+                                      onClick={() => row.nationalId && threeWayListData.has(row.nationalId) ? handleRemoveFromThreeWay(row.nationalId) : handleAddToThreeWay(row)}
+                                      disabled={row.nationalId ? loadingThreeWay.has(row.nationalId) : false}
                                       sx={{
                                         borderRadius: '50%',
                                         width: 32,
                                         height: 32,
-                                        ...(threeWayListData.has(row.id) ? {
+                                        ...(row.nationalId && threeWayListData.has(row.nationalId) ? {
                                           // Contained style (เต็มสี)
                                           bgcolor: 'warning.main',
                                           color: 'white',
@@ -1532,7 +1846,11 @@ export default function PolicePersonnelPage() {
                                         }),
                                       }}
                                     >
-                                      <ChangeHistoryIcon fontSize="small" />
+                                      {row.nationalId && loadingThreeWay.has(row.nationalId) ? (
+                                        <CircularProgress size={16} color="inherit" />
+                                      ) : (
+                                        <ChangeHistoryIcon fontSize="small" />
+                                      )}
                                     </IconButton>
                                   </Tooltip>
                                   <Tooltip title="ตำแหน่งว่าง">
@@ -1540,12 +1858,13 @@ export default function PolicePersonnelPage() {
                                       size="small"
                                       color="success"
                                       onClick={() =>
-                                        vacantListData.has(row.id)
-                                          ? handleRemoveFromVacant(row.id)
+                                        row.nationalId && vacantListData.has(row.nationalId)
+                                          ? handleRemoveFromVacant(row.nationalId)
                                           : handleAddToVacant(row)
                                       }
+                                      disabled={row.nationalId ? loadingVacant.has(row.nationalId) : false}
                                       sx={{
-                                        ...(vacantListData.has(row.id) ? {
+                                        ...(row.nationalId && vacantListData.has(row.nationalId) ? {
                                           // Contained style (มีพื้นสี)
                                           bgcolor: 'success.main',
                                           color: 'white',
@@ -1562,7 +1881,11 @@ export default function PolicePersonnelPage() {
                                         height: 32,
                                       }}
                                     >
-                                      <VacantIcon fontSize="small" />
+                                      {row.nationalId && loadingVacant.has(row.nationalId) ? (
+                                        <CircularProgress size={16} color="inherit" />
+                                      ) : (
+                                        <VacantIcon fontSize="small" />
+                                      )}
                                     </IconButton>
                                   </Tooltip>
                                 </>
@@ -1630,207 +1953,13 @@ export default function PolicePersonnelPage() {
           )}
         </Paper>
 
-        {/* Detail Modal */}
-        <Dialog 
-          open={detailModalOpen} 
-          onClose={handleCloseDetailModal} 
-          maxWidth="md" 
-          fullWidth
-          fullScreen={isMobile}
-        >
-          <DialogTitle sx={{ 
-            borderBottom: 1, 
-            borderColor: 'divider',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            py: 1.5,
-            px: 2
-          }}>
-            <PersonIcon fontSize="small" />
-            <Box component="span" sx={{ fontWeight: 600, fontSize: '1.25rem' }}>
-              รายละเอียดบุคลากร
-            </Box>
-            {selectedPersonnel && (
-              <Chip 
-                label={selectedPersonnel.rank ? 'มีผู้ดำรง' : 'ตำแหน่งว่าง'} 
-                color={selectedPersonnel.rank ? 'success' : 'default'} 
-                size="small" 
-                sx={{ ml: 'auto', height: 24, fontSize: '0.75rem' }}
-              />
-            )}
-          </DialogTitle>
-          
-          <DialogContent sx={{ p: 2 , mt: 2}}>
-            {selectedPersonnel && (
-              <Box>
-                {/* Header Section - ชื่อและตำแหน่ง */}
-                <Box sx={{ p: 2, mb: 2, bgcolor: 'primary.main', color: 'white', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.25, fontSize: '1.125rem' }}>
-                    {selectedPersonnel.rank || null} {selectedPersonnel.fullName || 'ตำแหน่งว่าง'}
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9, fontSize: '0.938rem' }}>
-                    {selectedPersonnel.position} • {selectedPersonnel.unit || '-'}
-                  </Typography>
-                </Box>
-
-                {/* Content Sections */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
-                  
-                  {/* Left Column */}
-                  <Box>
-                    {/* ข้อมูลตำแหน่ง */}
-                    <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
-                        <BadgeIcon fontSize="small" />
-                        ข้อมูลตำแหน่ง
-                      </Typography>
-                      <Divider sx={{ mb: 1 }} />
-                      <Stack spacing={0.75} divider={<Divider />}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center'  }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ID</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.noId || '-'}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.positionNumber || '-'}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ทำหน้าที่</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.actingAs || '-'}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หน่วย</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.unit || '-'}</Typography>
-                        </Box>
-                      </Stack>
-                    </Paper>
-
-                    {/* ข้อมูลบุคคล */}
-                    {selectedPersonnel.rank && (
-                      <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'success.50', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
-                          <PersonIcon fontSize="small" />
-                          ข้อมูลบุคคล
-                        </Typography>
-                        <Divider sx={{ mb: 1 }} />
-                        <Stack spacing={0.75} divider={<Divider />}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ชื่อ-สกุล</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.fullName || '-'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ยศ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.rank || '-'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อาวุโส</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.seniority || '-'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อายุ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.age ? `${selectedPersonnel.age}` : '-'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>วันเกิด</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.birthDate)}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขบัตรประชาชน</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{selectedPersonnel.nationalId || '-'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>คุณวุฒิ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.education || '-'}</Typography>
-                          </Box>
-                        </Stack>
-                      </Paper>
-                    )}
-                  </Box>
-
-                  {/* Right Column */}
-                  <Box>
-                    {/* ข้อมูลการแต่งตั้ง */}
-                    {selectedPersonnel.rank && (
-                      <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'info.50', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'info.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
-                          <CalendarIcon fontSize="small" />
-                          ข้อมูลการแต่งตั้ง
-                        </Typography>
-                        <Divider sx={{ mb: 1 }} />
-                        <Stack spacing={0.75} divider={<Divider />}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>แต่งตั้งครั้งสุดท้าย</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.lastAppointment)}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ระดับนี้เมื่อ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.currentRankSince)}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>บรรจุ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedPersonnel.enrollmentDate)}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เกษียณ</Typography>
-                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.retirementDate || '-'}</Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>จำนวนปี</Typography>
-                            <Typography variant="body2" fontWeight={600} color="info.main" sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.yearsOfService ? `${selectedPersonnel.yearsOfService} ปี` : '-'}</Typography>
-                          </Box>
-                        </Stack>
-                      </Paper>
-                    )}
-
-                    {/* ข้อมูลการฝึกอบรม */}
-                    {(selectedPersonnel.trainingLocation || selectedPersonnel.trainingCourse) && (
-                      <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'warning.50', borderRadius: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
-                          <EducationIcon fontSize="small" />
-                          ข้อมูลการฝึกอบรม
-                        </Typography>
-                        <Divider sx={{ mb: 1 }} />
-                        <Stack spacing={0.75} divider={<Divider />}>
-                          {selectedPersonnel.trainingLocation && (
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>สถานที่ฝึกอบรม</Typography>
-                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.trainingLocation}</Typography>
-                            </Box>
-                          )}
-                          {selectedPersonnel.trainingCourse && (
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หลักสูตร (นรต.)</Typography>
-                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedPersonnel.trainingCourse}</Typography>
-                            </Box>
-                          )}
-                        </Stack>
-                      </Paper>
-                    )}
-                  </Box>
-                </Box>
-
-                {/* หมายเหตุ - Full Width */}
-                {selectedPersonnel.notes && (
-                  <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'grey.100', borderRadius: 1, border: 1, borderColor: 'grey.300' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.75, fontSize: '0.938rem' }}>
-                      หมายเหตุ
-                    </Typography>
-                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: 'text.secondary', display: 'block', fontSize: '0.875rem' }}>
-                      {selectedPersonnel.notes}
-                    </Typography>
-                  </Paper>
-                )}
-              </Box>
-            )}
-          </DialogContent>
-          
-          <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
-            <Button onClick={handleCloseDetailModal} variant="contained" size="medium" sx={{ minWidth: 100, fontWeight: 600 }}>
-              ปิด
-            </Button>
-          </DialogActions>
-        </Dialog>
+        {/* Detail Modal - Using Reusable Component */}
+        <PersonnelDetailModal 
+          open={detailModalOpen}
+          onClose={handleCloseDetailModal}
+          personnel={selectedPersonnel}
+          loading={false}
+        />
 
         {/* Edit Dialog */}
         <Dialog 

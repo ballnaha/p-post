@@ -32,7 +32,9 @@ model PosCodeMaster {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relation
-  personnel PolicePersonnel[]
+  personnel              PolicePersonnel[]
+  swapTransactionDetails SwapTransactionDetail[]
+  swapLists              SwapList[]
 
   @@map("pos_code_master")
 }
@@ -92,17 +94,19 @@ model PolicePersonnel {
 // Swap List (รายการที่เลือกไว้สำหรับสลับตำแหน่ง)
 // เก็บสำเนาข้อมูลบุคลากรทั้งหมดไว้ เพราะ police_personnel มีการนำเข้าใหม่ทุกปีและข้อมูลเดิมจะถูกลบ
 // ดังนั้นต้องเก็บ snapshot ของข้อมูลในขณะที่เพิ่มเข้า swap list
+// รองรับทั้ง two-way, three-way, และ vacant-position
 model SwapList {
-  id    String @id @default(cuid())
-  year  Int // ปีที่เลือก (พ.ศ.)
-  notes String? @db.Text // หมายเหตุเพิ่มเติมสำหรับการ swap
+  id       String @id @default(cuid())
+  year     Int // ปีที่เลือก (พ.ศ.)
+  swapType String @default("two-way") @map("swap_type") // two-way, three-way, vacant-position
+  notes    String? @db.Text // หมายเหตุเพิ่มเติมสำหรับการ swap
 
-  // ข้อมูลอ้างอิง (สำหรับเชื่อมโยงกับข้อมูลปัจจุบัน ถ้ามี)
-  originalPersonnelId String? @map("original_personnel_id") // ID เดิมจาก police_personnel
-  noId                Int?    @map("no_id") // ลำดับที่
+  // ข้อมูลอ้างอิง
+  noId Int? @map("no_id") // ลำดับที่
 
   // ข้อมูลตำแหน่ง (Position Information) - สำเนาจาก PolicePersonnel
-  posCodeId      Int?    @map("pos_code")
+  posCodeId      Int?           @map("pos_code")
+  posCodeMaster  PosCodeMaster? @relation(fields: [posCodeId], references: [id])
   position       String? // ตำแหน่ง
   positionNumber String? @map("position_number") // เลขตำแหน่ง
   unit           String? // หน่วย
@@ -135,69 +139,15 @@ model SwapList {
   updatedBy String?  @map("updated_by")
 
   // Index สำหรับการค้นหา
-  @@index([originalPersonnelId, year])
   @@index([year])
+  @@index([swapType])
   @@index([nationalId])
   @@index([rank])
   @@index([unit])
   @@index([position])
   @@index([fullName])
+  @@index([posCodeId])
   @@map("swap_list")
-}
-
-// Three Way Swap List (รายการสามเส้า - สลับตำแหน่ง 3 คน)
-// กฎ: แต่ละคนต้องไม่อยู่ตำแหน่งเดิม (A->B, B->C, C->A)
-model ThreeWaySwap {
-  id    String @id @default(cuid())
-  year  Int // ปีที่เลือก (พ.ศ.)
-  notes String? @db.Text // หมายเหตุเพิ่มเติม
-
-  // ข้อมูลอ้างอิง
-  originalPersonnelId String? @map("original_personnel_id") // ID เดิมจาก police_personnel
-  noId                Int?    @map("no_id") // ลำดับที่
-
-  // ข้อมูลตำแหน่ง (Position Information)
-  posCodeId      Int?    @map("pos_code")
-  position       String? // ตำแหน่ง
-  positionNumber String? @map("position_number") // เลขตำแหน่ง
-  unit           String? // หน่วย
-  actingAs       String? @map("acting_as") // ทำหน้าที่
-
-  // ข้อมูลบุคคล (Person Information)
-  seniority  String? @map("seniority") // อาวุโส
-  rank       String? // ยศ
-  fullName   String? @map("full_name") // ชื่อสกุล
-  nationalId String? @map("national_id") // เลขบัตรประชาชน
-  birthDate  String? @map("birth_date") // วันเกิด
-  age        String? // อายุ
-  education  String? // คุณวุฒิ
-
-  // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
-  lastAppointment  String? @map("last_appointment")
-  currentRankSince String? @map("current_rank_since")
-  enrollmentDate   String? @map("enrollment_date")
-  retirementDate   String? @map("retirement_date")
-  yearsOfService   String? @map("years_of_service")
-
-  // ข้อมูลการฝึกอบรม (Training Information)
-  trainingLocation String? @map("training_location")
-  trainingCourse   String? @map("training_course")
-
-  // Metadata
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy String?  @map("created_by")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedBy String?  @map("updated_by")
-
-  // Index
-  @@unique([originalPersonnelId, year], name: "unique_threeway_personnel_year")
-  @@index([year])
-  @@index([nationalId])
-  @@index([rank])
-  @@index([unit])
-  @@index([position])
-  @@index([fullName])
-  @@map("three_way_swap")
 }
 
 // Vacant Position List (รายการตำแหน่งว่าง)
@@ -208,8 +158,7 @@ model VacantPosition {
   notes String? @db.Text // หมายเหตุเพิ่มเติม
 
   // ข้อมูลอ้างอิง
-  originalPersonnelId String? @map("original_personnel_id") // ID เดิมจาก police_personnel
-  noId                Int?    @map("no_id") // ลำดับที่
+  noId Int? @map("no_id") // ลำดับที่
 
   // ข้อมูลตำแหน่ง (Position Information)
   posCodeId      Int?    @map("pos_code")
@@ -245,7 +194,6 @@ model VacantPosition {
   updatedBy String?  @map("updated_by")
 
   // Index
-  @@unique([originalPersonnelId, year], name: "unique_vacant_personnel_year")
   @@index([year])
   @@index([unit])
   @@index([position])
@@ -291,6 +239,8 @@ model SwapTransactionDetail {
   nationalId      String? @map("national_id") // เลขบัตรประชาชน
   fullName        String  @map("full_name") // ชื่อ-นามสกุล
   rank            String? // ยศ
+  posCodeId       Int?    @map("pos_code_id") // รหัสตำแหน่ง
+  posCodeMaster   PosCodeMaster? @relation(fields: [posCodeId], references: [id])
   
   // ตำแหน่งเดิม (From)
   fromPosition       String? @map("from_position") // ตำแหน่งเดิม
@@ -312,5 +262,73 @@ model SwapTransactionDetail {
   @@index([transactionId])
   @@index([personnelId])
   @@index([nationalId])
+  @@index([posCodeId])
   @@map("swap_transaction_detail")
+}
+
+// Three Way Swap Transaction (บันทึกการสลับตำแหน่งสามเส้า - 3 คน)
+// กฎ: A→B, B→C, C→A (แต่ละคนต้องไม่อยู่ตำแหน่งเดิม)
+model ThreeWayTransaction {
+  id               String   @id @default(cuid())
+  year             Int // ปีที่ทำการสลับ (พ.ศ.)
+  swapDate         DateTime // วันที่ทำการสลับ
+  groupName        String?  @map("group_name") // ชื่อกลุ่ม เช่น "นาย A → นาย B → นาย C"
+  groupNumber      String?  @map("group_number") // เลขกลุ่ม เช่น "2568/3W-001"
+  status           String   @default("completed") // completed, pending, cancelled
+  notes            String?  @db.Text // หมายเหตุ
+  
+  // Relations
+  swapDetails ThreeWayTransactionDetail[]
+  
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@index([year])
+  @@index([swapDate])
+  @@index([status])
+  @@map("three_way_transaction")
+}
+
+// Three Way Swap Transaction Detail (รายละเอียดการสลับของแต่ละคนในสามเส้า)
+// เก็บข้อมูลว่าใครย้ายจากตำแหน่งไหนไปตำแหน่งไหน (3 คน)
+model ThreeWayTransactionDetail {
+  id              String @id @default(cuid())
+  transactionId   String @map("transaction_id")
+  transaction     ThreeWayTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  
+  // ลำดับในวงจร (1, 2, 3)
+  sequence        Int // คนที่ 1, 2, 3
+  
+  // ข้อมูลบุคคล
+  personnelId     String? @map("personnel_id") // ID อ้างอิงกับ police_personnel
+  nationalId      String? @map("national_id") // เลขบัตรประชาชน
+  fullName        String  @map("full_name") // ชื่อ-นามสกุล
+  rank            String? // ยศ
+  posCodeId       Int?    @map("pos_code_id") // รหัสตำแหน่ง
+  
+  // ตำแหน่งเดิม (From)
+  fromPosition       String? @map("from_position") // ตำแหน่งเดิม
+  fromPositionNumber String? @map("from_position_number") // เลขที่ตำแหน่งเดิม
+  fromUnit           String? @map("from_unit") // หน่วยเดิม
+  
+  // ตำแหน่งใหม่ (To)
+  toPosition         String? @map("to_position") // ตำแหน่งใหม่
+  toPositionNumber   String? @map("to_position_number") // เลขที่ตำแหน่งใหม่
+  toUnit             String? @map("to_unit") // หน่วยใหม่
+  
+  // ข้อมูลเพิ่มเติม
+  notes              String? @db.Text // หมายเหตุเฉพาะคน
+  
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([transactionId])
+  @@index([personnelId])
+  @@index([nationalId])
+  @@index([sequence])
+  @@map("three_way_transaction_detail")
 }

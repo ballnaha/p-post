@@ -1,0 +1,181 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+
+/**
+ * GET /api/swap-transactions/[id]
+ * ดึงข้อมูลผลการสลับตำแหน่งตาม ID
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const transaction = await prisma.swapTransaction.findUnique({
+      where: { id },
+      include: {
+        swapDetails: {
+          include: {
+            posCodeMaster: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
+          orderBy: { fullName: 'asc' }
+        }
+      }
+    });
+
+    if (!transaction) {
+      return NextResponse.json(
+        { success: false, error: 'ไม่พบข้อมูล' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: transaction
+    });
+  } catch (error: any) {
+    console.error('Error fetching swap transaction:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PUT /api/swap-transactions/[id]
+ * แก้ไขข้อมูลผลการสลับตำแหน่ง
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const { year, swapDate, swapType, groupName, groupNumber, status, notes, swapDetails } = body;
+
+    // ตรวจสอบว่ามีข้อมูลอยู่หรือไม่
+    const existingTransaction = await prisma.swapTransaction.findUnique({
+      where: { id }
+    });
+
+    if (!existingTransaction) {
+      return NextResponse.json(
+        { success: false, error: 'ไม่พบข้อมูล' },
+        { status: 404 }
+      );
+    }
+
+    // อัพเดทข้อมูล
+    const updateData: any = {};
+    if (year !== undefined) updateData.year = year;
+    if (swapDate !== undefined) updateData.swapDate = new Date(swapDate);
+    if (swapType !== undefined) updateData.swapType = swapType;
+    if (groupName !== undefined) updateData.groupName = groupName;
+    if (groupNumber !== undefined) updateData.groupNumber = groupNumber;
+    if (status !== undefined) updateData.status = status;
+    if (notes !== undefined) updateData.notes = notes;
+
+    // ถ้ามีการอัพเดท swapDetails
+    if (swapDetails && Array.isArray(swapDetails)) {
+      // ลบ swapDetails เก่าทั้งหมด
+      await prisma.swapTransactionDetail.deleteMany({
+        where: { transactionId: id }
+      });
+
+      // สร้าง swapDetails ใหม่
+      updateData.swapDetails = {
+        create: swapDetails.map((detail: any) => ({
+          personnelId: detail.personnelId,
+          nationalId: detail.nationalId,
+          fullName: detail.fullName,
+          rank: detail.rank,
+          fromPosition: detail.fromPosition,
+          fromPositionNumber: detail.fromPositionNumber,
+          fromUnit: detail.fromUnit,
+          toPosition: detail.toPosition,
+          toPositionNumber: detail.toPositionNumber,
+          toUnit: detail.toUnit,
+          notes: detail.notes
+        }))
+      };
+    }
+
+    const transaction = await prisma.swapTransaction.update({
+      where: { id },
+      data: updateData,
+      include: {
+        swapDetails: true
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: transaction,
+      message: 'แก้ไขข้อมูลสำเร็จ'
+    });
+  } catch (error: any) {
+    console.error('Error updating swap transaction:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการแก้ไขข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/swap-transactions/[id]
+ * ลบข้อมูลผลการสลับตำแหน่ง
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    // ตรวจสอบว่ามีข้อมูลอยู่หรือไม่
+    const existingTransaction = await prisma.swapTransaction.findUnique({
+      where: { id },
+      include: {
+        swapDetails: true
+      }
+    });
+
+    if (!existingTransaction) {
+      return NextResponse.json(
+        { success: false, error: 'ไม่พบข้อมูล' },
+        { status: 404 }
+      );
+    }
+
+    // ลบ swapDetails ก่อน (Cascade delete should handle this, but being explicit)
+    await prisma.swapTransactionDetail.deleteMany({
+      where: { transactionId: id }
+    });
+
+    // ลบ transaction
+    await prisma.swapTransaction.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'ลบข้อมูลสำเร็จ'
+    });
+  } catch (error: any) {
+    console.error('Error deleting swap transaction:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการลบข้อมูล' },
+      { status: 500 }
+    );
+  }
+}

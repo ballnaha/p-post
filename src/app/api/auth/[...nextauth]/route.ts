@@ -86,8 +86,8 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.sub;
+      if (token && session.user) {
+        session.user.id = token.sub as string;
         session.user.username = token.username as string;
         session.user.role = token.role as string;
       }
@@ -97,7 +97,9 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/login',
     signOut: '/login',
+    error: '/login',
   },
+  debug: process.env.NODE_ENV === 'development',
   secret: process.env.NEXTAUTH_SECRET,
 };
 

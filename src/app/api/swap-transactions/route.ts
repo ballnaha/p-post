@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 
 /**
  * GET /api/swap-transactions
- * ดึงรายการผลการสลับตำแหน่งทั้งหมด
+ * ดึงรายการผลการสลับตำแหน่งทั้งหมด พร้อม posCodeMaster
  */
 export async function GET(request: NextRequest) {
   try {
@@ -19,6 +19,14 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         swapDetails: {
+          include: {
+            posCodeMaster: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
           orderBy: { fullName: 'asc' }
         }
       },

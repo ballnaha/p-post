@@ -7,11 +7,12 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const swapItem = await prisma.swapList.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!swapItem) {
@@ -37,14 +38,15 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     
     // ตรวจสอบว่ามี swap item อยู่จริง
     const existing = await prisma.swapList.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existing) {
@@ -55,11 +57,11 @@ export async function PUT(
     }
 
     // กรองข้อมูลที่ต้องการอัพเดท (ไม่รวม relation objects และ auto-generated fields)
-    const { year, notes, id, posCodeMaster, createdAt, updatedAt, createdBy, updatedBy, ...personnelData } = body;
+    const { year, notes, id: bodyId, posCodeMaster, createdAt, updatedAt, createdBy, updatedBy, ...personnelData } = body;
 
     // อัพเดทข้อมูล
     const updated = await prisma.swapList.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...personnelData,
         year: year || existing.year,
@@ -87,12 +89,14 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    
     // ตรวจสอบว่ามี swap item อยู่จริง
     const existing = await prisma.swapList.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existing) {
@@ -102,9 +106,33 @@ export async function DELETE(
       );
     }
 
+    // ตรวจสอบว่าบุคลากรนี้มีการจับคู่ใน swap_transaction_detail หรือไม่
+    if (existing.nationalId) {
+      const hasSwapTransaction = await prisma.swapTransactionDetail.findFirst({
+        where: {
+          nationalId: existing.nationalId
+        },
+        include: {
+          transaction: true
+        }
+      });
+
+      if (hasSwapTransaction) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'ไม่สามารถลบได้ เนื่องจากบุคลากรนี้มีการจับคู่แลกตำแหน่งอยู่',
+            detail: 'กรุณาลบการจับคู่ใน Swap Transaction ก่อน',
+            transactionId: hasSwapTransaction.transactionId
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // ลบข้อมูล
     await prisma.swapList.delete({
-      where: { id: params.id }
+      where: { id }
     });
 
     return NextResponse.json({

@@ -43,3 +43,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+  /* npm run seed:poscode */

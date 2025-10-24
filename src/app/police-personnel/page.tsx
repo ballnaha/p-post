@@ -229,11 +229,11 @@ export default function PolicePersonnelPage() {
     }
   };
 
-  // ดึงรายการ Swap List สำหรับปีปัจจุบัน
+  // ดึงรายการ Swap List สำหรับปีปัจจุบัน (เฉพาะ two-way)
   const fetchSwapListForCurrentYear = async () => {
     try {
       const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/swap-list?year=${currentYear}`);
+      const response = await fetch(`/api/swap-list?year=${currentYear}&swapType=two-way`);
       const result = await response.json();
       if (result.success) {
         // ใช้ nationalId แทน originalPersonnelId เพื่อให้ทำงานได้แม้ import ข้อมูลใหม่
@@ -415,7 +415,6 @@ export default function PolicePersonnelPage() {
 
   const handleCloseDetailModal = () => {
     setDetailModalOpen(false);
-    setSelectedPersonnel(null);
   };
 
   const handleEdit = (personnel: PolicePersonnel) => {
@@ -1199,7 +1198,7 @@ export default function PolicePersonnelPage() {
                 {/* Chip แสดงสถานะ Swap List */}
                 {person.rank && person.nationalId && swapListData.has(person.nationalId) && (
                   <Chip 
-                    label="อยู่ใน Swap List" 
+                    label="อยู่ในสลับตำแหน่ง" 
                     size="small" 
                     color="info"
                     sx={{ fontSize: '0.7rem', height: 20 }}
@@ -1548,7 +1547,7 @@ export default function PolicePersonnelPage() {
                 onChange={(e) => handleSwapFilterChange(e.target.value as 'all' | 'in-swap' | 'in-threeway' | 'in-vacant')}
               >
                 <MenuItem value="all">ทั้งหมด</MenuItem>
-                <MenuItem value="in-swap">อยู่ใน Swap List</MenuItem>
+                <MenuItem value="in-swap">อยู่ในสลับตำแหน่ง</MenuItem>
                 <MenuItem value="in-threeway">อยู่ในสามเส้า</MenuItem>
                 <MenuItem value="in-vacant">อยู่ในตำแหน่งว่าง</MenuItem>
               </Select>
@@ -1959,6 +1958,7 @@ export default function PolicePersonnelPage() {
           onClose={handleCloseDetailModal}
           personnel={selectedPersonnel}
           loading={false}
+          onClearData={() => setSelectedPersonnel(null)}
         />
 
         {/* Edit Dialog */}

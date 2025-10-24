@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// GET - ดึงข้อมูล three-way transaction ตาม ID
+// GET - ดึงข้อมูล three-way transaction ตาม ID (ใช้ SwapTransaction)
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const transaction = await prisma.threeWayTransaction.findUnique({
-      where: { id: params.id },
+    const transaction = await prisma.swapTransaction.findUnique({
+      where: { 
+        id: params.id,
+      },
       include: {
         swapDetails: {
           orderBy: { sequence: 'asc' },
@@ -16,7 +18,7 @@ export async function GET(
       },
     });
 
-    if (!transaction) {
+    if (!transaction || transaction.swapType !== 'three-way') {
       return NextResponse.json(
         { success: false, error: 'Transaction not found' },
         { status: 404 }
@@ -36,7 +38,7 @@ export async function GET(
   }
 }
 
-// PUT - แก้ไข three-way transaction
+// PUT - แก้ไข three-way transaction (ใช้ SwapTransaction)
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -54,19 +56,20 @@ export async function PUT(
     }
 
     // ลบ details เก่าและสร้างใหม่
-    const transaction = await prisma.threeWayTransaction.update({
+    const transaction = await prisma.swapTransaction.update({
       where: { id: params.id },
       data: {
         year,
         swapDate: swapDate ? new Date(swapDate) : undefined,
+        swapType: 'three-way',
         groupName,
         groupNumber,
         status,
         notes,
         swapDetails: swapDetails ? {
           deleteMany: {},
-          create: swapDetails.map((detail: any) => ({
-            sequence: detail.sequence,
+          create: swapDetails.map((detail: any, index: number) => ({
+            sequence: index + 1,
             personnelId: detail.personnelId,
             nationalId: detail.nationalId,
             fullName: detail.fullName,
@@ -102,13 +105,13 @@ export async function PUT(
   }
 }
 
-// DELETE - ลบ three-way transaction
+// DELETE - ลบ three-way transaction (ใช้ SwapTransaction)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.threeWayTransaction.delete({
+    await prisma.swapTransaction.delete({
       where: { id: params.id },
     });
 

@@ -1,6 +1,6 @@
 {
-  "name": "empty_layout",
-  "version": "0.1.0",
+  "name": "p_post",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --port 3003",

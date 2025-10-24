@@ -32,6 +32,13 @@ import {
   Divider,
   Card,
   CardContent,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Collapse,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -46,6 +53,8 @@ import {
   ViewModule as ViewModuleIcon,
   Visibility as ViewIcon,
   Person as PersonIcon,
+  KeyboardArrowDown as ArrowDownIcon,
+  KeyboardArrowUp as ArrowUpIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter } from 'next/navigation';
@@ -127,7 +136,7 @@ export default function ThreeWaySwapPage() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear() + 543);
   
   // View mode
-  const [viewMode, setViewMode] = useState<'card'>('card');
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
   
   // Menu state
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -150,6 +159,9 @@ export default function ThreeWaySwapPage() {
   // Pagination states
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(6);
+
+  // Expanded rows for table view
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Generate available years
   const getAvailableYears = () => {
@@ -280,14 +292,20 @@ export default function ThreeWaySwapPage() {
     setLoadingPersonnel(true);
 
     try {
-      const response = await fetch(`/api/police-personnel/${personnelId}`);
-      if (!response.ok) throw new Error('Failed to fetch personnel');
+      // ใช้ API swap-list/personnel แทน police-personnel เพราะข้อมูลอยู่ใน swap_list
+      const response = await fetch(`/api/swap-list/personnel/${personnelId}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch personnel');
+      }
       const result = await response.json();
       setPersonnelDetail(result.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching personnel:', error);
-      toast.error('ไม่สามารถโหลดข้อมูลบุคลากรได้');
+      toast.error(error.message || 'ไม่สามารถโหลดข้อมูลบุคลากรได้');
       setPersonnelDetail(null);
+      // ปิด modal ถ้าไม่มีข้อมูล
+      setPersonnelModalOpen(false);
     } finally {
       setLoadingPersonnel(false);
     }
@@ -295,6 +313,9 @@ export default function ThreeWaySwapPage() {
 
   const handleClosePersonnelModal = () => {
     setPersonnelModalOpen(false);
+  };
+
+  const handleClearPersonnelData = () => {
     setSelectedPersonnelId(null);
     setPersonnelDetail(null);
   };
@@ -327,6 +348,18 @@ export default function ThreeWaySwapPage() {
     }
   };
 
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
   };
@@ -354,43 +387,45 @@ export default function ThreeWaySwapPage() {
             gap: 2
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <ThreeWayIcon sx={{ fontSize: 40, color: 'secondary.main' }} />
               <Box>
-                <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+                <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
                   การสลับตำแหน่งสามเส้า
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  รายการสลับตำแหน่ง 3 คน (A→B→C→A)
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  จัดการและตรวจสอบรายการสลับตำแหน่งแบบสามเส้า (3 คน)
                 </Typography>
               </Box>
             </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-              <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel>ปีงบประมาณ</InputLabel>
-                <Select
-                  value={currentYear}
-                  label="ปีงบประมาณ"
-                  onChange={handleYearChange}
-                >
-                  {availableYears.map((year) => (
-                    <MenuItem key={year} value={year}>
-                      {year}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Tooltip title="รีเฟรช">
-                <IconButton onClick={fetchData} color="primary">
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
-
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {/* View Mode Toggle */}
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(event, newValue) => {
+                  if (newValue !== null) {
+                    setViewMode(newValue);
+                  }
+                }}
+                size="small"
+                aria-label="view mode"
+              >
+                <ToggleButton value="table" aria-label="table view">
+                  <Tooltip title="มุมมองตาราง">
+                    <ViewListIcon />
+                  </Tooltip>
+                </ToggleButton>
+                <ToggleButton value="card" aria-label="card view">
+                  <Tooltip title="มุมมองการ์ด">
+                    <ViewModuleIcon />
+                  </Tooltip>
+                </ToggleButton>
+              </ToggleButtonGroup>
               <Button
                 variant="contained"
+                color="warning"
                 startIcon={<AddIcon />}
                 onClick={() => router.push('/police-personnel/three-way-swap/add')}
+                size="large"
               >
                 เพิ่มการสลับสามเส้า
               </Button>
@@ -399,51 +434,119 @@ export default function ThreeWaySwapPage() {
         </Paper>
 
         {/* Filters */}
-        {!loading && data.length > 0 && (
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 'fit-content' }}>
-                ตัวกรอง:
-              </Typography>
-              
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ 
+            display: 'grid', 
+            gridTemplateColumns: { xs: '1fr', md: '1fr 2fr' }, 
+            gap: 2,
+            alignItems: 'start'
+          }}>
+            <FormControl size="small">
+              <InputLabel id="year-filter-label">ปีที่สลับตำแหน่ง</InputLabel>
+              <Select
+                labelId="year-filter-label"
+                id="year-filter"
+                value={currentYear}
+                label="ปีที่สลับตำแหน่ง"
+                onChange={handleYearChange}
+              >
+                {availableYears.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
               <Autocomplete
-                size="small"
+                fullWidth
                 options={groupNameOptions}
                 value={groupNameFilter}
-                onChange={(_, newValue) => setGroupNameFilter(newValue)}
-                renderInput={(params) => <TextField {...params} label="ชื่อกลุ่ม" />}
-                sx={{ minWidth: 250 }}
+                onChange={(event, newValue) => setGroupNameFilter(newValue)}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="ชื่อกลุ่ม" 
+                    placeholder="ค้นหาชื่อกลุ่ม..."
+                    size="small"
+                  />
+                )}
+                noOptionsText="ไม่พบข้อมูล"
               />
-
               {groupNameFilter && (
-                <Button 
-                  size="small" 
+                <Button
+                  variant="outlined"
+                  size="medium"
                   onClick={() => setGroupNameFilter(null)}
+                  startIcon={<RefreshIcon />}
+                  sx={{ whiteSpace: 'nowrap' }}
                 >
                   ล้างตัวกรอง
                 </Button>
               )}
+            </Box>
+          </Box>
 
-              <Divider orientation="vertical" flexItem />
-              
-              <Typography variant="body2" color="text.secondary">
-                ผลลัพธ์: {filteredData.length} รายการ
-              </Typography>
-            </Stack>
-          </Paper>
-        )}
+          
+        </Paper>
 
         {/* Content */}
         {loading ? (
-          <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {[1, 2, 3].map((i) => (
-                <Box key={i}>
-                  <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 3 }}>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Paper key={i} elevation={2} sx={{ p: 3 }}>
+                {/* Card Header Skeleton */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton variant="rounded" width={120} height={32} sx={{ mb: 1 }} />
+                    <Skeleton variant="text" width="80%" height={32} sx={{ mb: 0.5 }} />
+                    <Skeleton variant="text" width="60%" height={24} />
+                  </Box>
+                  <Skeleton variant="circular" width={40} height={40} />
                 </Box>
-              ))}
-            </Box>
-          </Paper>
+
+                {/* Three-way Details Skeleton */}
+                <Box sx={{ mt: 2 }}>
+                  <Skeleton variant="text" width={180} height={24} sx={{ mb: 1.5 }} />
+                  
+                  {/* Three person cards */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {[1, 2, 3].map((j) => (
+                      <Box 
+                        key={j}
+                        sx={{ 
+                          p: 2, 
+                          bgcolor: 'grey.50', 
+                          borderRadius: 1,
+                          borderLeft: '3px solid',
+                          borderLeftColor: j === 1 ? 'success.main' : j === 2 ? 'info.main' : 'warning.main'
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Skeleton variant="rounded" width={60} height={20} sx={{ mb: 0.5 }} />
+                            <Skeleton variant="text" width="70%" height={24} sx={{ mb: 0.5 }} />
+                            <Skeleton variant="rounded" width={100} height={20} />
+                          </Box>
+                          <Skeleton variant="circular" width={32} height={32} />
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          <Skeleton variant="text" width="90%" height={20} />
+                          <Skeleton variant="text" width="85%" height={20} />
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+
+                  {/* Cycle indicator skeleton */}
+                  <Box sx={{ mt: 2, textAlign: 'center' }}>
+                    <Skeleton variant="rounded" width="100%" height={40} />
+                  </Box>
+                </Box>
+              </Paper>
+            ))}
+          </Box>
         ) : (
           <>
             {filteredData.length === 0 ? (
@@ -468,9 +571,10 @@ export default function ThreeWaySwapPage() {
               </Paper>
             ) : (
               <>
-                {/* Card View */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 3 }}>
-                  {paginatedData.map((row) => (
+                {viewMode === 'card' ? (
+                  /* Card View */
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 3 }}>
+                    {paginatedData.map((row) => (
                     <Paper key={row.id} elevation={2} sx={{ 
                       p: 3, 
                       position: 'relative',
@@ -487,7 +591,7 @@ export default function ThreeWaySwapPage() {
                           <Chip
                             icon={<ThreeWayIcon />}
                             label={row.groupNumber || '-'}
-                            color="secondary"
+                            color="warning"
                             size="medium"
                             sx={{ fontWeight: 600, mb: 1, fontSize: '0.9rem' }}
                           />
@@ -499,12 +603,7 @@ export default function ThreeWaySwapPage() {
                               <CalendarIcon sx={{ fontSize: 16 }} />
                               {formatDate(row.swapDate)}
                             </Typography>
-                            <Chip
-                              label={getStatusText(row.status)}
-                              color={getStatusColor(row.status)}
-                              size="small"
-                              sx={{ height: 22 }}
-                            />
+                            
                           </Box>
                         </Box>
                         <IconButton
@@ -603,21 +702,188 @@ export default function ThreeWaySwapPage() {
                           ))}
                         </Box>
 
-                        {/* Show cycle indicator */}
-                        {row.swapDetails.length === 3 && (
-                          <Box sx={{ mt: 2, p: 1.5, bgcolor: 'secondary.lighter', borderRadius: 1, textAlign: 'center' }}>
-                            <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
-                              🔄 วงจรสลับ: {row.swapDetails[0]?.fullName?.split(' ').pop()} → {row.swapDetails[1]?.fullName?.split(' ').pop()} → {row.swapDetails[2]?.fullName?.split(' ').pop()} → {row.swapDetails[0]?.fullName?.split(' ').pop()}
-                            </Typography>
-                          </Box>
-                        )}
                       </Box>
                     </Paper>
-                  ))}
-                </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  /* Table View */
+                  <Paper elevation={2}>
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: 'warning.main' }}>
+                            <TableCell sx={{ color: 'white', width: 50, fontWeight: 600 }} />
+                            <TableCell sx={{ color: 'white', fontWeight: 600 }}>เลขกลุ่ม</TableCell>
+                            <TableCell sx={{ color: 'white', fontWeight: 600 }}>ชื่อกลุ่ม</TableCell>
+                            <TableCell sx={{ color: 'white', fontWeight: 600 }}>วันที่สลับ</TableCell>
+                            <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }} align="center">จัดการ</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {paginatedData.map((row) => (
+                            <React.Fragment key={row.id}>
+                              <TableRow 
+                                hover 
+                                sx={{ 
+                                  '&:hover': { 
+                                    bgcolor: 'action.hover',
+                                    cursor: 'pointer'
+                                  }
+                                }}
+                              >
+                                <TableCell>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => toggleRow(row.id)}
+                                    color="primary"
+                                  >
+                                    {expandedRows.has(row.id) ? <ArrowUpIcon /> : <ArrowDownIcon />}
+                                  </IconButton>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={row.groupNumber || '-'}
+                                    color="warning"
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ fontWeight: 600 }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" fontWeight={600}>
+                                    {row.groupName || '-'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <CalendarIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    {formatDate(row.swapDate)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="center">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleMenuOpen(e, row)}
+                                    color="default"
+                                  >
+                                    <MoreVertIcon />
+                                  </IconButton>
+                                </TableCell>
+                              </TableRow>
+                            
+                              {/* Expanded Detail Row */}
+                              <TableRow>
+                                <TableCell colSpan={5} sx={{ p: 0 }}>
+                                  <Collapse in={expandedRows.has(row.id)} timeout="auto" unmountOnExit>
+                                    <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
+                                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <ThreeWayIcon color="warning" />
+                                        รายละเอียดการสลับตำแหน่งสามเส้า
+                                      </Typography>
+                                      
+                                      {row.notes && (
+                                        <Alert severity="info" sx={{ mb: 2 }}>
+                                          <strong>หมายเหตุ:</strong> {row.notes}
+                                        </Alert>
+                                      )}
+                                      
+                                      <TableContainer>
+                                        <Table size="small">
+                                          <TableHead>
+                                            <TableRow sx={{ bgcolor: 'white' }}>
+                                              <TableCell>ลำดับ</TableCell>
+                                              <TableCell>ชื่อ-สกุล</TableCell>
+                                              <TableCell>ยศ</TableCell>
+                                              <TableCell>POSCODE</TableCell>
+                                              <TableCell>จากตำแหน่ง</TableCell>
+                                              <TableCell>จากหน่วย</TableCell>
+                                              <TableCell sx={{ color: 'success.main', fontWeight: 'bold' }}>→ ไปตำแหน่ง</TableCell>
+                                              <TableCell sx={{ color: 'success.main', fontWeight: 'bold' }}>→ ไปหน่วย</TableCell>
+                                              <TableCell align="center">ดูข้อมูล</TableCell>
+                                            </TableRow>
+                                          </TableHead>
+                                          <TableBody>
+                                            {row.swapDetails
+                                              .sort((a, b) => a.sequence - b.sequence)
+                                              .map((detail, index) => (
+                                              <TableRow key={detail.id} sx={{ bgcolor: 'white' }}>
+                                                <TableCell>
+                                                  <Chip 
+                                                    label={detail.sequence}
+                                                    size="small"
+                                                    color={index === 0 ? 'success' : index === 1 ? 'info' : 'warning'}
+                                                    sx={{ fontWeight: 600, minWidth: 40 }}
+                                                  />
+                                                </TableCell>
+                                                <TableCell><strong>{detail.fullName}</strong></TableCell>
+                                                <TableCell>{detail.rank || '-'}</TableCell>
+                                                <TableCell>
+                                                  {detail.posCodeMaster ? (
+                                                    <Chip 
+                                                      label={`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`}
+                                                      size="small"
+                                                      color="primary"
+                                                      variant="outlined"
+                                                      sx={{ fontSize: '0.75rem' }}
+                                                    />
+                                                  ) : '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                  {detail.fromPosition || '-'}
+                                                  {detail.fromPositionNumber && ` (${detail.fromPositionNumber})`}
+                                                </TableCell>
+                                                <TableCell>{detail.fromUnit || '-'}</TableCell>
+                                                <TableCell sx={{ bgcolor: 'success.50' }}>
+                                                  <strong>{detail.toPosition || '-'}</strong>
+                                                  {detail.toPositionNumber && ` (${detail.toPositionNumber})`}
+                                                </TableCell>
+                                                <TableCell sx={{ bgcolor: 'success.50' }}>
+                                                  <strong>{detail.toUnit || '-'}</strong>
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                  <Tooltip title="ดูรายละเอียดบุคลากร">
+                                                    <IconButton
+                                                      size="small"
+                                                      color="primary"
+                                                      onClick={() => handleViewPersonnelDetail(detail.personnelId)}
+                                                    >
+                                                      <ViewIcon fontSize="small" />
+                                                    </IconButton>
+                                                  </Tooltip>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                        </Table>
+                                      </TableContainer>
+                                    </Box>
+                                  </Collapse>
+                                </TableCell>
+                              </TableRow>
+                            </React.Fragment>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+          
+                    {/* Pagination for Table View */}
+                    {filteredData.length > 0 && (
+                      <DataTablePagination
+                        count={filteredData.length}
+                        page={page}
+                        rowsPerPage={rowsPerPage}
+                        rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                        onPageChange={handlePageChange}
+                        onRowsPerPageChange={handleRowsPerPageChange}
+                        variant="minimal"
+                      />
+                    )}
+                  </Paper>
+                )}
               
-                {/* Pagination */}
-                {filteredData.length > 0 && (
+                {/* Pagination for Card View */}
+                {viewMode === 'card' && filteredData.length > 0 && (
                   <Paper sx={{ mt: 3 }}>
                     <DataTablePagination
                       count={filteredData.length}
@@ -683,6 +949,7 @@ export default function ThreeWaySwapPage() {
         <PersonnelDetailModal
           open={personnelModalOpen}
           onClose={handleClosePersonnelModal}
+          onClearData={handleClearPersonnelData}
           personnel={personnelDetail}
           loading={loadingPersonnel}
           title="รายละเอียดบุคลากร"

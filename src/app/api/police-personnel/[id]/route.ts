@@ -115,14 +115,6 @@ export async function DELETE(
         errors.push('อยู่ในรายการ Swap List');
       }
 
-      // ตรวจสอบว่ามีใน three-way-swap หรือไม่
-      const inThreeWaySwap = await prisma.threeWaySwap.findFirst({
-        where: { nationalId: personnel.nationalId }
-      });
-      if (inThreeWaySwap) {
-        errors.push('อยู่ในรายการ Three Way Swap');
-      }
-
       // ตรวจสอบว่ามีใน vacant-position หรือไม่
       const inVacantPosition = await prisma.vacantPosition.findFirst({
         where: { nationalId: personnel.nationalId }
@@ -131,7 +123,7 @@ export async function DELETE(
         errors.push('อยู่ในรายการ Vacant Position');
       }
 
-      // ตรวจสอบว่ามีการจับคู่ใน swap_transaction_detail หรือไม่
+      // ตรวจสอบว่ามีการจับคู่ใน swap_transaction_detail หรือไม่ (รวมทั้ง two-way และ three-way)
       const hasSwapTransaction = await prisma.swapTransactionDetail.findFirst({
         where: { nationalId: personnel.nationalId }
       });

@@ -249,7 +249,6 @@ export default function EditSwapTransactionPage() {
 
   const handleCloseDetail = () => {
     setDetailDialogOpen(false);
-    setSelectedPersonnelDetail(null);
   };
 
   const handleSelectPersonnelA = (newValue: PolicePersonnel | null) => {
@@ -928,6 +927,7 @@ export default function EditSwapTransactionPage() {
           onClose={handleCloseDetail}
           personnel={selectedPersonnelDetail}
           loading={false}
+          onClearData={() => setSelectedPersonnelDetail(null)}
         />
       </Box>
     </Layout>

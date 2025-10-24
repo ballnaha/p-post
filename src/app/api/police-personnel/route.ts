@@ -146,17 +146,19 @@ export async function GET(request: NextRequest) {
         const swapList = await prisma.swapList.findMany({
           where: {
             year: currentYear,
-            nationalId: { in: nationalIds }
+            nationalId: { in: nationalIds },
+            swapType: 'two-way'
           },
           select: { nationalId: true }
         });
         const swapNationalIds = new Set(swapList.map(s => s.nationalId).filter(Boolean));
         filteredPersonnel = personnel.filter(p => p.nationalId && swapNationalIds.has(p.nationalId));
       } else if (swapFilter === 'in-threeway') {
-        const threeWayList = await prisma.threeWaySwap.findMany({
+        const threeWayList = await prisma.swapList.findMany({
           where: {
             year: currentYear,
-            nationalId: { in: nationalIds }
+            nationalId: { in: nationalIds },
+            swapType: 'three-way'
           },
           select: { nationalId: true }
         });

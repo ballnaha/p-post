@@ -229,10 +229,14 @@ model SwapTransaction {
 
 // Swap Transaction Detail (รายละเอียดการสลับของแต่ละคน)
 // เก็บข้อมูลว่าใครย้ายจากตำแหน่งไหนไปตำแหน่งไหน
+// รองรับทั้ง two-way และ three-way swap
 model SwapTransactionDetail {
   id              String @id @default(cuid())
   transactionId   String @map("transaction_id")
   transaction     SwapTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  
+  // ลำดับในวงจร (สำหรับ three-way: 1, 2, 3 / สำหรับ two-way: 1, 2)
+  sequence        Int? // คนที่ 1, 2, 3, ... (optional สำหรับ two-way)
   
   // ข้อมูลบุคคล
   personnelId     String? @map("personnel_id") // ID อ้างอิงกับ police_personnel
@@ -263,72 +267,6 @@ model SwapTransactionDetail {
   @@index([personnelId])
   @@index([nationalId])
   @@index([posCodeId])
-  @@map("swap_transaction_detail")
-}
-
-// Three Way Swap Transaction (บันทึกการสลับตำแหน่งสามเส้า - 3 คน)
-// กฎ: A→B, B→C, C→A (แต่ละคนต้องไม่อยู่ตำแหน่งเดิม)
-model ThreeWayTransaction {
-  id               String   @id @default(cuid())
-  year             Int // ปีที่ทำการสลับ (พ.ศ.)
-  swapDate         DateTime // วันที่ทำการสลับ
-  groupName        String?  @map("group_name") // ชื่อกลุ่ม เช่น "นาย A → นาย B → นาย C"
-  groupNumber      String?  @map("group_number") // เลขกลุ่ม เช่น "2568/3W-001"
-  status           String   @default("completed") // completed, pending, cancelled
-  notes            String?  @db.Text // หมายเหตุ
-  
-  // Relations
-  swapDetails ThreeWayTransactionDetail[]
-  
-  // Metadata
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy String?  @map("created_by")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedBy String?  @map("updated_by")
-
-  @@index([year])
-  @@index([swapDate])
-  @@index([status])
-  @@map("three_way_transaction")
-}
-
-// Three Way Swap Transaction Detail (รายละเอียดการสลับของแต่ละคนในสามเส้า)
-// เก็บข้อมูลว่าใครย้ายจากตำแหน่งไหนไปตำแหน่งไหน (3 คน)
-model ThreeWayTransactionDetail {
-  id              String @id @default(cuid())
-  transactionId   String @map("transaction_id")
-  transaction     ThreeWayTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  
-  // ลำดับในวงจร (1, 2, 3)
-  sequence        Int // คนที่ 1, 2, 3
-  
-  // ข้อมูลบุคคล
-  personnelId     String? @map("personnel_id") // ID อ้างอิงกับ police_personnel
-  nationalId      String? @map("national_id") // เลขบัตรประชาชน
-  fullName        String  @map("full_name") // ชื่อ-นามสกุล
-  rank            String? // ยศ
-  posCodeId       Int?    @map("pos_code_id") // รหัสตำแหน่ง
-  
-  // ตำแหน่งเดิม (From)
-  fromPosition       String? @map("from_position") // ตำแหน่งเดิม
-  fromPositionNumber String? @map("from_position_number") // เลขที่ตำแหน่งเดิม
-  fromUnit           String? @map("from_unit") // หน่วยเดิม
-  
-  // ตำแหน่งใหม่ (To)
-  toPosition         String? @map("to_position") // ตำแหน่งใหม่
-  toPositionNumber   String? @map("to_position_number") // เลขที่ตำแหน่งใหม่
-  toUnit             String? @map("to_unit") // หน่วยใหม่
-  
-  // ข้อมูลเพิ่มเติม
-  notes              String? @db.Text // หมายเหตุเฉพาะคน
-  
-  // Metadata
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([transactionId])
-  @@index([personnelId])
-  @@index([nationalId])
   @@index([sequence])
-  @@map("three_way_transaction_detail")
+  @@map("swap_transaction_detail")
 }

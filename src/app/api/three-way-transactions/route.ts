@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// GET - ดึงรายการ three-way transactions
+// GET - ดึงรายการ three-way transactions (ใช้ SwapTransaction แทน)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const year = searchParams.get('year');
 
-    const whereClause = year ? { year: parseInt(year) } : {};
+    const whereClause: any = { swapType: 'three-way' };
+    if (year) {
+      whereClause.year = parseInt(year);
+    }
 
-    const transactions = await prisma.threeWayTransaction.findMany({
+    const transactions = await prisma.swapTransaction.findMany({
       where: whereClause,
       include: {
         swapDetails: {
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - สร้าง three-way transaction ใหม่
+// POST - สร้าง three-way transaction ใหม่ (ใช้ SwapTransaction แทน)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -49,27 +52,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate: sequence ต้องเป็น 1, 2, 3
-    const sequences = swapDetails.map((d: any) => d.sequence).sort();
-    if (sequences[0] !== 1 || sequences[1] !== 2 || sequences[2] !== 3) {
-      return NextResponse.json(
-        { success: false, error: 'Sequence must be 1, 2, 3' },
-        { status: 400 }
-      );
-    }
-
-    // สร้าง transaction พร้อม details
-    const transaction = await prisma.threeWayTransaction.create({
+    // สร้าง transaction พร้อม details (ใช้ SwapTransaction)
+    const transaction = await prisma.swapTransaction.create({
       data: {
         year,
         swapDate: new Date(swapDate),
+        swapType: 'three-way', // ระบุ type
         groupName,
         groupNumber,
-        status: status || 'pending',
+        status: status || 'completed',
         notes,
         swapDetails: {
-          create: swapDetails.map((detail: any) => ({
-            sequence: detail.sequence,
+          create: swapDetails.map((detail: any, index: number) => ({
+            sequence: index + 1, // 1, 2, 3
             personnelId: detail.personnelId,
             nationalId: detail.nationalId,
             fullName: detail.fullName,

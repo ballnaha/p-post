@@ -46,9 +46,9 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
       setIsSidebarOpen(false);
       setIsSidebarCollapsed(false);
     } else {
-      // On desktop, opened by default (expanded)
+      // On desktop, opened by default (mini/collapsed)
       setIsSidebarOpen(true);
-      setIsSidebarCollapsed(false);
+      setIsSidebarCollapsed(true); // Default เป็น mini sidebar
     }
     // Update ref
     prevIsMobileRef.current = isMobile;

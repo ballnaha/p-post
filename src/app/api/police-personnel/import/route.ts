@@ -110,6 +110,17 @@ export async function POST(request: NextRequest) {
         return;
       }
 
+      // ตรวจสอบว่ามี pos_code_master ในระบบหรือไม่
+      const posCodeCount = await prisma.posCodeMaster.count();
+      if (posCodeCount === 0) {
+        sendProgress({ 
+          type: 'error', 
+          error: 'กรุณาเพิ่มข้อมูล POS Code Master ในระบบก่อน (ใช้คำสั่ง npm run seed:poscode)' 
+        });
+        close();
+        return;
+      }
+
       const results = {
         success: 0,
         failed: 0,

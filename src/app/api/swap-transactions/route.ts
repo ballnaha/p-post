@@ -10,10 +10,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const year = searchParams.get('year');
     const status = searchParams.get('status');
+    const swapType = searchParams.get('swapType');
     
     const where: any = {};
     if (year) where.year = parseInt(year);
     if (status) where.status = status;
+    if (swapType) where.swapType = swapType;
 
     const transactions = await prisma.swapTransaction.findMany({
       where,
@@ -27,7 +29,10 @@ export async function GET(request: NextRequest) {
               }
             }
           },
-          orderBy: { fullName: 'asc' }
+          orderBy: [
+            { sequence: 'asc' },
+            { fullName: 'asc' }
+          ]
         }
       },
       orderBy: [
@@ -77,11 +82,13 @@ export async function POST(request: NextRequest) {
         status: 'completed',
         notes,
         swapDetails: {
-          create: swapDetails.map((detail: any) => ({
+          create: swapDetails.map((detail: any, index: number) => ({
+            sequence: detail.sequence !== undefined ? detail.sequence : (swapType === 'three-way' ? index + 1 : null),
             personnelId: detail.personnelId,
             nationalId: detail.nationalId,
             fullName: detail.fullName,
             rank: detail.rank,
+            posCodeId: detail.posCodeId,
             fromPosition: detail.fromPosition,
             fromPositionNumber: detail.fromPositionNumber,
             fromUnit: detail.fromUnit,
@@ -93,7 +100,9 @@ export async function POST(request: NextRequest) {
         }
       },
       include: {
-        swapDetails: true
+        swapDetails: {
+          orderBy: swapType === 'three-way' ? { sequence: 'asc' } : { fullName: 'asc' }
+        }
       }
     });
 

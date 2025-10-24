@@ -101,7 +101,7 @@ export default function AddSwapTransactionPage() {
   const fetchNextGroupNumber = async (): Promise<Set<string>> => {
     try {
       const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/swap-transactions?year=${currentYear}`);
+      const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=two-way`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch swap transactions');
@@ -110,13 +110,13 @@ export default function AddSwapTransactionPage() {
       const result = await response.json();
       const transactions = result.data || [];
       
-      // Find the maximum group number for this year
+      // Find the maximum group number for this year (format: 2568/2W-001)
       let maxNumber = 0;
       if (Array.isArray(transactions)) {
         transactions.forEach((transaction: any) => {
           if (transaction.groupNumber) {
-            // Extract number from format "2568/001"
-            const match = transaction.groupNumber.match(/\/(\d+)$/);
+            // Extract number from format "2568/2W-001"
+            const match = transaction.groupNumber.match(/\/2W-(\d+)$/);
             if (match) {
               const num = parseInt(match[1], 10);
               if (num > maxNumber) {
@@ -130,7 +130,7 @@ export default function AddSwapTransactionPage() {
       // Next number is max + 1
       const nextNumber = maxNumber + 1;
       const formattedNumber = String(nextNumber).padStart(3, '0');
-      setGroupNumber(`${currentYear}/${formattedNumber}`);
+      setGroupNumber(`${currentYear}/2W-${formattedNumber}`);
       
       // Extract personnel IDs who already swapped in this year
       const swappedIds = new Set<string>();
@@ -151,7 +151,7 @@ export default function AddSwapTransactionPage() {
       console.error('Error fetching group number:', error);
       // Fallback to default
       const currentYear = new Date().getFullYear() + 543;
-      setGroupNumber(`${currentYear}/001`);
+      setGroupNumber(`${currentYear}/2W-001`);
       return new Set<string>();
     }
   };
@@ -160,8 +160,9 @@ export default function AddSwapTransactionPage() {
     try {
       setSearchLoading(true);
       // Fetch from swap-list API to get personnel who are in the current year's swap list
+      // Filter by swapType=two-way to get only personnel for two-way swap
       const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/swap-list?year=${currentYear}`);
+      const response = await fetch(`/api/swap-list?year=${currentYear}&swapType=two-way`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch swap list');
@@ -195,7 +196,6 @@ export default function AddSwapTransactionPage() {
 
   const handleCloseDetail = () => {
     setDetailDialogOpen(false);
-    setSelectedPersonnelDetail(null);
   };
 
   const handleSelectPersonnelA = (newValue: PolicePersonnel | null) => {
@@ -882,6 +882,7 @@ export default function AddSwapTransactionPage() {
           onClose={handleCloseDetail}
           personnel={selectedPersonnelDetail}
           loading={false}
+          onClearData={() => setSelectedPersonnelDetail(null)}
         />
       </Box>
     </Layout>

@@ -58,6 +58,7 @@ interface PersonnelDetailModalProps {
   personnel: PersonnelData | null;
   loading?: boolean;
   title?: string; // Custom title (default: "รายละเอียดบุคลากร")
+  onClearData?: () => void; // Optional callback to clear personnel data after animation
 }
 
 // Utility function สำหรับ format วันที่
@@ -111,15 +112,26 @@ export default function PersonnelDetailModal({
   onClose,
   personnel,
   loading = false,
-  title = 'รายละเอียดบุคลากร'
+  title = 'รายละเอียดบุคลากร',
+  onClearData
 }: PersonnelDetailModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  const handleClose = () => {
+    onClose();
+    // Delay clearing data until animation completes (if callback provided)
+    if (onClearData) {
+      setTimeout(() => {
+        onClearData();
+      }, 300); // Match MUI Dialog transition duration
+    }
+  };
+
   return (
     <Dialog 
       open={open} 
-      onClose={onClose}
+      onClose={handleClose}
       maxWidth="md"
       fullWidth
       fullScreen={isMobile}
@@ -322,7 +334,7 @@ export default function PersonnelDetailModal({
       </DialogContent>
       
       <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
-        <Button onClick={onClose} variant="contained" size="medium" sx={{ minWidth: 100, fontWeight: 600 }}>
+        <Button onClick={handleClose} variant="contained" size="medium" sx={{ minWidth: 100, fontWeight: 600 }}>
           ปิด
         </Button>
       </DialogActions>

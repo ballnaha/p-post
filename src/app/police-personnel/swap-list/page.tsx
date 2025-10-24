@@ -186,7 +186,8 @@ export default function SwapListPage() {
       setData([]);
       setFilteredData([]);
       
-      const response = await fetch(`/api/swap-transactions?year=${currentYear}`);
+      // Filter by swapType=two-way to get only two-way swap transactions
+      const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=two-way`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch data');
@@ -259,14 +260,15 @@ export default function SwapListPage() {
       const response = await fetch(`/api/swap-list/personnel/${personnelId}`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch personnel details');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch personnel details');
       }
 
       const result = await response.json();
       setSelectedPersonnel(result.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching personnel details:', error);
-      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูลบุคลากร');
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูลบุคลากร');
       setPersonnelDetailModalOpen(false);
     } finally {
       setLoadingPersonnel(false);
@@ -275,7 +277,6 @@ export default function SwapListPage() {
 
   const handleClosePersonnelDetailModal = () => {
     setPersonnelDetailModalOpen(false);
-    setSelectedPersonnel(null);
   };
 
   const formatDate = (dateString?: string | null) => {
@@ -537,8 +538,53 @@ export default function SwapListPage() {
 
         {/* Content */}
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-            <CircularProgress size={60} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 3 }}>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Paper key={i} elevation={2} sx={{ p: 3 }}>
+                {/* Card Header Skeleton */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton variant="rounded" width={100} height={32} sx={{ mb: 1 }} />
+                    <Skeleton variant="text" width="75%" height={32} sx={{ mb: 0.5 }} />
+                    <Skeleton variant="text" width="50%" height={24} />
+                  </Box>
+                  <Skeleton variant="circular" width={40} height={40} />
+                </Box>
+
+                {/* Swap Details Skeleton */}
+                <Box sx={{ mt: 2 }}>
+                  <Skeleton variant="text" width={160} height={24} sx={{ mb: 1.5 }} />
+                  
+                  {/* Two person cards for swap */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {[1, 2].map((j) => (
+                      <Box 
+                        key={j}
+                        sx={{ 
+                          p: 2, 
+                          bgcolor: 'grey.50', 
+                          borderRadius: 1,
+                          borderLeft: '3px solid',
+                          borderLeftColor: 'primary.main'
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Skeleton variant="text" width="65%" height={24} sx={{ mb: 0.5 }} />
+                            <Skeleton variant="rounded" width={90} height={20} />
+                          </Box>
+                          <Skeleton variant="circular" width={32} height={32} />
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          <Skeleton variant="text" width="88%" height={20} />
+                          <Skeleton variant="text" width="82%" height={20} />
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Paper>
+            ))}
           </Box>
         ) : (
           <>
@@ -929,6 +975,7 @@ export default function SwapListPage() {
           onClose={handleClosePersonnelDetailModal}
           personnel={selectedPersonnel}
           loading={loadingPersonnel}
+          onClearData={() => setSelectedPersonnel(null)}
         />
       </Box>
     </Layout>

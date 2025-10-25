@@ -61,6 +61,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import DataTablePagination from '@/components/DataTablePagination';
+import { EmptyState } from '@/app/components/EmptyState';
 
 interface PolicePersonnel {
   id: string;
@@ -590,32 +591,17 @@ export default function SwapListPage() {
           <>
             {filteredData.length === 0 ? (
               <Fade in={!loading} timeout={800}>
-                <Paper sx={{ p: 4 }}>
-                  <Alert 
-                    severity="info" 
-                    sx={{ 
-                      '& .MuiAlert-message': { 
-                        width: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: 2
-                      }
-                    }}
-                  >
-                    <SwapHorizIcon sx={{ fontSize: 60, color: 'info.main', opacity: 0.5 }} />
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="h6" gutterBottom>
-                        {groupNameFilter ? 'ไม่พบข้อมูลที่ตรงกับการกรอง' : 'ไม่พบข้อมูลการสลับตำแหน่ง'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {groupNameFilter 
-                          ? 'ลองปรับเปลี่ยนตัวกรองหรือล้างตัวกรอง' 
-                          : `ยังไม่มีรายการสลับตำแหน่งในปี ${currentYear}`
-                        }
-                      </Typography>
-                    </Box>
-                  </Alert>
+                <Paper sx={{ borderRadius: 2 }}>
+                  <EmptyState
+                    icon={SwapHorizIcon}
+                    title={groupNameFilter ? 'ไม่พบข้อมูลที่ตรงกับการกรอง' : 'ไม่พบข้อมูลการสลับตำแหน่ง'}
+                    description={groupNameFilter 
+                      ? 'ลองปรับเปลี่ยนตัวกรองหรือล้างตัวกรอง' 
+                      : `ยังไม่มีรายการสลับตำแหน่งในปี ${currentYear}`
+                    }
+                    actionLabel={!groupNameFilter ? 'เพิ่มรายการสลับตำแหน่ง' : undefined}
+                    onAction={!groupNameFilter ? () => router.push('/police-personnel/swap-list/add') : undefined}
+                  />
                 </Paper>
               </Fade>
             ) : (
@@ -945,12 +931,20 @@ export default function SwapListPage() {
         >
           <DialogTitle>ยืนยันการลบข้อมูล</DialogTitle>
           <DialogContent>
-            <Typography>
-              คุณต้องการลบรายการสลับตำแหน่งวันที่{' '}
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              คุณต้องการลบรายการสลับตำแหน่ง กลุ่ม{' '}
               <strong>
-                {itemToDelete && formatDate(itemToDelete.swapDate)}
+                {itemToDelete && itemToDelete.groupName ? itemToDelete.groupName : '(ไม่ระบุชื่อกลุ่ม)'}
               </strong>{' '}
               ใช่หรือไม่?
+            </Typography>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                ระบบจะตรวจสอบว่าบุคลากรในรายการนี้ได้ทำการสลับตำแหน่งในปีเดียวกันแล้วหรือไม่
+              </Typography>
+            </Alert>
+            <Typography variant="body2" color="error">
+              การดำเนินการนี้ไม่สามารถย้อนกลับได้
             </Typography>
           </DialogContent>
           <DialogActions>

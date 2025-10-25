@@ -118,12 +118,19 @@ export async function DELETE(
       });
 
       if (hasSwapTransaction) {
+        const transactionType = hasSwapTransaction.transaction?.swapType === 'three-way' 
+          ? 'การสลับตำแหน่งสามเส้า' 
+          : 'การสลับตำแหน่ง';
+        
+        const errorMessage = `ไม่สามารถลบได้ เนื่องจากบุคลากรนี้มี${transactionType}อยู่ในปี ${hasSwapTransaction.transaction?.year || 'ไม่ระบุ'} กรุณาลบ${transactionType}ก่อน`;
+        
         return NextResponse.json(
           { 
             success: false, 
-            error: 'ไม่สามารถลบได้ เนื่องจากบุคลากรนี้มีการจับคู่แลกตำแหน่งอยู่',
-            detail: 'กรุณาลบการจับคู่ใน Swap Transaction ก่อน',
-            transactionId: hasSwapTransaction.transactionId
+            error: errorMessage,
+            detail: `กรุณาลบ${transactionType}ก่อน`,
+            transactionId: hasSwapTransaction.transactionId,
+            transactionType: hasSwapTransaction.transaction?.swapType
           },
           { status: 400 }
         );

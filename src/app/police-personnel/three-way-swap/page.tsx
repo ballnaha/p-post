@@ -61,6 +61,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import DataTablePagination from '@/components/DataTablePagination';
+import { EmptyState } from '@/app/components/EmptyState';
 
 interface ThreeWaySwapDetail {
   id: string;
@@ -145,6 +146,8 @@ export default function ThreeWaySwapPage() {
   // Delete confirmation
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<ThreeWaySwapTransaction | null>(null);
   
   // Personnel detail modal
   const [personnelModalOpen, setPersonnelModalOpen] = useState(false);
@@ -257,6 +260,7 @@ export default function ThreeWaySwapPage() {
   const handleDeleteClick = () => {
     if (selectedTransaction) {
       setDeletingId(selectedTransaction.id);
+      setItemToDelete(selectedTransaction);
       setDeleteDialogOpen(true);
     }
     handleMenuClose();
@@ -265,6 +269,7 @@ export default function ThreeWaySwapPage() {
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
 
+    setIsDeleting(true);
     try {
       const response = await fetch(`/api/three-way-transactions/${deletingId}`, {
         method: 'DELETE',
@@ -272,10 +277,17 @@ export default function ThreeWaySwapPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete');
+        
+        // ถ้าเป็น error เกี่ยวกับข้อมูลที่เกี่ยวข้อง ให้แสดง error ที่ละเอียดขึ้น
+        if (response.status === 400 && errorData.conflictPersonnel) {
+          toast.error(errorData.error);
+        } else {
+          throw new Error(errorData.error || 'Failed to delete');
+        }
+        return;
       }
 
-      toast.success('ลบข้อมูลสำเร็จ');
+      toast.success('ลบข้อมูลการสลับตำแหน่งสามเส้าสำเร็จ');
       fetchData();
     } catch (error: any) {
       console.error('Error deleting transaction:', error);
@@ -283,6 +295,8 @@ export default function ThreeWaySwapPage() {
     } finally {
       setDeleteDialogOpen(false);
       setDeletingId(null);
+      setItemToDelete(null);
+      setIsDeleting(false);
     }
   };
 
@@ -550,24 +564,17 @@ export default function ThreeWaySwapPage() {
         ) : (
           <>
             {filteredData.length === 0 ? (
-              <Paper sx={{ p: 8, textAlign: 'center' }}>
-                <ThreeWayIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-                <Typography variant="h6" color="text.secondary" gutterBottom>
-                  ไม่พบข้อมูลการสลับตำแหน่งสามเส้า
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  {groupNameFilter 
+              <Paper sx={{ borderRadius: 2 }}>
+                <EmptyState
+                  icon={ThreeWayIcon}
+                  title="ไม่พบข้อมูลการสลับตำแหน่งสามเส้า"
+                  description={groupNameFilter 
                     ? 'ลองปรับเปลี่ยนตัวกรองหรือเพิ่มข้อมูลใหม่'
                     : `ยังไม่มีข้อมูลการสลับตำแหน่งสามเส้าในปี ${currentYear}`
                   }
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => router.push('/police-personnel/three-way-swap/add')}
-                >
-                  เพิ่มการสลับสามเส้า
-                </Button>
+                  actionLabel={!groupNameFilter ? 'เพิ่มการสลับสามเส้า' : undefined}
+                  onAction={!groupNameFilter ? () => router.push('/police-personnel/three-way-swap/add') : undefined}
+                />
               </Paper>
             ) : (
               <>
@@ -909,7 +916,7 @@ export default function ThreeWaySwapPage() {
         >
           <MenuItem onClick={handleEdit}>
             <ListItemIcon>
-              <EditIcon fontSize="small" />
+              <EditIcon color="primary" fontSize="small" />
             </ListItemIcon>
             <ListItemText>แก้ไข</ListItemText>
           </MenuItem>
@@ -924,23 +931,41 @@ export default function ThreeWaySwapPage() {
         {/* Delete Confirmation Dialog */}
         <Dialog
           open={deleteDialogOpen}
-          onClose={() => setDeleteDialogOpen(false)}
+          onClose={() => !isDeleting && setDeleteDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
         >
-          <DialogTitle>ยืนยันการลบ</DialogTitle>
+          <DialogTitle>ยืนยันการลบข้อมูลการสลับตำแหน่งสามเส้า</DialogTitle>
           <DialogContent>
-            <Typography>
-              คุณแน่ใจหรือไม่ที่จะลบรายการสลับตำแหน่งสามเส้านี้?
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              คุณต้องการลบรายการสลับตำแหน่งสามเส้า กลุ่ม{' '}
+              <strong>
+                {itemToDelete && itemToDelete.groupName ? itemToDelete.groupName : '(ไม่ระบุชื่อกลุ่ม)'}
+                
+              </strong>{' '}
+              ใช่หรือไม่?
             </Typography>
-            <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                ระบบจะตรวจสอบว่าบุคลากรในรายการนี้ได้ทำการสลับตำแหน่งในปีเดียวกันแล้วหรือไม่
+              </Typography>
+            </Alert>
+            <Typography variant="body2" color="error">
               การดำเนินการนี้ไม่สามารถย้อนกลับได้
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setDeleteDialogOpen(false)}>
+            <Button onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting}>
               ยกเลิก
             </Button>
-            <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-              ลบ
+            <Button 
+              onClick={handleDeleteConfirm} 
+              color="error" 
+              variant="contained"
+              disabled={isDeleting}
+              startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : undefined}
+            >
+              {isDeleting ? 'กำลังลบ...' : 'ลบ'}
             </Button>
           </DialogActions>
         </Dialog>

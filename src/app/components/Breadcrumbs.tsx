@@ -75,8 +75,17 @@ const Breadcrumbs: React.FC = () => {
 
         case 'swap-list':
           breadcrumbs.push({
-            label: 'รายการสลับ',
+            label: 'สลับตำแหน่ง',
             href: isLast ? undefined : '/police-personnel/swap-list',
+            icon: <SwapHorizIcon sx={{ fontSize: 16 }} />,
+            isActive: isLast,
+          });
+          break;
+
+        case 'three-way-swap':
+          breadcrumbs.push({
+            label: 'สามเส้า',
+            href: isLast ? undefined : '/police-personnel/three-way-swap',
             icon: <SwapHorizIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
           });

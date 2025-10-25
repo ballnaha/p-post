@@ -13,6 +13,7 @@ import {
   Chip,
   Divider,
   Stack,
+  Skeleton,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -363,8 +364,57 @@ export default function EditSwapTransactionPage() {
   if (loading) {
     return (
       <Layout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
-          <CircularProgress size={60} />
+        <Box sx={{ p: 3 }}>
+          {/* Header Skeleton */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Box sx={{ flex: 1 }}>
+                <Skeleton variant="text" width={280} height={40} sx={{ mb: 1 }} />
+                <Skeleton variant="text" width={360} height={24} />
+              </Box>
+              <Skeleton variant="rounded" width={120} height={40} />
+            </Box>
+          </Paper>
+
+          {/* Form Skeleton */}
+          <Paper sx={{ p: 3 }}>
+            <Skeleton variant="text" width={200} height={32} sx={{ mb: 3 }} />
+            
+            {/* Row 1 */}
+            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+              <Skeleton variant="rounded" width="33%" height={56} />
+              <Skeleton variant="rounded" width="33%" height={56} />
+              <Skeleton variant="rounded" width="33%" height={56} />
+            </Box>
+
+            {/* Row 2 */}
+            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+              <Skeleton variant="rounded" width="50%" height={56} />
+              <Skeleton variant="rounded" width="50%" height={56} />
+            </Box>
+
+            <Skeleton variant="rounded" width="100%" height={1} sx={{ my: 3 }} />
+
+            {/* Personnel Cards */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3, mb: 3 }}>
+              {[1, 2].map((i) => (
+                <Box key={i}>
+                  <Skeleton variant="text" width={160} height={28} sx={{ mb: 2 }} />
+                  <Skeleton variant="rounded" width="100%" height={240} />
+                </Box>
+              ))}
+            </Box>
+
+            {/* Notes */}
+            <Skeleton variant="text" width={120} height={28} sx={{ mb: 2 }} />
+            <Skeleton variant="rounded" width="100%" height={120} sx={{ mb: 3 }} />
+
+            {/* Buttons */}
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+              <Skeleton variant="rounded" width={100} height={40} />
+              <Skeleton variant="rounded" width={140} height={40} />
+            </Box>
+          </Paper>
         </Box>
       </Layout>
     );
@@ -685,7 +735,7 @@ export default function EditSwapTransactionPage() {
                   }
                   value={personnelB}
                   onChange={(event, newValue) => handleSelectPersonnelB(newValue)}
-                  disabled={!personnelA}
+                  disabled={false}
                   loading={searchLoading}
                   renderInput={(params) => (
                     <TextField

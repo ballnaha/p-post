@@ -240,7 +240,7 @@ function LoginPage() {
                 letterSpacing: '-0.02em'
               }}
             >
-              P-POST
+              <img src="/images/logo.png" alt="P POST Logo" style={{ height: 75 }} />
             </Typography>
             <Typography 
               variant="body1" 
@@ -250,7 +250,7 @@ function LoginPage() {
                 fontSize: '0.95rem'
               }}
             >
-              Police Position Management System
+              เข้าสู่ระบบ
             </Typography>
           </Box>
 

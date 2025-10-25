@@ -157,6 +157,61 @@ export async function DELETE(
       );
     }
 
+    // ดึง personnelId ของบุคลากรที่เกี่ยวข้องในธุรกรรมนี้
+    const personnelIds = existingTransaction.swapDetails
+      .map(detail => detail.personnelId)
+      .filter((id): id is string => id !== null);
+
+    // ตรวจสอบว่าบุคลากรเหล่านี้มีการสลับตำแหน่งในปีนี้หรือไม่ (รวมทั้งสามเส้า)
+    const relatedSwapTransactions = await prisma.swapTransaction.findMany({
+      where: {
+        id: { not: existingTransaction.id }, // ไม่ใช่ตัวเอง
+        year: existingTransaction.year,
+        swapDetails: {
+          some: {
+            personnelId: {
+              in: personnelIds
+            }
+          }
+        }
+      },
+      include: {
+        swapDetails: {
+          where: {
+            personnelId: {
+              in: personnelIds
+            }
+          }
+        }
+      }
+    });
+
+    if (relatedSwapTransactions.length > 0) {
+      // หาชื่อบุคลากรที่มีปัญหา
+      const conflictPersonnelNames: string[] = [];
+      relatedSwapTransactions.forEach(transaction => {
+        if (transaction.swapDetails) {
+          transaction.swapDetails.forEach(detail => {
+            if (detail.personnelId && personnelIds.includes(detail.personnelId) && detail.fullName) {
+              conflictPersonnelNames.push(detail.fullName);
+            }
+          });
+        }
+      });
+
+      const uniqueNames = [...new Set(conflictPersonnelNames)];
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `ไม่สามารถลบได้ เนื่องจากบุคลากร ${uniqueNames.join(', ')} ได้ถูกสลับตำแหน่งในปี ${existingTransaction.year} แล้ว กรุณาลบข้อมูลการสลับตำแหน่งของบุคลากรเหล่านี้ก่อน`,
+          conflictPersonnel: uniqueNames,
+          year: existingTransaction.year
+        },
+        { status: 400 }
+      );
+    }
+
     // ลบ swapDetails ก่อน (Cascade delete should handle this, but being explicit)
     await prisma.swapTransactionDetail.deleteMany({
       where: { transactionId: id }

@@ -38,15 +38,56 @@ const Header: React.FC = () => {
 
   const handleLogout = async () => {
     handleMenuClose();
-    const isProduction = process.env.NODE_ENV === 'production';
-    const envBase = isProduction
-      ? process.env.NEXT_PUBLIC_BASE_URL
-      : process.env.NEXTAUTH_URL;
-    const baseUrl = (envBase || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-    await signOut({
-      callbackUrl: `${baseUrl}/login`,
-      redirect: true
-    });
+    
+    try {
+      // 1. Call server-side logout API to clear session cookies
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      // 2. Clear all localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+      }
+      
+      // 3. Clear all sessionStorage
+      if (typeof window !== 'undefined') {
+        sessionStorage.clear();
+      }
+      
+      // 4. Clear all cookies from client-side
+      if (typeof window !== 'undefined') {
+        document.cookie.split(";").forEach((c) => {
+          document.cookie = c
+            .replace(/^ +/, "")
+            .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+      }
+      
+      // 5. SignOut from NextAuth (clear NextAuth session)
+      const isProduction = process.env.NODE_ENV === 'production';
+      const envBase = isProduction
+        ? process.env.NEXT_PUBLIC_BASE_URL
+        : process.env.NEXTAUTH_URL;
+      const baseUrl = (envBase || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+      
+      await signOut({
+        callbackUrl: `${baseUrl}/login`,
+        redirect: false // Don't auto-redirect, we'll do it manually
+      });
+      
+      // 6. Hard reload to ensure complete cache clear
+      if (typeof window !== 'undefined') {
+        window.location.href = `${baseUrl}/login`;
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force redirect even if logout API fails
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
   };
 
   // สร้าง initials จาก username หรือใช้ default
@@ -91,7 +132,7 @@ const Header: React.FC = () => {
               userSelect: 'none'
             }}
           >
-            P POST
+            <img src="/images/logo.png" alt="P POST Logo" style={{ height: 50, verticalAlign: 'middle' }} />
           </Typography>
         </Box>
         

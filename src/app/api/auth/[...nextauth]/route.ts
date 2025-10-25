@@ -94,6 +94,12 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  events: {
+    async signOut(message) {
+      // Log การ logout (optional)
+      console.log('User signed out at:', new Date().toISOString());
+    },
+  },
   pages: {
     signIn: '/login',
     signOut: '/login',

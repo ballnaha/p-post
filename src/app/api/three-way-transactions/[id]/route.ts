@@ -111,18 +111,96 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    // ตรวจสอบว่ามีข้อมูลอยู่หรือไม่
+    const existingTransaction = await prisma.swapTransaction.findUnique({
+      where: { id: params.id },
+      include: {
+        swapDetails: true
+      }
+    });
+
+    if (!existingTransaction) {
+      return NextResponse.json(
+        { success: false, error: 'ไม่พบข้อมูลการสลับตำแหน่งสามเส้า' },
+        { status: 404 }
+      );
+    }
+
+    if (existingTransaction.swapType !== 'three-way') {
+      return NextResponse.json(
+        { success: false, error: 'ข้อมูลนี้ไม่ใช่การสลับตำแหน่งสามเส้า' },
+        { status: 400 }
+      );
+    }
+
+    // ดึง personnelId ของบุคลากรที่เกี่ยวข้องในธุรกรรมนี้
+    const personnelIds = existingTransaction.swapDetails
+      .map(detail => detail.personnelId)
+      .filter((id): id is string => id !== null);
+
+    // ตรวจสอบว่าบุคลากรเหล่านี้มีการสลับตำแหน่งในปีนี้หรือไม่ (ไม่ใช่สามเส้า)
+    const relatedSwapTransactions = await prisma.swapTransaction.findMany({
+      where: {
+        year: existingTransaction.year,
+        swapType: { not: 'three-way' }, // ไม่ใช่สามเส้า
+        swapDetails: {
+          some: {
+            personnelId: {
+              in: personnelIds
+            }
+          }
+        }
+      },
+      include: {
+        swapDetails: {
+          where: {
+            personnelId: {
+              in: personnelIds
+            }
+          }
+        }
+      }
+    });
+
+    if (relatedSwapTransactions.length > 0) {
+      // หาชื่อบุคลากรที่มีปัญหา
+      const conflictPersonnelNames: string[] = [];
+      relatedSwapTransactions.forEach(transaction => {
+        if (transaction.swapDetails) {
+          transaction.swapDetails.forEach(detail => {
+            if (detail.personnelId && personnelIds.includes(detail.personnelId) && detail.fullName) {
+              conflictPersonnelNames.push(detail.fullName);
+            }
+          });
+        }
+      });
+
+      const uniqueNames = [...new Set(conflictPersonnelNames)];
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `ไม่สามารถลบได้ เนื่องจากบุคลากร ${uniqueNames.join(', ')} ได้ถูกสลับตำแหน่งในปี ${existingTransaction.year} แล้ว กรุณาลบข้อมูลการสลับตำแหน่งของบุคลากรเหล่านี้ก่อน`,
+          conflictPersonnel: uniqueNames,
+          year: existingTransaction.year
+        },
+        { status: 400 }
+      );
+    }
+
+    // ถ้าไม่มีข้อมูลที่ขัดแย้ง ให้ลบได้
     await prisma.swapTransaction.delete({
       where: { id: params.id },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Transaction deleted successfully',
+      message: 'ลบข้อมูลการสลับตำแหน่งสามเส้าสำเร็จ',
     });
   } catch (error) {
     console.error('Error deleting three-way transaction:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to delete transaction' },
+      { success: false, error: 'เกิดข้อผิดพลาดในการลบข้อมูล' },
       { status: 500 }
     );
   }

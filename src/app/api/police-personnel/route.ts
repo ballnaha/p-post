@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     
     // เพิ่ม position filter - ตรวจสอบจาก rank แทน fullName
     if (positionFilter === 'vacant') {
-      // ตำแหน่งว่างทั่วไป - ไม่มี rank และไม่มีคำว่า "ว่าง (กันตำแหน่ง)"
+      // รายการยื่นขอตำแหน่งทั่วไป - ไม่มี rank และไม่มีคำว่า "ว่าง (กันตำแหน่ง)"
       where.AND = [
         {
           OR: [
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
         { rank: { not: '' } }
       ];
     } else if (positionFilter === 'reserved') {
-      // ตำแหน่งว่าง (กันตำแหน่ง) - มีคำว่า "ว่าง (กันตำแหน่ง)" ใน fullName
+      // รายการยื่นขอตำแหน่ง (กันตำแหน่ง) - มีคำว่า "ว่าง (กันตำแหน่ง)" ใน fullName
       where.fullName = { contains: 'ว่าง (กันตำแหน่ง)' };
     }
     

@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       if (existing) {
         const swapTypeText = selectedSwapType === 'two-way' ? 'สลับตำแหน่ง 2 คน' : 
                              selectedSwapType === 'three-way' ? 'สลับตำแหน่งสามเส้า' : 
-                             'ตำแหน่งว่าง';
+                             'รายการยื่นขอตำแหน่ง';
         return NextResponse.json(
           { success: false, error: `บุคลากรนี้อยู่ในรายการ${swapTypeText}ปี ${swapYear} แล้ว` },
           { status: 400 }
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     const swapTypeText = selectedSwapType === 'two-way' ? 'สลับตำแหน่ง 2 คน' : 
                          selectedSwapType === 'three-way' ? 'สลับตำแหน่งสามเส้า' : 
-                         'ตำแหน่งว่าง';
+                         'รายการยื่นขอตำแหน่ง';
 
     return NextResponse.json({
       success: true,

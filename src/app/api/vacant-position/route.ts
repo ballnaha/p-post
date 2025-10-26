@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// GET - ดึงรายการตำแหน่งว่าง
+// GET - ดึงรายการรายการยื่นขอตำแหน่ง
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -11,6 +11,10 @@ export async function GET(request: NextRequest) {
 
     const vacantPositions = await prisma.vacantPosition.findMany({
       where: whereClause,
+      include: {
+        posCodeMaster: true, // ดึงข้อมูลรหัสตำแหน่งปัจจุบัน
+        requestedPosCode: true, // ดึงข้อมูลรหัสตำแหน่งที่ขอ
+      },
       orderBy: [
         { year: 'desc' },
         { createdAt: 'desc' },
@@ -27,14 +31,36 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - เพิ่มตำแหน่งว่างเข้ารายการ
+// POST - เพิ่มรายการยื่นขอตำแหน่งเข้ารายการ
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    // กรอง fields ที่ไม่ต้องการออก (id, posCodeMaster, timestamps, originalPersonnelId)
-    const { year, notes, id, posCodeMaster, createdAt, updatedAt, createdBy, updatedBy, originalPersonnelId, ...personnelData } = body;
+    // กรอง fields ที่ไม่ต้องการออก (id, posCodeMaster, timestamps, originalPersonnelId, requestedPositionId)
+    const { 
+      year, 
+      notes, 
+      nominator, 
+      requestedPositionId, 
+      id, 
+      posCodeMaster, 
+      requestedPosCode,
+      createdAt, 
+      updatedAt, 
+      createdBy, 
+      updatedBy, 
+      originalPersonnelId, 
+      ...personnelData 
+    } = body;
 
-    // เช็คว่ามีข้อมูลซ้ำหรือไม่ (ใช้เลขบัตรประชาชน หรือ position + unit)
+    // ตรวจสอบว่ามีตำแหน่งที่ขอหรือไม่
+    if (!requestedPositionId) {
+      return NextResponse.json(
+        { error: 'กรุณาเลือกตำแหน่งที่ขอ' },
+        { status: 400 }
+      );
+    }
+
+    // เช็คว่ามีข้อมูลซ้ำหรือไม่ (ใช้เลขบัตรประชาชน)
     if (personnelData.nationalId) {
       const existing = await prisma.vacantPosition.findFirst({
         where: {
@@ -45,7 +71,7 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         return NextResponse.json(
-          { error: 'ตำแหน่งนี้อยู่ในรายการตำแหน่งว่างแล้ว' },
+          { error: 'ตำแหน่งนี้อยู่ในรายการรายการยื่นขอตำแหน่งแล้ว' },
           { status: 400 }
         );
       }
@@ -56,7 +82,13 @@ export async function POST(request: NextRequest) {
       data: {
         year,
         notes,
+        nominator,
+        requestedPositionId,
         ...personnelData,
+      },
+      include: {
+        posCodeMaster: true,
+        requestedPosCode: true,
       },
     });
 
@@ -70,7 +102,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - ลบออกจากรายการตำแหน่งว่าง
+// DELETE - ลบออกจากรายการรายการยื่นขอตำแหน่ง
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

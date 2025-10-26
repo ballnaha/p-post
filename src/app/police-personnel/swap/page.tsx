@@ -112,7 +112,7 @@ export default function SwapPositionPage() {
   // ฟังก์ชันเลือกบุคลากร A
   const handleSelectPersonnelA = (personnel: PolicePersonnel | null) => {
     if (personnel && !personnel.rank) {
-      toast.error('ไม่สามารถเลือกตำแหน่งว่างได้');
+      toast.error('ไม่สามารถเลือกรายการยื่นขอตำแหน่งได้');
       return;
     }
     setPersonnelA(personnel);
@@ -122,7 +122,7 @@ export default function SwapPositionPage() {
   // ฟังก์ชันเลือกบุคลากร B
   const handleSelectPersonnelB = (personnel: PolicePersonnel | null) => {
     if (personnel && !personnel.rank) {
-      toast.error('ไม่สามารถเลือกตำแหน่งว่างได้');
+      toast.error('ไม่สามารถเลือกรายการยื่นขอตำแหน่งได้');
       return;
     }
     
@@ -269,7 +269,7 @@ export default function SwapPositionPage() {
               <strong>เงื่อนไขการสลับตำแหน่ง:</strong>
             </Typography>
             <Typography variant="body2" sx={{ fontSize: '0.813rem', mt: 0.5 }}>
-              ✅ ต้องมีผู้ดำรงตำแหน่งทั้งคู่ (ไม่ใช่ตำแหน่งว่าง)<br />
+              ✅ ต้องมีผู้ดำรงตำแหน่งทั้งคู่ (ไม่ใช่รายการยื่นขอตำแหน่ง)<br />
               ✅ <strong>ตำแหน่งต้องเท่ากัน</strong> (เช่น ผบ.หมู่ ⟷ ผบ.หมู่)<br />
               ⚠️ ยศไม่จำเป็นต้องเท่ากัน
             </Typography>

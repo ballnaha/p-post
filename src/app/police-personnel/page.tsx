@@ -58,7 +58,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   SwapHoriz as SwapHorizIcon,
-  EventAvailable as VacantIcon,
+  AssignmentTurnedIn as VacantIcon,
   ChangeHistory as ChangeHistoryIcon,
   MoreVert as MoreVertIcon,
   InfoOutlined as InfoOutlinedIcon,
@@ -178,6 +178,16 @@ export default function PolicePersonnelPage() {
 
   // Vacant Position states
   const [vacantListData, setVacantListData] = useState<Set<string>>(new Set());
+  const [addToVacantModalOpen, setAddToVacantModalOpen] = useState(false);
+  const [selectedVacantYear, setSelectedVacantYear] = useState<number>(() => {
+    const currentYear = new Date().getFullYear() + 543;
+    return currentYear;
+  });
+  const [vacantNominator, setVacantNominator] = useState('');
+  const [vacantRequestedPosition, setVacantRequestedPosition] = useState<number | null>(null);
+  const [vacantNotes, setVacantNotes] = useState('');
+  const [selectedVacantPersonnel, setSelectedVacantPersonnel] = useState<PolicePersonnel | null>(null);
+  const [isAddingToVacant, setIsAddingToVacant] = useState(false);
 
   // Loading states สำหรับ icon actions (เก็บ nationalId ของคนที่กำลัง process)
   const [loadingSwap, setLoadingSwap] = useState<Set<string>>(new Set());
@@ -621,7 +631,7 @@ export default function PolicePersonnelPage() {
       return;
     }
     if (personnel.nationalId && vacantListData.has(personnel.nationalId)) {
-      toast.error('บุคคลนี้อยู่ในรายการตำแหน่งว่างแล้ว กรุณาลบออกจากรายการตำแหน่งว่างก่อน');
+      toast.error('บุคคลนี้ได้ยื่นขอตำแหน่งแล้ว กรุณายกเลิกคำขอก่อน');
       return;
     }
 
@@ -712,7 +722,7 @@ export default function PolicePersonnelPage() {
       return;
     }
     if (personnel.nationalId && vacantListData.has(personnel.nationalId)) {
-      toast.error('บุคคลนี้อยู่ในรายการตำแหน่งว่างแล้ว กรุณาลบออกจากรายการตำแหน่งว่างก่อน');
+      toast.error('บุคคลนี้ได้ยื่นขอตำแหน่งแล้ว กรุณายกเลิกคำขอก่อน');
       return;
     }
 
@@ -965,36 +975,75 @@ export default function PolicePersonnelPage() {
       return;
     }
 
-    // เพิ่ม loading state
-    if (personnel.nationalId) {
-      setLoadingVacant(prev => new Set(prev).add(personnel.nationalId!));
+    // เปิด modal สำหรับกรอกข้อมูล
+    setSelectedVacantPersonnel(personnel);
+    const currentYear = new Date().getFullYear() + 543;
+    setSelectedVacantYear(currentYear);
+    setVacantNominator('');
+    setVacantRequestedPosition(null);
+    setVacantNotes('');
+    setAddToVacantModalOpen(true);
+  };
+
+  const handleConfirmAddToVacant = async () => {
+    if (!selectedVacantPersonnel) return;
+
+    // เพิ่ม loading state สำหรับ modal button
+    setIsAddingToVacant(true);
+    
+    // เพิ่ม loading state สำหรับ icon
+    if (selectedVacantPersonnel.nationalId) {
+      setLoadingVacant(prev => new Set(prev).add(selectedVacantPersonnel.nationalId!));
     }
 
     try {
-      const currentYear = new Date().getFullYear() + 543;
+      // ตรวจสอบว่ามีตำแหน่งที่ขอหรือไม่
+      if (!vacantRequestedPosition) {
+        toast.error('กรุณาเลือกตำแหน่งที่ขอ');
+        setIsAddingToVacant(false);
+        if (selectedVacantPersonnel.nationalId) {
+          setLoadingVacant(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(selectedVacantPersonnel.nationalId!);
+            return newSet;
+          });
+        }
+        return;
+      }
+
       const response = await fetch('/api/vacant-position', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...personnel,
-          originalPersonnelId: personnel.id,
-          year: currentYear,
-          notes: null
+          ...selectedVacantPersonnel,
+          originalPersonnelId: selectedVacantPersonnel.id,
+          year: selectedVacantYear,
+          nominator: vacantNominator || null,
+          requestedPositionId: vacantRequestedPosition,
+          notes: vacantNotes || null
         }),
       });
 
       if (response.ok) {
-        toast.success('เพิ่มเข้ารายการตำแหน่งว่างสำเร็จ');
+        toast.success('ยื่นขอตำแหน่งสำเร็จ');
         
         // อัพเดท state ทันที (ใช้ nationalId)
-        if (personnel.nationalId) {
-          setVacantListData(prev => new Set(prev).add(personnel.nationalId!));
+        if (selectedVacantPersonnel.nationalId) {
+          setVacantListData(prev => new Set(prev).add(selectedVacantPersonnel.nationalId!));
         }
         
         fetchVacantListForCurrentYear();
         if (swapFilter === 'in-vacant') {
           setPage(0); // Reset to first page to see the newly added person
         }
+
+        // ปิด modal และ clear form
+        setAddToVacantModalOpen(false);
+        setSelectedVacantPersonnel(null);
+        setSelectedVacantYear(new Date().getFullYear() + 543);
+        setVacantNominator('');
+        setVacantRequestedPosition(null);
+        setVacantNotes('');
       } else {
         const result = await response.json();
         toast.error(result.error || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
@@ -1004,10 +1053,11 @@ export default function PolicePersonnelPage() {
       toast.error('เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
     } finally {
       // ลบ loading state
-      if (personnel.nationalId) {
+      setIsAddingToVacant(false);
+      if (selectedVacantPersonnel.nationalId) {
         setLoadingVacant(prev => {
           const newSet = new Set(prev);
-          newSet.delete(personnel.nationalId!);
+          newSet.delete(selectedVacantPersonnel.nationalId!);
           return newSet;
         });
       }
@@ -1026,7 +1076,7 @@ export default function PolicePersonnelPage() {
       );
 
       if (response.ok) {
-        toast.success('ลบออกจากรายการตำแหน่งว่างแล้ว');
+        toast.success('ยกเลิกการยื่นขอตำแหน่งแล้ว');
         
         // อัพเดท state ทันที
         setVacantListData(prev => {
@@ -1256,7 +1306,7 @@ export default function PolicePersonnelPage() {
                         {person.fullName}
                       </>
                     ) : (
-                      'ตำแหน่งว่าง'
+                      'ว่าง'
                     )}
                   </Typography>
                 </Box>
@@ -1388,20 +1438,20 @@ export default function PolicePersonnelPage() {
                 {/* Chip แสดงสถานะ Vacant Position */}
                 {person.rank && person.nationalId && vacantListData.has(person.nationalId) && (
                   <Chip 
-                    label="อยู่ในตำแหน่งว่าง" 
+                    label="ยื่นขอตำแหน่ง" 
                     size="small" 
                     color="success"
                     sx={{ fontSize: '0.7rem', height: 20 }}
                   />
                 )}
                 
-                {/* Swap, สามเส้า, ตำแหน่งว่าง (ซ้าย) | Menu (ขวา) */}
+                {/* Swap, สามเส้า, ยื่นขอตำแหน่ง (ซ้าย) | Menu (ขวา) */}
                 <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                  {/* ปุ่มฝั่งซ้าย: Swap, สามเส้า, ตำแหน่งว่าง */}
+                  {/* ปุ่มฝั่งซ้าย: Swap, สามเส้า, ยื่นขอตำแหน่ง */}
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     {!person.rank ? (
-                      // ถ้าเป็นตำแหน่งว่าง แสดงแค่ปุ่มตำแหน่งว่างอย่างเดียว
-                      <Tooltip title="ตำแหน่งว่าง" leaveDelay={0} disableFocusListener>
+                      // ถ้าไม่มีบุคคล (ว่าง) แสดงปุ่มยื่นขอตำแหน่งเท่านั้น
+                      <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener>
                         <IconButton
                           size="medium"
                           color="success"
@@ -1417,7 +1467,7 @@ export default function PolicePersonnelPage() {
                         </IconButton>
                       </Tooltip>
                     ) : (
-                      // ถ้ามีคน แสดง Swap, สามเส้า, ตำแหน่งว่าง
+                      // ถ้ามีบุคคล แสดง Swap, สามเส้า, ยื่นขอตำแหน่ง
                       <>
                         <Tooltip 
                           title={getPersonnelStatus(person.nationalId).isInSwap ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"} 
@@ -1502,7 +1552,7 @@ export default function PolicePersonnelPage() {
                         </Tooltip>
                         
                         <Tooltip 
-                          title={person.nationalId && vacantListData.has(person.nationalId) ? "ลบออกจากตำแหน่งว่าง" : "เพิ่มเข้าตำแหน่งว่าง"} 
+                          title={person.nationalId && vacantListData.has(person.nationalId) ? "ยกเลิกการยื่นขอตำแหน่ง" : "ยื่นขอตำแหน่ง"} 
                           leaveDelay={0}
                           disableFocusListener
                           enterDelay={200}
@@ -1722,7 +1772,7 @@ export default function PolicePersonnelPage() {
               >
                 <MenuItem value="all">ทั้งหมด</MenuItem>
                 <MenuItem value="occupied">มีผู้ดำรง</MenuItem>
-                <MenuItem value="vacant">ตำแหน่งว่าง</MenuItem>
+                <MenuItem value="vacant">ว่าง</MenuItem>
                 <MenuItem value="reserved">ว่าง (กันตำแหน่ง)</MenuItem>
               </Select>
             </FormControl>
@@ -1767,7 +1817,7 @@ export default function PolicePersonnelPage() {
                 <MenuItem value="all">ทั้งหมด</MenuItem>
                 <MenuItem value="in-swap">อยู่ในสลับตำแหน่ง</MenuItem>
                 <MenuItem value="in-threeway">อยู่ในสามเส้า</MenuItem>
-                <MenuItem value="in-vacant">อยู่ในตำแหน่งว่าง</MenuItem>
+                <MenuItem value="in-vacant">ยื่นขอตำแหน่ง</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -1948,7 +1998,7 @@ export default function PolicePersonnelPage() {
                         {row.rank ? (
                           <Chip label="มีผู้ดำรง" color="success" size="small" />
                         ) : (
-                          <Chip label="ตำแหน่งว่าง" color="default" size="small" />
+                          <Chip label="ว่าง" color="default" size="small" />
                         )}
                       </TableCell>
                       <TableCell align="center">
@@ -1974,20 +2024,20 @@ export default function PolicePersonnelPage() {
                           {/* Chip แสดงสถานะ Vacant Position */}
                           {row.rank && row.nationalId && vacantListData.has(row.nationalId) && (
                             <Chip 
-                              label="อยู่ในตำแหน่งว่าง" 
+                              label="ยื่นขอตำแหน่ง" 
                               size="small" 
                               color="success"
                               sx={{ fontSize: '0.7rem', height: 20 }}
                             />
                           )}
                           
-                          {/* Swap, สามเส้า, ตำแหน่งว่าง (ซ้าย) | Menu (ขวา) */}
+                          {/* Swap, สามเส้า, ยื่นขอตำแหน่ง (ซ้าย) | Menu (ขวา) */}
                           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             {/* ปุ่มฝั่งซ้าย */}
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                               {!row.rank ? (
-                                // ถ้าเป็นตำแหน่งว่าง แสดงแค่ปุ่มตำแหน่งว่างอย่างเดียว
-                                <Tooltip title="ตำแหน่งว่าง" leaveDelay={0} disableFocusListener>
+                                // ถ้าไม่มีบุคคล (ว่าง) แสดงปุ่มยื่นขอตำแหน่งเท่านั้น
+                                <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener>
                                   <IconButton
                                     size="small"
                                     color="success"
@@ -2003,7 +2053,7 @@ export default function PolicePersonnelPage() {
                                   </IconButton>
                                 </Tooltip>
                               ) : (
-                                // ถ้ามีคน แสดง Swap, สามเส้า, ตำแหน่งว่าง
+                                // ถ้ามีบุคคล แสดง Swap, สามเส้า, ยื่นขอตำแหน่ง
                                 <>
                                   <Tooltip 
                                     title={getPersonnelStatus(row.nationalId).isInSwap ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"} 
@@ -2086,7 +2136,7 @@ export default function PolicePersonnelPage() {
                                       )}
                                     </IconButton>
                                   </Tooltip>
-                                  <Tooltip title="ตำแหน่งว่าง" leaveDelay={0} disableFocusListener enterDelay={200}>
+                                  <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener enterDelay={200}>
                                     <IconButton
                                       size="small"
                                       color="success"
@@ -2669,6 +2719,142 @@ export default function PolicePersonnelPage() {
               startIcon={isAddingToThreeWay ? <CircularProgress size={16} color="inherit" /> : <ChangeHistoryIcon />}
             >
               {isAddingToThreeWay ? 'กำลังเพิ่ม...' : 'เพิ่มเข้ารายการ'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Add to Vacant Position Dialog */}
+        <Dialog open={addToVacantModalOpen} onClose={() => setAddToVacantModalOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <VacantIcon color="success" />
+              <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
+                ยื่นขอตำแหน่ง
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 2, mt: 2 }}>
+            <Stack spacing={2.5}>
+              {/* แสดงข้อมูลบุคลากรที่เลือก */}
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: 'grey.50', 
+                borderRadius: 1,
+                border: 1,
+                borderColor: 'grey.200'
+              }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  บุคลากรที่เลือก
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'success.main' }}>
+                  {selectedVacantPersonnel?.rank} {selectedVacantPersonnel?.fullName}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  ตำแหน่ง: {selectedVacantPersonnel?.position || '-'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  หน่วย: {selectedVacantPersonnel?.unit || '-'}
+                </Typography>
+              </Box>
+
+              {/* ปีที่ยื่นขอ */}
+              <FormControl fullWidth>
+                <InputLabel>ปีที่ยื่นขอตำแหน่ง</InputLabel>
+                <Select
+                  value={selectedVacantYear}
+                  label="ปีที่ยื่นขอตำแหน่ง"
+                  onChange={(e) => setSelectedVacantYear(Number(e.target.value))}
+                >
+                  {(() => {
+                    const currentYear = new Date().getFullYear() + 543;
+                    const years = [];
+                    for (let year = currentYear; year >= 2568; year--) {
+                      years.push(
+                        <MenuItem key={year} value={year}>
+                          {year}
+                        </MenuItem>
+                      );
+                    }
+                    return years;
+                  })()}
+                </Select>
+              </FormControl>
+
+              
+              {/* ตำแหน่งที่ขอ - Dropdown จาก pos_code_master */}
+              <FormControl fullWidth required>
+                <InputLabel>ตำแหน่งที่ขอ</InputLabel>
+                <Select
+                  value={vacantRequestedPosition || ''}
+                  label="ตำแหน่งที่ขอ"
+                  onChange={(e) => setVacantRequestedPosition(Number(e.target.value))}
+                >
+                  <MenuItem value="">
+                    <em>-- เลือกตำแหน่งที่ต้องการขอ --</em>
+                  </MenuItem>
+                  {posCodes.map((posCode) => (
+                    <MenuItem key={posCode.id} value={posCode.id}>
+                      {posCode.id} - {posCode.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {/* ผู้สนับสนุน */}
+              <TextField
+                fullWidth
+                label="ผู้สนับสนุน"
+                placeholder="ระบุชื่อผู้สนับสนุน/ผู้เสนอชื่อ"
+                value={vacantNominator}
+                onChange={(e) => setVacantNominator(e.target.value)}
+                
+              />
+
+
+              {/* หมายเหตุ */}
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="หมายเหตุ (ถ้ามี)"
+                placeholder="เช่น เหตุผล, ข้อมูลเพิ่มเติม..."
+                value={vacantNotes}
+                onChange={(e) => setVacantNotes(e.target.value)}
+              />
+
+              <Alert severity="info" sx={{ py: 0.5 }}>
+                <Typography variant="body2" sx={{ fontSize: '0.813rem' }}>
+                  กรุณาเลือกตำแหน่งที่ต้องการยื่นขอจากรายการ
+                </Typography>
+              </Alert>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
+            <Button 
+              onClick={() => {
+                setAddToVacantModalOpen(false);
+                setSelectedVacantPersonnel(null);
+                setSelectedVacantYear(new Date().getFullYear() + 543);
+                setVacantNominator('');
+                setVacantRequestedPosition(null);
+                setVacantNotes('');
+              }} 
+              variant="outlined" 
+              size="medium"
+              disabled={isAddingToVacant}
+            >
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleConfirmAddToVacant} 
+              variant="contained" 
+              color="success"
+              size="medium"
+              sx={{ minWidth: 120 }}
+              disabled={isAddingToVacant || !vacantRequestedPosition}
+              startIcon={isAddingToVacant ? <CircularProgress size={20} color="inherit" /> : <VacantIcon />}
+            >
+              {isAddingToVacant ? 'กำลังเพิ่ม...' : 'เพิ่มเข้ารายการ'}
             </Button>
           </DialogActions>
         </Dialog>

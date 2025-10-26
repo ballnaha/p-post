@@ -151,7 +151,7 @@ export default function PersonnelDetailModal({
         </Box>
         {personnel && (
           <Chip 
-            label={personnel.rank ? 'มีผู้ดำรง' : 'ตำแหน่งว่าง'} 
+            label={personnel.rank ? 'มีผู้ดำรง' : 'รายการยื่นขอตำแหน่ง'} 
             color={personnel.rank ? 'success' : 'default'} 
             size="small" 
             sx={{ ml: 'auto', height: 24, fontSize: '0.75rem' }}
@@ -169,7 +169,7 @@ export default function PersonnelDetailModal({
             {/* Header Section - ชื่อและตำแหน่ง */}
             <Box sx={{ p: 2, mb: 2, bgcolor: 'primary.main', color: 'white', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.25, fontSize: '1.125rem' }}>
-                {personnel.rank || ''} {personnel.fullName || 'ตำแหน่งว่าง'}
+                {personnel.rank || ''} {personnel.fullName || 'รายการยื่นขอตำแหน่ง'}
               </Typography>
               <Typography variant="body2" sx={{ opacity: 0.9, fontSize: '0.938rem' }}>
                 {personnel.position} • {personnel.unit || '-'}

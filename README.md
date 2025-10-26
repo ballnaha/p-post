@@ -86,3 +86,7 @@ src/
 ## License
 
 This project is licensed under the MIT License.
+
+คำถาม
+- ถ้าไม่ขอตำแหน่ง สามารถ ยื่นตำแหน่งให้เค้าได้ไหม
+- 

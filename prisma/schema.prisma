@@ -31,10 +31,12 @@ model PosCodeMaster {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relation
-  personnel              PolicePersonnel[]
-  swapTransactionDetails SwapTransactionDetail[]
-  swapLists              SwapList[]
+  // Relations
+  personnel                    PolicePersonnel[]
+  swapTransactionDetails       SwapTransactionDetail[]
+  swapLists                    SwapList[]
+  vacantPositionsCurrent       VacantPosition[]      @relation("CurrentPosition")
+  vacantPositionsRequested     VacantPosition[]      @relation("RequestedPosition")
 
   @@map("pos_code_master")
 }
@@ -42,7 +44,7 @@ model PosCodeMaster {
 // Police Personnel Data (ข้อมูลตำแหน่งตำรวจ)
 // ระบบนี้จัดเก็บข้อมูลตำแหน่ง ไม่ใช่ข้อมูลบุคคล
 // - ตำแหน่งที่มีคนดำรง: มีชื่อ-สกุล + เลขบัตรประชาชน
-// - ตำแหน่งว่าง: มีข้อมูลตำแหน่ง แต่ไม่มีชื่อคน
+// - รายการยื่นขอตำแหน่ง: มีข้อมูลตำแหน่ง แต่ไม่มีชื่อคน
 model PolicePersonnel {
   id             String         @id @default(cuid())
   noId           Int?           @map("no_id")
@@ -150,24 +152,32 @@ model SwapList {
   @@map("swap_list")
 }
 
-// Vacant Position List (รายการตำแหน่งว่าง)
+// Vacant Position List (รายการรายการยื่นขอตำแหน่ง)
 // เก็บข้อมูลตำแหน่งที่ว่างไว้สำหรับการจัดการ
 model VacantPosition {
   id    String @id @default(cuid())
   year  Int // ปีที่เลือก (พ.ศ.)
   notes String? @db.Text // หมายเหตุเพิ่มเติม
+  displayOrder Int? @map("display_order") // ลำดับการแสดงผล (สำหรับ drag & drop)
+
+  // ข้อมูลการเสนอชื่อเข้ารายการยื่นขอตำแหน่ง
+  nominator              String? // ผู้สนับสนุน/ผู้เสนอชื่อ
+  requestedPosition      String? @map("requested_position") // ตำแหน่งที่ขอ (text - deprecated)
+  requestedPositionId    Int?    @map("requested_position_id") // รหัสตำแหน่งที่ขอ (FK to PosCodeMaster)
+  requestedPosCode       PosCodeMaster? @relation("RequestedPosition", fields: [requestedPositionId], references: [id])
 
   // ข้อมูลอ้างอิง
   noId Int? @map("no_id") // ลำดับที่
 
   // ข้อมูลตำแหน่ง (Position Information)
-  posCodeId      Int?    @map("pos_code")
+  posCodeId      Int?           @map("pos_code")
+  posCodeMaster  PosCodeMaster? @relation("CurrentPosition", fields: [posCodeId], references: [id])
   position       String? // ตำแหน่ง
   positionNumber String? @map("position_number") // เลขตำแหน่ง
   unit           String? // หน่วย
   actingAs       String? @map("acting_as") // ทำหน้าที่
 
-  // ข้อมูลบุคคล (Person Information) - จะว่างส่วนใหญ่เพราะเป็นตำแหน่งว่าง
+  // ข้อมูลบุคคล (Person Information) - จะว่างส่วนใหญ่เพราะเป็นรายการยื่นขอตำแหน่ง
   seniority  String? @map("seniority")
   rank       String?
   fullName   String? @map("full_name")
@@ -197,6 +207,8 @@ model VacantPosition {
   @@index([year])
   @@index([unit])
   @@index([position])
+  @@index([posCodeId])
+  @@index([requestedPositionId])
   @@map("vacant_position")
 }
 

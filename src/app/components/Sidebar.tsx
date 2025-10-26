@@ -85,7 +85,7 @@ const Sidebar: React.FC = () => {
           key: 'three-way-swap' 
         },
         { 
-          label: 'ตำแหน่งว่าง', 
+          label: 'รายการยื่นขอตำแหน่ง', 
           href: '/police-personnel/vacant-position', 
           icon: <VacantIcon sx={{ fontSize: 20 }} />, 
           key: 'vacant-position' 

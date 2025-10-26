@@ -138,7 +138,7 @@ function LoginPage() {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundImage: 'url(/images/bg_login_1.png)',
+              backgroundImage: 'url(/images/bg_login_2.png)',
               backgroundPosition: 'center',
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
@@ -240,7 +240,7 @@ function LoginPage() {
                 letterSpacing: '-0.02em'
               }}
             >
-              <img src="/images/logo.png" alt="P POST Logo" style={{ height: 75 }} />
+              <img src="/images/logo_1.png" alt="P POST Logo" style={{ height: 75 }} />
             </Typography>
             <Typography 
               variant="body1" 

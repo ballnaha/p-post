@@ -28,8 +28,19 @@ import {
   FormControl,
   InputLabel,
   Select,
+  SelectChangeEvent,
   MenuItem,
   InputAdornment,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
@@ -43,9 +54,33 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   Refresh as RefreshIcon,
+  ViewModule as ViewModuleIcon,
+  ViewList as ViewListIcon,
+  DragIndicator as DragIndicatorIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
+import DataTablePagination from '@/components/DataTablePagination';
 
 interface VacantPosition {
   id: string;
@@ -72,6 +107,8 @@ interface Applicant {
   nationalId: string;
   birthDate: Date | null;
   seniority: number | null;
+  age?: number | string;
+  yearsOfService?: number | string;
   requestedPosCode: {
     name: string;
   };
@@ -87,6 +124,152 @@ interface FilterOptions {
   posCodes: FilterOption[];
 }
 
+// Sortable Item Component
+function SortableApplicantItem({ 
+  applicant, 
+  index, 
+  onAssign, 
+  loading 
+}: { 
+  applicant: Applicant; 
+  index: number;
+  onAssign: (applicant: Applicant) => void;
+  loading: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({ 
+    id: applicant.id,
+    // ปิด animation ของตำแหน่งอื่น
+    animateLayoutChanges: () => false,
+  });
+
+  const style = {
+    // ให้เฉพาะตัวที่ลากมี transform
+    transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+    transition: isDragging ? transition : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <ListItem
+      ref={setNodeRef}
+      style={style}
+      sx={{
+        py: 0.5,
+        pr: 14, // เพิ่ม padding ขวาเพื่อให้พื้นที่สำหรับปุ่ม
+        bgcolor: isOver 
+          ? (theme) => `rgba(25, 118, 210, 0.08)` 
+          : 'background.paper',
+        borderRadius: 1,
+        mb: 0.5,
+        border: isOver ? 2 : 1,
+        borderStyle: isOver ? 'dashed' : 'solid',
+        borderColor: isOver 
+          ? 'primary.main' 
+          : (isDragging ? 'primary.main' : 'divider'),
+        // ปิด transition จาก sx เพื่อไม่ให้ item อื่นขยับ
+        transition: (isDragging || isOver) ? 'all 0.2s ease-out' : 'none',
+        boxShadow: isDragging 
+          ? '0 12px 40px rgba(0,0,0,0.15)' 
+          : (isOver ? '0 4px 20px rgba(25, 118, 210, 0.2)' : 'none'),
+        zIndex: isDragging ? 1000 : (isOver ? 100 : 1),
+        alignItems: 'flex-start', // จัดให้ปุ่มอยู่ตำแหน่งที่ถูกต้อง
+        // จำกัดขนาดเมื่อลาก
+        ...(isDragging && {
+          maxWidth: '100%',
+          width: '100%',
+          position: 'relative',
+        }),
+      }}
+    >
+      <Box
+        {...attributes}
+        {...listeners}
+        sx={{
+          cursor: 'grab',
+          display: 'flex',
+          alignItems: 'center',
+          mr: 1,
+          color: 'text.secondary',
+          '&:active': {
+            cursor: 'grabbing',
+          },
+        }}
+      >
+        <DragIndicatorIcon fontSize="small" />
+      </Box>
+      <ListItemText
+        primary={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Chip 
+              label={`อันดับ ${applicant.displayOrder || index + 1}`} 
+              size="small" 
+              color="primary"
+            />
+            <Box component="span" sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              {applicant.rank} {applicant.fullName} ({applicant.age ? `${applicant.age}` : 'อายุไม่ระบุ'}) <br />
+              <Typography 
+                component="span" 
+                variant="caption" 
+                color="text.secondary"
+                sx={{ fontSize: '0.75rem' }}
+              >
+                จำนวนปี: {applicant.yearsOfService || '-'}
+              </Typography>
+            </Box>
+          </Box>
+        }
+        secondary={
+          <Box>
+            <strong>ตำแหน่งปัจจุบัน:</strong> {applicant.position} | {applicant.unit}
+            {applicant.nominator && (
+              <>
+                <br />
+                <strong>ผู้เสนอ:</strong> {applicant.nominator}
+              </>
+            )}
+            {applicant.notes && (
+              <>
+                <br />
+                <strong>หมายเหตุ:</strong> {applicant.notes}
+              </>
+            )}
+            <Box sx={{ mt: 1 }}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<ArrowIcon fontSize="small" />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAssign(applicant);
+                }}
+                disabled={loading}
+                color="success"
+                sx={{ 
+                  minWidth: 100, 
+                  py: 0.5, 
+                  fontSize: '0.75rem',
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                จับคู่
+              </Button>
+            </Box>
+          </Box>
+        }
+      />
+    </ListItem>
+  );
+}
+
 export default function VacantPositionAssignmentPage() {
   const [vacantPositions, setVacantPositions] = useState<VacantPosition[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<VacantPosition | null>(null);
@@ -97,6 +280,16 @@ export default function VacantPositionAssignmentPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignNotes, setAssignNotes] = useState('');
+  const [hasOrderChanged, setHasOrderChanged] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  
+  // Swap confirmation states
+  const [swapConfirmOpen, setSwapConfirmOpen] = useState(false);
+  const [swapData, setSwapData] = useState<{
+    activeItem: Applicant | null;
+    overItem: Applicant | null;
+  }>({ activeItem: null, overItem: null });
+  const [isSwapping, setIsSwapping] = useState(false);
   
   // Filter states
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({ units: [], posCodes: [] });
@@ -106,10 +299,45 @@ export default function VacantPositionAssignmentPage() {
     posCode: 'all',
   });
   
+  // Year filter state
+  const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear() + 543);
+  
+  // Generate available years (from 2568 to current year)
+  const getAvailableYears = () => {
+    const currentBuddhistYear = new Date().getFullYear() + 543;
+    const startYear = 2568;
+    const years: number[] = [];
+    
+    for (let year = currentBuddhistYear; year >= startYear; year--) {
+      years.push(year);
+    }
+    
+    return years;
+  };
+
+  const availableYears = getAvailableYears();
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  
+  // Pagination state for table view
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  
   // Summary states
   const [total, setTotal] = useState(0);
   
   const toast = useToast();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     fetchFilterOptions();
@@ -124,7 +352,7 @@ export default function VacantPositionAssignmentPage() {
       setVacantPositions([]);
       setTotal(0);
     }
-  }, [filters.search, filters.unit, filters.posCode]); // ลบ page และ limit ออก
+  }, [filters.search, filters.unit, filters.posCode, currentYear]); // เพิ่ม currentYear
 
   const fetchFilterOptions = async () => {
     try {
@@ -146,6 +374,7 @@ export default function VacantPositionAssignmentPage() {
         ...(filters.search && { search: filters.search }),
         ...(filters.unit !== 'all' && { unit: filters.unit }),
         ...(filters.posCode !== 'all' && { posCode: filters.posCode }),
+        year: currentYear.toString(), // เพิ่ม year parameter
       });
 
       const response = await fetch(`/api/vacant-position/actual?${params}`);
@@ -185,13 +414,27 @@ export default function VacantPositionAssignmentPage() {
       unit: 'all',
       posCode: 'all',
     });
+    setPage(0); // Reset page when filters change
     // ไม่ต้องรีเซ็ต page เพราะไม่มี pagination
+  };
+
+  const handleChangePage = (newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (newRowsPerPage: number) => {
+    setRowsPerPage(newRowsPerPage);
+    setPage(0);
+  };
+
+  const handleYearChange = (event: SelectChangeEvent<number>) => {
+    setCurrentYear(Number(event.target.value));
+    setPage(0); // Reset page when year changes
   };
 
   const fetchApplicants = async (posCodeId: number) => {
     setLoading(true);
     try {
-      const currentYear = new Date().getFullYear() + 543; // พ.ศ.
       // ดึงรายการผู้สมัครเฉพาะตำแหน่งนั้น
       const response = await fetch(`/api/vacant-position/applicants/${posCodeId}?year=${currentYear}`);
       if (response.ok) {
@@ -212,6 +455,100 @@ export default function VacantPositionAssignmentPage() {
     setSelectedPosition(position);
     fetchApplicants(position.posCodeId);
     setDialogOpen(true);
+    setHasOrderChanged(false);
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    setActiveId(null);
+
+    if (over && active.id !== over.id) {
+      const activeItem = applicants.find((item) => item.id === active.id);
+      const overItem = applicants.find((item) => item.id === over.id);
+
+      if (activeItem && overItem) {
+        // เปิด dialog ยืนยัน
+        setSwapData({ activeItem, overItem });
+        setSwapConfirmOpen(true);
+      }
+    }
+  };
+
+  // ยืนยันการสลับจาก Dialog
+  const handleSwapConfirm = async () => {
+    const { activeItem, overItem } = swapData;
+    
+    if (!activeItem || !overItem) return;
+
+    setIsSwapping(true);
+
+    try {
+      setApplicants((items) => {
+        const oldIndex = items.findIndex((item) => item.id === activeItem.id);
+        const newIndex = items.findIndex((item) => item.id === overItem.id);
+        
+        // สลับตำแหน่งเฉพาะ 2 items ที่เลือก
+        const newItems = [...items];
+        [newItems[oldIndex], newItems[newIndex]] = [newItems[newIndex], newItems[oldIndex]];
+        
+        // Update displayOrder for all items
+        return newItems.map((item, index) => ({
+          ...item,
+          displayOrder: index + 1,
+        }));
+      });
+      setHasOrderChanged(true);
+      setSwapConfirmOpen(false);
+      toast.success('สลับตำแหน่งเรียบร้อย');
+    } catch (error) {
+      console.error('Error swapping:', error);
+      toast.error('เกิดข้อผิดพลาดในการสลับตำแหน่ง');
+    } finally {
+      setIsSwapping(false);
+    }
+  };
+
+  // ยกเลิกการสลับ
+  const handleSwapCancel = () => {
+    setSwapConfirmOpen(false);
+    setSwapData({ activeItem: null, overItem: null });
+  };
+
+  const handleSaveOrder = async () => {
+    if (!selectedPosition) return;
+
+    setLoading(true);
+    try {
+      const updates = applicants.map((applicant, index) => ({
+        id: applicant.id,
+        displayOrder: index + 1,
+      }));
+
+      const response = await fetch('/api/vacant-position/reorder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ updates }),
+      });
+
+      if (response.ok) {
+        toast.success('บันทึกลำดับสำเร็จ');
+        setHasOrderChanged(false);
+      } else {
+        toast.error('ไม่สามารถบันทึกลำดับได้');
+      }
+    } catch (error) {
+      console.error('Error saving order:', error);
+      toast.error('เกิดข้อผิดพลาดในการบันทึกลำดับ');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAssignPosition = (applicant: Applicant, vacantPosition: VacantPosition) => {
@@ -263,42 +600,80 @@ export default function VacantPositionAssignmentPage() {
   return (
     <Layout>
       <Box>
-        <Stack spacing={1} sx={{ mb: 2 }}>
-          <Typography variant="h6">
-            จัดการจับคู่ตำแหน่งที่ว่าง
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            เลือกหน่วยหรือรหัสตำแหน่งเพื่อแสดงตำแหน่งที่ว่าง
-          </Typography>
-          
-          {!loading && total > 0 && vacantPositions.length > 0 && (
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Chip
-                icon={<AssignmentIcon />}
-                label={`ตำแหน่งว่าง: ${total} ตำแหน่ง`}
-                color="warning"
-                variant="filled"
-                size="small"
-              />
+        {/* Header */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 2
+          }}>
+            <Box>
+              <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
+                จัดการจับคู่ตำแหน่งที่ว่าง
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                เลือกหน่วยหรือรหัสตำแหน่งเพื่อแสดงตำแหน่งที่ว่างและดูรายการผู้สมัคร
+              </Typography>
             </Box>
-          )}
-        </Stack>
+            
+            {/* Summary and View Toggle */}
+            {!loading && total > 0 && vacantPositions.length > 0 && (
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Chip
+                  icon={<AssignmentIcon />}
+                  label={`ตำแหน่งว่าง: ${total} ตำแหน่ง`}
+                  color="warning"
+                  variant="filled"
+                  size="medium"
+                />
+                
+                {/* View Toggle */}
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  onChange={(e, newMode) => newMode && setViewMode(newMode)}
+                  size="small"
+                  aria-label="view mode"
+                >
+                  <ToggleButton value="card" aria-label="card view">
+                    <Tooltip title="มุมมองการ์ด">
+                      <ViewModuleIcon />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="table" aria-label="table view">
+                    <Tooltip title="มุมมองตาราง">
+                      <ViewListIcon />
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+            )}
+          </Box>
+        </Paper>
 
         {/* Filter Section */}
-        <Paper sx={{ p: 2, mb: 2 }}>
+        <Paper sx={{ p: 3, mb: 3 }}>
           <Stack spacing={2}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <FilterIcon fontSize="small" />
-              <Typography variant="subtitle1">
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 ตัวกรองข้อมูล
               </Typography>
             </Box>
             
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+            <Box sx={{ 
+              display: 'grid', 
+              gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 2fr' }, 
+              gap: 2,
+              alignItems: 'start'
+            }}>
+              
               {/* Search */}
               <TextField
                 label="ค้นหา"
-                placeholder="ค้นหาตำแหน่ง, หน่วย..."
+                placeholder="ค้นหาชื่อตำแหน่ง..."
                 value={filters.search}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 size="small"
@@ -309,73 +684,97 @@ export default function VacantPositionAssignmentPage() {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ flex: 1 }}
               />
-              
-              {/* Unit Filter */}
-              <FormControl sx={{ minWidth: 180 }} size="small">
-                <InputLabel>หน่วย *</InputLabel>
+
+              {/* Year Filter */}
+              <FormControl size="small">
+                <InputLabel id="year-filter-label">ปี</InputLabel>
                 <Select
-                  value={filters.unit}
-                  label="หน่วย *"
-                  onChange={(e) => handleFilterChange('unit', e.target.value)}
+                  labelId="year-filter-label"
+                  id="year-filter"
+                  value={currentYear}
+                  label="ปี"
+                  onChange={handleYearChange}
                 >
-                  <MenuItem value="all">-- เลือกหน่วย --</MenuItem>
-                  {filterOptions.units.map((unit) => (
-                    <MenuItem key={unit.value} value={unit.value}>
-                      {unit.label}
+                  {availableYears.map((year) => (
+                    <MenuItem key={year} value={year}>
+                      {year}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              
-              {/* Position Code Filter */}
-              <FormControl sx={{ minWidth: 200 }} size="small">
-                <InputLabel>รหัสตำแหน่ง *</InputLabel>
-                <Select
-                  value={filters.posCode}
-                  label="รหัสตำแหน่ง *"
-                  onChange={(e) => handleFilterChange('posCode', e.target.value)}
-                >
-                  <MenuItem value="all">-- เลือกรหัสตำแหน่ง --</MenuItem>
-                  {filterOptions.posCodes.map((posCode) => (
-                    <MenuItem key={posCode.value} value={posCode.value}>
-                      {posCode.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+
+              {/* Unit and PosCode in one column */}
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                {/* Unit Filter */}
+                <FormControl size="small" sx={{ flex: 1 }}>
+                  <InputLabel>หน่วย</InputLabel>
+                  <Select
+                    value={filters.unit}
+                    label="หน่วย"
+                    onChange={(e) => handleFilterChange('unit', e.target.value)}
+                  >
+                    <MenuItem value="all">ทั้งหมด</MenuItem>
+                    {filterOptions.units.map((unit) => (
+                      <MenuItem key={unit.value} value={unit.value}>
+                        {unit.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                
+                {/* Position Code Filter */}
+                <FormControl size="small" sx={{ flex: 1 }}>
+                  <InputLabel>รหัสตำแหน่ง</InputLabel>
+                  <Select
+                    value={filters.posCode}
+                    label="รหัสตำแหน่ง"
+                    onChange={(e) => handleFilterChange('posCode', e.target.value)}
+                  >
+                    <MenuItem value="all">ทั้งหมด</MenuItem>
+                    {filterOptions.posCodes.map((posCode) => (
+                      <MenuItem key={posCode.value} value={posCode.value}>
+                        {posCode.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+
+            </Box>
+            
+            {/* Summary and Reset */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {total > 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    พบตำแหน่งที่ว่าง: <strong>{total}</strong> ตำแหน่ง
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    เลือกหน่วยหรือรหัสตำแหน่งเพื่อค้นหาตำแหน่งที่ว่าง
+                  </Typography>
+                )}
+                {(filters.search || filters.unit !== 'all' || filters.posCode !== 'all') && (
+                  <Chip
+                    label="มีการกรองข้อมูล"
+                    color="primary"
+                    variant="outlined"
+                    size="small"
+                  />
+                )}
+              </Box>
               
               {/* Reset Button */}
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon fontSize="small" />}
-                onClick={resetFilters}
-                size="small"
-                sx={{ height: 40 }}
-              >
-                รีเซ็ต
-              </Button>
-            </Stack>
-            
-            {/* Summary */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {total > 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  พบตำแหน่งที่ว่าง: <strong>{total}</strong> ตำแหน่ง
-                </Typography>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  เลือกหน่วยหรือรหัสตำแหน่งเพื่อค้นหาตำแหน่งที่ว่าง
-                </Typography>
-              )}
               {(filters.search || filters.unit !== 'all' || filters.posCode !== 'all') && (
-                <Chip
-                  label="มีการกรองข้อมูล"
-                  color="primary"
+                <Button
                   variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={resetFilters}
                   size="small"
-                />
+                >
+                  ล้างตัวกรอง
+                </Button>
               )}
             </Box>
           </Stack>
@@ -385,17 +784,16 @@ export default function VacantPositionAssignmentPage() {
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
             <CircularProgress size={24} />
           </Box>
-        ) : (
+        ) : viewMode === 'card' ? (
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { 
               xs: '1fr', 
               sm: 'repeat(2, 1fr)',
               md: 'repeat(3, 1fr)', 
-              lg: 'repeat(3, 1fr)',
-              xl: 'repeat(4, 1fr)'
+              lg: 'repeat(4, 1fr)',
             }, 
-            gap: 2.5,
+            gap: 2,
             mt: 1
           }}>
             {vacantPositions.map((position) => (
@@ -403,17 +801,18 @@ export default function VacantPositionAssignmentPage() {
                 key={position.id}
                 sx={{ 
                   height: 'fit-content',
-                  borderRadius: 3,
+                  borderRadius: 2,
                   border: '1px solid',
-                  borderColor: 'grey.200',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  borderColor: 'divider',
+                  transition: 'all 0.2s ease-in-out',
                   cursor: 'pointer',
                   overflow: 'hidden',
                   position: 'relative',
+                  bgcolor: 'background.paper',
                   '&:hover': {
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.12)',
+                    boxShadow: '0 4px 16px rgba(25, 118, 210, 0.15)',
                     borderColor: 'primary.main',
-                    transform: 'translateY(-4px)',
+                    transform: 'translateY(-2px)',
                   },
                   '&:before': {
                     content: '""',
@@ -421,196 +820,268 @@ export default function VacantPositionAssignmentPage() {
                     top: 0,
                     left: 0,
                     right: 0,
-                    height: '4px',
+                    height: '3px',
                     background: 'linear-gradient(90deg, #1976d2 0%, #42a5f5 100%)',
                   }
                 }}
                 onClick={() => handleViewApplicants(position)}
               >
-                <CardContent sx={{ p: 2.5, pb: 2 }}>
-                  <Stack spacing={2}>
-                    {/* Header with position name and code */}
-                    <Box>
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1 }}>
-                        <Box sx={{ 
-                          p: 1, 
-                          borderRadius: 2, 
-                          backgroundColor: 'primary.50',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <BusinessIcon color="primary" fontSize="medium" />
-                        </Box>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography 
-                            variant="h6" 
-                            sx={{ 
-                              fontWeight: 700,
-                              fontSize: '1.1rem',
-                              lineHeight: 1.3,
-                              color: 'text.primary',
-                              mb: 0.5
-                            }}
-                          >
-                            {position.posCodeName}
-                          </Typography>
-                          <Chip
-                            label={`รหัส ${position.posCodeId}`}
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            sx={{ 
-                              height: 24,
-                              fontSize: '0.75rem',
-                              fontWeight: 500
-                            }}
-                          />
-                        </Box>
+                <CardContent sx={{ p: 1.5, pb: 1 }}>
+                  <Stack spacing={1.25}>
+                    {/* Header - Compact */}
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                      <Box sx={{ 
+                        p: 0.75, 
+                        borderRadius: 1.5, 
+                        bgcolor: 'primary.50',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <BusinessIcon color="primary" sx={{ fontSize: '1.25rem' }} />
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography 
+                          variant="subtitle2"
+                          sx={{ 
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            lineHeight: 1.4,
+                            color: 'text.primary',
+                            mb: 0.5,
+                          }}
+                        >
+                          {position.posCodeId} - {position.posCodeName}
+                        </Typography>
                       </Box>
                     </Box>
 
-                    {/* Unit and Position in horizontal layout */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                      {/* หน่วย */}
-                      <Box sx={{ 
-                        backgroundColor: 'grey.50',
-                        border: '1px solid',
-                        borderColor: 'grey.200',
-                        borderRadius: 2,
-                        p: 1.5,
-                        textAlign: 'center',
-                        position: 'relative',
-                        '&:before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: '2px',
-                          backgroundColor: 'primary.main',
-                          borderRadius: '2px 2px 0 0'
-                        }
-                      }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                          หน่วยงาน
-                        </Typography>
-                        <Typography variant="subtitle1" sx={{ 
-                          fontWeight: 700,
-                          color: 'primary.main',
-                          fontSize: '0.95rem',
-                          mt: 0.5
-                        }}>
-                          {position.unit || 'ไม่ระบุ'}
-                        </Typography>
-                      </Box>
-                      
+                    {/* Info Section - Compact */}
+                    <Box sx={{ 
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 0.75,
+                    }}>
                       {/* ตำแหน่ง */}
                       <Box sx={{ 
-                        backgroundColor: 'grey.50',
-                        border: '1px solid',
-                        borderColor: 'grey.200',
-                        borderRadius: 2,
-                        p: 1.5,
-                        textAlign: 'center',
-                        position: 'relative',
-                        '&:before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: '2px',
-                          backgroundColor: 'success.main',
-                          borderRadius: '2px 2px 0 0'
-                        }
+                        bgcolor: 'rgba(46, 125, 50, 0.04)',
+                        borderLeft: '2px solid',
+                        borderColor: 'success.main',
+                        borderRadius: 1,
+                        p: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1
                       }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                          ตำแหน่ง
-                        </Typography>
-                        <Typography variant="subtitle1" sx={{ 
-                          fontWeight: 700,
-                          color: 'success.main',
-                          fontSize: '0.95rem',
-                          mt: 0.5
+                        <Box>
+                          <Typography 
+                            variant="caption" 
+                            color="text.secondary" 
+                            sx={{ 
+                              fontSize: '0.7rem',
+                              fontWeight: 500,
+                              display: 'block',
+                              mb: 0.25
+                            }}
+                          >
+                            ตำแหน่ง
+                          </Typography>
+                          <Typography 
+                            variant="body2"
+                            sx={{ 
+                              fontWeight: 600,
+                              color: 'success.main',
+                              fontSize: '0.85rem',
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            {position.position || '-'}
+                          </Typography>
+                        </Box>
+                        
+                        {/* หน่วย - ชิดขวา */}
+                        <Box sx={{ 
+                          bgcolor: 'rgba(25, 118, 210, 0.08)',
+                          borderRadius: 1,
+                          px: 1.5,
+                          py: 0.75,
+                          textAlign: 'right',
+                          flexShrink: 0
                         }}>
-                          {position.position || 'ไม่ระบุ'}
-                        </Typography>
+                          <Typography 
+                            variant="caption" 
+                            color="text.secondary" 
+                            sx={{ 
+                              fontSize: '0.65rem',
+                              fontWeight: 500,
+                              display: 'block',
+                            }}
+                          >
+                            หน่วย
+                          </Typography>
+                          <Typography 
+                            variant="body2"
+                            sx={{ 
+                              fontWeight: 700,
+                              color: 'primary.main',
+                              fontSize: '0.9rem',
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {position.unit || '-'}
+                          </Typography>
+                        </Box>
                       </Box>
                     </Box>
                     
-                    {/* Position Number */}
+                    {/* Position Number - Inline style */}
                     {position.positionNumber && (
                       <Box sx={{ 
                         display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        gap: 1,
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        bgcolor: 'grey.50',
+                        borderRadius: 1,
+                        px: 1,
                         py: 0.5
                       }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                        <Typography 
+                          variant="caption" 
+                          color="text.secondary" 
+                          sx={{ fontSize: '0.75rem', fontWeight: 500 }}
+                        >
                           เลขตำแหน่ง
                         </Typography>
-                        <Chip
-                          label={position.positionNumber}
-                          size="small"
-                          color="info"
-                          variant="filled"
+                        <Typography 
+                          variant="caption"
                           sx={{ 
-                            fontWeight: 600,
+                            fontWeight: 700,
+                            color: 'info.main',
                             fontSize: '0.75rem'
                           }}
-                        />
+                        >
+                          {position.positionNumber}
+                        </Typography>
                       </Box>
                     )}
-
-                    {/* Status Badge */}
-                    <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.5 }}>
-                      <Chip
-                        icon={<AssignmentIcon fontSize="small" />}
-                        label="ตำแหน่งว่าง"
-                        color="warning"
-                        variant="filled"
-                        sx={{ 
-                          fontWeight: 600,
-                          fontSize: '0.8rem',
-                          px: 1,
-                          boxShadow: '0 2px 8px rgba(255, 152, 0, 0.3)'
-                        }}
-                      />
-                    </Box>
                   </Stack>
                 </CardContent>
                 
                 <CardActions sx={{ 
-                  p: 2.5, 
-                  pt: 0,
-                  backgroundColor: 'grey.25'
+                  p: 1.5, 
+                  pt: 0.5,
                 }}>
                   <Button
-                    startIcon={<ViewIcon />}
+                    startIcon={<ViewIcon sx={{ fontSize: '1rem' }} />}
                     onClick={() => handleViewApplicants(position)}
                     variant="contained"
                     fullWidth
+                    size="small"
                     sx={{ 
-                      py: 1.2,
-                      fontSize: '0.9rem',
+                      py: 0.75,
+                      fontSize: '0.8rem',
                       fontWeight: 600,
-                      borderRadius: 2,
+                      borderRadius: 1.5,
                       textTransform: 'none',
-                      boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
+                      boxShadow: 'none',
                       '&:hover': {
-                        boxShadow: '0 6px 20px rgba(25, 118, 210, 0.4)',
-                        transform: 'translateY(-1px)'
+                        boxShadow: '0 2px 8px rgba(25, 118, 210, 0.25)',
                       }
                     }}
                   >
-                    ดูรายการผู้สมัคร
+                    ดูผู้สมัคร
                   </Button>
                 </CardActions>
               </Card>
               ))}
           </Box>
+        ) : (
+          /* Table View */
+          <TableContainer component={Paper} sx={{ mt: 1 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'grey.50' }}>
+                  <TableCell sx={{ fontWeight: 700 }}>รหัสตำแหน่ง - ชื่อตำแหน่ง</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>หน่วย</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>ตำแหน่ง</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>เลขตำแหน่ง</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700 }}>การดำเนินการ</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {vacantPositions
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((position) => (
+                  <TableRow 
+                    key={position.id}
+                    hover
+                    sx={{ 
+                      cursor: 'pointer',
+                      '&:hover': {
+                        bgcolor: 'action.hover'
+                      }
+                    }}
+                    onClick={() => handleViewApplicants(position)}
+                  >
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {position.posCodeId} - {position.posCodeName}
+                    </TableCell>
+                    <TableCell>{position.unit || '-'}</TableCell>
+                    <TableCell>{position.position || '-'}</TableCell>
+                    <TableCell>
+                      {position.positionNumber ? (
+                        <Chip
+                          label={position.positionNumber}
+                          size="small"
+                          color="info"
+                          variant="outlined"
+                        />
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Button
+                        startIcon={<ViewIcon />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewApplicants(position);
+                        }}
+                        variant="contained"
+                        size="small"
+                        sx={{ 
+                          fontSize: '0.75rem',
+                          textTransform: 'none',
+                          boxShadow: 'none',
+                          '&:hover': {
+                            boxShadow: '0 2px 8px rgba(25, 118, 210, 0.25)',
+                          }
+                        }}
+                      >
+                        ดูผู้สมัคร
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {vacantPositions.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                      ไม่พบข้อมูล
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+            <DataTablePagination
+              count={vacantPositions.length}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              variant="minimal"
+            />
+          </TableContainer>
         )}
 
         {/* แสดงข้อความแนะนำเมื่อยังไม่มีการ filter */}
@@ -635,23 +1106,45 @@ export default function VacantPositionAssignmentPage() {
           onClose={() => setDialogOpen(false)}
           maxWidth="md"
           fullWidth
+          fullScreen={isMobile}
+          sx={{
+            '& .MuiDialog-paper': {
+              margin: { xs: 0, sm: 2 },
+              width: { xs: '100%' },
+              maxHeight: { xs: '100%', sm: 'calc(100% - 64px)' },
+            },
+          }}
         >
           <DialogTitle sx={{ pb: 1 }}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <AccountBoxIcon fontSize="small" />
-              <Box>
-                <Typography variant="subtitle1">
-                  ผู้ยื่นขอตำแหน่ง: {selectedPosition?.posCodeName}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  หน่วย: {selectedPosition?.unit} | ตำแหน่ง: {selectedPosition?.position}
-                </Typography>
-              </Box>
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+              <Stack direction="row" spacing={1} alignItems="center">
+                <AccountBoxIcon fontSize="small" />
+                <Box>
+                  <Typography variant="subtitle1">
+                    ผู้ยื่นขอตำแหน่ง: {selectedPosition?.posCodeName}
+                  </Typography>
+                  <Typography variant="body2" color="text.primary" sx={{ fontSize: '0.9rem' }}>
+                    หน่วย: {selectedPosition?.unit} | ตำแหน่ง: {selectedPosition?.position}
+                  </Typography>
+                </Box>
+              </Stack>
+              {hasOrderChanged && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSaveOrder}
+                  disabled={loading}
+                  color="primary"
+                >
+                  บันทึกลำดับ
+                </Button>
+              )}
             </Stack>
           </DialogTitle>
           
-          <DialogContent sx={{ pt: 0 }}>
-            {loading ? (
+          <DialogContent sx={{ pt: 0, minHeight: '400px', maxHeight: '600px', overflow: 'auto', position: 'relative' }}>
+            {loading && applicants.length === 0 ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
                 <CircularProgress size={24} />
               </Box>
@@ -661,67 +1154,118 @@ export default function VacantPositionAssignmentPage() {
               </Alert>
             ) : (
               <>
-                <Typography variant="body2" gutterBottom color="text.secondary">
-                  รายการผู้ยื่นขอตำแหน่งนี้ (เรียงตามลำดับ): {applicants.length} คน
-                </Typography>
-                <List dense>
-                  {applicants.map((applicant, index) => (
-                    <React.Fragment key={applicant.id}>
-                      <ListItem sx={{ py: 0.5 }}>
-                        <ListItemText
-                          primary={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                              <Chip 
-                                label={`อันดับ ${applicant.displayOrder || index + 1}`} 
-                                size="small" 
-                                color="primary"
-                              />
-                              <Box component="span" sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                                {applicant.fullName}
-                              </Box>
-                              <Chip 
-                                label={applicant.rank} 
-                                size="small" 
-                                variant="outlined"
-                              />
-                            </Box>
-                          }
-                          secondary={
-                            <>
-                              <strong>ตำแหน่งปัจจุบัน:</strong> {applicant.position} | {applicant.unit}
-                              {applicant.nominator && (
-                                <>
-                                  <br />
-                                  <strong>ผู้เสนอ:</strong> {applicant.nominator}
-                                </>
-                              )}
-                              {applicant.notes && (
-                                <>
-                                  <br />
-                                  <strong>หมายเหตุ:</strong> {applicant.notes}
-                                </>
-                              )}
-                            </>
-                          }
+                <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                  <Typography variant="body2">
+                    รายการผู้ยื่นขอตำแหน่งนี้: {applicants.length} คน
+                    <br />
+                    <Typography variant="caption" color="text.secondary">
+                      💡 ลากและวางเพื่อจัดเรียงลำดับผู้สมัคร
+                    </Typography>
+                  </Typography>
+                </Alert>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={applicants.map(a => a.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <List 
+                      dense 
+                      sx={{ 
+                        py: 0,
+                      }}
+                    >
+                      {applicants.map((applicant, index) => (
+                        <SortableApplicantItem
+                          key={applicant.id}
+                          applicant={applicant}
+                          index={index}
+                          onAssign={(app) => handleAssignPosition(app, selectedPosition!)}
+                          loading={loading}
                         />
-                        <ListItemSecondaryAction>
-                          <Button
-                            variant="contained"
-                            size="small"
-                            startIcon={<ArrowIcon fontSize="small" />}
-                            onClick={() => handleAssignPosition(applicant, selectedPosition!)}
-                            disabled={loading}
-                            color="success"
-                            sx={{ minWidth: 100, py: 0.5, fontSize: '0.75rem' }}
-                          >
-                            จับคู่
-                          </Button>
-                        </ListItemSecondaryAction>
+                      ))}
+                    </List>
+                  </SortableContext>
+                  <DragOverlay>
+                    {activeId ? (
+                      <ListItem
+                        sx={{
+                          py: 0.5,
+                          bgcolor: 'background.paper',
+                          borderRadius: 1,
+                          border: 2,
+                          borderColor: 'primary.main',
+                          boxShadow: '0 12px 40px rgba(0,0,0,0.15)',
+                          opacity: 0.9,
+                          maxWidth: '700px',
+                          width: '700px',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            cursor: 'grabbing',
+                            display: 'flex',
+                            alignItems: 'center',
+                            mr: 1,
+                            color: 'text.secondary',
+                          }}
+                        >
+                          <DragIndicatorIcon fontSize="small" />
+                        </Box>
+                        {(() => {
+                          const applicant = applicants.find(a => a.id === activeId);
+                          const index = applicants.findIndex(a => a.id === activeId);
+                          if (!applicant) return null;
+                          return (
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                  <Chip 
+                                    label={`อันดับ ${applicant.displayOrder || index + 1}`} 
+                                    size="small" 
+                                    color="primary"
+                                  />
+                                  <Box component="span" sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
+                                    {applicant.rank} {applicant.fullName} ({applicant.age ? `${applicant.age}` : 'อายุไม่ระบุ'}) <br />
+                                    <Typography 
+                                      component="span" 
+                                      variant="caption" 
+                                      color="text.secondary"
+                                      sx={{ fontSize: '0.75rem' }}
+                                    >
+                                      จำนวนปี: {applicant.yearsOfService || '-'}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              }
+                              secondary={
+                                <>
+                                  <strong>ตำแหน่งปัจจุบัน:</strong> {applicant.position} | {applicant.unit}
+                                  {applicant.nominator && (
+                                    <>
+                                      <br />
+                                      <strong>ผู้เสนอ:</strong> {applicant.nominator}
+                                    </>
+                                  )}
+                                  {applicant.notes && (
+                                    <>
+                                      <br />
+                                      <strong>หมายเหตุ:</strong> {applicant.notes}
+                                    </>
+                                  )}
+                                </>
+                              }
+                            />
+                          );
+                        })()}
                       </ListItem>
-                      {index < applicants.length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </List>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
               </>
             )}
           </DialogContent>
@@ -803,6 +1347,108 @@ export default function VacantPositionAssignmentPage() {
               size="small"
             >
               ยืนยัน
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Swap Confirmation Dialog */}
+        <Dialog
+          open={swapConfirmOpen}
+          onClose={() => !isSwapping && handleSwapCancel()}
+          maxWidth="sm"
+          fullWidth
+          fullScreen={isMobile}
+          PaperProps={{
+            sx: {
+              width: { xs: '100%', sm: 'auto' },
+              height: { xs: '100%', sm: 'auto' },
+              maxHeight: { xs: '100%', sm: '90vh' },
+              margin: { xs: 0, sm: '32px' },
+              borderRadius: { xs: 0, sm: 1 },
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }}
+        >
+          <DialogTitle sx={{ flexShrink: 0 }}>ยืนยันการสลับลำดับความสำคัญ</DialogTitle>
+          <DialogContent
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              px: { xs: 2, sm: 3 },
+              minHeight: 0
+            }}
+          >
+            <Typography variant="body1" sx={{ mb: 3 }}>
+              คุณต้องการสลับลำดับความสำคัญระหว่าง:
+            </Typography>
+            
+            <Stack spacing={2}>
+              <Paper sx={{ p: 2, bgcolor: 'primary.50', border: 1, borderColor: 'primary.main' }}>
+                <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                  ลำดับที่ {swapData.activeItem?.displayOrder || '-'}
+                </Typography>
+                <Typography variant="h6" fontWeight={600}>
+                  {swapData.activeItem?.rank} {swapData.activeItem?.fullName || 'ไม่ระบุชื่อ'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ตำแหน่งปัจจุบัน: {swapData.activeItem?.position || 'ไม่ระบุ'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  หน่วย: {swapData.activeItem?.unit || 'ไม่ระบุ'}
+                </Typography>
+              </Paper>
+
+              <Box sx={{ textAlign: 'center', py: 1 }}>
+                <Typography variant="h4" color="primary.main">⇅</Typography>
+              </Box>
+
+              <Paper sx={{ p: 2, bgcolor: 'secondary.50', border: 1, borderColor: 'secondary.main' }}>
+                <Typography variant="subtitle2" color="secondary.main" gutterBottom>
+                  ลำดับที่ {swapData.overItem?.displayOrder || '-'}
+                </Typography>
+                <Typography variant="h6" fontWeight={600}>
+                  {swapData.overItem?.rank} {swapData.overItem?.fullName || 'ไม่ระบุชื่อ'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ตำแหน่งปัจจุบัน: {swapData.overItem?.position || 'ไม่ระบุ'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  หน่วย: {swapData.overItem?.unit || 'ไม่ระบุ'}
+                </Typography>
+              </Paper>
+            </Stack>
+
+            <Alert severity="info" sx={{ mt: 3 }}>
+              การสลับลำดับจะส่งผลต่อความสำคัญในการพิจารณาตำแหน่ง
+            </Alert>
+          </DialogContent>
+          <DialogActions sx={{ 
+            px: { xs: 2, sm: 3 }, 
+            py: { xs: 2, sm: 2 },
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 1, sm: 0 },
+            flexShrink: 0,
+            '& .MuiButton-root': {
+              minWidth: { xs: '100%', sm: 'auto' }
+            }
+          }}>
+            <Button 
+              onClick={handleSwapCancel} 
+              disabled={isSwapping}
+              sx={{ order: { xs: 2, sm: 1 } }}
+            >
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleSwapConfirm} 
+              color="primary" 
+              variant="contained"
+              disabled={isSwapping}
+              startIcon={isSwapping ? <CircularProgress size={20} color="inherit" /> : undefined}
+              sx={{ order: { xs: 1, sm: 2 } }}
+            >
+              {isSwapping ? 'กำลังสลับ...' : 'ยืนยันการสลับ'}
             </Button>
           </DialogActions>
         </Dialog>

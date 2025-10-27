@@ -23,6 +23,7 @@ import {
   Inventory as InventoryIcon,
   ImportExport as ImportIcon,
   SwapHoriz as SwapHorizIcon,
+  EventAvailable as VacantIcon,
 } from '@mui/icons-material';
 
 interface BreadcrumbItem {
@@ -87,6 +88,15 @@ const Breadcrumbs: React.FC = () => {
             label: 'สามเส้า',
             href: isLast ? undefined : '/police-personnel/three-way-swap',
             icon: <SwapHorizIcon sx={{ fontSize: 16 }} />,
+            isActive: isLast,
+          });
+          break;
+
+        case 'vacant-position':
+          breadcrumbs.push({
+            label: 'ยื่นขอตำแหน่งว่าง',
+            href: isLast ? undefined : '/police-personnel/vacant-position',
+            icon: <VacantIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
           });
           break;

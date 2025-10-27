@@ -7,9 +7,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = await params;
     const transaction = await prisma.swapTransaction.findUnique({
       where: { 
-        id: params.id,
+        id: id,
       },
       include: {
         swapDetails: {
@@ -44,6 +45,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { year, swapDate, groupName, groupNumber, status, notes, swapDetails } = body;
 
@@ -57,7 +59,7 @@ export async function PUT(
 
     // ลบ details เก่าและสร้างใหม่
     const transaction = await prisma.swapTransaction.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         year,
         swapDate: swapDate ? new Date(swapDate) : undefined,
@@ -111,9 +113,10 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = await params;
     // ตรวจสอบว่ามีข้อมูลอยู่หรือไม่
     const existingTransaction = await prisma.swapTransaction.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         swapDetails: true
       }
@@ -190,7 +193,7 @@ export async function DELETE(
 
     // ถ้าไม่มีข้อมูลที่ขัดแย้ง ให้ลบได้
     await prisma.swapTransaction.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({

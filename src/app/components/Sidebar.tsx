@@ -31,6 +31,7 @@ import {
   SwapHoriz as SwapIcon,
   ChangeHistory as ThreeWayIcon,
   EventAvailable as VacantIcon,
+  AssignmentTurnedIn as AssignmentIcon,
 } from '@mui/icons-material';
 import { useNavigation } from './NavigationContext';
 import { usePathname, useRouter } from 'next/navigation';
@@ -89,6 +90,12 @@ const Sidebar: React.FC = () => {
           href: '/police-personnel/vacant-position', 
           icon: <VacantIcon sx={{ fontSize: 20 }} />, 
           key: 'vacant-position' 
+        },
+        { 
+          label: 'จัดการจับคู่ตำแหน่ง', 
+          href: '/police-personnel/vacant-position/assignment', 
+          icon: <AssignmentIcon sx={{ fontSize: 20 }} />, 
+          key: 'vacant-assignment' 
         },
       ]
     },

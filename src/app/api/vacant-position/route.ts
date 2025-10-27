@@ -77,6 +77,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // หา displayOrder ถัดไปสำหรับตำแหน่งที่ขอ
+    const maxDisplayOrder = await prisma.vacantPosition.findFirst({
+      where: {
+        requestedPositionId: requestedPositionId,
+        year: year,
+      },
+      orderBy: {
+        displayOrder: 'desc'
+      },
+      select: {
+        displayOrder: true
+      }
+    });
+
+    const nextDisplayOrder = (maxDisplayOrder?.displayOrder || 0) + 1;
+
     // สร้างข้อมูลใหม่
     const newEntry = await prisma.vacantPosition.create({
       data: {
@@ -84,6 +100,7 @@ export async function POST(request: NextRequest) {
         notes,
         nominator,
         requestedPositionId,
+        displayOrder: nextDisplayOrder,
         ...personnelData,
       },
       include: {
@@ -118,21 +135,56 @@ export async function DELETE(request: NextRequest) {
 
     const year = parseInt(yearParam);
 
-    const deleted = await prisma.vacantPosition.deleteMany({
+    // ค้นหาข้อมูลที่จะลบก่อน เพื่อเอา requestedPositionId
+    const itemToDelete = await prisma.vacantPosition.findFirst({
       where: {
         nationalId: nationalId,
         year: year,
       },
+      select: {
+        id: true,
+        requestedPositionId: true,
+        displayOrder: true,
+      },
     });
 
-    if (deleted.count === 0) {
+    if (!itemToDelete) {
       return NextResponse.json(
         { error: 'Record not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ message: 'Removed from vacant position list' });
+    // ลบข้อมูล
+    await prisma.vacantPosition.delete({
+      where: {
+        id: itemToDelete.id,
+      },
+    });
+
+    // จัดลำดับ displayOrder ใหม่สำหรับตำแหน่งเดียวกัน
+    if (itemToDelete.requestedPositionId) {
+      const remainingItems = await prisma.vacantPosition.findMany({
+        where: {
+          requestedPositionId: itemToDelete.requestedPositionId,
+          year: year,
+        },
+        orderBy: { displayOrder: 'asc' },
+        select: { id: true },
+      });
+
+      // อัปเดต displayOrder ให้เป็น 1, 2, 3, 4...
+      for (let i = 0; i < remainingItems.length; i++) {
+        await prisma.vacantPosition.update({
+          where: { id: remainingItems[i].id },
+          data: { displayOrder: i + 1 },
+        });
+      }
+    }
+
+    return NextResponse.json({ 
+      message: 'Removed from vacant position list and reordered successfully' 
+    });
   } catch (error) {
     console.error('Error removing from vacant position list:', error);
     return NextResponse.json(

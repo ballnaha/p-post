@@ -104,6 +104,12 @@ interface PolicePersonnel {
   updatedBy?: string;
 }
 
+// ฟังก์ชันตรวจสอบว่าเป็นตำแหน่งกันตำแหน่งหรือไม่ (รองรับทั้งมีเว้นวรรคและไม่มีเว้นวรรค)
+const isReservedPosition = (fullName: string | null | undefined): boolean => {
+  if (!fullName) return false;
+  return fullName.includes('ว่าง (กันตำแหน่ง)') || fullName.includes('ว่าง(กันตำแหน่ง)');
+};
+
 export default function PolicePersonnelPage() {
   const router = useRouter();
   const theme = useTheme();
@@ -1306,7 +1312,9 @@ export default function PolicePersonnelPage() {
                         {person.fullName}
                       </>
                     ) : (
-                      'ว่าง'
+                      isReservedPosition(person.fullName)
+                        ? 'ว่าง (กันตำแหน่ง)'
+                        : 'ว่าง'
                     )}
                   </Typography>
                 </Box>
@@ -1449,7 +1457,7 @@ export default function PolicePersonnelPage() {
                 <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
                   {/* ปุ่มฝั่งซ้าย: Swap, สามเส้า, ยื่นขอตำแหน่ง */}
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    {!person.rank ? (
+                    {!person.rank && (!person.fullName || (person.fullName !== 'ว่าง' && !isReservedPosition(person.fullName))) ? (
                       // ถ้าไม่มีบุคคล (ว่าง) แสดงปุ่มยื่นขอตำแหน่งเท่านั้น
                       <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener>
                         <IconButton
@@ -1466,7 +1474,7 @@ export default function PolicePersonnelPage() {
                           <VacantIcon />
                         </IconButton>
                       </Tooltip>
-                    ) : (
+                    ) : person.rank ? (
                       // ถ้ามีบุคคล แสดง Swap, สามเส้า, ยื่นขอตำแหน่ง
                       <>
                         <Tooltip 
@@ -1589,7 +1597,7 @@ export default function PolicePersonnelPage() {
                           </IconButton>
                         </Tooltip>
                       </>
-                    )}
+                    ) : null}
                   </Box>
 
                   {/* เส้นคั่น */}
@@ -1984,7 +1992,10 @@ export default function PolicePersonnelPage() {
                       <TableCell>{row.rank || '-'}</TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {row.fullName || '-'}
+                          {isReservedPosition(row.fullName)
+                            ? 'ว่าง (กันตำแหน่ง)'
+                            : (row.fullName || 'ว่าง')
+                          }
                         </Typography>
                         {row.nationalId && (
                           <Typography variant="caption" color="text.secondary">
@@ -2035,7 +2046,7 @@ export default function PolicePersonnelPage() {
                           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             {/* ปุ่มฝั่งซ้าย */}
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
-                              {!row.rank ? (
+                              {!row.rank && (!row.fullName || (row.fullName !== 'ว่าง' && !isReservedPosition(row.fullName))) ? (
                                 // ถ้าไม่มีบุคคล (ว่าง) แสดงปุ่มยื่นขอตำแหน่งเท่านั้น
                                 <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener>
                                   <IconButton
@@ -2052,7 +2063,7 @@ export default function PolicePersonnelPage() {
                                     <VacantIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
-                              ) : (
+                              ) : row.rank ? (
                                 // ถ้ามีบุคคล แสดง Swap, สามเส้า, ยื่นขอตำแหน่ง
                                 <>
                                   <Tooltip 
@@ -2173,7 +2184,7 @@ export default function PolicePersonnelPage() {
                                     </IconButton>
                                   </Tooltip>
                                 </>
-                              )}
+                              ) : null}
                             </Box>
 
                             {/* เส้นคั่น */}
@@ -2274,84 +2285,180 @@ export default function PolicePersonnelPage() {
           maxWidth="md" 
           fullWidth
           fullScreen={isMobile}
+          PaperProps={{
+            sx: {
+              display: 'flex',
+              flexDirection: 'column',
+              height: { xs: '100%', sm: 'auto' },
+              maxHeight: { xs: '100%', sm: '90vh' },
+              margin: { xs: 0, sm: '32px' },
+              borderRadius: { xs: 0, sm: 2 },
+              
+            }
+          }}
         >
-          <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', py: 1.5, px: 2 }}>
-            <Box component="span" sx={{ fontWeight: 600, fontSize: '1.25rem' }}>
-              แก้ไขข้อมูลบุคลากร
+          <DialogTitle sx={{ 
+            pb: 1, 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            flexShrink: 0 ,
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonIcon color="action" />
+              <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
+                แก้ไขข้อมูลบุคลากร
+              </Typography>
             </Box>
           </DialogTitle>
           
-          <DialogContent sx={{ pt: 2, px: 2, pb: 2 }}>
-            <Stack spacing={2}>
+          <DialogContent sx={{ 
+            flex: 1,
+            overflow: 'auto',
+            p: { xs: 2, sm: 3 },
+            pt: { xs: 3, sm: 4 },
+            backgroundColor: 'grey.50',
+            '& .MuiTextField-root': {
+              '& .MuiInputLabel-root': {
+                fontSize: '0.875rem'
+              },
+              '& .MuiInputBase-input': {
+                fontSize: '0.875rem'
+              },
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 1,
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main'
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderWidth: 1
+                }
+              }
+            }
+          }}>
+            <Stack spacing={{ xs: 2, sm: 3 }}>
               {/* ข้อมูลบุคคล */}
-              <Box>
-                <Typography variant="body2" fontWeight={600} color="primary" mb={1} mt={1}>
-                  ข้อมูลบุคคล
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <Paper sx={{                 
+                p: { xs: 2, sm: 3 },
+                mt: { xs: 1.5, sm: 5 },                 
+                borderRadius: 2, 
+                border: '1px solid', 
+                borderColor: 'grey.200',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+                  <PersonIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ fontSize: '0.938rem' }}>
+                    ข้อมูลบุคคล
+                  </Typography>
+                </Box>
+                <Stack spacing={2.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="ยศ"
                       value={editFormData.rank || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, rank: e.target.value })}
+                      variant="outlined"
                       size="small"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <RankIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                          </InputAdornment>
+                        )
+                      }}
                     />
                     <TextField
                       fullWidth
                       label="ชื่อ-สกุล"
                       value={editFormData.fullName || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, fullName: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                   </Stack>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="เลขบัตรประชาชน"
                       value={editFormData.nationalId || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, nationalId: e.target.value })}
+                      variant="outlined"
                       size="small"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <BadgeIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                          </InputAdornment>
+                        )
+                      }}
                     />
                     <TextField
                       fullWidth
                       label="อายุ"
                       value={editFormData.age || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, age: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                   </Stack>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="อาวุโส"
                       value={editFormData.seniority || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, seniority: e.target.value })}
+                      variant="outlined"
                       size="small"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <ServiceIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                          </InputAdornment>
+                        )
+                      }}
                     />
                     <TextField
                       fullWidth
                       label="คุณวุฒิ"
                       value={editFormData.education || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, education: e.target.value })}
+                      variant="outlined"
                       size="small"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <EducationIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                          </InputAdornment>
+                        )
+                      }}
                     />
                   </Stack>
                 </Stack>
-              </Box>
+              </Paper>
 
               {/* ข้อมูลตำแหน่ง */}
-              <Box>
-                <Typography variant="body2" fontWeight={600} color="primary" mb={1}>
-                  ข้อมูลตำแหน่ง
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <Paper sx={{ 
+                p: { xs: 2, sm: 3 }, 
+                borderRadius: 2, 
+                border: '1px solid', 
+                borderColor: 'grey.200',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+                  <PositionIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ fontSize: '0.938rem' }}>
+                    ข้อมูลตำแหน่ง
+                  </Typography>
+                </Box>
+                <Stack spacing={2.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="ตำแหน่ง"
                       value={editFormData.position || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, position: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                     <TextField
@@ -2359,41 +2466,61 @@ export default function PolicePersonnelPage() {
                       label="เลขตำแหน่ง"
                       value={editFormData.positionNumber || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, positionNumber: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                   </Stack>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="หน่วย"
                       value={editFormData.unit || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, unit: e.target.value })}
+                      variant="outlined"
                       size="small"
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <BusinessIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                          </InputAdornment>
+                        )
+                      }}
                     />
                     <TextField
                       fullWidth
                       label="ทำหน้าที่"
                       value={editFormData.actingAs || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, actingAs: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                   </Stack>
                 </Stack>
-              </Box>
+              </Paper>
 
               {/* ข้อมูลวันที่ */}
-              <Box>
-                <Typography variant="body2" fontWeight={600} color="primary" mb={1}>
-                  ข้อมูลวันที่
-                </Typography>
-                <Stack spacing={1.5}>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <Paper sx={{ 
+                p: { xs: 2, sm: 3 }, 
+                borderRadius: 2, 
+                border: '1px solid', 
+                borderColor: 'grey.200',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+                  <CalendarIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ fontSize: '0.938rem' }}>
+                    ข้อมูลวันที่
+                  </Typography>
+                </Box>
+                <Stack spacing={2.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="วันเกิด"
                       placeholder="DD/MM/YYYY"
                       value={editFormData.birthDate || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, birthDate: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                     <TextField
@@ -2402,16 +2529,18 @@ export default function PolicePersonnelPage() {
                       placeholder="DD/MM/YYYY"
                       value={editFormData.lastAppointment || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, lastAppointment: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                   </Stack>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="ระดับนี้เมื่อ"
                       placeholder="DD/MM/YYYY"
                       value={editFormData.currentRankSince || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, currentRankSince: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                     <TextField
@@ -2420,16 +2549,18 @@ export default function PolicePersonnelPage() {
                       placeholder="DD/MM/YYYY"
                       value={editFormData.enrollmentDate || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, enrollmentDate: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                   </Stack>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField
                       fullWidth
                       label="เกษียณ"
                       placeholder="DD/MM/YYYY"
                       value={editFormData.retirementDate || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, retirementDate: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                     <TextField
@@ -2437,23 +2568,34 @@ export default function PolicePersonnelPage() {
                       label="จำนวนปี"
                       value={editFormData.yearsOfService || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, yearsOfService: e.target.value })}
+                      variant="outlined"
                       size="small"
                     />
                   </Stack>
                 </Stack>
-              </Box>
+              </Paper>
 
               {/* ข้อมูลการฝึกอบรม */}
-              <Box>
-                <Typography variant="body2" fontWeight={600} color="primary" mb={1}>
-                  ข้อมูลการฝึกอบรม
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <Paper sx={{ 
+                p: { xs: 2, sm: 3 }, 
+                borderRadius: 2, 
+                border: '1px solid', 
+                borderColor: 'grey.200',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+                  <EducationIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ fontSize: '0.938rem' }}>
+                    ข้อมูลการฝึกอบรม
+                  </Typography>
+                </Box>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <TextField
                     fullWidth
                     label="สถานที่ฝึกอบรม (ตท.)"
                     value={editFormData.trainingLocation || ''}
                     onChange={(e) => setEditFormData({ ...editFormData, trainingLocation: e.target.value })}
+                    variant="outlined"
                     size="small"
                   />
                   <TextField
@@ -2461,37 +2603,83 @@ export default function PolicePersonnelPage() {
                     label="หลักสูตร (นรต.)"
                     value={editFormData.trainingCourse || ''}
                     onChange={(e) => setEditFormData({ ...editFormData, trainingCourse: e.target.value })}
+                    variant="outlined"
                     size="small"
                   />
                 </Stack>
-              </Box>
+              </Paper>
 
               {/* หมายเหตุ */}
-              <TextField
-                fullWidth
-                multiline
-                rows={2}
-                label="หมายเหตุ"
-                value={editFormData.notes || ''}
-                onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-                size="small"
-              />
+              <Paper sx={{ 
+                p: { xs: 2, sm: 3 }, 
+                borderRadius: 2, 
+                border: '1px solid', 
+                borderColor: 'grey.200',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+                  <InfoOutlinedIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ fontSize: '0.938rem' }}>
+                    หมายเหตุ
+                  </Typography>
+                </Box>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label="หมายเหตุเพิ่มเติม"
+                  value={editFormData.notes || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                  variant="outlined"
+                  size="small"
+                  placeholder="ระบุข้อมูลเพิ่มเติม..."
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main'
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: 2
+                      }
+                    }
+                  }}
+                />
+              </Paper>
             </Stack>
           </DialogContent>
           
-          <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
-            <Button onClick={handleEditClose} variant="outlined" size="medium" disabled={isSaving}>
+          <DialogActions sx={{ 
+            px: { xs: 2, sm: 3 }, 
+            py: { xs: 2, sm: 2.5 }, 
+            bgcolor: 'white', 
+            borderTop: 1, 
+            borderColor: 'divider',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 1, sm: 0 },
+            flexShrink: 0,
+            '& .MuiButton-root': {
+              minWidth: { xs: '100%', sm: 120 }
+            }
+          }}>
+            <Button 
+              onClick={handleEditClose} 
+              variant="outlined" 
+              size="medium"
+              disabled={isSaving}
+              sx={{ order: { xs: 2, sm: 1 } }}
+            >
               ยกเลิก
             </Button>
             <Button 
               onClick={handleEditSave} 
               variant="contained" 
-              size="medium" 
-              sx={{ minWidth: 100 }}
+              size="medium"
               disabled={isSaving}
-              startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : null}
+              startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <EditIcon />}
+              sx={{ order: { xs: 1, sm: 2 } }}
             >
-              {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
+              {isSaving ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
             </Button>
           </DialogActions>
         </Dialog>

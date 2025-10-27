@@ -135,6 +135,17 @@ export default function PersonnelDetailModal({
       maxWidth="md"
       fullWidth
       fullScreen={isMobile}
+      PaperProps={{
+        sx: {
+          width: { xs: '100%' },
+          height: { xs: '100%', sm: 'auto' },
+          maxHeight: { xs: '100%', sm: '90vh' },
+          margin: { xs: 0, sm: '32px' },
+          borderRadius: { xs: 0, sm: 1 },
+          display: 'flex',
+          flexDirection: 'column'
+        }
+      }}
     >
       <DialogTitle sx={{ 
         borderBottom: 1, 
@@ -143,7 +154,8 @@ export default function PersonnelDetailModal({
         alignItems: 'center',
         gap: 1,
         py: 1.5,
-        px: 2
+        px: 2,
+        flexShrink: 0
       }}>
         <PersonIcon fontSize="small" />
         <Box component="span" sx={{ fontWeight: 600, fontSize: '1.25rem' }}>
@@ -159,7 +171,13 @@ export default function PersonnelDetailModal({
         )}
       </DialogTitle>
       
-      <DialogContent sx={{ p: 2, mt: 2 }}>
+      <DialogContent sx={{ 
+        p: { xs: 1.5, sm: 2 }, 
+        mt: 2,
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0
+      }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
             <CircularProgress size={60} />
@@ -333,8 +351,25 @@ export default function PersonnelDetailModal({
         ) : null}
       </DialogContent>
       
-      <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
-        <Button onClick={handleClose} variant="contained" size="medium" sx={{ minWidth: 100, fontWeight: 600 }}>
+      <DialogActions sx={{ 
+        px: { xs: 1.5, sm: 2 }, 
+        py: { xs: 2, sm: 1.5 }, 
+        bgcolor: 'grey.50', 
+        borderTop: 1, 
+        borderColor: 'divider',
+        justifyContent: 'center',
+        flexShrink: 0
+      }}>
+        <Button 
+          onClick={handleClose} 
+          variant="contained" 
+          size="medium" 
+          sx={{ 
+            minWidth: { xs: '100%', sm: 100 }, 
+            fontWeight: 600,
+            py: { xs: 1.5, sm: 1 }
+          }}
+        >
           ปิด
         </Button>
       </DialogActions>

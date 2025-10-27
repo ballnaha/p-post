@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
             {
               AND: [
                 { fullName: { not: null } },
-                { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } }
+                { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } }, // มีเว้นวรรค
+                { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }    // ไม่มีเว้นวรรค
               ]
             }
           ]
@@ -55,8 +56,11 @@ export async function GET(request: NextRequest) {
         { rank: { not: '' } }
       ];
     } else if (positionFilter === 'reserved') {
-      // รายการยื่นขอตำแหน่ง (กันตำแหน่ง) - มีคำว่า "ว่าง (กันตำแหน่ง)" ใน fullName
-      where.fullName = { contains: 'ว่าง (กันตำแหน่ง)' };
+      // รายการยื่นขอตำแหน่ง (กันตำแหน่ง) - มีคำว่า "ว่าง (กันตำแหน่ง)" หรือ "ว่าง(กันตำแหน่ง)" ใน fullName
+      where.OR = [
+        { fullName: { contains: 'ว่าง (กันตำแหน่ง)' } }, // มีเว้นวรรค
+        { fullName: { contains: 'ว่าง(กันตำแหน่ง)' } }    // ไม่มีเว้นวรรค
+      ];
     }
     
     // เพิ่ม position type filter (ตำแหน่ง - ผกก., รอง ผกก. เป็นต้น)

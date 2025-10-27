@@ -40,6 +40,11 @@ import {
   DialogActions,
   Stack,
   Skeleton,
+  useTheme,
+  useMediaQuery,
+  Tabs,
+  Tab,
+  Badge,
 } from '@mui/material';
 import {
   AssignmentTurnedIn as VacantIcon,
@@ -136,12 +141,13 @@ interface SortableCardProps {
   item: VacantPositionData;
   displayOrder: number;
   compact?: boolean;
+  showOrder?: boolean; // เพิ่ม prop เพื่อควบคุมการแสดงลำดับ
   onViewDetail: (item: VacantPositionData) => void;
   onMenuOpen: (event: React.MouseEvent<HTMLElement>, item: VacantPositionData) => void;
   draggedItem?: VacantPositionData | null; // เพิ่ม prop เพื่อรู้ว่า card ไหนกำลังลาก
 }
 
-function SortableCard({ item, displayOrder, compact, onViewDetail, onMenuOpen, draggedItem }: SortableCardProps) {
+function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDetail, onMenuOpen, draggedItem }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -221,12 +227,23 @@ function SortableCard({ item, displayOrder, compact, onViewDetail, onMenuOpen, d
             {/* ลำดับที่ และชื่อ */}
             <Box sx={{ mb: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                <Chip
-                  label={`#${displayOrder + 1}`}
-                  color="primary"
-                  size="small"
-                  sx={{ fontWeight: 600, fontSize: '0.7rem', height: 20 }}
-                />
+                {showOrder && (
+                  <Chip
+                    label={`#${displayOrder + 1}`}
+                    size="small"
+                    sx={{ 
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      fontWeight: 700, 
+                      fontSize: '0.7rem', 
+                      height: 22,
+                      borderRadius: '11px',
+                      '& .MuiChip-label': {
+                        px: 1,
+                      }
+                    }}
+                  />
+                )}
                 <Typography variant="body2" fontWeight={700} sx={{ flex: 1 }}>
                   {item.rank ? `${item.rank} ${item.fullName || ''}` : (item.fullName || 'ว่าง')}
                 </Typography>
@@ -263,28 +280,40 @@ function SortableCard({ item, displayOrder, compact, onViewDetail, onMenuOpen, d
         {/* ลำดับที่, รหัสตำแหน่ง และ Badge */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 1, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Chip
-              label={`ลำดับที่ ${displayOrder + 1}`}
-              color="primary"
-              size="small"
-              sx={{ fontWeight: 600, fontSize: '0.75rem' }}
-            />
+            {showOrder && (
+              <Chip
+                label={`ลำดับที่ ${displayOrder + 1}`}
+                size="small"
+                sx={{ 
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  fontWeight: 700, 
+                  fontSize: '0.75rem',
+                  borderRadius: '12px',
+                  px: 0.5,
+                }}
+              />
+            )}
             {item.posCodeMaster && (
               <Chip 
                 label={`${item.posCodeMaster.id} - ${item.posCodeMaster.name}`} 
                 size="small" 
-                color="primary"
                 variant="outlined"
-                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600 }}
+                sx={{ 
+                  borderColor: 'primary.main',
+                  color: 'primary.main',
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                  height: 24, 
+                  fontSize: '0.7rem', 
+                  fontWeight: 600,
+                  borderRadius: '12px',
+                  '& .MuiChip-label': {
+                    px: 1,
+                  }
+                }}
               />
             )}
           </Box>
-          <Chip
-            label="ยื่นขอตำแหน่ง"
-            color="success"
-            size="small"
-            sx={{ fontWeight: 500, fontSize: '0.75rem' }}
-          />
         </Box>
 
         {/* ยศ ชื่อ-สกุล */}
@@ -468,7 +497,7 @@ function SortableCard({ item, displayOrder, compact, onViewDetail, onMenuOpen, d
                 color: 'white',
               }
             }}
-          >
+          > 
             <InfoOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -576,6 +605,9 @@ function TableSkeleton() {
 
 export default function VacantPositionPage() {
   const toast = useToast();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const [data, setData] = useState<VacantPositionData[]>([]);
   const [filteredData, setFilteredData] = useState<VacantPositionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -585,6 +617,10 @@ export default function VacantPositionPage() {
   const [compactView, setCompactView] = useState(false); // Compact card view
   const [activeId, setActiveId] = useState<string | null>(null); // Active drag item
   const [draggedItem, setDraggedItem] = useState<VacantPositionData | null>(null); // ข้อมูลของ item ที่ลาก
+  
+  // Tab states
+  const [selectedTab, setSelectedTab] = useState<number | 'all'>('all');
+  const [positionGroups, setPositionGroups] = useState<Array<{ id: number; name: string; count: number }>>([]);
   
   // Filter states
   const [requestedPositionFilter, setRequestedPositionFilter] = useState<number | null>(null);
@@ -649,7 +685,7 @@ export default function VacantPositionPage() {
       applyFilters();
       updateFilterOptions();
     }
-  }, [data, requestedPositionFilter, loading]);
+  }, [data, requestedPositionFilter, selectedTab, loading]);
 
   // Generate available years (from 2568 to current year)
   const getAvailableYears = () => {
@@ -724,6 +760,12 @@ export default function VacantPositionPage() {
         return;
       }
 
+      // ตรวจสอบว่าทั้งสองรายการอยู่ในตำแหน่งเดียวกันหรือไม่
+      if (activeItem.requestedPositionId !== overItem.requestedPositionId) {
+        toast.error('ไม่สามารถลากข้ามกลุ่มตำแหน่งที่แตกต่างกันได้');
+        return;
+      }
+
       // เปิด dialog ยืนยัน
       setSwapData({ activeItem, overItem });
       setSwapConfirmOpen(true);
@@ -739,70 +781,58 @@ export default function VacantPositionPage() {
     setIsSwapping(true);
 
     try {
-      // Get displayOrder - use actual value or current index in data array
-      const activeDisplayOrder = activeItem.displayOrder !== null && activeItem.displayOrder !== undefined 
-        ? activeItem.displayOrder 
-        : data.findIndex(item => item.id === activeItem.id);
+      // Get items in the same position group
+      const groupItems = data.filter(item => item.requestedPositionId === activeItem.requestedPositionId);
       
-      const overDisplayOrder = overItem.displayOrder !== null && overItem.displayOrder !== undefined 
-        ? overItem.displayOrder 
-        : data.findIndex(item => item.id === overItem.id);
-
-      // Debug log
-      console.log('Swapping:', {
-        active: { id: activeItem.id, oldOrder: activeDisplayOrder, newOrder: overDisplayOrder },
-        over: { id: overItem.id, oldOrder: overDisplayOrder, newOrder: activeDisplayOrder }
+      // Sort by current displayOrder within the group
+      groupItems.sort((a, b) => {
+        const aOrder = a.displayOrder !== null && a.displayOrder !== undefined ? a.displayOrder : 0;
+        const bOrder = b.displayOrder !== null && b.displayOrder !== undefined ? b.displayOrder : 0;
+        return aOrder - bOrder;
       });
 
-      // Check if orders are the same (shouldn't happen but just in case)
-      if (activeDisplayOrder === overDisplayOrder) {
-        console.warn('Display orders are the same, skipping update');
-        setSwapConfirmOpen(false);
-        return;
-      }
+      // Get current positions within the group
+      const activeGroupIndex = groupItems.findIndex(item => item.id === activeItem.id);
+      const overGroupIndex = groupItems.findIndex(item => item.id === overItem.id);
+
+      // Debug log
+      console.log('Swapping within group:', {
+        groupId: activeItem.requestedPositionId,
+        active: { id: activeItem.id, groupIndex: activeGroupIndex },
+        over: { id: overItem.id, groupIndex: overGroupIndex }
+      });
+
+      // Swap positions within the group
+      const newGroupItems = [...groupItems];
+      [newGroupItems[activeGroupIndex], newGroupItems[overGroupIndex]] = 
+      [newGroupItems[overGroupIndex], newGroupItems[activeGroupIndex]];
+
+      // Update displayOrder for the group (1, 2, 3, 4...)
+      newGroupItems.forEach((item, index) => {
+        item.displayOrder = index + 1;
+      });
 
       // Update in main data
       const newData = data.map(item => {
-        if (item.id === activeItem.id) {
-          return { ...item, displayOrder: overDisplayOrder };
-        }
-        if (item.id === overItem.id) {
-          return { ...item, displayOrder: activeDisplayOrder };
-        }
-        return item;
+        const updatedGroupItem = newGroupItems.find(gi => gi.id === item.id);
+        return updatedGroupItem || item;
       });
 
-      // Sort by displayOrder
-      const sortedData = newData.sort((a, b) => {
-        if (a.displayOrder === null || a.displayOrder === undefined) return 1;
-        if (b.displayOrder === null || b.displayOrder === undefined) return -1;
-        return a.displayOrder - b.displayOrder;
-      });
+      setData(newData);
 
-      setData(sortedData);
-
-      // Update filtered data as well
+      // Update filtered data as well if item exists in filtered data
       const newFilteredData = filteredData.map(item => {
-        if (item.id === activeItem.id) {
-          return { ...item, displayOrder: overDisplayOrder };
-        }
-        if (item.id === overItem.id) {
-          return { ...item, displayOrder: activeDisplayOrder };
-        }
-        return item;
-      }).sort((a, b) => {
-        if (a.displayOrder === null || a.displayOrder === undefined) return 1;
-        if (b.displayOrder === null || b.displayOrder === undefined) return -1;
-        return a.displayOrder - b.displayOrder;
+        const updatedGroupItem = newGroupItems.find(gi => gi.id === item.id);
+        return updatedGroupItem || item;
       });
 
       setFilteredData(newFilteredData);
 
-      // Send only the two swapped items to API
-      const updates = [
-        { id: activeItem.id, displayOrder: overDisplayOrder },
-        { id: overItem.id, displayOrder: activeDisplayOrder }
-      ];
+      // Send updated group items to API
+      const updates = newGroupItems.map(item => ({
+        id: item.id,
+        displayOrder: item.displayOrder
+      }));
 
       console.log('Sending to API:', updates);
 
@@ -834,6 +864,60 @@ export default function VacantPositionPage() {
     setSwapData({ activeItem: null, overItem: null });
   };
 
+  const autoAssignDisplayOrder = async (data: VacantPositionData[]): Promise<VacantPositionData[]> => {
+    // Group data by requestedPositionId
+    const groupedData = data.reduce((acc, item) => {
+      const groupId = item.requestedPositionId || 0;
+      if (!acc[groupId]) {
+        acc[groupId] = [];
+      }
+      acc[groupId].push(item);
+      return acc;
+    }, {} as Record<number, VacantPositionData[]>);
+
+    // Process each group
+    const updatedItems: VacantPositionData[] = [];
+    const updatePromises: Promise<any>[] = [];
+
+    for (const [groupId, groupItems] of Object.entries(groupedData)) {
+      // Sort items in group by displayOrder (nulls last)
+      groupItems.sort((a, b) => {
+        if (a.displayOrder === null || a.displayOrder === undefined) return 1;
+        if (b.displayOrder === null || b.displayOrder === undefined) return -1;
+        return a.displayOrder - b.displayOrder;
+      });
+
+      // Assign displayOrder sequentially
+      groupItems.forEach((item, index) => {
+        if (item.displayOrder === null || item.displayOrder === undefined) {
+          item.displayOrder = index + 1;
+          // Update database
+          updatePromises.push(
+            fetch(`/api/vacant-position/${item.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ displayOrder: item.displayOrder })
+            })
+          );
+        }
+      });
+
+      updatedItems.push(...groupItems);
+    }
+
+    // Wait for all updates to complete
+    if (updatePromises.length > 0) {
+      try {
+        await Promise.all(updatePromises);
+        console.log(`Updated displayOrder for ${updatePromises.length} items`);
+      } catch (error) {
+        console.error('Error updating displayOrder:', error);
+      }
+    }
+
+    return updatedItems;
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -845,8 +929,16 @@ export default function VacantPositionPage() {
       if (!response.ok) throw new Error('Failed to fetch data');
       const result = await response.json();
       
-      // Sort by displayOrder (null values go to the end)
-      const sortedData = result.sort((a: VacantPositionData, b: VacantPositionData) => {
+      // Auto assign displayOrder for items that don't have it
+      const dataWithDisplayOrder = await autoAssignDisplayOrder(result);
+      
+      // Sort by position group first, then by displayOrder within group
+      const sortedData = dataWithDisplayOrder.sort((a: VacantPositionData, b: VacantPositionData) => {
+        // First sort by requestedPositionId
+        if (a.requestedPositionId !== b.requestedPositionId) {
+          return (a.requestedPositionId || 0) - (b.requestedPositionId || 0);
+        }
+        // Then sort by displayOrder within the same group
         if (a.displayOrder === null || a.displayOrder === undefined) return 1;
         if (b.displayOrder === null || b.displayOrder === undefined) return -1;
         return a.displayOrder - b.displayOrder;
@@ -872,14 +964,65 @@ export default function VacantPositionPage() {
       .sort((a, b) => a.id - b.id);
     
     setRequestedPositionOptions(requestedPositions);
+    
+    // Update position groups for tabs
+    updatePositionGroups();
+  };
+
+  const updatePositionGroups = () => {
+    const groups = data.reduce((acc, item) => {
+      if (item.requestedPosCode) {
+        const existing = acc.find(g => g.id === item.requestedPosCode!.id);
+        if (existing) {
+          existing.count++;
+        } else {
+          acc.push({
+            id: item.requestedPosCode.id,
+            name: item.requestedPosCode.name,
+            count: 1
+          });
+        }
+      }
+      return acc;
+    }, [] as Array<{ id: number; name: string; count: number }>);
+    
+    // Sort by position ID
+    groups.sort((a, b) => a.id - b.id);
+    setPositionGroups(groups);
+    
+    // Validate selectedTab - if current tab doesn't exist in groups, reset to 'all'
+    if (selectedTab !== 'all') {
+      const tabExists = groups.some(g => g.id === selectedTab);
+      if (!tabExists) {
+        setSelectedTab('all');
+      }
+    }
   };
 
   const applyFilters = () => {
     let filtered = [...data];
 
+    // Apply tab filter
+    if (selectedTab !== 'all') {
+      filtered = filtered.filter(item => item.requestedPositionId === selectedTab);
+    }
+
+    // Apply additional filters
     if (requestedPositionFilter) {
       filtered = filtered.filter(item => item.requestedPositionId === requestedPositionFilter);
     }
+
+    // Sort by position group first, then by displayOrder within group
+    filtered.sort((a, b) => {
+      // First sort by requestedPositionId
+      if (a.requestedPositionId !== b.requestedPositionId) {
+        return (a.requestedPositionId || 0) - (b.requestedPositionId || 0);
+      }
+      // Then sort by displayOrder within the same group
+      const aOrder = a.displayOrder ?? 0;
+      const bOrder = b.displayOrder ?? 0;
+      return aOrder - bOrder;
+    });
 
     setFilteredData(filtered);
     setPage(0); // Reset to first page when filters change
@@ -887,11 +1030,21 @@ export default function VacantPositionPage() {
 
   const handleResetFilters = () => {
     setRequestedPositionFilter(null);
+    setSelectedTab('all'); // Reset to all tab
     setPage(0);
   };
 
   const handleYearChange = (event: SelectChangeEvent<number>) => {
     setSelectedYear(Number(event.target.value));
+  };
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number | 'all') => {
+    setSelectedTab(newValue);
+    // Clear position filter when changing tabs
+    if (newValue !== 'all') {
+      setRequestedPositionFilter(null);
+    }
+    setPage(0); // Reset to first page when tab changes
   };
 
   const handleViewModeChange = (_event: React.MouseEvent<HTMLElement>, newMode: 'table' | 'card' | null) => {
@@ -922,6 +1075,24 @@ export default function VacantPositionPage() {
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
   );
+
+  // Helper function to get display order within group
+  const getGroupDisplayOrder = (item: VacantPositionData): number => {
+    if (selectedTab === 'all') {
+      // For 'all' tab, show global display order
+      return (item.displayOrder ?? 0) + 1;
+    } else {
+      // For specific tab, calculate order within the group
+      const groupItems = filteredData
+        .filter(i => i.requestedPositionId === item.requestedPositionId)
+        .sort((a, b) => {
+          const aOrder = a.displayOrder ?? 0;
+          const bOrder = b.displayOrder ?? 0;
+          return aOrder - bOrder;
+        });
+      return groupItems.findIndex(i => i.id === item.id) + 1;
+    }
+  };
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return '-';
@@ -1162,24 +1333,27 @@ export default function VacantPositionPage() {
             </FormControl>
             
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <Autocomplete
-                fullWidth
-                options={requestedPositionOptions}
-                value={requestedPositionOptions.find(opt => opt.id === requestedPositionFilter) || null}
-                onChange={(event, newValue) => setRequestedPositionFilter(newValue?.id || null)}
-                getOptionLabel={(option) => `${option.id} - ${option.name}`}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="ตำแหน่งที่ขอ" 
-                    placeholder="เลือกตำแหน่งที่ขอ..."
-                    size="small"
-                  />
-                )}
-                noOptionsText="ไม่พบข้อมูล"
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-              />
-              {requestedPositionFilter && (
+              {/* Show filter only when "All" tab is selected */}
+              {selectedTab === 'all' && (
+                <Autocomplete
+                  fullWidth
+                  options={requestedPositionOptions}
+                  value={requestedPositionOptions.find(opt => opt.id === requestedPositionFilter) || null}
+                  onChange={(event, newValue) => setRequestedPositionFilter(newValue?.id || null)}
+                  getOptionLabel={(option) => `${option.id} - ${option.name}`}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="ตำแหน่งที่ขอ" 
+                      placeholder="เลือกตำแหน่งที่ขอ..."
+                      size="small"
+                    />
+                  )}
+                  noOptionsText="ไม่พบข้อมูล"
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                />
+              )}
+              {requestedPositionFilter && selectedTab === 'all' && (
                 <Button
                   variant="outlined"
                   size="medium"
@@ -1190,9 +1364,109 @@ export default function VacantPositionPage() {
                   ล้างตัวกรอง
                 </Button>
               )}
+              {selectedTab !== 'all' && (
+                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  กำลังแสดงรายการสำหรับตำแหน่ง: {positionGroups.find(g => g.id === selectedTab)?.name}
+                </Typography>
+              )}
             </Box>
           </Box>
         </Paper>
+
+        {/* Position Tabs */}
+        {!loading && positionGroups.length > 0 && (
+          <Paper sx={{ mb: 3 }}>
+            <Tabs
+              value={selectedTab}
+              onChange={handleTabChange}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                '& .MuiTabs-indicator': {
+                  height: 3,
+                },
+                '& .MuiTab-root': {
+                  textTransform: 'none',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  minHeight: 56,
+                  px: 3,
+                },
+              }}
+            >
+              <Tab 
+                value="all"
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
+                      ทั้งหมด
+                    </Typography>
+                    <Chip
+                      label={data.length}
+                      size="small"
+                      sx={{
+                        backgroundColor: (theme) => theme.palette.primary.main,
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        height: 22,
+                        minWidth: 22,
+                        borderRadius: '11px',
+                        '& .MuiChip-label': {
+                          px: 0.8,
+                        }
+                      }}
+                    />
+                  </Box>
+                }
+              />
+              {positionGroups.map((group) => (
+                <Tab
+                  key={group.id}
+                  value={group.id}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontWeight: 600, 
+                          color: 'inherit',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {group.id} - {group.name}
+                      </Typography>
+                      <Chip
+                        label={group.count}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          backgroundColor: (theme) => alpha(theme.palette.secondary.main, 0.1),
+                          borderColor: (theme) => theme.palette.secondary.main,
+                          color: (theme) => theme.palette.secondary.main,
+                          fontWeight: 700,
+                          fontSize: '0.75rem',
+                          height: 22,
+                          minWidth: 22,
+                          borderRadius: '11px',
+                          '& .MuiChip-label': {
+                            px: 0.8,
+                          },
+                          // Animation on hover
+                          transition: 'all 0.2s ease-in-out',
+                          '&:hover': {
+                            backgroundColor: (theme) => alpha(theme.palette.secondary.main, 0.2),
+                            transform: 'scale(1.05)',
+                          }
+                        }}
+                      />
+                    </Box>
+                  }
+                />
+              ))}
+            </Tabs>
+          </Paper>
+        )}
 
         {/* Content */}
         {loading ? (
@@ -1204,7 +1478,9 @@ export default function VacantPositionPage() {
                   <Table>
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>ลำดับที่</TableCell>
+                        {selectedTab !== 'all' && (
+                          <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>ลำดับที่</TableCell>
+                        )}
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>รหัสตำแหน่ง</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>ยศ-ชื่อ</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>ตำแหน่ง</TableCell>
@@ -1247,10 +1523,19 @@ export default function VacantPositionPage() {
                 <Paper sx={{ borderRadius: 2 }}>
                   <EmptyState
                     icon={VacantIcon}
-                    title={requestedPositionFilter ? 'ไม่พบข้อมูลที่ตรงกับการกรอง' : 'ไม่พบรายการยื่นขอตำแหน่ง'}
-                    description={requestedPositionFilter 
-                      ? 'ลองปรับเปลี่ยนตัวกรองหรือล้างตัวกรอง' 
-                      : `ยังไม่มีรายการยื่นขอตำแหน่งในปี ${selectedYear}`
+                    title={
+                      selectedTab !== 'all' 
+                        ? `ไม่พบรายการยื่นขอตำแหน่ง ${positionGroups.find(g => g.id === selectedTab)?.name || ''}`
+                        : requestedPositionFilter 
+                          ? 'ไม่พบข้อมูลที่ตรงกับการกรอง' 
+                          : 'ไม่พบรายการยื่นขอตำแหน่ง'
+                    }
+                    description={
+                      selectedTab !== 'all'
+                        ? 'ยังไม่มีบุคลากรยื่นขอตำแหน่งนี้ในปีที่เลือก'
+                        : requestedPositionFilter 
+                          ? 'ลองปรับเปลี่ยนตัวกรองหรือล้างตัวกรอง' 
+                          : `ยังไม่มีรายการยื่นขอตำแหน่งในปี ${selectedYear}`
                     }
                   />
                 </Paper>
@@ -1264,7 +1549,9 @@ export default function VacantPositionPage() {
                       <Table>
                         <TableHead>
                           <TableRow sx={{ bgcolor: 'primary.main' }}>
-                            <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>ลำดับที่</TableCell>
+                            {selectedTab !== 'all' && (
+                              <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>ลำดับที่</TableCell>
+                            )}
                             <TableCell sx={{ color: 'white', fontWeight: 600 }}>รหัสตำแหน่ง</TableCell>
                             <TableCell sx={{ color: 'white', fontWeight: 600 }}>ยศ-ชื่อ</TableCell>
                             <TableCell sx={{ color: 'white', fontWeight: 600 }}>ตำแหน่ง</TableCell>
@@ -1290,23 +1577,43 @@ export default function VacantPositionPage() {
                                 }
                               }}
                             >
-                              <TableCell>
-                                <Chip
-                                  label={(item.displayOrder ?? index) + 1}
-                                  color="primary"
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{ fontWeight: 600 }}
-                                />
+                            <TableCell>
+                                {selectedTab !== 'all' && (
+                                  <Chip
+                                    label={getGroupDisplayOrder(item)}
+                                    size="small"
+                                    sx={{ 
+                                      bgcolor: 'primary.main',
+                                      color: 'white',
+                                      fontWeight: 700,
+                                      minWidth: 32,
+                                      height: 24,
+                                      borderRadius: '12px',
+                                      '& .MuiChip-label': {
+                                        px: 1,
+                                      }
+                                    }}
+                                  />
+                                )}
                               </TableCell>
                               <TableCell>
                                 {item.posCodeMaster ? (
                                   <Chip 
                                     label={`${item.posCodeMaster.id} - ${item.posCodeMaster.name}`}
                                     size="small"
-                                    color="primary"
                                     variant="outlined"
-                                    sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                    sx={{ 
+                                      borderColor: 'info.main',
+                                      color: 'info.main',
+                                      bgcolor: (theme) => alpha(theme.palette.info.main, 0.08),
+                                      fontWeight: 600, 
+                                      fontSize: '0.75rem',
+                                      height: 26,
+                                      borderRadius: '13px',
+                                      '& .MuiChip-label': {
+                                        px: 1.2,
+                                      }
+                                    }}
                                   />
                                 ) : (
                                   <Typography variant="body2" color="text.secondary">-</Typography>
@@ -1440,7 +1747,8 @@ export default function VacantPositionPage() {
                       sx={{ mb: 3 }}
                     >
                       <Typography variant="body2">
-                        <strong>เคล็ดลับ:</strong> คลิกและลากการ์ดเพื่อจัดเรียงลำดับความสำคัญได้ (การลากจะสลับลำดับของทั้งสองการ์ด)
+                        <strong>เคล็ดลับ:</strong> คลิกและลากการ์ดเพื่อจัดเรียงลำดับความสำคัญได้ 
+                        (การลากจะสลับลำดับของทั้งสองการ์ด และสามารถลากได้เฉพาะภายในกลุ่มตำแหน่งเดียวกันเท่านั้น)
                       </Typography>
                     </Alert>
 
@@ -1469,8 +1777,9 @@ export default function VacantPositionPage() {
                             <SortableCard 
                               key={item.id}
                               item={item}
-                              displayOrder={item.displayOrder ?? index}
+                              displayOrder={getGroupDisplayOrder(item) - 1}
                               compact={compactView}
+                              showOrder={selectedTab !== 'all'}
                               onViewDetail={handleViewDetail}
                               onMenuOpen={handleMenuOpen}
                               draggedItem={draggedItem}
@@ -1567,8 +1876,30 @@ export default function VacantPositionPage() {
         </Menu>
 
         {/* Edit Modal */}
-        <Dialog open={editModalOpen} onClose={handleEditClose} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Dialog 
+          open={editModalOpen} 
+          onClose={handleEditClose} 
+          maxWidth="sm" 
+          fullWidth
+          fullScreen={isMobile}
+          PaperProps={{
+            sx: {
+              width: { xs: '100%'},
+              height: { xs: '100%', sm: 'auto' },
+              maxHeight: { xs: '100%', sm: '90vh' },
+              margin: { xs: 0, sm: '32px' },
+              borderRadius: { xs: 0, sm: 1 },
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            pb: 1, 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            flexShrink: 0
+          }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <EditIcon color="action" />
               <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
@@ -1576,7 +1907,14 @@ export default function VacantPositionPage() {
               </Typography>
             </Box>
           </DialogTitle>
-          <DialogContent sx={{ pt: 2, mt: 2 }}>
+          <DialogContent sx={{ 
+            pt: 2, 
+            mt: 2,
+            flex: 1,
+            overflow: 'auto',
+            px: { xs: 2, sm: 3 },
+            minHeight: 0
+          }}>
             <Stack spacing={2.5}>
               {/* แสดงข้อมูลบุคลากร */}
               <Box sx={{ 
@@ -1639,12 +1977,25 @@ export default function VacantPositionPage() {
               />
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
+          <DialogActions sx={{ 
+            px: { xs: 2, sm: 2 }, 
+            py: { xs: 2, sm: 1.5 }, 
+            bgcolor: 'grey.50', 
+            borderTop: 1, 
+            borderColor: 'divider',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 1, sm: 0 },
+            flexShrink: 0,
+            '& .MuiButton-root': {
+              minWidth: { xs: '100%', sm: 120 }
+            }
+          }}>
             <Button 
               onClick={handleEditClose} 
               variant="outlined" 
               size="medium"
               disabled={isSaving}
+              sx={{ order: { xs: 2, sm: 1 } }}
             >
               ยกเลิก
             </Button>
@@ -1652,9 +2003,9 @@ export default function VacantPositionPage() {
               onClick={handleEditSave} 
               variant="contained" 
               size="medium"
-              sx={{ minWidth: 120 }}
               disabled={isSaving || !editFormData.requestedPositionId}
               startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <EditIcon />}
+              sx={{ order: { xs: 1, sm: 2 } }}
             >
               {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
             </Button>
@@ -1667,9 +2018,28 @@ export default function VacantPositionPage() {
           onClose={() => !isSwapping && handleSwapCancel()}
           maxWidth="sm"
           fullWidth
+          fullScreen={isMobile}
+          PaperProps={{
+            sx: {
+              width: { xs: '100%', sm: 'auto' },
+              height: { xs: '100%', sm: 'auto' },
+              maxHeight: { xs: '100%', sm: '90vh' },
+              margin: { xs: 0, sm: '32px' },
+              borderRadius: { xs: 0, sm: 1 },
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }}
         >
-          <DialogTitle>ยืนยันการสลับลำดับความสำคัญ</DialogTitle>
-          <DialogContent>
+          <DialogTitle sx={{ flexShrink: 0 }}>ยืนยันการสลับลำดับความสำคัญ</DialogTitle>
+          <DialogContent
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              px: { xs: 2, sm: 3 },
+              minHeight: 0
+            }}
+          >
             <Typography variant="body1" sx={{ mb: 3 }}>
               คุณต้องการสลับลำดับความสำคัญระหว่าง:
             </Typography>
@@ -1677,8 +2047,8 @@ export default function VacantPositionPage() {
             <Stack spacing={2}>
               <Paper sx={{ p: 2, bgcolor: 'primary.50', border: 1, borderColor: 'primary.main' }}>
                 <Typography variant="subtitle2" color="primary.main" gutterBottom>
-                  ลำดับที่ {swapData.activeItem?.displayOrder !== null && swapData.activeItem?.displayOrder !== undefined 
-                    ? swapData.activeItem.displayOrder + 1 
+                  ลำดับที่ {swapData.activeItem 
+                    ? getGroupDisplayOrder(swapData.activeItem)
                     : '-'}
                 </Typography>
                 <Typography variant="h6" fontWeight={600}>
@@ -1695,8 +2065,8 @@ export default function VacantPositionPage() {
 
               <Paper sx={{ p: 2, bgcolor: 'secondary.50', border: 1, borderColor: 'secondary.main' }}>
                 <Typography variant="subtitle2" color="secondary.main" gutterBottom>
-                  ลำดับที่ {swapData.overItem?.displayOrder !== null && swapData.overItem?.displayOrder !== undefined 
-                    ? swapData.overItem.displayOrder + 1 
+                  ลำดับที่ {swapData.overItem 
+                    ? getGroupDisplayOrder(swapData.overItem)
                     : '-'}
                 </Typography>
                 <Typography variant="h6" fontWeight={600}>
@@ -1712,8 +2082,21 @@ export default function VacantPositionPage() {
               การสลับลำดับจะส่งผลต่อความสำคัญในการพิจารณาตำแหน่ง
             </Alert>
           </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={handleSwapCancel} disabled={isSwapping}>
+          <DialogActions sx={{ 
+            px: { xs: 2, sm: 3 }, 
+            py: { xs: 2, sm: 2 },
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 1, sm: 0 },
+            flexShrink: 0,
+            '& .MuiButton-root': {
+              minWidth: { xs: '100%', sm: 'auto' }
+            }
+          }}>
+            <Button 
+              onClick={handleSwapCancel} 
+              disabled={isSwapping}
+              sx={{ order: { xs: 2, sm: 1 } }}
+            >
               ยกเลิก
             </Button>
             <Button 
@@ -1722,6 +2105,7 @@ export default function VacantPositionPage() {
               variant="contained"
               disabled={isSwapping}
               startIcon={isSwapping ? <CircularProgress size={20} color="inherit" /> : undefined}
+              sx={{ order: { xs: 1, sm: 2 } }}
             >
               {isSwapping ? 'กำลังสลับ...' : 'ยืนยันการสลับ'}
             </Button>
@@ -1732,9 +2116,28 @@ export default function VacantPositionPage() {
         <Dialog
           open={deleteConfirmOpen}
           onClose={() => !isDeleting && handleDeleteCancel()}
+          fullScreen={isMobile}
+          PaperProps={{
+            sx: {
+              width: { xs: '100%', sm: 'auto' },
+              height: { xs: '100%', sm: 'auto' },
+              maxHeight: { xs: '100%', sm: '90vh' },
+              margin: { xs: 0, sm: '32px' },
+              borderRadius: { xs: 0, sm: 1 },
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }}
         >
-          <DialogTitle>ยืนยันการลบข้อมูล</DialogTitle>
-          <DialogContent>
+          <DialogTitle sx={{ flexShrink: 0 }}>ยืนยันการลบข้อมูล</DialogTitle>
+          <DialogContent
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              px: { xs: 2, sm: 3 },
+              minHeight: 0
+            }}
+          >
             <Typography variant="body1" sx={{ mb: 2 }}>
               คุณต้องการลบรายการยื่นขอตำแหน่ง{' '}
               {itemToDelete?.rank && itemToDelete?.fullName && (
@@ -1748,8 +2151,21 @@ export default function VacantPositionPage() {
               การดำเนินการนี้ไม่สามารถย้อนกลับได้
             </Typography>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleDeleteCancel} disabled={isDeleting}>
+          <DialogActions sx={{ 
+            px: { xs: 2, sm: 3 }, 
+            py: { xs: 2, sm: 1.5 },
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 1, sm: 0 },
+            flexShrink: 0,
+            '& .MuiButton-root': {
+              minWidth: { xs: '100%', sm: 'auto' }
+            }
+          }}>
+            <Button 
+              onClick={handleDeleteCancel} 
+              disabled={isDeleting}
+              sx={{ order: { xs: 2, sm: 1 } }}
+            >
               ยกเลิก
             </Button>
             <Button 
@@ -1758,6 +2174,7 @@ export default function VacantPositionPage() {
               variant="contained"
               disabled={isDeleting}
               startIcon={isDeleting ? <CircularProgress size={20} color="inherit" /> : undefined}
+              sx={{ order: { xs: 1, sm: 2 } }}
             >
               {isDeleting ? 'กำลังลบ...' : 'ลบ'}
             </Button>

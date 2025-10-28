@@ -43,6 +43,8 @@ import {
   useTheme,
   Tabs,
   Tab,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
@@ -354,6 +356,7 @@ export default function VacantPositionAssignmentPage() {
   const [unassignReason, setUnassignReason] = useState('');
   const [hasOrderChanged, setHasOrderChanged] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showAssignedInModal, setShowAssignedInModal] = useState(false); // Default: ซ่อนคนที่จับคู่แล้ว
   
   // State สำหรับสถิติ
   const [stats, setStats] = useState<{
@@ -971,23 +974,17 @@ export default function VacantPositionAssignmentPage() {
                     <Chip 
                       label={`ทั้งหมด: ${stats.applicants.total}`} 
                       color="primary"
-                      onClick={() => setApplicantFilterTab('all')}
-                      variant={applicantFilterTab === 'all' ? 'filled' : 'outlined'}
-                      sx={{ fontWeight: 600, cursor: 'pointer' }}
+                      sx={{ fontWeight: 600 }}
                     />
                     <Chip 
                       label={`จับคู่แล้ว: ${stats.applicants.assigned}`} 
                       color="success"
-                      onClick={() => setApplicantFilterTab('assigned')}
-                      variant={applicantFilterTab === 'assigned' ? 'filled' : 'outlined'}
-                      sx={{ fontWeight: 600, cursor: 'pointer' }}
+                      sx={{ fontWeight: 600 }}
                     />
                     <Chip 
                       label={`รอจับคู่: ${stats.applicants.pending}`} 
                       color="warning"
-                      onClick={() => setApplicantFilterTab('pending')}
-                      variant={applicantFilterTab === 'pending' ? 'filled' : 'outlined'}
-                      sx={{ fontWeight: 600, cursor: 'pointer' }}
+                      sx={{ fontWeight: 600 }}
                     />
                   </Box>
                 </Box>
@@ -1080,6 +1077,20 @@ export default function VacantPositionAssignmentPage() {
                         {posCode.label}
                       </MenuItem>
                     ))}
+                  </Select>
+                </FormControl>
+                
+                {/* Assignment Status Filter */}
+                <FormControl size="small" sx={{ flex: 1 }}>
+                  <InputLabel>สถานะการจับคู่</InputLabel>
+                  <Select
+                    value={applicantFilterTab}
+                    label="สถานะการจับคู่"
+                    onChange={(e) => setApplicantFilterTab(e.target.value as 'all' | 'assigned' | 'pending')}
+                  >
+                    <MenuItem value="all">ทั้งหมด</MenuItem>
+                    <MenuItem value="assigned">จับคู่แล้ว</MenuItem>
+                    <MenuItem value="pending">รอจับคู่</MenuItem>
                   </Select>
                 </FormControl>
               </Box>
@@ -1634,15 +1645,36 @@ export default function VacantPositionAssignmentPage() {
               </Alert>
             ) : (
               <>
-                <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
-                  <Typography variant="body2">
-                    รายการผู้ยื่นขอตำแหน่งนี้: {applicants.length} คน
-                    <br />
-                    <Typography variant="caption" color="text.secondary">
-                      💡 ลากและวางเพื่อจัดเรียงลำดับผู้สมัคร
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Alert severity="info" sx={{ py: 0.5, flex: 1, mr: 2 }}>
+                    <Typography variant="body2">
+                      รายการผู้ยื่นขอตำแหน่งนี้: {applicants.length} คน
+                      {applicants.filter(a => a.isAssigned).length > 0 && ` (จับคู่แล้ว: ${applicants.filter(a => a.isAssigned).length} คน)`}
+                      <br />
+                      <Typography variant="caption" color="text.secondary">
+                        💡 ลากและวางเพื่อจัดเรียงลำดับผู้สมัคร
+                      </Typography>
                     </Typography>
-                  </Typography>
-                </Alert>
+                  </Alert>
+                  
+                  {applicants.filter(a => a.isAssigned).length > 0 && (
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={showAssignedInModal}
+                          onChange={(e) => setShowAssignedInModal(e.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label={
+                        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                          แสดงคนที่จับคู่แล้ว
+                        </Typography>
+                      }
+                      sx={{ m: 0 }}
+                    />
+                  )}
+                </Box>
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -1659,7 +1691,9 @@ export default function VacantPositionAssignmentPage() {
                         py: 0,
                       }}
                     >
-                      {applicants.map((applicant, index) => (
+                      {applicants
+                        .filter(applicant => showAssignedInModal ? true : !applicant.isAssigned)
+                        .map((applicant, index) => (
                         <SortableApplicantItem
                           key={applicant.id}
                           applicant={applicant}

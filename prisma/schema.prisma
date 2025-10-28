@@ -159,6 +159,7 @@ model VacantPosition {
   year  Int // ปีที่เลือก (พ.ศ.)
   notes String? @db.Text // หมายเหตุเพิ่มเติม
   displayOrder Int? @map("display_order") // ลำดับการแสดงผล (สำหรับ drag & drop)
+  isAssigned Boolean @default(false) @map("is_assigned") // สถานะว่าจับคู่ตำแหน่งแล้วหรือไม่
 
   // ข้อมูลการเสนอชื่อเข้ารายการยื่นขอตำแหน่ง
   nominator              String? // ผู้สนับสนุน/ผู้เสนอชื่อ

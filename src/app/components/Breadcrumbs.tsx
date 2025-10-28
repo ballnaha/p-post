@@ -24,6 +24,7 @@ import {
   ImportExport as ImportIcon,
   SwapHoriz as SwapHorizIcon,
   EventAvailable as VacantIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 
 interface BreadcrumbItem {
@@ -97,6 +98,15 @@ const Breadcrumbs: React.FC = () => {
             label: 'ยื่นขอตำแหน่งว่าง',
             href: isLast ? undefined : '/police-personnel/vacant-position',
             icon: <VacantIcon sx={{ fontSize: 16 }} />,
+            isActive: isLast,
+          });
+          break;
+
+        case 'assignment-history':
+          breadcrumbs.push({
+            label: 'ประวัติการจับคู่',
+            href: isLast ? undefined : '/police-personnel/vacant-position/assignment-history',
+            icon: <HistoryIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
           });
           break;

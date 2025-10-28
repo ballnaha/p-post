@@ -40,7 +40,49 @@ export async function GET(
       ],
     });
 
-    return NextResponse.json(applicants);
+    // เช็คว่าผู้ยื่นขอแต่ละคนถูกจับคู่แล้วหรือยัง
+    const applicantIds = applicants.map(a => a.id);
+    const assignedApplicants = await prisma.swapTransactionDetail.findMany({
+      where: {
+        personnelId: { in: applicantIds },
+        transaction: {
+          swapType: 'vacant-assignment',
+          status: 'completed', // เฉพาะที่ยังไม่ถูกยกเลิก
+        }
+      },
+      include: {
+        transaction: {
+          select: {
+            swapDate: true,
+            year: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // สร้าง Map ของการจับคู่
+    const assignmentMap = new Map();
+    assignedApplicants.forEach(detail => {
+      if (!assignmentMap.has(detail.personnelId)) {
+        assignmentMap.set(detail.personnelId, {
+          assignedPosition: detail.toPosition,
+          assignedUnit: detail.toUnit,
+          assignedDate: detail.transaction.swapDate,
+          assignedYear: detail.transaction.year,
+        });
+      }
+    });
+
+    // เพิ่มข้อมูลการจับคู่เข้าไปในผลลัพธ์
+    const applicantsWithAssignment = applicants.map(applicant => ({
+      ...applicant,
+      assignmentInfo: assignmentMap.get(applicant.id) || null,
+    }));
+
+    return NextResponse.json(applicantsWithAssignment);
   } catch (error) {
     console.error('Error fetching applicants for position:', error);
     return NextResponse.json(

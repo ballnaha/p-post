@@ -41,6 +41,49 @@ export async function GET(request: NextRequest) {
       ]
     });
 
+    // สำหรับ vacant-assignment ให้ดึงข้อมูล requestedPosCode
+    if (swapType === 'vacant-assignment') {
+      const enrichedTransactions = await Promise.all(
+        transactions.map(async (transaction) => {
+          const enrichedDetails = await Promise.all(
+            transaction.swapDetails.map(async (detail) => {
+              if (detail.personnelId) {
+                // ดึงข้อมูล VacantPosition จาก personnelId
+                const vacantPosition = await prisma.vacantPosition.findUnique({
+                  where: { id: detail.personnelId },
+                  include: {
+                    requestedPosCode: {
+                      select: {
+                        id: true,
+                        name: true
+                      }
+                    }
+                  }
+                });
+                
+                return {
+                  ...detail,
+                  requestedPosCode: vacantPosition?.requestedPosCode || null,
+                  requestedPositionId: vacantPosition?.requestedPositionId || null
+                };
+              }
+              return detail;
+            })
+          );
+          
+          return {
+            ...transaction,
+            swapDetails: enrichedDetails
+          };
+        })
+      );
+      
+      return NextResponse.json({
+        success: true,
+        data: enrichedTransactions
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: transactions

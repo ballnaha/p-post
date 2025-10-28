@@ -3,15 +3,21 @@ import prisma from '@/lib/prisma';
 
 // POST - จับคู่ผู้ยื่นขอกับตำแหน่งที่ว่าง
 export async function POST(request: NextRequest) {
+  console.log('🔵 API /assign called');
   try {
     const body = await request.json();
+    console.log('📦 Request body:', body);
+    
     const { 
       applicantId, // ID ของผู้ยื่นขอจาก VacantPosition
       vacantPositionId, // ID ของตำแหน่งที่ว่างจาก PolicePersonnel
       notes 
     } = body;
 
+    console.log('🔍 Extracted params:', { applicantId, vacantPositionId, notes });
+
     if (!applicantId || !vacantPositionId) {
+      console.log('❌ Missing required fields');
       return NextResponse.json(
         { error: 'Applicant ID and vacant position ID are required' },
         { status: 400 }
@@ -19,8 +25,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ใช้ transaction เพื่อความปลอดภัย
+    console.log('🔄 Starting transaction...');
     const result = await prisma.$transaction(async (tx) => {
       // ดึงข้อมูลผู้ยื่นขอ
+      console.log('📥 Fetching applicant:', applicantId);
       const applicant = await tx.vacantPosition.findUnique({
         where: { id: applicantId },
         include: {
@@ -30,10 +38,13 @@ export async function POST(request: NextRequest) {
       });
 
       if (!applicant) {
+        console.log('❌ Applicant not found');
         throw new Error('Applicant not found');
       }
+      console.log('✅ Found applicant:', applicant.fullName);
 
       // ดึงข้อมูลตำแหน่งที่ว่าง
+      console.log('📥 Fetching vacant position:', vacantPositionId);
       const vacantPosition = await tx.policePersonnel.findUnique({
         where: { id: vacantPositionId },
         include: {
@@ -42,14 +53,27 @@ export async function POST(request: NextRequest) {
       });
 
       if (!vacantPosition) {
+        console.log('❌ Vacant position not found');
         throw new Error('Vacant position not found');
       }
+      console.log('✅ Found vacant position:', {
+        position: vacantPosition.position,
+        unit: vacantPosition.unit,
+        fullName: vacantPosition.fullName,
+        isOccupied: !!(vacantPosition.fullName && vacantPosition.fullName.trim() !== '' && vacantPosition.fullName !== 'ตำแหน่งว่าง')
+      });
 
       // ตรวจสอบว่าตำแหน่งยังว่างอยู่ (ไม่มีคนหรือเป็นตำแหน่งว่าง)
-      // ปรับเงื่อนไขให้เข้มงวดน้อยลง - อนุญาตให้จับคู่ได้หากเป็นตำแหน่งว่าง
-      if (vacantPosition.fullName && 
-          vacantPosition.fullName.trim() !== '' && 
-          vacantPosition.fullName !== 'ตำแหน่งว่าง') {
+      // อนุญาตให้จับคู่ได้ถ้า fullName เป็น null, '', 'ว่าง', 'ตำแหน่งว่าง', 'ว่าง (กันตำแหน่ง)', หรือ 'ว่าง(กันตำแหน่ง)'
+      const isVacant = !vacantPosition.fullName || 
+                       vacantPosition.fullName.trim() === '' || 
+                       vacantPosition.fullName === 'ว่าง' ||
+                       vacantPosition.fullName === 'ตำแหน่งว่าง' ||
+                       vacantPosition.fullName === 'ว่าง (กันตำแหน่ง)' ||
+                       vacantPosition.fullName === 'ว่าง(กันตำแหน่ง)';
+      
+      if (!isVacant) {
+        console.log('❌ Position already occupied by:', vacantPosition.fullName);
         return NextResponse.json(
           { 
             error: 'Position is no longer vacant',
@@ -59,29 +83,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-        const updatedPosition = await tx.policePersonnel.update({
-          where: { id: vacantPositionId },
-          data: {
-            fullName: applicant.fullName,
-            nationalId: applicant.nationalId,
-            rank: applicant.rank,
-            seniority: applicant.seniority,
-            birthDate: applicant.birthDate,
-            age: applicant.age,
-            education: applicant.education,
-            lastAppointment: applicant.lastAppointment,
-            currentRankSince: applicant.currentRankSince,
-            enrollmentDate: applicant.enrollmentDate,
-            retirementDate: applicant.retirementDate,
-            yearsOfService: applicant.yearsOfService,
-            trainingLocation: applicant.trainingLocation,
-            trainingCourse: applicant.trainingCourse,
-            notes: notes || `จับคู่จาก รายการยื่นขอตำแหน่ง: ${applicant.notes || ''}`,
-            updatedAt: new Date(),
-            updatedBy: 'admin', // ควรใช้ข้อมูล user จริง
-          },
-        });
-
+      console.log('✅ Position is vacant, proceeding with assignment...');
+      
+      // ไม่ต้อง update police_personnel เพราะปีต่อไปจะเป็นชุดข้อมูลใหม่
+      // เก็บแค่ประวัติการจับคู่ใน SwapTransaction เท่านั้น
+      console.log('💾 Creating swap transaction (without updating police_personnel)...');
+      
       // บันทึกประวัติการจับคู่ในตาราง SwapTransaction
       const currentYear = new Date().getFullYear() + 543; // แปลงเป็น พ.ศ.
       const transaction = await tx.swapTransaction.create({
@@ -91,13 +98,15 @@ export async function POST(request: NextRequest) {
           swapType: 'vacant-assignment',
           groupName: `จับคู่: ${applicant.fullName} → ${vacantPosition.position} ${vacantPosition.unit}`,
           status: 'completed',
-          notes: `การจับคู่ผู้ยื่นขอตำแหน่งกับตำแหน่งที่ว่าง\n${notes || ''}`,
+          notes: notes || null,
           createdBy: 'admin', // ควรใช้ข้อมูล user จริง
         },
       });
+      console.log('✅ Created transaction:', transaction.id);
 
       // บันทึกรายละเอียดการจับคู่
-      await tx.swapTransactionDetail.create({
+      console.log('💾 Creating transaction detail...');
+      const detail = await tx.swapTransactionDetail.create({
         data: {
           transactionId: transaction.id,
           sequence: 1,
@@ -112,22 +121,35 @@ export async function POST(request: NextRequest) {
           toPosition: vacantPosition.position,
           toPositionNumber: vacantPosition.positionNumber,
           toUnit: vacantPosition.unit,
-          notes: 'ย้ายจากรายการยื่นขอตำแหน่งไปยังตำแหน่งที่ว่าง',
+          notes: null,
         },
       });
+      console.log('✅ Created transaction detail:', detail.id);
 
-      // ลบผู้ยื่นขอออกจากรายการ (หรืออาจจะเปลี่ยนสถานะแทน)
-      await tx.vacantPosition.delete({
+      // อัพเดทสถานะผู้ยื่นขอเป็น "จับคู่แล้ว" แทนการลบ
+      console.log('� Updating applicant status to assigned...');
+      const updatedApplicant = await tx.vacantPosition.update({
         where: { id: applicantId },
+        data: { isAssigned: true },
+      });
+      console.log('✅ Updated applicant status:', updatedApplicant.id);
+
+      console.log('✅ Transaction completed:', {
+        vacantPositionId: vacantPositionId,
+        transaction: transaction.id,
+        updatedApplicant: updatedApplicant.id,
       });
 
       return {
-        updatedPosition,
-        transaction,
+        success: true,
+        vacantPositionId: vacantPositionId,
+        transactionId: transaction.id,
+        updatedApplicantId: updatedApplicant.id,
         message: 'การจับคู่สำเร็จ'
       };
     });
 
+    console.log('📤 Sending response:', result);
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error assigning position:', error);

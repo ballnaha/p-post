@@ -45,6 +45,8 @@ import {
   Tabs,
   Tab,
   Badge,
+  Collapse,
+  IconButton as MuiIconButton,
 } from '@mui/material';
 import {
   AssignmentTurnedIn as VacantIcon,
@@ -59,6 +61,8 @@ import {
   DragIndicator as DragIndicatorIcon,
   ViewComfy as ViewComfyIcon,
   ViewCompact as ViewCompactIcon,
+  CheckCircle as CheckIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { 
   DndContext, 
@@ -109,6 +113,13 @@ interface VacantPositionData {
     id: number;
     name: string;
   };
+  isAssigned?: boolean; // สถานะจับคู่แล้ว
+  assignmentInfo?: {
+    assignedPosition: string;
+    assignedUnit: string;
+    assignedDate: string;
+    assignedYear: number;
+  } | null;
   originalPersonnelId?: string;
   noId?: number;
   position?: string;
@@ -145,9 +156,11 @@ interface SortableCardProps {
   onViewDetail: (item: VacantPositionData) => void;
   onMenuOpen: (event: React.MouseEvent<HTMLElement>, item: VacantPositionData) => void;
   draggedItem?: VacantPositionData | null; // เพิ่ม prop เพื่อรู้ว่า card ไหนกำลังลาก
+  isAssignmentExpanded?: boolean; // เพิ่ม prop เพื่อควบคุมการขยายข้อมูลการจับคู่
+  onToggleAssignment?: () => void; // เพิ่ม prop สำหรับ toggle
 }
 
-function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDetail, onMenuOpen, draggedItem }: SortableCardProps) {
+function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDetail, onMenuOpen, draggedItem, isAssignmentExpanded, onToggleAssignment }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -185,6 +198,9 @@ function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDet
         borderColor: isOver 
           ? 'primary.main' 
           : (isDragging ? 'primary.main' : 'success.main'),
+        // เพิ่ม border top สีเข้มสำหรับตำแหน่งที่จับคู่แล้ว
+        borderTop: item.isAssigned ? 4 : undefined,
+        borderTopColor: item.isAssigned ? 'success.dark' : undefined,
         backgroundColor: isOver 
           ? (theme) => alpha(theme.palette.primary.main, 0.08) 
           : 'background.paper',
@@ -235,22 +251,22 @@ function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDet
                       bgcolor: 'primary.main',
                       color: 'white',
                       fontWeight: 700, 
-                      fontSize: '0.7rem', 
-                      height: 22,
-                      borderRadius: '11px',
+                      fontSize: '0.75rem', 
+                      height: 24,
+                      borderRadius: '12px',
                       '& .MuiChip-label': {
                         px: 1,
                       }
                     }}
                   />
                 )}
-                <Typography variant="body2" fontWeight={700} sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={700} sx={{ flex: 1, fontSize: '1rem' }}>
                   {item.rank ? `${item.rank} ${item.fullName || ''}` : (item.fullName || 'ว่าง')}
                 </Typography>
               </Box>
               
               {/* ตำแหน่ง */}
-              <Typography variant="caption" color="primary.main" fontWeight={500}>
+              <Typography variant="body2" color="primary.main" fontWeight={500} sx={{ fontSize: '0.9rem' }}>
                 {item.position || 'ไม่ระบุตำแหน่ง'}
               </Typography>
             </Box>
@@ -258,18 +274,71 @@ function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDet
             <Divider sx={{ mb: 1 }} />
 
             {/* ตำแหน่งที่ขอ */}
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
               ตำแหน่งที่ขอ:
             </Typography>
-            <Typography variant="body2" color="secondary.main" fontWeight={600} sx={{ mb: 0.5 }}>
+            <Typography variant="body2" color="primary.main" fontWeight={600} sx={{ mb: 0.5, fontSize: '0.9rem' }}>
               {item.requestedPosCode 
                 ? `${item.requestedPosCode.id} - ${item.requestedPosCode.name}` 
                 : (item.requestedPosition || '-')}
             </Typography>
 
+            {/* สถานะการจับคู่ */}
+            {item.isAssigned && item.assignmentInfo && (
+              <Box sx={{ mt: 1 }}>
+                <Box 
+                  onClick={onToggleAssignment}
+                  sx={{ 
+                    p: 0.75,
+                    bgcolor: 'success.50',
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: 'success.main',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    '&:hover': {
+                      bgcolor: 'success.100',
+                    },
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                    <Typography variant="body2" color="success.dark" fontWeight={700} sx={{ fontSize: '0.8rem' }}>
+                      จับคู่แล้ว
+                    </Typography>
+                  </Box>
+                  <ExpandMoreIcon 
+                    sx={{ 
+                      fontSize: 18,
+                      color: 'success.main',
+                      transform: isAssignmentExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.3s',
+                    }} 
+                  />
+                </Box>
+                <Collapse in={isAssignmentExpanded}>
+                  <Box sx={{ mt: 0.5, p: 1, bgcolor: 'success.50', borderRadius: 1, border: 1, borderColor: 'success.dark' }}>
+                    <Typography variant="body2" color="text.primary" display="block" sx={{ fontSize: '0.85rem' }}>
+                      ตำแหน่ง: {item.assignmentInfo.assignedPosition}
+                    </Typography>
+                    <Typography variant="body2" color="text.primary" display="block" sx={{ fontSize: '0.85rem' }}>
+                      หน่วยงาน: {item.assignmentInfo.assignedUnit}
+                    </Typography>
+                    {item.assignmentInfo.assignedDate && (
+                      <Typography variant="body2" color="text.primary" display="block" sx={{ fontSize: '0.85rem' }}>
+                        วันที่: {new Date(item.assignmentInfo.assignedDate).toLocaleDateString('th-TH')}
+                      </Typography>
+                    )}
+                  </Box>
+                </Collapse>
+              </Box>
+            )}
+
             {/* ผู้สนับสนุน */}
             {item.nominator && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.8rem' }}>
                 ผู้สนับสนุน: <strong>{item.nominator}</strong>
               </Typography>
             )}
@@ -468,6 +537,72 @@ function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDet
           </Typography>
         </Box>
 
+        {/* สถานะการจับคู่ - Full View */}
+        {item.isAssigned && item.assignmentInfo && (
+          <Box sx={{ mb: 1.5 }}>
+            <Box 
+              onClick={onToggleAssignment}
+              sx={{ 
+                p: 1.5,
+                bgcolor: 'success.50',
+                borderRadius: 2,
+                border: 1,
+                borderColor: 'success.main',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                '&:hover': {
+                  bgcolor: 'success.100',
+                },
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CheckIcon sx={{ fontSize: 20, color: 'success.main' }} />
+                <Typography variant="body2" color="success.dark" fontWeight={700}>
+                  จับคู่ตำแหน่งแล้ว
+                </Typography>
+              </Box>
+              <ExpandMoreIcon 
+                sx={{ 
+                  fontSize: 20,
+                  color: 'success.main',
+                  transform: isAssignmentExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.3s',
+                }} 
+              />
+            </Box>
+            <Collapse in={isAssignmentExpanded}>
+              <Box sx={{ mt: 1, p: 1.5, bgcolor: 'success.50', borderRadius: 2, border: 1, borderColor: 'success.light' }}>
+                <Box sx={{ pl: 3.5 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600 }}>
+                    ตำแหน่ง:
+                  </Typography>
+                  <Typography variant="body2" color="text.primary" fontWeight={600} sx={{ mb: 0.5 }}>
+                    {item.assignmentInfo.assignedPosition}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600 }}>
+                    หน่วย:
+                  </Typography>
+                  <Typography variant="body2" color="text.primary" fontWeight={600} sx={{ mb: 0.5 }}>
+                    {item.assignmentInfo.assignedUnit}
+                  </Typography>
+                  {item.assignmentInfo.assignedDate && (
+                    <>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600 }}>
+                        วันที่จับคู่:
+                      </Typography>
+                      <Typography variant="body2" color="text.primary" fontWeight={600}>
+                        {new Date(item.assignmentInfo.assignedDate).toLocaleDateString('th-TH')}
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              </Box>
+            </Collapse>
+          </Box>
+        )}
+
         {/* หมายเหตุ */}
         {item.notes && (
           <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
@@ -638,6 +773,9 @@ export default function VacantPositionPage() {
   // Menu states
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuItem, setMenuItem] = useState<VacantPositionData | null>(null);
+
+  // Assignment info expanded states - track which cards have expanded assignment info
+  const [expandedAssignments, setExpandedAssignments] = useState<Set<string>>(new Set());
 
   // Edit modal states
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -1247,6 +1385,19 @@ export default function VacantPositionPage() {
     setDetailModalOpen(false);
   };
 
+  // Toggle assignment info for a specific card
+  const handleToggleAssignment = (itemId: string) => {
+    setExpandedAssignments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <Layout>
       <Box>
@@ -1562,6 +1713,7 @@ export default function VacantPositionPage() {
                             <TableCell sx={{ color: 'white', fontWeight: 600 }}>หน่วย</TableCell>
                             <TableCell sx={{ color: 'white', fontWeight: 600 }}>ผู้สนับสนุน</TableCell>
                             <TableCell sx={{ color: 'white', fontWeight: 600 }}>ตำแหน่งที่ขอ</TableCell>
+                            <TableCell sx={{ color: 'white', fontWeight: 600 }}>สถานะ</TableCell>
                             <TableCell sx={{ color: 'white', fontWeight: 600 }}>หมายเหตุ</TableCell>
                             <TableCell sx={{ color: 'white', fontWeight: 600, width: 120 }} align="center">จัดการ</TableCell>
                           </TableRow>
@@ -1577,8 +1729,8 @@ export default function VacantPositionPage() {
                                 }
                               }}
                             >
-                            <TableCell>
-                                {selectedTab !== 'all' && (
+                              {selectedTab !== 'all' && (
+                                <TableCell>
                                   <Chip
                                     label={getGroupDisplayOrder(item)}
                                     size="small"
@@ -1594,8 +1746,8 @@ export default function VacantPositionPage() {
                                       }
                                     }}
                                   />
-                                )}
-                              </TableCell>
+                                </TableCell>
+                              )}
                               <TableCell>
                                 {item.posCodeMaster ? (
                                   <Chip 
@@ -1682,6 +1834,27 @@ export default function VacantPositionPage() {
                                     ? `${item.requestedPosCode.id} - ${item.requestedPosCode.name}` 
                                     : (item.requestedPosition || '-')}
                                 </Typography>
+                              </TableCell>
+                              <TableCell>
+                                {item.isAssigned && item.assignmentInfo ? (
+                                  <Tooltip title={`${item.assignmentInfo.assignedPosition} - ${item.assignmentInfo.assignedUnit}`}>
+                                    <Chip
+                                      icon={<CheckIcon sx={{ fontSize: 16 }} />}
+                                      label="จับคู่แล้ว"
+                                      size="small"
+                                      color="success"
+                                      sx={{ fontWeight: 600 }}
+                                    />
+                                  </Tooltip>
+                                ) : (
+                                  <Chip
+                                    label="รอจับคู่"
+                                    size="small"
+                                    variant="outlined"
+                                    color="warning"
+                                    sx={{ fontWeight: 600 }}
+                                  />
+                                )}
                               </TableCell>
                               <TableCell>
                                 <Typography 
@@ -1783,6 +1956,8 @@ export default function VacantPositionPage() {
                               onViewDetail={handleViewDetail}
                               onMenuOpen={handleMenuOpen}
                               draggedItem={draggedItem}
+                              isAssignmentExpanded={expandedAssignments.has(item.id)}
+                              onToggleAssignment={() => handleToggleAssignment(item.id)}
                             />
                           ))}
                         </Box>

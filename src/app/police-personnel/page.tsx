@@ -1835,7 +1835,7 @@ export default function PolicePersonnelPage() {
             {/* ช่องค้นหาหลัก - ให้ใหญ่ขึ้นบน iPad */}
             <TextField
               size="small"
-              placeholder="ค้นหาด้วย เลขบัตรประชาชน , เลขตำแหน่ง..."
+              placeholder="ค้นหาด้วย เลขบัตรประชาชน, เลขตำแหน่ง, หมายเหตุ..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}

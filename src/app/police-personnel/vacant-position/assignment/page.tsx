@@ -249,7 +249,7 @@ function SortableApplicantItem({
                 component="span" 
                 variant="caption" 
                 color="text.secondary"
-                sx={{ fontSize: '0.75rem' }}
+                sx={{ fontSize: '0.8rem' }}
               >
                 จำนวนปี: {applicant.yearsOfService || '-'}
               </Typography>
@@ -258,7 +258,42 @@ function SortableApplicantItem({
         }
         secondary={
           <Box>
-            <strong>ตำแหน่งปัจจุบัน:</strong> {applicant.position} | {applicant.unit}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+              <Typography variant="body2" component="span">
+                <strong>ตำแหน่งปัจจุบัน:</strong> {applicant.position} | {applicant.unit}
+              </Typography>
+              {!applicant.isAssigned && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<ArrowIcon fontSize="small" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (selectedPosition) {
+                      onAssign(applicant, selectedPosition);
+                    }
+                  }}
+                  disabled={loading || !selectedPosition || selectedPosition.assignmentInfo !== null}
+                  color="success"
+                  sx={{ 
+                    minWidth: 100, 
+                    py: 1, 
+                    fontSize: '0.75rem',
+                    flexShrink: 0,
+                    borderRadius: 2,
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  จับคู่
+                </Button>
+              )}
+            </Box>
+            {!applicant.isAssigned && selectedPosition?.assignmentInfo && (
+              <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, fontWeight: 500 }}>
+                ⚠️ ตำแหน่งนี้ถูกจับคู่ให้กับ {selectedPosition.assignmentInfo.assignedPersonName} แล้ว
+              </Typography>
+            )}
             {applicant.nominator && (
               <>
                 <br />
@@ -306,37 +341,6 @@ function SortableApplicantItem({
                 </Box>
               </>
             )}
-            {!applicant.isAssigned && (
-              <Box sx={{ mt: 1 }}>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<ArrowIcon fontSize="small" />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (selectedPosition) {
-                      onAssign(applicant, selectedPosition);
-                    }
-                  }}
-                  disabled={loading || !selectedPosition || selectedPosition.assignmentInfo !== null}
-                  color="success"
-                  sx={{ 
-                    minWidth: 100, 
-                    py: 0.5, 
-                    fontSize: '0.75rem',
-                  }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  จับคู่
-                </Button>
-                {selectedPosition?.assignmentInfo && (
-                  <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, fontWeight: 500 }}>
-                    ⚠️ ตำแหน่งนี้ถูกจับคู่ให้กับ {selectedPosition.assignmentInfo.assignedPersonName} แล้ว
-                  </Typography>
-                )}
-              </Box>
-            )}
           </Box>
         }
         secondaryTypographyProps={{ component: 'div' }}
@@ -377,6 +381,16 @@ export default function VacantPositionAssignmentPage() {
       total: number;
       assigned: number;
       pending: number;
+      pendingByPosition: Array<{
+        positionId: number;
+        positionName: string;
+        count: number;
+      }>;
+      assignedByPosition: Array<{
+        positionId: number;
+        positionName: string;
+        count: number;
+      }>;
     };
   } | null>(null);
   
@@ -560,15 +574,13 @@ export default function VacantPositionAssignmentPage() {
       filteredPositions = filteredPositions.filter(pos => !pos.assignmentInfo);
     }
     
-    // เมื่อเลือก "ทั้งหมด" ให้เรียงตามสถานะการจับคู่ (จับคู่แล้วอยู่ด้วยกัน)
-    if (filterType === 'all') {
-      filteredPositions = filteredPositions.sort((a, b) => {
-        const aHasAssignment = a.assignmentInfo ? 1 : 0;
-        const bHasAssignment = b.assignmentInfo ? 1 : 0;
-        // เรียงให้ที่จับคู่แล้วอยู่ด้านบน (1 มาก่อน 0)
-        return bHasAssignment - aHasAssignment;
-      });
-    }
+    // เรียงตามสถานะการจับคู่ (จับคู่แล้วขึ้นก่อน) สำหรับทุกกรณี
+    filteredPositions = filteredPositions.sort((a, b) => {
+      const aHasAssignment = a.assignmentInfo ? 1 : 0;
+      const bHasAssignment = b.assignmentInfo ? 1 : 0;
+      // เรียงให้ที่จับคู่แล้วอยู่ด้านบน (1 มาก่อน 0)
+      return bHasAssignment - aHasAssignment;
+    });
     
     setVacantPositions(filteredPositions);
   };
@@ -1193,7 +1205,7 @@ export default function VacantPositionAssignmentPage() {
               </Typography>
               
               {/* Stats Row */}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
                 {/* DB Stats */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'text.secondary' }}>
@@ -1227,7 +1239,7 @@ export default function VacantPositionAssignmentPage() {
                 <Divider orientation="vertical" flexItem />
                 
                 {/* Applicants Stats */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
                   <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'text.secondary' }}>
                     ผู้ยื่นขอตำแหน่ง (ปี {currentYear}):
                   </Typography>
@@ -1249,6 +1261,70 @@ export default function VacantPositionAssignmentPage() {
                     />
                   </Box>
                 </Box>
+
+                {/* รายละเอียดรอจับคู่และจับคู่แล้ว */}
+                {((stats.applicants.pendingByPosition && stats.applicants.pendingByPosition.length > 0) ||
+                  (stats.applicants.assignedByPosition && stats.applicants.assignedByPosition.length > 0)) && (
+                  <>
+                    <Divider orientation="vertical" flexItem />
+                    
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
+                      {/* รายละเอียดรอจับคู่แต่ละตำแหน่ง */}
+                      {stats.applicants.pendingByPosition && stats.applicants.pendingByPosition.length > 0 && (
+                        <Box>
+                          <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'warning.dark', mb: 0.5, display: 'block' }}>
+                            รอจับคู่:
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {stats.applicants.pendingByPosition.map((pos) => (
+                              <Chip 
+                                key={`pending-${pos.positionId}`}
+                                label={`${pos.positionName}: ${pos.count} คน`}
+                                size="small"
+                                variant="outlined"
+                                color="warning"
+                                sx={{ 
+                                  fontSize: '0.85rem',
+                                  height: 24,
+                                  '& .MuiChip-label': {
+                                    px: 1
+                                  }
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+
+                      {/* รายละเอียดจับคู่แล้วแต่ละตำแหน่ง */}
+                      {stats.applicants.assignedByPosition && stats.applicants.assignedByPosition.length > 0 && (
+                        <Box>
+                          <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'success.dark', mb: 0.5, display: 'block' }}>
+                            จับคู่แล้ว:
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                            {stats.applicants.assignedByPosition.map((pos) => (
+                              <Chip 
+                                key={`assigned-${pos.positionId}`}
+                                label={`${pos.positionName}: ${pos.count} คน`}
+                                size="small"
+                                variant="outlined"
+                                color="success"
+                                sx={{ 
+                                  fontSize: '0.85rem',
+                                  height: 24,
+                                  '& .MuiChip-label': {
+                                    px: 1
+                                  }
+                                }}
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  </>
+                )}
               </Box>
             </Box>
           </Paper>

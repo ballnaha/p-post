@@ -108,6 +108,7 @@ export async function GET(request: NextRequest) {
         { nationalId: { contains: search } },
         { positionNumber: { contains: search } },
         { position: { contains: search } },
+        { notes: { contains: search } },
       ];
       
       if (where.AND || where.OR) {

@@ -21,7 +21,60 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    return NextResponse.json(vacantPositions);
+    // ดึงข้อมูลการจับคู่จาก swap_transaction_detail สำหรับคนที่มี nationalId
+    const nationalIds = vacantPositions
+      .map(v => v.nationalId)
+      .filter((id): id is string => !!id);
+
+    const assignmentMap = new Map();
+    
+    if (nationalIds.length > 0) {
+      const assignments = await prisma.swapTransactionDetail.findMany({
+        where: {
+          nationalId: {
+            in: nationalIds
+          }
+        },
+        include: {
+          transaction: {
+            select: {
+              year: true,
+              swapDate: true,
+              createdAt: true,
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      // สร้าง map ของ nationalId -> assignment info
+      assignments.forEach(assignment => {
+        if (assignment.nationalId && !assignmentMap.has(assignment.nationalId)) {
+          assignmentMap.set(assignment.nationalId, {
+            assignedPosition: assignment.toPosition || '',
+            assignedUnit: assignment.toUnit || '',
+            assignedDate: assignment.createdAt.toISOString(),
+            assignedYear: assignment.transaction.year,
+          });
+        }
+      });
+    }
+
+    // แปลงข้อมูลให้รวม assignmentInfo
+    const formattedData = vacantPositions.map(item => {
+      const assignmentInfo = item.nationalId ? assignmentMap.get(item.nationalId) : null;
+      const hasAssignment = !!assignmentInfo;
+
+      return {
+        ...item,
+        isAssigned: item.isAssigned || hasAssignment,
+        assignmentInfo: assignmentInfo || null,
+      };
+    });
+
+    return NextResponse.json(formattedData);
   } catch (error) {
     console.error('Error fetching vacant position list:', error);
     return NextResponse.json(

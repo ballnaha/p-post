@@ -87,6 +87,73 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // นับจำนวนผู้ยื่นขอแต่ละตำแหน่ง (รอจับคู่)
+    const pendingByPosition = await prisma.vacantPosition.groupBy({
+      by: ['requestedPositionId'],
+      where: {
+        ...applicantsWhere,
+        isAssigned: false,
+        requestedPositionId: { not: null } // กรองเฉพาะที่มี requestedPositionId
+      },
+      _count: {
+        id: true
+      }
+    });
+
+    // นับจำนวนผู้ที่จับคู่แล้วแต่ละตำแหน่ง
+    const assignedByPosition = await prisma.vacantPosition.groupBy({
+      by: ['requestedPositionId'],
+      where: {
+        ...applicantsWhere,
+        isAssigned: true,
+        requestedPositionId: { not: null }
+      },
+      _count: {
+        id: true
+      }
+    });
+
+    // ดึงข้อมูลชื่อตำแหน่ง (รวมทั้ง pending และ assigned)
+    const allPositionIds = [
+      ...pendingByPosition.map(p => p.requestedPositionId),
+      ...assignedByPosition.map(p => p.requestedPositionId)
+    ].filter((id): id is number => id !== null);
+    
+    const uniquePositionIds = [...new Set(allPositionIds)];
+      
+    const positions = await prisma.posCodeMaster.findMany({
+      where: {
+        id: {
+          in: uniquePositionIds
+        }
+      },
+      select: {
+        id: true,
+        name: true
+      }
+    });
+
+    // สร้าง map ของตำแหน่งและจำนวนคน
+    const positionMap = new Map(positions.map(p => [p.id, p.name]));
+    
+    const pendingByPositionDetail = pendingByPosition
+      .filter(item => item.requestedPositionId !== null) // กรอง null ออก
+      .map(item => ({
+        positionId: item.requestedPositionId as number,
+        positionName: positionMap.get(item.requestedPositionId as number) || 'ไม่ระบุ',
+        count: item._count.id
+      }))
+      .sort((a, b) => b.count - a.count); // เรียงจากมากไปน้อย
+
+    const assignedByPositionDetail = assignedByPosition
+      .filter(item => item.requestedPositionId !== null)
+      .map(item => ({
+        positionId: item.requestedPositionId as number,
+        positionName: positionMap.get(item.requestedPositionId as number) || 'ไม่ระบุ',
+        count: item._count.id
+      }))
+      .sort((a, b) => b.count - a.count); // เรียงจากมากไปน้อย
+
     return NextResponse.json({
       success: true,
       data: {
@@ -100,7 +167,9 @@ export async function GET(request: NextRequest) {
         applicants: {
           total: totalApplicants,
           assigned: assignedApplicants,
-          pending: pendingApplicants
+          pending: pendingApplicants,
+          pendingByPosition: pendingByPositionDetail,
+          assignedByPosition: assignedByPositionDetail
         },
         year: year ? parseInt(year) : null
       }

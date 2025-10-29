@@ -632,7 +632,7 @@ export default function EditThreeWaySwapPage() {
   if (loading) {
     return (
       <Layout>
-        <Box sx={{ p: 3 }}>
+        <Box>
           {/* Header Skeleton */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

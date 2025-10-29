@@ -515,7 +515,7 @@ export default function AddThreeWaySwapPage() {
 
   return (
     <Layout>
-      <Box sx={{ p: 3 }}>
+      <Box>
         {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ 

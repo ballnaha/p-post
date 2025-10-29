@@ -20,13 +20,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ใช้ transaction เพื่อความปลอดภัย
+    // ใช้ transaction เพื่อความปลอดภัย พร้อม timeout
     console.log('🔄 Starting transaction...');
     const result = await prisma.$transaction(async (tx) => {
       // ดึงข้อมูลผู้ยื่นขอ
       console.log('📥 Fetching applicant:', applicantId);
       const applicant = await tx.vacantPosition.findUnique({
         where: { id: applicantId },
+        select: {
+          id: true,
+          fullName: true,
+          isAssigned: true
+        }
       });
 
       if (!applicant) {
@@ -72,12 +77,30 @@ export async function POST(request: NextRequest) {
         cancelledTransactions: cancelledTransactions.count,
         message: 'ยกเลิกการจับคู่สำเร็จ'
       };
+    }, {
+      maxWait: 5000, // รอ transaction เริ่มต้นสูงสุด 5 วินาที
+      timeout: 10000, // timeout รวมของ transaction 10 วินาที
     });
 
     console.log('📤 Sending response:', result);
     return NextResponse.json(result);
   } catch (error) {
     console.error('💥 Error unassigning position:', error);
+    
+    // ตรวจสอบ Prisma error type
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code: string; message: string };
+      if (prismaError.code === 'P2028') {
+        return NextResponse.json(
+          { 
+            error: 'ระบบไม่สามารถดำเนินการได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง',
+            details: 'Transaction timeout - database is busy'
+          },
+          { status: 503 } // Service Unavailable
+        );
+      }
+    }
+    
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to unassign position' },
       { status: 500 }

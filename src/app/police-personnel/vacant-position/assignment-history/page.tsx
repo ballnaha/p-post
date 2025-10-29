@@ -30,6 +30,7 @@ import {
   ToggleButton,
   IconButton,
   Collapse,
+  Skeleton,
 } from '@mui/material';
 import {
   History as HistoryIcon,
@@ -85,8 +86,7 @@ interface PosCode {
 export default function AssignmentHistoryPage() {
   const [assignmentHistory, setAssignmentHistory] = useState<AssignmentHistory[]>([]);
   const [filteredHistory, setFilteredHistory] = useState<AssignmentHistory[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filtering, setFiltering] = useState(false);
+  const [loading, setLoading] = useState(true); // เปลี่ยนเป็น true สำหรับ initial load
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear() + 543);
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
   const [posCodes, setPosCodes] = useState<PosCode[]>([]);
@@ -142,14 +142,9 @@ export default function AssignmentHistoryPage() {
 
   // Filter ตามตำแหน่ง (ไม่มี status tab แล้ว - แสดงเฉพาะ completed)
   useEffect(() => {
-    const filterData = async () => {
+    const filterData = () => {
       // ถ้ายังโหลดอยู่ ไม่ต้อง filter
       if (loading) return;
-      
-      setFiltering(true);
-      
-      // ใช้ setTimeout เพื่อให้ UI อัพเดท loading state ก่อน
-      await new Promise(resolve => setTimeout(resolve, 100));
       
       let filtered = assignmentHistory;
 
@@ -167,7 +162,6 @@ export default function AssignmentHistoryPage() {
 
       setFilteredHistory(filtered);
       setPage(0); // Reset to first page when filter changes
-      setFiltering(false);
     };
     
     filterData();
@@ -357,12 +351,57 @@ export default function AssignmentHistoryPage() {
 
         {/* Content */}
         <Box>
-          {loading || filtering ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
-              <CircularProgress />
+          {loading ? (
+            <Box>
+              {viewMode === 'table' ? (
+                <Paper elevation={2}>
+                  <TableContainer>
+                    <Table>
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: 'primary.main' }}>
+                          <TableCell sx={{ color: 'white', width: 50, fontWeight: 600 }} />
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>วันที่</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>ปี</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>กลุ่ม</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>สถานะ</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {Array.from({ length: rowsPerPage }).map((_, index) => (
+                          <TableRow key={index}>
+                            <TableCell><Skeleton variant="circular" width={32} height={32} /></TableCell>
+                            <TableCell><Skeleton variant="text" width="80%" /></TableCell>
+                            <TableCell><Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 3 }} /></TableCell>
+                            <TableCell><Skeleton variant="text" width="70%" /></TableCell>
+                            <TableCell><Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 3 }} /></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              ) : (
+                <Box sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' }, 
+                  gap: 2 
+                }}>
+                  {Array.from({ length: rowsPerPage }).map((_, index) => (
+                    <Card key={index}>
+                      <CardContent>
+                        <Skeleton variant="text" width="60%" height={32} sx={{ mb: 1 }} />
+                        <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 3, mb: 2 }} />
+                        <Skeleton variant="text" width="90%" />
+                        <Skeleton variant="text" width="80%" />
+                        <Skeleton variant="text" width="70%" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
             </Box>
           ) : filteredHistory.length === 0 ? (
-            <Fade in={!loading && !filtering} timeout={800}>
+            <Fade in={!loading} timeout={800}>
               <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 2 }}>
                 <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2, opacity: 0.5 }} />
                 <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -607,7 +646,7 @@ export default function AssignmentHistoryPage() {
                                         size="small"
                                         color="primary"
                                         variant="outlined"
-                                        sx={{ fontSize: '0.7rem', height: 20 }}
+                                        sx={{ fontWeight: 600 }}
                                       />
                                     )}
                                   </Box>

@@ -45,6 +45,7 @@ import {
   Tab,
   Switch,
   FormControlLabel,
+  Skeleton,
 } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
@@ -317,7 +318,7 @@ function SortableApplicantItem({
                       onAssign(applicant, selectedPosition);
                     }
                   }}
-                  disabled={loading || !selectedPosition}
+                  disabled={loading || !selectedPosition || selectedPosition.assignmentInfo !== null}
                   color="success"
                   sx={{ 
                     minWidth: 100, 
@@ -329,6 +330,11 @@ function SortableApplicantItem({
                 >
                   จับคู่
                 </Button>
+                {selectedPosition?.assignmentInfo && (
+                  <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, fontWeight: 500 }}>
+                    ⚠️ ตำแหน่งนี้ถูกจับคู่ให้กับ {selectedPosition.assignmentInfo.assignedPersonName} แล้ว
+                  </Typography>
+                )}
               </Box>
             )}
           </Box>
@@ -395,6 +401,10 @@ export default function VacantPositionAssignmentPage() {
   
   // Applicant filter tab state (เพิ่ม)
   const [applicantFilterTab, setApplicantFilterTab] = useState<'all' | 'assigned' | 'pending'>('all');
+  
+  // Modal refresh state
+  const [modalRefreshKey, setModalRefreshKey] = useState(0);
+  const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   
   // Year filter state
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear() + 543);
@@ -550,6 +560,16 @@ export default function VacantPositionAssignmentPage() {
       filteredPositions = filteredPositions.filter(pos => !pos.assignmentInfo);
     }
     
+    // เมื่อเลือก "ทั้งหมด" ให้เรียงตามสถานะการจับคู่ (จับคู่แล้วอยู่ด้วยกัน)
+    if (filterType === 'all') {
+      filteredPositions = filteredPositions.sort((a, b) => {
+        const aHasAssignment = a.assignmentInfo ? 1 : 0;
+        const bHasAssignment = b.assignmentInfo ? 1 : 0;
+        // เรียงให้ที่จับคู่แล้วอยู่ด้านบน (1 มาก่อน 0)
+        return bHasAssignment - aHasAssignment;
+      });
+    }
+    
     setVacantPositions(filteredPositions);
   };
 
@@ -570,8 +590,12 @@ export default function VacantPositionAssignmentPage() {
       posCode: 'all',
     });
     setVacantTypeTab('all'); // รีเซ็ต tab ด้วย
+    setApplicantFilterTab('all'); // รีเซ็ต applicant filter ด้วย
     setPage(0); // Reset page when filters change
-    // ไม่ต้องรีเซ็ต page เพราะไม่มี pagination
+    // ล้างข้อมูลและโหลดใหม่
+    setAllVacantPositions([]);
+    setVacantPositions([]);
+    setTotal(0);
   };
 
   const handleChangePage = (newPage: number) => {
@@ -598,6 +622,11 @@ export default function VacantPositionAssignmentPage() {
         const data = await response.json();
         console.log('Fetched applicants:', data);
         setApplicants(data);
+        setModalRefreshKey(prev => prev + 1); // Trigger modal refresh
+        
+        // แสดง refresh indicator ชั่วคราว
+        setShowRefreshIndicator(true);
+        setTimeout(() => setShowRefreshIndicator(false), 3000);
       } else {
         toast.error('ไม่สามารถโหลดข้อมูลผู้ยื่นขอได้');
       }
@@ -730,6 +759,18 @@ export default function VacantPositionAssignmentPage() {
   };
 
   const handleAssignPosition = (applicant: Applicant, vacantPosition: VacantPosition) => {
+    // ตรวจสอบว่าผู้สมัครถูกจับคู่ไปแล้วหรือไม่
+    if (applicant.isAssigned) {
+      toast.error(`${applicant.fullName} ถูกจับคู่ตำแหน่งไปแล้ว`);
+      return;
+    }
+
+    // ตรวจสอบว่าตำแหน่งถูกจับคู่ไปแล้วหรือไม่
+    if (vacantPosition.assignmentInfo) {
+      toast.error(`ตำแหน่งนี้ถูกจับคู่ให้กับ ${vacantPosition.assignmentInfo.assignedPersonName} ไปแล้ว`);
+      return;
+    }
+
     setSelectedApplicant(applicant);
     setSelectedVacantSlot(vacantPosition);
     setAssignNotes('');
@@ -770,31 +811,68 @@ export default function VacantPositionAssignmentPage() {
         const result = await response.json();
         console.log('✅ Assignment successful:', result);
         
-        toast.success('จับคู่ตำแหน่งสำเร็จ');
+        // ปิด assign dialog
         setAssignDialogOpen(false);
         
-        // รีเฟรชข้อมูลตำแหน่งว่าง
-        console.log('🔄 Refreshing vacant positions...');
-        await fetchVacantPositions();
+        // รีเฟรชข้อมูลก่อน (โดยไม่แสดง toast ระหว่างโหลด)
+        console.log('🔄 Refreshing data...');
         
-        // รีเฟรชรายการผู้สมัคร
-        if (selectedPosition) {
-          console.log('🔄 Refreshing applicants for posCodeId:', selectedPosition.posCodeId);
+        // รีเฟรชรายการผู้สมัครใน modal ทันที (ไม่ปิด modal)
+        if (selectedPosition && dialogOpen) {
+          console.log('🔄 Refreshing applicants in modal for posCodeId:', selectedPosition.posCodeId);
           await fetchApplicants(selectedPosition.posCodeId);
+          
+          // อัปเดต selectedPosition ด้วยเพื่อให้ข้อมูลตรงกับ vacant position ล่าสุด
+          const updatedPosition = await fetch(`/api/vacant-position/actual?year=${currentYear}`)
+            .then(res => res.json())
+            .then(data => {
+              const positions = data.data || data;
+              return positions.find((p: VacantPosition) => p.id === selectedPosition.id);
+            })
+            .catch(err => {
+              console.error('Error updating position:', err);
+              return null;
+            });
+          
+          if (updatedPosition) {
+            setSelectedPosition(updatedPosition);
+          }
         }
         
-        // รีเฟรชสถิติ
-        console.log('🔄 Refreshing stats...');
+        // รีเฟรชข้อมูลตำแหน่งว่างและสถิติ
+        await fetchVacantPositions();
         await fetchStats();
         
         console.log('✅ All data refreshed');
+        
+        // แสดง success message หลังจากโหลดข้อมูลเสร็จแล้ว
+        toast.success('จับคู่ตำแหน่งสำเร็จ');
       } else {
         const error = await response.json();
         console.error('❌ Assignment failed:', { status: response.status, error });
         
         if (response.status === 409) {
-          // ตำแหน่งไม่ว่างแล้ว
-          toast.error(error.details || 'ตำแหน่งนี้ไม่ว่างแล้ว');
+          // ตำแหน่งไม่ว่างแล้วหรือผู้สมัครถูกจับคู่แล้ว
+          toast.error(error.details || 'ตำแหน่งนี้ไม่ว่างแล้วหรือผู้สมัครถูกจับคู่แล้ว');
+          
+          // ปิด dialog และรีเฟรชข้อมูลเพื่อแสดงสถานะล่าสุด
+          setAssignDialogOpen(false);
+          
+          console.log('🔄 Reloading data due to conflict...');
+          await fetchVacantPositions();
+          
+          // รีเฟรชรายการผู้สมัครใน modal ด้วย
+          if (selectedPosition && dialogOpen) {
+            console.log('🔄 Reloading modal applicants...');
+            toast.info('กำลังอัปเดตรายการผู้ยื่นขอ...', 2000);
+            await fetchApplicants(selectedPosition.posCodeId);
+          }
+          
+          await fetchStats();
+        } else if (response.status === 503) {
+          // Service Unavailable - Transaction timeout
+          toast.error(error.error || 'ระบบไม่สามารถดำเนินการได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง');
+          setAssignDialogOpen(false);
         } else {
           toast.error(error.error || 'ไม่สามารถจับคู่ตำแหน่งได้');
         }
@@ -817,6 +895,10 @@ export default function VacantPositionAssignmentPage() {
     if (!unassignApplicant) return;
 
     setLoading(true);
+    
+    // ปิด dialog ทันทีเพื่อให้รู้สึก responsive
+    setUnassignDialogOpen(false);
+    
     try {
       console.log('🔄 Unassigning applicant:', unassignApplicant.id);
       
@@ -835,32 +917,69 @@ export default function VacantPositionAssignmentPage() {
         const result = await response.json();
         console.log('✅ Unassignment successful:', result);
         
+        // แสดง success message ทันที
         toast.success('ยกเลิกการจับคู่สำเร็จ');
         
-        // ปิด dialog
-        setUnassignDialogOpen(false);
+        // เคลียร์ข้อมูล dialog
         setUnassignApplicant(null);
         setUnassignReason('');
         
-        // รีเฟรชข้อมูล
+        // รีเฟรชข้อมูล (modal ผู้ยื่นขอจะแสดง loading ถ้าเปิดอยู่)
         console.log('🔄 Refreshing data...');
-        await fetchVacantPositions();
         
-        if (selectedPosition) {
-          await fetchApplicants(selectedPosition.posCodeId);
+        // รีเฟรชรายการผู้สมัครใน modal ก่อน (ถ้า modal เปิดอยู่)
+        if (selectedPosition && dialogOpen) {
+          console.log('🔄 Reloading modal applicants after unassign...');
+          
+          // โหลดข้อมูล applicants และ position แบบ parallel
+          const [_, updatedPosition] = await Promise.all([
+            fetchApplicants(selectedPosition.posCodeId),
+            fetch(`/api/vacant-position/actual?year=${currentYear}`)
+              .then(res => res.json())
+              .then(data => {
+                const positions = data.data || data;
+                return positions.find((p: VacantPosition) => p.id === selectedPosition.id);
+              })
+              .catch(err => {
+                console.error('Error updating position:', err);
+                return null;
+              })
+          ]);
+          
+          if (updatedPosition) {
+            setSelectedPosition(updatedPosition);
+          }
         }
         
-        await fetchStats();
+        // รีเฟรชข้อมูลตำแหน่งว่างและสถิติ (ทำพร้อมกัน)
+        await Promise.all([
+          fetchVacantPositions(),
+          fetchStats()
+        ]);
         
         console.log('✅ All data refreshed');
       } else {
         const error = await response.json();
         console.error('❌ Unassignment failed:', error);
-        toast.error(error.error || 'ไม่สามารถยกเลิกการจับคู่ได้');
+        
+        if (response.status === 503) {
+          // Service Unavailable - Transaction timeout
+          toast.error(error.error || 'ระบบไม่สามารถดำเนินการได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง');
+        } else {
+          toast.error(error.error || 'ไม่สามารถยกเลิกการจับคู่ได้');
+        }
+        
+        // เคลียร์ข้อมูล dialog เมื่อเกิด error
+        setUnassignApplicant(null);
+        setUnassignReason('');
       }
     } catch (error) {
       console.error('💥 Error unassigning:', error);
       toast.error('เกิดข้อผิดพลาดในการยกเลิกการจับคู่');
+      
+      // เคลียร์ข้อมูล dialog เมื่อเกิด error
+      setUnassignApplicant(null);
+      setUnassignReason('');
     } finally {
       setLoading(false);
     }
@@ -921,77 +1040,6 @@ export default function VacantPositionAssignmentPage() {
             )}
           </Box>
         </Paper>
-
-        {/* Statistics Section - Compact but Readable */}
-        {stats && (
-          <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              {/* Header */}
-              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                📊 สถิติตำแหน่งว่าง
-              </Typography>
-              
-              {/* Stats Row */}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-                {/* DB Stats */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'text.secondary' }}>
-                    Database (ปัจจุบัน):
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip 
-                      label={`ว่างทั้งหมด: ${stats.policePersonnel.totalVacant}`} 
-                      color="info"
-                      sx={{ fontWeight: 600 }}
-                    />
-                    <Chip 
-                      label={`ว่าง: ${stats.policePersonnel.vacant}`} 
-                      color="warning"
-                      sx={{ fontWeight: 600 }}
-                    />
-                    <Chip 
-                      label={`กันตำแหน่ง: ${stats.policePersonnel.reserved}`} 
-                      color="success"
-                      sx={{ fontWeight: 600 }}
-                    />
-                    {stats.policePersonnel.emptyName > 0 && (
-                      <Chip 
-                        label={`ไม่มีชื่อ: ${stats.policePersonnel.emptyName}`}
-                        sx={{ fontWeight: 600 }}
-                      />
-                    )}
-                  </Box>
-                </Box>
-                
-                <Divider orientation="vertical" flexItem />
-                
-                {/* Applicants Stats */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'text.secondary' }}>
-                    ผู้ยื่นขอตำแหน่ง (ปี {currentYear}):
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip 
-                      label={`ทั้งหมด: ${stats.applicants.total}`} 
-                      color="primary"
-                      sx={{ fontWeight: 600 }}
-                    />
-                    <Chip 
-                      label={`จับคู่แล้ว: ${stats.applicants.assigned}`} 
-                      color="success"
-                      sx={{ fontWeight: 600 }}
-                    />
-                    <Chip 
-                      label={`รอจับคู่: ${stats.applicants.pending}`} 
-                      color="warning"
-                      sx={{ fontWeight: 600 }}
-                    />
-                  </Box>
-                </Box>
-              </Box>
-            </Box>
-          </Paper>
-        )}
 
         {/* Filter Section */}
         <Paper sx={{ p: 3, mb: 3 }}>
@@ -1134,6 +1182,79 @@ export default function VacantPositionAssignmentPage() {
           </Stack>
         </Paper>
 
+
+        {/* Statistics Section - Compact but Readable */}
+        {stats && (
+          <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {/* Header */}
+              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                📊 สถิติตำแหน่งว่าง
+              </Typography>
+              
+              {/* Stats Row */}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+                {/* DB Stats */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'text.secondary' }}>
+                    Database (ปัจจุบัน):
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip 
+                      label={`ว่างทั้งหมด: ${stats.policePersonnel.totalVacant}`} 
+                      color="info"
+                      sx={{ fontWeight: 600 }}
+                    />
+                    <Chip 
+                      label={`ว่าง: ${stats.policePersonnel.vacant}`} 
+                      color="warning"
+                      sx={{ fontWeight: 600 }}
+                    />
+                    <Chip 
+                      label={`กันตำแหน่ง: ${stats.policePersonnel.reserved}`} 
+                      color="success"
+                      sx={{ fontWeight: 600 }}
+                    />
+                    {stats.policePersonnel.emptyName > 0 && (
+                      <Chip 
+                        label={`ไม่มีชื่อ: ${stats.policePersonnel.emptyName}`}
+                        sx={{ fontWeight: 600 }}
+                      />
+                    )}
+                  </Box>
+                </Box>
+                
+                <Divider orientation="vertical" flexItem />
+                
+                {/* Applicants Stats */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'text.secondary' }}>
+                    ผู้ยื่นขอตำแหน่ง (ปี {currentYear}):
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip 
+                      label={`ทั้งหมด: ${stats.applicants.total}`} 
+                      color="primary"
+                      sx={{ fontWeight: 600 }}
+                    />
+                    <Chip 
+                      label={`จับคู่แล้ว: ${stats.applicants.assigned}`} 
+                      color="success"
+                      sx={{ fontWeight: 600 }}
+                    />
+                    <Chip 
+                      label={`รอจับคู่: ${stats.applicants.pending}`} 
+                      color="warning"
+                      sx={{ fontWeight: 600 }}
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
+        )}
+
+
         {/* Vacant Position Type Tabs - Minimal Style */}
         {(filters.unit !== 'all' || filters.posCode !== 'all' || filters.search) && (
           <Box sx={{ mb: 3 }}>
@@ -1180,8 +1301,36 @@ export default function VacantPositionAssignmentPage() {
         )}
 
         {loading && vacantPositions.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-            <CircularProgress size={24} />
+          <Box sx={{ 
+            display: 'grid', 
+            gridTemplateColumns: { 
+              xs: '1fr', 
+              sm: 'repeat(2, 1fr)',
+              md: 'repeat(3, 1fr)', 
+              lg: 'repeat(4, 1fr)',
+            }, 
+            gap: 2,
+            mt: 1
+          }}>
+            {Array.from({ length: rowsPerPage }).map((_, index) => (
+              <Card key={index} sx={{ borderRadius: 2 }}>
+                <Box sx={{ height: 4, bgcolor: 'grey.300' }} />
+                <CardContent sx={{ p: 1.5, pb: 1 }}>
+                  <Skeleton variant="text" width="60%" height={24} sx={{ mb: 0.5 }} />
+                  <Skeleton variant="text" width="80%" height={20} />
+                  <Skeleton variant="text" width="40%" height={20} sx={{ mb: 1 }} />
+                  <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
+                    <Skeleton variant="rounded" width={80} height={24} />
+                    <Skeleton variant="rounded" width={60} height={24} />
+                  </Box>
+                  <Skeleton variant="text" width="90%" height={16} />
+                  <Skeleton variant="text" width="70%" height={16} />
+                </CardContent>
+                <CardActions sx={{ p: 1.5, pt: 0 }}>
+                  <Skeleton variant="rounded" width="100%" height={32} />
+                </CardActions>
+              </Card>
+            ))}
           </Box>
         ) : viewMode === 'card' ? (
           <>
@@ -1285,9 +1434,9 @@ export default function VacantPositionAssignmentPage() {
                     }}>
                       {/* ตำแหน่ง */}
                       <Box sx={{ 
-                        bgcolor: 'rgba(46, 125, 50, 0.04)',
+                        
                         borderLeft: '2px solid',
-                        borderColor: 'success.main',
+                        borderColor: 'primary.main',
                         borderRadius: 1,
                         p: 1,
                         display: 'flex',
@@ -1312,7 +1461,7 @@ export default function VacantPositionAssignmentPage() {
                             variant="body2"
                             sx={{ 
                               fontWeight: 600,
-                              color: 'success.main',
+                              color: 'primary.main',
                               fontSize: '0.85rem',
                               lineHeight: 1.3,
                             }}
@@ -1632,11 +1781,11 @@ export default function VacantPositionAssignmentPage() {
           </DialogTitle>
           
           <DialogContent sx={{ pt: 0, minHeight: '400px', maxHeight: '600px', overflow: 'auto', position: 'relative' }}>
-            {loadingApplicants ? (
+            {loadingApplicants || loading ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', gap: 2 }}>
                 <CircularProgress size={40} />
                 <Typography variant="body2" color="text.secondary">
-                  กำลังโหลดรายการผู้ยื่นขอ...
+                  {loading ? 'กำลังโหลด...' : 'กำลังโหลดรายการผู้ยื่นขอ...'}
                 </Typography>
               </Box>
             ) : applicants.length === 0 ? (
@@ -1645,6 +1794,26 @@ export default function VacantPositionAssignmentPage() {
               </Alert>
             ) : (
               <>
+                
+                {/* แสดง Alert เมื่อตำแหน่งถูกจับคู่แล้ว */}
+                {selectedPosition?.assignmentInfo && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography variant="body2" fontWeight={600}>
+                      ⚠️ ไม่อนุญาตให้จับคู่ซ้ำ
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                      ตำแหน่งนี้ถูกจับคู่ให้กับ <strong>{selectedPosition.assignmentInfo.assignedPersonName}</strong> ({selectedPosition.assignmentInfo.assignedPersonRank}) แล้ว
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      จับคู่เมื่อ: {new Date(selectedPosition.assignmentInfo.assignedDate).toLocaleDateString('th-TH', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </Typography>
+                  </Alert>
+                )}
+                
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Alert severity="info" sx={{ py: 0.5, flex: 1, mr: 2 }}>
                     <Typography variant="body2">
@@ -1653,6 +1822,7 @@ export default function VacantPositionAssignmentPage() {
                       <br />
                       <Typography variant="caption" color="text.secondary">
                         💡 ลากและวางเพื่อจัดเรียงลำดับผู้สมัคร
+                        {modalRefreshKey > 0 && ' • อัปเดตล่าสุด'}
                       </Typography>
                     </Typography>
                   </Alert>
@@ -1953,11 +2123,11 @@ export default function VacantPositionAssignmentPage() {
               onClick={confirmUnassign}
               variant="contained"
               color="error"
-              startIcon={loading ? <CircularProgress size={16} /> : <CloseIcon fontSize="small" />}
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CloseIcon fontSize="small" />}
               disabled={loading}
               size="small"
             >
-              ยืนยันการยกเลิกการจับคู่
+              {loading ? 'กำลังยกเลิก...' : 'ยืนยันการยกเลิกการจับคู่'}
             </Button>
           </DialogActions>
         </Dialog>

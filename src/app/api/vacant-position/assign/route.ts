@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ใช้ transaction เพื่อความปลอดภัย
+    // ใช้ transaction เพื่อความปลอดภัย พร้อม timeout
     console.log('🔄 Starting transaction...');
     const result = await prisma.$transaction(async (tx) => {
       // ดึงข้อมูลผู้ยื่นขอ
@@ -42,6 +42,13 @@ export async function POST(request: NextRequest) {
         throw new Error('Applicant not found');
       }
       console.log('✅ Found applicant:', applicant.fullName);
+
+      // ตรวจสอบว่าผู้ยื่นขอถูกจับคู่ไปแล้วหรือไม่
+      if (applicant.isAssigned) {
+        console.log('❌ Applicant already assigned');
+        throw new Error('Applicant already assigned');
+      }
+      console.log('✅ Applicant is not yet assigned');
 
       // ดึงข้อมูลตำแหน่งที่ว่าง
       console.log('📥 Fetching vacant position:', vacantPositionId);
@@ -62,6 +69,38 @@ export async function POST(request: NextRequest) {
         fullName: vacantPosition.fullName,
         isOccupied: !!(vacantPosition.fullName && vacantPosition.fullName.trim() !== '' && vacantPosition.fullName !== 'ตำแหน่งว่าง')
       });
+
+      // ตรวจสอบว่าตำแหน่งนี้ถูกจับคู่ไปแล้วหรือไม่ (ตรวจจาก SwapTransaction)
+      const existingAssignment = await tx.swapTransaction.findFirst({
+        where: {
+          year: new Date().getFullYear() + 543,
+          swapType: 'vacant-assignment',
+          status: 'completed',
+          swapDetails: {
+            some: {
+              toPosition: vacantPosition.position,
+              toPositionNumber: vacantPosition.positionNumber,
+              toUnit: vacantPosition.unit,
+            }
+          }
+        },
+        select: {
+          id: true,
+          swapDetails: {
+            select: {
+              fullName: true
+            },
+            take: 1
+          }
+        }
+      });
+
+      if (existingAssignment && existingAssignment.swapDetails.length > 0) {
+        console.log('❌ Position already assigned to someone else');
+        const assignedTo = existingAssignment.swapDetails[0];
+        throw new Error(`CONFLICT:ตำแหน่งนี้ถูกจับคู่ให้กับ ${assignedTo.fullName} ไปแล้ว`);
+      }
+      console.log('✅ Position is available for assignment');
 
       // ตรวจสอบว่าตำแหน่งยังว่างอยู่ (ไม่มีคนหรือเป็นตำแหน่งว่าง)
       // อนุญาตให้จับคู่ได้ถ้า fullName เป็น null, '', 'ว่าง', 'ตำแหน่งว่าง', 'ว่าง (กันตำแหน่ง)', หรือ 'ว่าง(กันตำแหน่ง)'
@@ -147,12 +186,53 @@ export async function POST(request: NextRequest) {
         updatedApplicantId: updatedApplicant.id,
         message: 'การจับคู่สำเร็จ'
       };
+    }, {
+      maxWait: 5000, // รอ transaction เริ่มต้นสูงสุด 5 วินาที
+      timeout: 10000, // timeout รวมของ transaction 10 วินาที
     });
 
     console.log('📤 Sending response:', result);
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error assigning position:', error);
+    
+    // ตรวจสอบ CONFLICT error
+    if (error instanceof Error && error.message.startsWith('CONFLICT:')) {
+      const details = error.message.replace('CONFLICT:', '');
+      return NextResponse.json(
+        { 
+          error: 'Position already assigned',
+          details: details
+        },
+        { status: 409 }
+      );
+    }
+    
+    // ตรวจสอบ Applicant already assigned error
+    if (error instanceof Error && error.message === 'Applicant already assigned') {
+      return NextResponse.json(
+        { 
+          error: 'Applicant already assigned',
+          details: 'ผู้ยื่นขอถูกจับคู่ตำแหน่งไปแล้ว'
+        },
+        { status: 409 }
+      );
+    }
+    
+    // ตรวจสอบ Prisma error type
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code: string; message: string };
+      if (prismaError.code === 'P2028') {
+        return NextResponse.json(
+          { 
+            error: 'ระบบไม่สามารถดำเนินการได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง',
+            details: 'Transaction timeout - database is busy'
+          },
+          { status: 503 } // Service Unavailable
+        );
+      }
+    }
+    
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to assign position' },
       { status: 500 }

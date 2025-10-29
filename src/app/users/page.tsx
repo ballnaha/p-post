@@ -33,6 +33,7 @@ import {
   Button,
   Switch,
   FormControlLabel,
+  Skeleton,
 } from '@mui/material';
 import { Search, Refresh, Person, Email, CalendarToday, Security, PersonAdd as PersonAddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import DataTablePagination from '@/components/DataTablePagination';
@@ -72,7 +73,7 @@ export default function UsersPage() {
   const [isActive, setIsActive] = useState<'all' | 'true' | 'false'>('all');
   const [sortBy, setSortBy] = useState<'createdAt' | 'username' | 'lastLogin' | 'role'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // เปลี่ยนเป็น true สำหรับ initial load
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -674,9 +675,32 @@ export default function UsersPage() {
 
         {isMobile ? (
           <Box>
-            {rows.length === 0 ? (
+            {loading ? (
+              <Stack spacing={2}>
+                {Array.from({ length: pageSize }).map((_, index) => (
+                  <Card key={index} variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Skeleton variant="text" width="60%" height={24} />
+                          <Skeleton variant="text" width="40%" height={20} />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 3 }} />
+                          <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 3 }} />
+                        </Box>
+                      </Box>
+                      <Divider sx={{ my: 1 }} />
+                      <Skeleton variant="text" width="80%" />
+                      <Skeleton variant="text" width="70%" />
+                      <Skeleton variant="text" width="60%" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
+            ) : rows.length === 0 ? (
               <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                {loading ? 'กำลังโหลด...' : 'ไม่พบข้อมูล'}
+                ไม่พบข้อมูล
               </Paper>
             ) : (
               <Stack spacing={2}>
@@ -763,7 +787,33 @@ export default function UsersPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((u) => (
+                  {loading ? (
+                    Array.from({ length: pageSize }).map((_, index) => (
+                      <TableRow key={index}>
+                        <TableCell><Skeleton variant="text" width="80%" /></TableCell>
+                        <TableCell><Skeleton variant="text" width="90%" /></TableCell>
+                        <TableCell><Skeleton variant="text" width="70%" /></TableCell>
+                        <TableCell><Skeleton variant="text" width="70%" /></TableCell>
+                        <TableCell><Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 3 }} /></TableCell>
+                        <TableCell><Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 3 }} /></TableCell>
+                        <TableCell><Skeleton variant="text" width="90%" /></TableCell>
+                        <TableCell><Skeleton variant="text" width="90%" /></TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Skeleton variant="circular" width={32} height={32} />
+                            <Skeleton variant="circular" width={32} height={32} />
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                        ไม่พบข้อมูล
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                  rows.map((u) => (
                     <TableRow key={u.id} hover>
                       <TableCell>{u.username}</TableCell>
                       <TableCell>{u.email || '-'}</TableCell>
@@ -788,13 +838,7 @@ export default function UsersPage() {
                       </Box>
                     </TableCell>
                   </TableRow>
-                  ))}
-                  {rows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                        {loading ? 'กำลังโหลด...' : 'ไม่พบข้อมูล'}
-                      </TableCell>
-                    </TableRow>
+                  ))
                   )}
                 </TableBody>
               </Table>

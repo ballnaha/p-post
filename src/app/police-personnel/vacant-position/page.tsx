@@ -1356,7 +1356,7 @@ export default function VacantPositionPage() {
               {requestedPositionFilter && selectedTab === 'all' && (
                 <Button
                   variant="outlined"
-                  size="medium"
+                  size="small"
                   onClick={handleResetFilters}
                   startIcon={<RefreshIcon />}
                   sx={{ whiteSpace: 'nowrap' }}
@@ -1943,6 +1943,7 @@ export default function VacantPositionPage() {
                   value={editFormData.requestedPositionId || ''}
                   label="ตำแหน่งที่ขอ"
                   onChange={(e) => setEditFormData({ ...editFormData, requestedPositionId: Number(e.target.value) })}
+                  size="small"
                 >
                   <MenuItem value="">
                     <em>-- เลือกตำแหน่งที่ต้องการขอ --</em>
@@ -1962,6 +1963,7 @@ export default function VacantPositionPage() {
                 placeholder="ระบุชื่อผู้สนับสนุน/ผู้เสนอชื่อ"
                 value={editFormData.nominator}
                 onChange={(e) => setEditFormData({ ...editFormData, nominator: e.target.value })}
+                size="small"
               />
 
 
@@ -1974,6 +1976,7 @@ export default function VacantPositionPage() {
                 placeholder="เช่น เหตุผล, ข้อมูลเพิ่มเติม..."
                 value={editFormData.notes}
                 onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                size="small"
               />
             </Stack>
           </DialogContent>

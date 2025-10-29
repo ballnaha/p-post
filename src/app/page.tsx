@@ -190,104 +190,215 @@ export default function HomePage() {
         </Box>
 
         {/* Stats Cards Row 1 */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2, mb: 3 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2.5, mb: 4 }}>
           <Card sx={{ 
             borderRadius: 2,
             bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            border: 'none',
+            borderLeft: '4px solid',
+            borderColor: 'primary.main',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              transform: 'translateY(-4px)',
+            }
           }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
-                รายการทั้งหมด
-              </Typography>
-              <Typography variant="h4" fontWeight={700} color="primary.main" sx={{ mb: 0.5, fontSize: '2rem' }}>
-                {stats.totalVacantPositions.toLocaleString()}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                {stats.assignmentRate.toFixed(0)}% ของทั้งหมด
-              </Typography>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                    รายการทั้งหมด
+                  </Typography>
+                  <Typography variant="h3" fontWeight={700} color="text.primary" sx={{ mb: 0.5, fontSize: '2.25rem', lineHeight: 1 }}>
+                    {stats.totalVacantPositions.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2" color="success.main" sx={{ fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <TrendingUp sx={{ fontSize: 16 }} />
+                    {stats.assignmentRate.toFixed(0)}% จับคู่แล้ว
+                  </Typography>
+                </Box>
+                <Box sx={{ 
+                  width: 56,
+                  height: 56,
+                  borderRadius: 2,
+                  bgcolor: 'primary.50',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <AssignmentTurnedIn sx={{ fontSize: 28, color: 'primary.main' }} />
+                </Box>
+              </Box>
             </CardContent>
           </Card>
 
           <Card sx={{ 
             borderRadius: 2,
             bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            border: 'none',
+            borderLeft: '4px solid',
+            borderColor: 'success.main',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              transform: 'translateY(-4px)',
+            }
           }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
-                จับคู่สำเร็จ
-              </Typography>
-              <Typography variant="h4" fontWeight={700} color="success.main" sx={{ mb: 0.5, fontSize: '2rem' }}>
-                {stats.assignedPositions.toLocaleString()}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                จากทั้งหมด {stats.totalVacantPositions}
-              </Typography>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                    จับคู่สำเร็จ
+                  </Typography>
+                  <Typography variant="h3" fontWeight={700} color="text.primary" sx={{ mb: 0.5, fontSize: '2.25rem', lineHeight: 1 }}>
+                    {stats.assignedPositions.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                    จาก {stats.totalVacantPositions.toLocaleString()} รายการ
+                  </Typography>
+                </Box>
+                <Box sx={{ 
+                  width: 56,
+                  height: 56,
+                  borderRadius: 2,
+                  bgcolor: 'success.50',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <CheckCircle sx={{ fontSize: 28, color: 'success.main' }} />
+                </Box>
+              </Box>
             </CardContent>
           </Card>
 
           <Card sx={{ 
             borderRadius: 2,
             bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            border: 'none',
+            borderLeft: '4px solid',
+            borderColor: 'warning.main',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              transform: 'translateY(-4px)',
+            }
           }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
-                รอดำเนินการ
-              </Typography>
-              <Typography variant="h4" fontWeight={700} color="warning.main" sx={{ mb: 0.5, fontSize: '2rem' }}>
-                {stats.pendingPositions.toLocaleString()}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                รอการจับคู่
-              </Typography>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                    รอดำเนินการ
+                  </Typography>
+                  <Typography variant="h3" fontWeight={700} color="text.primary" sx={{ mb: 0.5, fontSize: '2.25rem', lineHeight: 1 }}>
+                    {stats.pendingPositions.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2" color="warning.main" sx={{ fontSize: '0.875rem', fontWeight: 600 }}>
+                    รอการจับคู่
+                  </Typography>
+                </Box>
+                <Box sx={{ 
+                  width: 56,
+                  height: 56,
+                  borderRadius: 2,
+                  bgcolor: 'warning.50',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <HelpOutline sx={{ fontSize: 28, color: 'warning.main' }} />
+                </Box>
+              </Box>
             </CardContent>
           </Card>
 
           <Card sx={{ 
             borderRadius: 2,
             bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            border: 'none',
+            borderLeft: '4px solid',
+            borderColor: 'info.main',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              transform: 'translateY(-4px)',
+            }
           }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
-                ผู้สมัคร
-              </Typography>
-              <Typography variant="h4" fontWeight={700} color="info.main" sx={{ mb: 0.5, fontSize: '2rem' }}>
-                {stats.totalApplicants.toLocaleString()}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                จำนวนบุคลากร
-              </Typography>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                    ผู้สมัคร
+                  </Typography>
+                  <Typography variant="h3" fontWeight={700} color="text.primary" sx={{ mb: 0.5, fontSize: '2.25rem', lineHeight: 1 }}>
+                    {stats.totalApplicants.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                    จำนวนบุคลากร
+                  </Typography>
+                </Box>
+                <Box sx={{ 
+                  width: 56,
+                  height: 56,
+                  borderRadius: 2,
+                  bgcolor: 'info.50',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <PeopleAlt sx={{ fontSize: 28, color: 'info.main' }} />
+                </Box>
+              </Box>
             </CardContent>
           </Card>
 
           <Card sx={{ 
             borderRadius: 2,
             bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            border: 'none',
+            borderLeft: '4px solid',
+            borderColor: '#9c27b0',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              transform: 'translateY(-4px)',
+            }
           }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
-                อัตราสำเร็จ
-              </Typography>
-              <Typography variant="h4" fontWeight={700} color="text.primary" sx={{ mb: 0.5, fontSize: '2rem' }}>
-                {stats.assignmentRate.toFixed(1)}%
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                การจับคู่
-              </Typography>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                    อัตราสำเร็จ
+                  </Typography>
+                  <Typography variant="h3" fontWeight={700} color="text.primary" sx={{ mb: 0.5, fontSize: '2.25rem', lineHeight: 1 }}>
+                    {stats.assignmentRate.toFixed(1)}%
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                    การจับคู่ตำแหน่ง
+                  </Typography>
+                </Box>
+                <Box sx={{ 
+                  width: 56,
+                  height: 56,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(156, 39, 176, 0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <SwapHoriz sx={{ fontSize: 28, color: '#9c27b0' }} />
+                </Box>
+              </Box>
             </CardContent>
           </Card>
         </Box>

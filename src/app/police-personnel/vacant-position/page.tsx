@@ -342,6 +342,18 @@ function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDet
                 ผู้สนับสนุน: <strong>{item.nominator}</strong>
               </Typography>
             )}
+
+            {/* หมายเหตุ */}
+            {item.notes && (
+              <Box sx={{ mt: 1, p: 1, bgcolor: 'info.50', borderRadius: 1, border: 1, borderColor: 'info.light' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 600, mb: 0.5 }}>
+                  📝 หมายเหตุ:
+                </Typography>
+                <Typography variant="body2" color="text.primary" sx={{ fontSize: '0.8rem', lineHeight: 1.4 }}>
+                  {item.notes}
+                </Typography>
+              </Box>
+            )}
           </>
         ) : (
           // Full View

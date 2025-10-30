@@ -44,6 +44,7 @@ import {
   KeyboardArrowUp as ArrowUpIcon,
   CalendarToday as CalendarIcon,
   Visibility as ViewIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
@@ -185,6 +186,17 @@ export default function AssignmentHistoryPage() {
     setSelectedPosCode(event.target.value);
   }, []);
 
+  const handleResetFilters = useCallback(() => {
+    setCurrentYear(new Date().getFullYear() + 543);
+    setSelectedPosCode('all');
+    setPage(0);
+  }, []);
+
+  const hasActiveFilters = useMemo(() => {
+    const defaultYear = new Date().getFullYear() + 543;
+    return currentYear !== defaultYear || selectedPosCode !== 'all';
+  }, [currentYear, selectedPosCode]);
+
   const handleViewModeChange = useCallback((event: React.MouseEvent<HTMLElement>, newViewMode: 'card' | 'table' | null) => {
     if (newViewMode !== null) {
       setViewMode(newViewMode);
@@ -304,12 +316,12 @@ export default function AssignmentHistoryPage() {
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', md: '1fr 2fr' }, 
+            display: 'flex',
+            flexWrap: 'wrap',
             gap: 2,
-            alignItems: 'start'
+            alignItems: 'center'
           }}>
-            <FormControl size="small">
+            <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel>ปี พ.ศ.</InputLabel>
               <Select
                 value={currentYear}
@@ -324,31 +336,44 @@ export default function AssignmentHistoryPage() {
               </Select>
             </FormControl>
 
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>ตำแหน่ง</InputLabel>
-                <Select
-                  value={selectedPosCode}
-                  onChange={handlePosCodeChange}
-                  label="ตำแหน่ง"
-                >
-                  <MenuItem value="all">ทั้งหมด</MenuItem>
-                  {posCodes.map((posCode) => (
-                    <MenuItem key={posCode.value} value={posCode.value}>
-                      {posCode.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+            <FormControl size="small" sx={{ flex: 1, minWidth: 250 }}>
+              <InputLabel>ตำแหน่ง</InputLabel>
+              <Select
+                value={selectedPosCode}
+                onChange={handlePosCodeChange}
+                label="ตำแหน่ง"
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                {posCodes.map((posCode) => (
+                  <MenuItem key={posCode.value} value={posCode.value}>
+                    {posCode.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-              <Chip
-                icon={<CheckCircleIcon />}
-                label={`พบ: ${filteredHistory.length} รายการ`}
-                color="primary"
-                variant="outlined"
-                sx={{ fontWeight: 600, minWidth: 140 }}
-              />
-            </Box>
+            {hasActiveFilters && (
+              <Tooltip title="ล้างตัวกรอง">
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="medium"
+                  startIcon={<ClearIcon />}
+                  onClick={handleResetFilters}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  ล้างตัวกรอง
+                </Button>
+              </Tooltip>
+            )}
+
+            <Chip
+              icon={<CheckCircleIcon />}
+              label={`พบ: ${filteredHistory.length} รายการ`}
+              color="primary"
+              variant="outlined"
+              sx={{ fontWeight: 600, minWidth: 140 }}
+            />
           </Box>
         </Paper>
 

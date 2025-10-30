@@ -50,9 +50,9 @@ export async function POST(request: NextRequest) {
       }
       console.log('✅ Applicant is not yet assigned');
 
-      // ดึงข้อมูลตำแหน่งที่ว่าง
+      // ดึงข้อมูลตำแหน่งที่ว่างจาก vacant_position (snapshot ถาวร)
       console.log('📥 Fetching vacant position:', vacantPositionId);
-      const vacantPosition = await tx.policePersonnel.findUnique({
+      const vacantPosition = await tx.vacantPosition.findUnique({
         where: { id: vacantPositionId },
         include: {
           posCodeMaster: true,
@@ -67,62 +67,16 @@ export async function POST(request: NextRequest) {
         position: vacantPosition.position,
         unit: vacantPosition.unit,
         fullName: vacantPosition.fullName,
-        isOccupied: !!(vacantPosition.fullName && vacantPosition.fullName.trim() !== '' && vacantPosition.fullName !== 'ตำแหน่งว่าง')
+        isAssigned: vacantPosition.isAssigned,
+        year: vacantPosition.year
       });
 
-      // ตรวจสอบว่าตำแหน่งนี้ถูกจับคู่ไปแล้วหรือไม่ (ตรวจจาก SwapTransaction)
-      const existingAssignment = await tx.swapTransaction.findFirst({
-        where: {
-          year: new Date().getFullYear() + 543,
-          swapType: 'vacant-assignment',
-          status: 'completed',
-          swapDetails: {
-            some: {
-              toPosition: vacantPosition.position,
-              toPositionNumber: vacantPosition.positionNumber,
-              toUnit: vacantPosition.unit,
-            }
-          }
-        },
-        select: {
-          id: true,
-          swapDetails: {
-            select: {
-              fullName: true
-            },
-            take: 1
-          }
-        }
-      });
-
-      if (existingAssignment && existingAssignment.swapDetails.length > 0) {
-        console.log('❌ Position already assigned to someone else');
-        const assignedTo = existingAssignment.swapDetails[0];
-        throw new Error(`CONFLICT:ตำแหน่งนี้ถูกจับคู่ให้กับ ${assignedTo.fullName} ไปแล้ว`);
+      // ตรวจสอบว่าตำแหน่งนี้ถูกจับคู่ไปแล้วหรือไม่
+      if (vacantPosition.isAssigned) {
+        console.log('❌ Position already assigned');
+        throw new Error('CONFLICT:ตำแหน่งนี้ถูกจับคู่ไปแล้ว');
       }
       console.log('✅ Position is available for assignment');
-
-      // ตรวจสอบว่าตำแหน่งยังว่างอยู่ (ไม่มีคนหรือเป็นตำแหน่งว่าง)
-      // อนุญาตให้จับคู่ได้ถ้า fullName เป็น null, '', 'ว่าง', 'ตำแหน่งว่าง', 'ว่าง (กันตำแหน่ง)', หรือ 'ว่าง(กันตำแหน่ง)'
-      const isVacant = !vacantPosition.fullName || 
-                       vacantPosition.fullName.trim() === '' || 
-                       vacantPosition.fullName === 'ว่าง' ||
-                       vacantPosition.fullName === 'ตำแหน่งว่าง' ||
-                       vacantPosition.fullName === 'ว่าง (กันตำแหน่ง)' ||
-                       vacantPosition.fullName === 'ว่าง(กันตำแหน่ง)';
-      
-      if (!isVacant) {
-        console.log('❌ Position already occupied by:', vacantPosition.fullName);
-        return NextResponse.json(
-          { 
-            error: 'Position is no longer vacant',
-            details: `ตำแหน่งนี้มีผู้ดำรงตำแหน่งแล้ว: ${vacantPosition.fullName}` 
-          },
-          { status: 409 }
-        );
-      }
-
-      console.log('✅ Position is vacant, proceeding with assignment...');
       
       // ไม่ต้อง update police_personnel เพราะปีต่อไปจะเป็นชุดข้อมูลใหม่
       // เก็บแค่ประวัติการจับคู่ใน SwapTransaction เท่านั้น
@@ -165,13 +119,21 @@ export async function POST(request: NextRequest) {
       });
       console.log('✅ Created transaction detail:', detail.id);
 
-      // อัพเดทสถานะผู้ยื่นขอเป็น "จับคู่แล้ว" แทนการลบ
-      console.log('� Updating applicant status to assigned...');
+      // อัพเดทสถานะผู้ยื่นขอเป็น "จับคู่แล้ว"
+      console.log('📝 Updating applicant status to assigned...');
       const updatedApplicant = await tx.vacantPosition.update({
         where: { id: applicantId },
         data: { isAssigned: true },
       });
       console.log('✅ Updated applicant status:', updatedApplicant.id);
+
+      // อัพเดทสถานะตำแหน่งว่างเป็น "จับคู่แล้ว"
+      console.log('📝 Updating vacant position status to assigned...');
+      await tx.vacantPosition.update({
+        where: { id: vacantPositionId },
+        data: { isAssigned: true },
+      });
+      console.log('✅ Updated vacant position status');
 
       console.log('✅ Transaction completed:', {
         vacantPositionId: vacantPositionId,

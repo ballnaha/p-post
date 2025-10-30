@@ -33,6 +33,7 @@ import {
   EventAvailable as VacantIcon,
   AssignmentTurnedIn as AssignmentIcon,
   History as HistoryIcon,
+  Sync as SyncIcon,
 } from '@mui/icons-material';
 import { useNavigation } from './NavigationContext';
 import { usePathname, useRouter } from 'next/navigation';
@@ -103,6 +104,12 @@ const Sidebar: React.FC = () => {
           href: '/police-personnel/vacant-position/assignment-history', 
           icon: <HistoryIcon sx={{ fontSize: 20 }} />, 
           key: 'assignment-history' 
+        },
+        { 
+          label: 'Sync ตำแหน่งว่าง', 
+          href: '/police-personnel/vacant-position/sync', 
+          icon: <SyncIcon sx={{ fontSize: 20 }} />, 
+          key: 'vacant-sync' 
         },
       ]
     },

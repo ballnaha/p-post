@@ -45,17 +45,9 @@ export async function POST(request: NextRequest) {
         throw new Error('Applicant is not assigned, cannot unassign');
       }
 
-      // ยกเลิกสถานะการจับคู่
-      console.log('🔄 Updating applicant status to unassigned...');
-      const updatedApplicant = await tx.vacantPosition.update({
-        where: { id: applicantId },
-        data: { isAssigned: false },
-      });
-      console.log('✅ Updated applicant status:', updatedApplicant.id);
-
-      // อัพเดทสถานะใน SwapTransaction เป็น 'cancelled'
-      console.log('🔄 Cancelling swap transaction...');
-      const cancelledTransactions = await tx.swapTransaction.updateMany({
+      // ค้นหา swap transaction ที่เกี่ยวข้อง
+      console.log('� Finding related swap transactions...');
+      const transactions = await tx.swapTransaction.findMany({
         where: {
           swapType: 'vacant-assignment',
           swapDetails: {
@@ -64,18 +56,75 @@ export async function POST(request: NextRequest) {
             }
           }
         },
-        data: {
-          status: 'cancelled',
-          notes: `ยกเลิกการจับคู่: ${reason || 'ไม่ระบุเหตุผล'}\n(ยกเลิกเมื่อ: ${new Date().toLocaleString('th-TH')})`
+        include: {
+          swapDetails: true
         }
       });
-      console.log('✅ Cancelled transactions:', cancelledTransactions.count);
+      console.log(`✅ Found ${transactions.length} transaction(s)`);
+
+      let deletedDetailsCount = 0;
+      let deletedTransactionsCount = 0;
+      let updatedVacantPositionIds: string[] = [];
+
+      // ลบ transaction details และ transactions
+      for (const transaction of transactions) {
+        console.log(`�️ Deleting transaction ${transaction.id}...`);
+        
+        // ลบ swap_transaction_detail ก่อน
+        const deletedDetails = await tx.swapTransactionDetail.deleteMany({
+          where: { transactionId: transaction.id }
+        });
+        deletedDetailsCount += deletedDetails.count;
+        console.log(`✅ Deleted ${deletedDetails.count} detail(s)`);
+
+        // เก็บ ID ของตำแหน่งว่างที่ต้อง reset isAssigned
+        for (const detail of transaction.swapDetails) {
+          // ค้นหาตำแหน่งว่างจาก toPosition + toUnit
+          const vacantPositions = await tx.vacantPosition.findMany({
+            where: {
+              position: detail.toPosition,
+              unit: detail.toUnit,
+              isAssigned: true
+            }
+          });
+          updatedVacantPositionIds.push(...vacantPositions.map(vp => vp.id));
+        }
+
+        // ลบ swap_transaction
+        await tx.swapTransaction.delete({
+          where: { id: transaction.id }
+        });
+        deletedTransactionsCount++;
+        console.log(`✅ Deleted transaction ${transaction.id}`);
+      }
+
+      // Reset isAssigned สำหรับผู้ยื่นขอ
+      console.log('🔄 Resetting applicant status...');
+      const updatedApplicant = await tx.vacantPosition.update({
+        where: { id: applicantId },
+        data: { isAssigned: false },
+      });
+      console.log('✅ Reset applicant status:', updatedApplicant.id);
+
+      // Reset isAssigned สำหรับตำแหน่งว่างที่เกี่ยวข้อง
+      if (updatedVacantPositionIds.length > 0) {
+        console.log(`🔄 Resetting ${updatedVacantPositionIds.length} vacant position(s)...`);
+        await tx.vacantPosition.updateMany({
+          where: {
+            id: { in: updatedVacantPositionIds }
+          },
+          data: { isAssigned: false }
+        });
+        console.log('✅ Reset vacant positions');
+      }
 
       return {
         success: true,
         applicantId: updatedApplicant.id,
-        cancelledTransactions: cancelledTransactions.count,
-        message: 'ยกเลิกการจับคู่สำเร็จ'
+        deletedTransactions: deletedTransactionsCount,
+        deletedDetails: deletedDetailsCount,
+        resetVacantPositions: updatedVacantPositionIds.length,
+        message: 'ลบการจับคู่สำเร็จ'
       };
     }, {
       maxWait: 5000, // รอ transaction เริ่มต้นสูงสุด 5 วินาที

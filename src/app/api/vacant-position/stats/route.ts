@@ -1,28 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// GET - ดึงสถิติตำแหน่งว่างจาก police_personnel
+// GET - ดึงสถิติตำแหน่งว่างจาก vacant_position (snapshot)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const year = searchParams.get('year');
 
-    // Query สำหรับตำแหน่งที่ว่าง (rank = null/empty)
-    const baseWhere = {
-      AND: [
-        {
-          OR: [
-            { rank: { equals: null } },
-            { rank: { equals: '' } }
-          ]
-        }
-      ]
+    if (!year) {
+      return NextResponse.json(
+        { error: 'Year parameter is required' },
+        { status: 400 }
+      );
+    }
+
+    const yearNumber = parseInt(year);
+
+    // Base where clause สำหรับ vacant_position
+    // เฉพาะตำแหน่งว่าง (ไม่ใช่ผู้ยื่นขอ)
+    const vacantPositionWhere = {
+      year: yearNumber,
+      nominator: null, // เฉพาะตำแหน่งว่าง
+      requestedPositionId: null
     };
 
-    // นับตำแหน่งว่างทั้งหมด
-    const totalVacant = await prisma.policePersonnel.count({
+    // นับตำแหน่งว่างทั้งหมดจาก vacant_position
+    const totalVacant = await prisma.vacantPosition.count({
       where: {
-        ...baseWhere,
+        ...vacantPositionWhere,
         OR: [
           { fullName: { equals: null } },
           { fullName: { equals: '' } },
@@ -33,29 +38,52 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // นับตำแหน่ง "ว่าง"
-    const vacant = await prisma.policePersonnel.count({
+    // นับตำแหน่ง "ว่าง" (ที่ยังไม่ถูกจับคู่)
+    const vacantNotAssigned = await prisma.vacantPosition.count({
       where: {
-        ...baseWhere,
-        fullName: { equals: 'ว่าง' }
+        ...vacantPositionWhere,
+        fullName: { equals: 'ว่าง' },
+        isAssigned: false
       }
     });
 
-    // นับตำแหน่ง "ว่าง (กันตำแหน่ง)" และ "ว่าง(กันตำแหน่ง)"
-    const reserved = await prisma.policePersonnel.count({
+    // นับตำแหน่ง "ว่าง" (ที่ถูกจับคู่แล้ว)
+    const vacantAssigned = await prisma.vacantPosition.count({
       where: {
-        ...baseWhere,
+        ...vacantPositionWhere,
+        fullName: { equals: 'ว่าง' },
+        isAssigned: true
+      }
+    });
+
+    // นับตำแหน่ง "ว่าง (กันตำแหน่ง)" (ที่ยังไม่ถูกจับคู่)
+    const reservedNotAssigned = await prisma.vacantPosition.count({
+      where: {
+        ...vacantPositionWhere,
         OR: [
           { fullName: { equals: 'ว่าง (กันตำแหน่ง)' } },
           { fullName: { equals: 'ว่าง(กันตำแหน่ง)' } }
-        ]
+        ],
+        isAssigned: false
+      }
+    });
+
+    // นับตำแหน่ง "ว่าง (กันตำแหน่ง)" (ที่ถูกจับคู่แล้ว)
+    const reservedAssigned = await prisma.vacantPosition.count({
+      where: {
+        ...vacantPositionWhere,
+        OR: [
+          { fullName: { equals: 'ว่าง (กันตำแหน่ง)' } },
+          { fullName: { equals: 'ว่าง(กันตำแหน่ง)' } }
+        ],
+        isAssigned: true
       }
     });
 
     // นับตำแหน่งที่ fullName = null หรือ empty
-    const emptyName = await prisma.policePersonnel.count({
+    const emptyName = await prisma.vacantPosition.count({
       where: {
-        ...baseWhere,
+        ...vacantPositionWhere,
         OR: [
           { fullName: { equals: null } },
           { fullName: { equals: '' } }
@@ -64,10 +92,14 @@ export async function GET(request: NextRequest) {
     });
 
     // นับจำนวนผู้ยื่นขอตำแหน่งจาก vacant_position
-    const applicantsWhere: any = {};
-    if (year) {
-      applicantsWhere.year = parseInt(year);
-    }
+    // ต้องกรองเฉพาะผู้ยื่นขอ (มี nominator หรือ requestedPositionId)
+    const applicantsWhere: any = {
+      year: yearNumber,
+      OR: [
+        { nominator: { not: null } }, // มีผู้เสนอ = เป็นผู้ยื่นขอ
+        { requestedPositionId: { not: null } } // มีตำแหน่งที่ขอ = เป็นผู้ยื่นขอ
+      ]
+    };
 
     const totalApplicants = await prisma.vacantPosition.count({
       where: applicantsWhere
@@ -157,12 +189,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        policePersonnel: {
-          totalVacant,
-          vacant,
-          reserved,
+        vacantPositions: {
+          totalVacant, // รวมทั้งหมด
+          vacant: vacantNotAssigned + vacantAssigned, // รวมทั้งหมดที่เป็น "ว่าง"
+          vacantNotAssigned, // ว่างที่ยังไม่จับคู่
+          vacantAssigned, // ว่างที่จับคู่แล้ว
+          reserved: reservedNotAssigned + reservedAssigned, // รวมทั้งหมดที่เป็น "กันตำแหน่ง"
+          reservedNotAssigned, // กันตำแหน่งที่ยังไม่จับคู่
+          reservedAssigned, // กันตำแหน่งที่จับคู่แล้ว
           emptyName,
-          other: totalVacant - vacant - reserved - emptyName
+          other: totalVacant - (vacantNotAssigned + vacantAssigned) - (reservedNotAssigned + reservedAssigned) - emptyName
         },
         applicants: {
           total: totalApplicants,
@@ -171,7 +207,7 @@ export async function GET(request: NextRequest) {
           pendingByPosition: pendingByPositionDetail,
           assignedByPosition: assignedByPositionDetail
         },
-        year: year ? parseInt(year) : null
+        year: yearNumber
       }
     });
   } catch (error) {

@@ -111,6 +111,15 @@ const Breadcrumbs: React.FC = () => {
           });
           break;
 
+        case 'assignment':
+          breadcrumbs.push({
+            label: 'การจับคู่ตำแหน่ง',
+            href: isLast ? undefined : '/police-personnel/vacant-position/assignment',
+            icon: <SwapHorizIcon sx={{ fontSize: 16 }} />,
+            isActive: isLast,
+          });
+          break;
+
         case 'users':
           breadcrumbs.push({
             label: 'ผู้ใช้งาน',

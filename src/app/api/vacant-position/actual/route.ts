@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// GET - ดึงรายการตำแหน่งที่ว่างจริง (ไม่มีคนดำรง) พร้อม filter
+// GET - ดึงรายการตำแหน่งที่ว่างจาก vacant_position (snapshot ถาวร)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -10,60 +10,57 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const unitFilter = searchParams.get('unit') || 'all';
     const posCodeFilter = searchParams.get('posCode') || 'all';
+    const year = searchParams.get('year'); // เพิ่ม year parameter
+
+    // ตรวจสอบ year (required)
+    if (!year) {
+      return NextResponse.json(
+        { success: false, error: 'Year parameter is required' },
+        { status: 400 }
+      );
+    }
+
+    const yearNumber = parseInt(year);
 
     // ถ้าไม่มี page และ limit จะดึงทั้งหมด
     const usePagination = page !== null && limit !== null;
     const skip = usePagination ? (page - 1) * limit : 0;
     const take = usePagination ? limit : undefined;
 
-    // สร้าง where clause สำหรับตำแหน่งที่ว่าง
-    // แสดงทั้ง: ว่าง, ว่าง (กันตำแหน่ง), ว่าง(กันตำแหน่ง), และตำแหน่งที่ไม่มีคน
+    // สร้าง where clause สำหรับตำแหน่งที่ว่าง จาก vacant_position
+    // ดึงเฉพาะตำแหน่งว่าง (ไม่ใช่ผู้ยื่นขอ) - แสดงทั้งที่จับคู่แล้วและยังไม่จับคู่
     const where: any = {
-      AND: [
-        {
-          OR: [
-            { rank: { equals: null } },
-            { rank: { equals: '' } }
-          ]
-        },
-        {
-          OR: [
-            { fullName: { equals: null } },
-            { fullName: { equals: '' } },
-            { fullName: { equals: 'ว่าง' } },
-            { fullName: { equals: 'ว่าง (กันตำแหน่ง)' } }, // มีเว้นวรรค
-            { fullName: { equals: 'ว่าง(กันตำแหน่ง)' } }    // ไม่มีเว้นวรรค
-          ]
-        }
-      ]
+      year: yearNumber,
+      nominator: null, // เฉพาะตำแหน่งว่าง (ไม่ใช่ผู้ยื่นขอ)
+      requestedPositionId: null
+      // ไม่กรอง isAssigned เพื่อให้แสดงทั้งที่จับคู่แล้วและยังไม่จับคู่
     };
 
     // เพิ่ม unit filter
     if (unitFilter !== 'all') {
-      where.AND.push({ unit: { equals: unitFilter } });
+      where.unit = unitFilter;
     }
 
     // เพิ่ม posCode filter
     if (posCodeFilter !== 'all') {
       const posCodeId = parseInt(posCodeFilter);
       if (!isNaN(posCodeId)) {
-        where.AND.push({ posCodeId: { equals: posCodeId } });
+        where.posCodeId = posCodeId;
       }
     }
 
     // เพิ่ม search filter
     if (search) {
-      const searchConditions = [
+      where.OR = [
         { position: { contains: search } },
         { unit: { contains: search } },
         { positionNumber: { contains: search } },
       ];
-      where.AND.push({ OR: searchConditions });
     }
 
-    // ดึงข้อมูลตำแหน่งที่ว่าง
+    // ดึงข้อมูลตำแหน่งที่ว่างจาก vacant_position
     const [vacantPositions, total] = await Promise.all([
-      prisma.policePersonnel.findMany({
+      prisma.vacantPosition.findMany({
         where,
         ...(usePagination ? { skip, take: take! } : {}),
         include: {
@@ -75,16 +72,17 @@ export async function GET(request: NextRequest) {
           { positionNumber: 'asc' },
         ],
       }),
-      prisma.policePersonnel.count({ where }),
+      prisma.vacantPosition.count({ where }),
     ]);
 
-    // เช็คว่าตำแหน่งไหนถูกจับคู่แล้ว
-    const positionIds = vacantPositions.map(p => p.id);
-    const assignedPositions = await prisma.swapTransactionDetail.findMany({
+    // เช็คว่าตำแหน่งเหล่านี้ถูกจับคู่แล้วหรือยัง (จาก swap_transaction_detail)
+    // ค้นหาจาก toPosition + toUnit ที่ตรงกับตำแหน่งว่าง
+    const assignedDetails = await prisma.swapTransactionDetail.findMany({
       where: {
         transaction: {
           swapType: 'vacant-assignment',
-          status: 'completed', // เฉพาะที่ยังไม่ถูกยกเลิก
+          status: 'completed',
+          year: yearNumber, // เฉพาะปีที่เลือก
         }
       },
       include: {
@@ -100,26 +98,30 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // สร้าง Map ของการจับคู่ตาม toPositionNumber (เลขที่ตำแหน่งที่จะไป)
-    // ใช้ toPositionNumber + toPosition + toUnit เป็น unique key
-    const positionAssignmentMap = new Map();
-    assignedPositions.forEach(detail => {
-      const key = `${detail.toPositionNumber}|${detail.toPosition}|${detail.toUnit}`;
-      if (!positionAssignmentMap.has(key)) {
-        positionAssignmentMap.set(key, {
-          assignedPersonName: detail.fullName,
-          assignedPersonRank: detail.rank,
-          assignedDate: detail.transaction.swapDate,
-          assignedYear: detail.transaction.year,
-          fromPosition: detail.fromPosition,
-          fromUnit: detail.fromUnit,
+    // สร้าง Map ของการจับคู่ (key = vacant_position.id)
+    // ค้นหาจาก toPosition + toUnit ที่ตรงกับตำแหน่งว่าง
+    const assignmentMap = new Map();
+    for (const detail of assignedDetails) {
+      // ค้นหาตำแหน่งที่ตรงกับ toPosition + toUnit
+      const matchedPosition = vacantPositions.find(vp => 
+        vp.position === detail.toPosition && vp.unit === detail.toUnit
+      );
+      
+      if (matchedPosition && !assignmentMap.has(matchedPosition.id)) {
+        assignmentMap.set(matchedPosition.id, {
+          assignedPersonName: detail.fullName || 'ไม่ระบุ',
+          assignedPersonRank: detail.rank || '',
+          assignedPosition: detail.toPosition,
+          assignedUnit: detail.toUnit,
+          assignedDate: detail.transaction?.swapDate || new Date(),
+          assignedYear: detail.transaction?.year || yearNumber,
         });
       }
-    });
+    }
 
-    // Return individual vacant positions instead of grouped
+    // Return individual vacant positions with assignmentInfo
     const result = vacantPositions.map(position => {
-      const key = `${position.positionNumber}|${position.position}|${position.unit}`;
+      const assignmentInfo = assignmentMap.get(position.id) || null;
       return {
         id: position.id,
         posCodeId: position.posCodeId,
@@ -129,8 +131,10 @@ export async function GET(request: NextRequest) {
         positionNumber: position.positionNumber,
         actingAs: position.actingAs,
         notes: position.notes,
-        fullName: position.fullName, // เพิ่ม fullName เพื่อใช้ filter ประเภทตำแหน่งว่าง
-        assignmentInfo: positionAssignmentMap.get(key) || null,
+        fullName: position.fullName,
+        isAssigned: position.isAssigned, // สถานะการจับคู่
+        year: position.year,
+        assignmentInfo, // เพิ่มข้อมูลการจับคู่
       };
     });
 

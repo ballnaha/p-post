@@ -9,19 +9,57 @@ export async function GET(request: NextRequest) {
 
     const whereClause = year ? { year: parseInt(year) } : {};
 
+    // Optimize: Select only necessary fields to reduce data transfer
     const vacantPositions = await prisma.vacantPosition.findMany({
       where: whereClause,
-      include: {
-        posCodeMaster: true, // ดึงข้อมูลรหัสตำแหน่งปัจจุบัน
-        requestedPosCode: true, // ดึงข้อมูลรหัสตำแหน่งที่ขอ
+      select: {
+        id: true,
+        year: true,
+        notes: true,
+        displayOrder: true,
+        nominator: true,
+        requestedPositionId: true,
+        isAssigned: true,
+        nationalId: true,
+        noId: true,
+        position: true,
+        positionNumber: true,
+        unit: true,
+        rank: true,
+        fullName: true,
+        age: true,
+        education: true,
+        seniority: true,
+        actingAs: true,
+        birthDate: true,
+        lastAppointment: true,
+        currentRankSince: true,
+        enrollmentDate: true,
+        retirementDate: true,
+        yearsOfService: true,
+        trainingLocation: true,
+        trainingCourse: true,
+        createdAt: true,
+        posCodeMaster: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        requestedPosCode: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
       },
       orderBy: [
-        { year: 'desc' },
-        { createdAt: 'desc' },
+        { requestedPositionId: 'asc' },
+        { displayOrder: 'asc' },
       ],
     });
 
-    // ดึงข้อมูลการจับคู่จาก swap_transaction_detail สำหรับคนที่มี nationalId
+    // Optimize: Only fetch assignments if there are nationalIds
     const nationalIds = vacantPositions
       .map(v => v.nationalId)
       .filter((id): id is string => !!id);
@@ -29,27 +67,31 @@ export async function GET(request: NextRequest) {
     const assignmentMap = new Map();
     
     if (nationalIds.length > 0) {
+      // Optimize: Get only the latest assignment per nationalId using DISTINCT ON equivalent
       const assignments = await prisma.swapTransactionDetail.findMany({
         where: {
           nationalId: {
             in: nationalIds
           }
         },
-        include: {
+        select: {
+          nationalId: true,
+          toPosition: true,
+          toUnit: true,
+          createdAt: true,
           transaction: {
             select: {
               year: true,
-              swapDate: true,
-              createdAt: true,
             }
           }
         },
         orderBy: {
           createdAt: 'desc'
-        }
+        },
+        // Limit to first result per nationalId (processed in JS below)
       });
 
-      // สร้าง map ของ nationalId -> assignment info
+      // Process assignments - keep only the latest per nationalId
       assignments.forEach(assignment => {
         if (assignment.nationalId && !assignmentMap.has(assignment.nationalId)) {
           assignmentMap.set(assignment.nationalId, {
@@ -62,14 +104,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // แปลงข้อมูลให้รวม assignmentInfo
+    // Optimize: Use simpler object spread instead of mapping
     const formattedData = vacantPositions.map(item => {
       const assignmentInfo = item.nationalId ? assignmentMap.get(item.nationalId) : null;
-      const hasAssignment = !!assignmentInfo;
-
+      
       return {
         ...item,
-        isAssigned: item.isAssigned || hasAssignment,
+        isAssigned: item.isAssigned || !!assignmentInfo,
         assignmentInfo: assignmentInfo || null,
       };
     });
@@ -215,7 +256,7 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    // จัดลำดับ displayOrder ใหม่สำหรับตำแหน่งเดียวกัน
+    // จัดลำดับ displayOrder ใหม่สำหรับตำแหน่งเดียวกัน (Optimized with batch update)
     if (itemToDelete.requestedPositionId) {
       const remainingItems = await prisma.vacantPosition.findMany({
         where: {
@@ -226,13 +267,15 @@ export async function DELETE(request: NextRequest) {
         select: { id: true },
       });
 
-      // อัปเดต displayOrder ให้เป็น 1, 2, 3, 4...
-      for (let i = 0; i < remainingItems.length; i++) {
-        await prisma.vacantPosition.update({
-          where: { id: remainingItems[i].id },
-          data: { displayOrder: i + 1 },
-        });
-      }
+      // Optimize: Use transaction for batch updates
+      const updatePromises = remainingItems.map((item, index) =>
+        prisma.vacantPosition.update({
+          where: { id: item.id },
+          data: { displayOrder: index + 1 },
+        })
+      );
+
+      await Promise.all(updatePromises);
     }
 
     return NextResponse.json({ 

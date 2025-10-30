@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { 
   Box, 
   Container, 
@@ -127,6 +127,33 @@ export default function HomePage() {
     setSelectedYear(Number(event.target.value));
   };
 
+  // Memoize sorted position details
+  const sortedPositionDetails = useMemo(() => {
+    if (!stats?.positionDetails) return [];
+    return [...stats.positionDetails].sort((a, b) => {
+      // เรียงตามตำแหน่งว่างที่มีมากที่สุดก่อน ถ้ามีข้อมูล
+      if (a.availableSlots && b.availableSlots) {
+        return b.availableSlots - a.availableSlots;
+      }
+      // ถ้าไม่มีข้อมูลตำแหน่งว่าง ให้เรียงตามจำนวนผู้สมัคร
+      return b.totalApplicants - a.totalApplicants;
+    });
+  }, [stats?.positionDetails]);
+
+  // Memoize pending positions
+  const pendingPositionsSorted = useMemo(() => {
+    if (!stats?.positionDetails) return [];
+    return stats.positionDetails
+      .filter(p => p.pendingCount > 0)
+      .sort((a, b) => b.pendingCount - a.pendingCount)
+      .slice(0, 5);
+  }, [stats?.positionDetails]);
+
+  // Memoize has pending count
+  const hasPendingPositions = useMemo(() => {
+    return stats?.positionDetails?.some(p => p.pendingCount > 0) ?? false;
+  }, [stats?.positionDetails]);
+
   if (loading) {
     return (
       <Layout>
@@ -190,7 +217,7 @@ export default function HomePage() {
         </Box>
 
         {/* Stats Cards Row 1 */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2.5, mb: 4 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2.5, mb: 4 }}>
           <Card sx={{ 
             borderRadius: 2,
             bgcolor: 'white',
@@ -360,47 +387,6 @@ export default function HomePage() {
             </CardContent>
           </Card>
 
-          <Card sx={{ 
-            borderRadius: 2,
-            bgcolor: 'white',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            border: 'none',
-            borderLeft: '4px solid',
-            borderColor: '#9c27b0',
-            transition: 'all 0.3s ease',
-            '&:hover': {
-              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-              transform: 'translateY(-4px)',
-            }
-          }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
-                    อัตราสำเร็จ
-                  </Typography>
-                  <Typography variant="h3" fontWeight={700} color="text.primary" sx={{ mb: 0.5, fontSize: '2.25rem', lineHeight: 1 }}>
-                    {stats.assignmentRate.toFixed(1)}%
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                    การจับคู่ตำแหน่ง
-                  </Typography>
-                </Box>
-                <Box sx={{ 
-                  width: 56,
-                  height: 56,
-                  borderRadius: 2,
-                  bgcolor: 'rgba(156, 39, 176, 0.08)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  <SwapHoriz sx={{ fontSize: 28, color: '#9c27b0' }} />
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
         </Box>
 
         {/* Details by Position Table */}
@@ -473,16 +459,7 @@ export default function HomePage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {stats.positionDetails
-                    .sort((a, b) => {
-                      // เรียงตามตำแหน่งว่างที่มีมากที่สุดก่อน ถ้ามีข้อมูล
-                      if (a.availableSlots && b.availableSlots) {
-                        return b.availableSlots - a.availableSlots;
-                      }
-                      // ถ้าไม่มีข้อมูลตำแหน่งว่าง ให้เรียงตามจำนวนผู้สมัคร
-                      return b.totalApplicants - a.totalApplicants;
-                    })
-                    .map((position, index) => {
+                  {sortedPositionDetails.map((position, index) => {
                       const hasSlotData = position.availableSlots !== undefined;
                       const slotStatus = hasSlotData 
                         ? position.availableSlots! > position.assignedCount 
@@ -760,11 +737,7 @@ export default function HomePage() {
               </Box>
               <CardContent sx={{ p: 2.5, bgcolor: 'white' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {stats.positionDetails
-                    .filter(p => p.pendingCount > 0)
-                    .sort((a, b) => b.pendingCount - a.pendingCount)
-                    .slice(0, 5)
-                    .map((position, index) => (
+                  {pendingPositionsSorted.map((position, index) => (
                     <Box key={position.posCodeId}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
@@ -808,7 +781,7 @@ export default function HomePage() {
                       {index < 4 && <Divider sx={{ mt: 2 }} />}
                     </Box>
                   ))}
-                  {stats.positionDetails.filter(p => p.pendingCount > 0).length === 0 && (
+                  {!hasPendingPositions && (
                     <Box sx={{ textAlign: 'center', py: 3 }}>
                       <CheckCircle sx={{ fontSize: 48, color: 'success.light', mb: 1 }} />
                       <Typography variant="body2" color="text.secondary" fontWeight={600}>

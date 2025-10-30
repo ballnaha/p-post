@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -423,8 +423,8 @@ export default function VacantPositionAssignmentPage() {
   // Year filter state
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear() + 543);
   
-  // Generate available years (from 2568 to current year)
-  const getAvailableYears = () => {
+  // Memoize available years
+  const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const startYear = 2568;
     const years: number[] = [];
@@ -434,9 +434,7 @@ export default function VacantPositionAssignmentPage() {
     }
     
     return years;
-  };
-
-  const availableYears = getAvailableYears();
+  }, []);
   
   // View mode state
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -479,16 +477,10 @@ export default function VacantPositionAssignmentPage() {
       setVacantPositions([]);
       setTotal(0);
     }
-  }, [filters.search, filters.unit, filters.posCode, currentYear]); // ลบ vacantTypeTab ออก
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search, filters.unit, filters.posCode, currentYear]);
 
-  // useEffect แยกสำหรับ filter ตาม tab (ไม่ต้องเรียก API ใหม่)
-  useEffect(() => {
-    if (allVacantPositions.length > 0) {
-      applyVacantTypeFilter(allVacantPositions, vacantTypeTab);
-    }
-  }, [vacantTypeTab, applicantFilterTab]); // เมื่อเปลี่ยน tab ให้ filter ข้อมูลที่มีอยู่
-
-  const fetchFilterOptions = async () => {
+  const fetchFilterOptions = useCallback(async () => {
     try {
       const response = await fetch('/api/vacant-position/filters');
       if (response.ok) {
@@ -498,9 +490,9 @@ export default function VacantPositionAssignmentPage() {
     } catch (error) {
       console.error('Error fetching filter options:', error);
     }
-  };
+  }, []);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const params = new URLSearchParams({
         year: currentYear.toString(),
@@ -514,9 +506,10 @@ export default function VacantPositionAssignmentPage() {
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentYear]);
 
-  const fetchVacantPositions = async () => {
+  const fetchVacantPositions = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -535,9 +528,6 @@ export default function VacantPositionAssignmentPage() {
         // เก็บข้อมูลทั้งหมด
         setAllVacantPositions(allPositions);
         setTotal(allPositions.length);
-        
-        // Filter ตามประเภทตำแหน่งว่างทันที
-        applyVacantTypeFilter(allPositions, vacantTypeTab);
       } else {
         toast.error('ไม่สามารถโหลดข้อมูลตำแหน่งที่ว่างได้');
       }
@@ -547,20 +537,21 @@ export default function VacantPositionAssignmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search, filters.unit, filters.posCode, currentYear]);
 
-  // ฟังก์ชัน filter ตามประเภทตำแหน่งว่าง
-  const applyVacantTypeFilter = (positions: VacantPosition[], filterType: 'all' | 'vacant' | 'reserved') => {
-    let filteredPositions = positions;
+  // Memoize filtered positions
+  const filteredVacantPositions = useMemo(() => {
+    let filteredPositions = allVacantPositions;
     
-    if (filterType === 'vacant') {
+    if (vacantTypeTab === 'vacant') {
       // แสดงเฉพาะ "ว่าง"
-      filteredPositions = positions.filter(pos => 
+      filteredPositions = filteredPositions.filter(pos => 
         pos.fullName === 'ว่าง'
       );
-    } else if (filterType === 'reserved') {
+    } else if (vacantTypeTab === 'reserved') {
       // แสดงเฉพาะ "ว่าง (กันตำแหน่ง)" หรือ "ว่าง(กันตำแหน่ง)"
-      filteredPositions = positions.filter(pos => 
+      filteredPositions = filteredPositions.filter(pos => 
         pos.fullName === 'ว่าง (กันตำแหน่ง)' || 
         pos.fullName === 'ว่าง(กันตำแหน่ง)'
       );
@@ -575,27 +566,30 @@ export default function VacantPositionAssignmentPage() {
     }
     
     // เรียงตามสถานะการจับคู่ (จับคู่แล้วขึ้นก่อน) สำหรับทุกกรณี
-    filteredPositions = filteredPositions.sort((a, b) => {
+    return [...filteredPositions].sort((a, b) => {
       const aHasAssignment = a.assignmentInfo ? 1 : 0;
       const bHasAssignment = b.assignmentInfo ? 1 : 0;
       // เรียงให้ที่จับคู่แล้วอยู่ด้านบน (1 มาก่อน 0)
       return bHasAssignment - aHasAssignment;
     });
-    
-    setVacantPositions(filteredPositions);
-  };
+  }, [allVacantPositions, vacantTypeTab, applicantFilterTab]);
 
-  const handleFilterChange = (filterType: string, value: string) => {
+  // Update vacantPositions when filtered positions change
+  useEffect(() => {
+    setVacantPositions(filteredVacantPositions);
+  }, [filteredVacantPositions]);
+
+  const handleFilterChange = useCallback((filterType: string, value: string) => {
     setFilters(prev => ({ ...prev, [filterType]: value }));
     // ไม่ต้องรีเซ็ต page เพราะไม่มี pagination
-  };
+  }, []);
 
-  const handleSearchChange = (value: string) => {
+  const handleSearchChange = useCallback((value: string) => {
     setFilters(prev => ({ ...prev, search: value }));
     // ไม่ต้องรีเซ็ต page เพราะไม่มี pagination
-  };
+  }, []);
 
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setFilters({
       search: '',
       unit: 'all',
@@ -608,23 +602,23 @@ export default function VacantPositionAssignmentPage() {
     setAllVacantPositions([]);
     setVacantPositions([]);
     setTotal(0);
-  };
+  }, []);
 
-  const handleChangePage = (newPage: number) => {
+  const handleChangePage = useCallback((newPage: number) => {
     setPage(newPage);
-  };
+  }, []);
 
-  const handleChangeRowsPerPage = (newRowsPerPage: number) => {
+  const handleChangeRowsPerPage = useCallback((newRowsPerPage: number) => {
     setRowsPerPage(newRowsPerPage);
     setPage(0);
-  };
+  }, []);
 
-  const handleYearChange = (event: SelectChangeEvent<number>) => {
+  const handleYearChange = useCallback((event: SelectChangeEvent<number>) => {
     setCurrentYear(Number(event.target.value));
     setPage(0); // Reset page when year changes
-  };
+  }, []);
 
-  const fetchApplicants = async (posCodeId: number) => {
+  const fetchApplicants = useCallback(async (posCodeId: number) => {
     setLoadingApplicants(true);
     setApplicants([]); // เคลียร์ข้อมูลเก่าก่อน
     try {
@@ -648,20 +642,21 @@ export default function VacantPositionAssignmentPage() {
     } finally {
       setLoadingApplicants(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentYear]);
 
-  const handleViewApplicants = (position: VacantPosition) => {
+  const handleViewApplicants = useCallback((position: VacantPosition) => {
     setSelectedPosition(position);
     fetchApplicants(position.posCodeId);
     setDialogOpen(true);
     setHasOrderChanged(false);
-  };
+  }, [fetchApplicants]);
 
-  const handleDragStart = (event: DragStartEvent) => {
+  const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string);
-  };
+  }, []);
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     
     setActiveId(null);
@@ -676,10 +671,10 @@ export default function VacantPositionAssignmentPage() {
         setSwapConfirmOpen(true);
       }
     }
-  };
+  }, [applicants]);
 
   // ยืนยันการสลับจาก Dialog
-  const handleSwapConfirm = async () => {
+  const handleSwapConfirm = useCallback(async () => {
     const { activeItem, overItem } = swapData;
     
     if (!activeItem || !overItem || !selectedPosition) return;
@@ -730,15 +725,16 @@ export default function VacantPositionAssignmentPage() {
     } finally {
       setIsSwapping(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swapData, selectedPosition, applicants]);
 
   // ยกเลิกการสลับ
-  const handleSwapCancel = () => {
+  const handleSwapCancel = useCallback(() => {
     setSwapConfirmOpen(false);
     setSwapData({ activeItem: null, overItem: null });
-  };
+  }, []);
 
-  const handleSaveOrder = async () => {
+  const handleSaveOrder = useCallback(async () => {
     if (!selectedPosition) return;
 
     setLoading(true);
@@ -768,9 +764,10 @@ export default function VacantPositionAssignmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPosition, applicants]);
 
-  const handleAssignPosition = (applicant: Applicant, vacantPosition: VacantPosition) => {
+  const handleAssignPosition = useCallback((applicant: Applicant, vacantPosition: VacantPosition) => {
     // ตรวจสอบว่าผู้สมัครถูกจับคู่ไปแล้วหรือไม่
     if (applicant.isAssigned) {
       toast.error(`${applicant.fullName} ถูกจับคู่ตำแหน่งไปแล้ว`);
@@ -787,9 +784,10 @@ export default function VacantPositionAssignmentPage() {
     setSelectedVacantSlot(vacantPosition);
     setAssignNotes('');
     setAssignDialogOpen(true);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const confirmAssignment = async () => {
+  const confirmAssignment = useCallback(async () => {
     if (!selectedApplicant || !selectedVacantSlot) {
       console.log('❌ Missing data:', { selectedApplicant, selectedVacantSlot });
       return;
@@ -895,15 +893,16 @@ export default function VacantPositionAssignmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedApplicant, selectedVacantSlot, assignNotes, selectedPosition, dialogOpen, currentYear, fetchApplicants, fetchVacantPositions, fetchStats]);
 
-  const handleUnassign = async (applicant: Applicant) => {
+  const handleUnassign = useCallback(async (applicant: Applicant) => {
     setUnassignApplicant(applicant);
     setUnassignReason('');
     setUnassignDialogOpen(true);
-  };
+  }, []);
 
-  const confirmUnassign = async () => {
+  const confirmUnassign = useCallback(async () => {
     if (!unassignApplicant) return;
 
     setLoading(true);
@@ -995,7 +994,8 @@ export default function VacantPositionAssignmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unassignApplicant, unassignReason, selectedPosition, dialogOpen, currentYear, fetchApplicants, fetchVacantPositions, fetchStats]);
 
   return (
     <Layout>

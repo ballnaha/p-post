@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -130,7 +130,6 @@ export default function SwapListPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SwapTransaction[]>([]);
-  const [filteredData, setFilteredData] = useState<SwapTransaction[]>([]);
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear() + 543);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<SwapTransaction | null>(null);
@@ -147,7 +146,6 @@ export default function SwapListPage() {
   
   // Filter states
   const [groupNameFilter, setGroupNameFilter] = useState<string | null>(null);
-  const [groupNameOptions, setGroupNameOptions] = useState<string[]>([]);
   
   // Pagination states
   const [page, setPage] = useState(0);
@@ -168,24 +166,36 @@ export default function SwapListPage() {
 
   const availableYears = getAvailableYears();
 
-  useEffect(() => {
-    fetchData();
-  }, [currentYear]);
+  // Memoized filter options - only recalculate when data changes
+  const groupNameOptions = useMemo(() => {
+    const names = Array.from(new Set(data.map(item => item.groupName).filter(Boolean))) as string[];
+    return names.sort();
+  }, [data]);
 
-  // Update filtered data and options when data changes
-  useEffect(() => {
-    if (!loading) {
-      applyFilters();
-      updateFilterOptions();
+  // Memoized filtered data - only recalculate when dependencies change
+  const filteredData = useMemo(() => {
+    let filtered = [...data];
+
+    if (groupNameFilter) {
+      filtered = filtered.filter(item => item.groupName === groupNameFilter);
     }
-  }, [data, groupNameFilter, loading]);
 
-  const fetchData = async () => {
+    return filtered;
+  }, [data, groupNameFilter]);
+
+  // Memoized paginated data
+  const paginatedData = useMemo(() => {
+    return filteredData.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
+    );
+  }, [filteredData, page, rowsPerPage]);
+
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       // Clear data immediately when starting to load
       setData([]);
-      setFilteredData([]);
       
       // Filter by swapType=two-way to get only two-way swap transactions
       const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=two-way`);
@@ -202,57 +212,43 @@ export default function SwapListPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentYear]); // Removed toast from dependencies
 
-  const updateFilterOptions = () => {
-    // Extract unique group names
-    const names = Array.from(new Set(data.map(item => item.groupName).filter(Boolean))) as string[];
-    
-    setGroupNameOptions(names.sort());
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const applyFilters = () => {
-    let filtered = [...data];
-
-    if (groupNameFilter) {
-      filtered = filtered.filter(item => item.groupName === groupNameFilter);
-    }
-
-    setFilteredData(filtered);
-    setPage(0); // Reset to first page when filters change
-  };
-
-  const handleResetFilters = () => {
+  const handleResetFilters = useCallback(() => {
     setGroupNameFilter(null);
     setPage(0); // Reset to first page when filters are reset
-  };
+  }, []);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, item: SwapTransaction) => {
+  const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, item: SwapTransaction) => {
     setAnchorEl(event.currentTarget);
     setSelectedItem(item);
-  };
+  }, []);
 
-  const handleMenuClose = () => {
+  const handleMenuClose = useCallback(() => {
     setAnchorEl(null);
     setSelectedItem(null);
-  };
+  }, []);
 
-  const handleEdit = () => {
+  const handleEdit = useCallback(() => {
     if (selectedItem) {
       router.push(`/police-personnel/swap-list/edit/${selectedItem.id}`);
     }
     handleMenuClose();
-  };
+  }, [selectedItem, router, handleMenuClose]);
 
-  const handleDeleteClick = () => {
+  const handleDeleteClick = useCallback(() => {
     if (selectedItem) {
       setItemToDelete(selectedItem);
       setDeleteDialogOpen(true);
     }
     handleMenuClose();
-  };
+  }, [selectedItem, handleMenuClose]);
 
-  const handleViewPersonnelDetail = async (personnelId: string) => {
+  const handleViewPersonnelDetail = useCallback(async (personnelId: string) => {
     try {
       setLoadingPersonnel(true);
       setPersonnelDetailModalOpen(true);
@@ -274,11 +270,11 @@ export default function SwapListPage() {
     } finally {
       setLoadingPersonnel(false);
     }
-  };
+  }, []); // Removed toast from dependencies
 
-  const handleClosePersonnelDetailModal = () => {
+  const handleClosePersonnelDetailModal = useCallback(() => {
     setPersonnelDetailModalOpen(false);
-  };
+  }, []);
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return '-';
@@ -325,7 +321,7 @@ export default function SwapListPage() {
     return dateString;
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     if (!itemToDelete) return;
 
     setIsDeleting(true);
@@ -350,13 +346,14 @@ export default function SwapListPage() {
       setDeleteDialogOpen(false);
       setItemToDelete(null);
     }
-  };
+  }, [itemToDelete, fetchData]); // Removed toast from dependencies
 
-  const handleYearChange = (event: SelectChangeEvent<number>) => {
+  const handleYearChange = useCallback((event: SelectChangeEvent<number>) => {
     setCurrentYear(Number(event.target.value));
-  };
+    setPage(0); // Reset page when year changes
+  }, []);
 
-  const handleViewModeChange = (_event: React.MouseEvent<HTMLElement>, newMode: 'table' | 'card' | null) => {
+  const handleViewModeChange = useCallback((_event: React.MouseEvent<HTMLElement>, newMode: 'table' | 'card' | null) => {
     if (newMode !== null) {
       setViewMode(newMode);
       // Reset pagination when switching view mode
@@ -368,9 +365,9 @@ export default function SwapListPage() {
         setRowsPerPage(12);
       }
     }
-  };
+  }, []);
 
-  const toggleRow = (id: string) => {
+  const toggleRow = useCallback((id: string) => {
     setExpandedRows(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -380,7 +377,7 @@ export default function SwapListPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
   const getSwapTypeLabel = (type: string) => {
     switch (type) {
@@ -410,20 +407,19 @@ export default function SwapListPage() {
   };
 
   // Pagination handlers
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
-  };
+  }, []);
 
-  const handleRowsPerPageChange = (newRowsPerPage: number) => {
+  const handleRowsPerPageChange = useCallback((newRowsPerPage: number) => {
     setRowsPerPage(newRowsPerPage);
     setPage(0);
-  };
+  }, []);
 
-  // Get paginated data
-  const paginatedData = filteredData.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  // Reset page when filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [groupNameFilter]);
 
   return (
     <Layout>

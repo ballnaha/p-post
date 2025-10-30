@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -85,7 +85,6 @@ interface PosCode {
 
 export default function AssignmentHistoryPage() {
   const [assignmentHistory, setAssignmentHistory] = useState<AssignmentHistory[]>([]);
-  const [filteredHistory, setFilteredHistory] = useState<AssignmentHistory[]>([]);
   const [loading, setLoading] = useState(true); // เปลี่ยนเป็น true สำหรับ initial load
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear() + 543);
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
@@ -96,8 +95,8 @@ export default function AssignmentHistoryPage() {
   const [rowsPerPage, setRowsPerPage] = useState(12); // Default for card view
   const toast = useToast();
 
-  // Generate available years
-  const getAvailableYears = () => {
+  // Generate available years - Memoize เพื่อไม่ต้องคำนวณใหม่ทุกครั้ง
+  const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const startYear = 2568;
     const years = [];
@@ -105,10 +104,10 @@ export default function AssignmentHistoryPage() {
       years.push(year);
     }
     return years;
-  };
+  }, []);
 
-  // ดึงรายการตำแหน่งสำหรับ filter (posCode ของตำแหน่งที่รับสมัคร)
-  const fetchPosCodes = async () => {
+  // ดึงรายการตำแหน่งสำหรับ filter (posCode ของตำแหน่งที่รับสมัคร) - ใช้ useCallback
+  const fetchPosCodes = useCallback(async () => {
     try {
       const response = await fetch(`/api/vacant-position/requested-positions?year=${currentYear}`);
       if (response.ok) {
@@ -118,10 +117,10 @@ export default function AssignmentHistoryPage() {
     } catch (error) {
       console.error('Error fetching pos codes:', error);
     }
-  };
+  }, [currentYear]);
 
-  // ดึงประวัติการจับคู่ตำแหน่ง
-  const fetchAssignmentHistory = async () => {
+  // ดึงประวัติการจับคู่ตำแหน่ง - ใช้ useCallback (ไม่ใส่ toast ใน deps เพราะจะ loop)
+  const fetchAssignmentHistory = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/swap-transactions?swapType=vacant-assignment&year=${currentYear}`);
@@ -138,53 +137,55 @@ export default function AssignmentHistoryPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Filter ตามตำแหน่ง (ไม่มี status tab แล้ว - แสดงเฉพาะ completed)
-  useEffect(() => {
-    const filterData = () => {
-      // ถ้ายังโหลดอยู่ ไม่ต้อง filter
-      if (loading) return;
-      
-      let filtered = assignmentHistory;
-
-      // Filter เฉพาะ completed
-      filtered = filtered.filter((history) => history.status === 'completed');
-
-      // Filter by posCode (ใช้ requestedPositionId สำหรับ vacant-assignment)
-      if (selectedPosCode !== 'all') {
-        filtered = filtered.filter((history) =>
-          history.swapDetails.some(
-            (detail) => detail.requestedPositionId === parseInt(selectedPosCode)
-          )
-        );
-      }
-
-      setFilteredHistory(filtered);
-      setPage(0); // Reset to first page when filter changes
-    };
-    
-    filterData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPosCode, assignmentHistory.length, loading]);
+  }, [currentYear]);
+
+  // Memoize filtered history เพื่อลดการคำนวณซ้ำ
+  const filteredHistory = useMemo(() => {
+    // ถ้ายังโหลดอยู่ ให้ return empty array
+    if (loading) return [];
+    
+    let filtered = assignmentHistory;
+
+    // Filter เฉพาะ completed
+    filtered = filtered.filter((history) => history.status === 'completed');
+
+    // Filter by posCode (ใช้ requestedPositionId สำหรับ vacant-assignment)
+    if (selectedPosCode !== 'all') {
+      filtered = filtered.filter((history) =>
+        history.swapDetails.some(
+          (detail) => detail.requestedPositionId === parseInt(selectedPosCode)
+        )
+      );
+    }
+
+    return filtered;
+  }, [selectedPosCode, assignmentHistory, loading]);
+
+  // Reset page เมื่อ filter เปลี่ยน
+  useEffect(() => {
+    setPage(0);
+  }, [selectedPosCode, assignmentHistory.length]);
 
   useEffect(() => {
     fetchPosCodes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]); // รีเฟรช posCodes เมื่อเปลี่ยนปี
 
   useEffect(() => {
     fetchAssignmentHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
-  const handleYearChange = (event: SelectChangeEvent<number>) => {
+  const handleYearChange = useCallback((event: SelectChangeEvent<number>) => {
     setCurrentYear(event.target.value as number);
-  };
+  }, []);
 
-  const handlePosCodeChange = (event: SelectChangeEvent<string>) => {
+  const handlePosCodeChange = useCallback((event: SelectChangeEvent<string>) => {
     setSelectedPosCode(event.target.value);
-  };
+  }, []);
 
-  const handleViewModeChange = (event: React.MouseEvent<HTMLElement>, newViewMode: 'card' | 'table' | null) => {
+  const handleViewModeChange = useCallback((event: React.MouseEvent<HTMLElement>, newViewMode: 'card' | 'table' | null) => {
     if (newViewMode !== null) {
       setViewMode(newViewMode);
       // Adjust rows per page based on view mode
@@ -195,9 +196,9 @@ export default function AssignmentHistoryPage() {
       }
       setPage(0);
     }
-  };
+  }, []);
 
-  const toggleRow = (id: string) => {
+  const toggleRow = useCallback((id: string) => {
     setExpandedRows(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -207,38 +208,40 @@ export default function AssignmentHistoryPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const handleChangePage = (newPage: number) => {
+  const handleChangePage = useCallback((newPage: number) => {
     setPage(newPage);
-  };
+  }, []);
 
-  const handleChangeRowsPerPage = (newRowsPerPage: number) => {
+  const handleChangeRowsPerPage = useCallback((newRowsPerPage: number) => {
     setRowsPerPage(newRowsPerPage);
     setPage(0);
-  };
+  }, []);
 
-  const getStatusColor = (status: string): 'success' | 'error' | 'default' => {
+  const getStatusColor = useCallback((status: string): 'success' | 'error' | 'default' => {
     switch (status) {
       case 'completed': return 'success';
       case 'cancelled': return 'error';
       default: return 'default';
     }
-  };
+  }, []);
 
-  const getStatusLabel = (status: string): string => {
+  const getStatusLabel = useCallback((status: string): string => {
     switch (status) {
       case 'completed': return 'จับคู่สำเร็จ';
       case 'cancelled': return 'ยกเลิกจับคู่';
       default: return status;
     }
-  };
+  }, []);
 
-  // Pagination
-  const paginatedData = filteredHistory.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  // Memoize paginated data
+  const paginatedData = useMemo(() => {
+    return filteredHistory.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
+    );
+  }, [filteredHistory, page, rowsPerPage]);
 
   return (
     <Layout>
@@ -313,7 +316,7 @@ export default function AssignmentHistoryPage() {
                 onChange={handleYearChange}
                 label="ปี พ.ศ."
               >
-                {getAvailableYears().map((year) => (
+                {availableYears.map((year) => (
                   <MenuItem key={year} value={year}>
                     {year}
                   </MenuItem>

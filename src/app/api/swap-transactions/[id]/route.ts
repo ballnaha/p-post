@@ -94,10 +94,12 @@ export async function PUT(
       // สร้าง swapDetails ใหม่
       updateData.swapDetails = {
         create: swapDetails.map((detail: any) => ({
+          sequence: detail.sequence,
           personnelId: detail.personnelId,
           nationalId: detail.nationalId,
           fullName: detail.fullName,
           rank: detail.rank,
+          posCodeId: detail.posCodeId,
           fromPosition: detail.fromPosition,
           fromPositionNumber: detail.fromPositionNumber,
           fromUnit: detail.fromUnit,

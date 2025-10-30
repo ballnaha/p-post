@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -160,7 +160,7 @@ interface SortableCardProps {
   onToggleAssignment?: () => void; // เพิ่ม prop สำหรับ toggle
 }
 
-function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDetail, onMenuOpen, draggedItem, isAssignmentExpanded, onToggleAssignment }: SortableCardProps) {
+const SortableCard = React.memo(function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDetail, onMenuOpen, draggedItem, isAssignmentExpanded, onToggleAssignment }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -668,10 +668,10 @@ function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDet
       </CardActions>
     </Card>
   );
-}
+});
 
 // Skeleton Loading Components
-function CardSkeleton() {
+const CardSkeleton = React.memo(function CardSkeleton() {
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardContent sx={{ flexGrow: 1, pb: 2 }}>
@@ -714,9 +714,9 @@ function CardSkeleton() {
       </CardActions>
     </Card>
   );
-}
+});
 
-function TableSkeleton() {
+const TableSkeleton = React.memo(function TableSkeleton() {
   return (
     <TableBody>
       {[...Array(5)].map((_, index) => (
@@ -748,7 +748,7 @@ function TableSkeleton() {
       ))}
     </TableBody>
   );
-}
+});
 
 export default function VacantPositionPage() {
   const toast = useToast();
@@ -1014,7 +1014,8 @@ export default function VacantPositionPage() {
     setSwapData({ activeItem: null, overItem: null });
   };
 
-  const autoAssignDisplayOrder = async (data: VacantPositionData[]): Promise<VacantPositionData[]> => {
+  // Optimize: Use useCallback and batch updates
+  const autoAssignDisplayOrder = useCallback(async (data: VacantPositionData[]): Promise<VacantPositionData[]> => {
     // Group data by requestedPositionId
     const groupedData = data.reduce((acc, item) => {
       const groupId = item.requestedPositionId || 0;
@@ -1027,7 +1028,7 @@ export default function VacantPositionPage() {
 
     // Process each group
     const updatedItems: VacantPositionData[] = [];
-    const updatePromises: Promise<any>[] = [];
+    const itemsToUpdate: Array<{ id: string; displayOrder: number }> = [];
 
     for (const [groupId, groupItems] of Object.entries(groupedData)) {
       // Sort items in group by displayOrder (nulls last)
@@ -1041,32 +1042,39 @@ export default function VacantPositionPage() {
       groupItems.forEach((item, index) => {
         if (item.displayOrder === null || item.displayOrder === undefined) {
           item.displayOrder = index + 1;
-          // Update database
-          updatePromises.push(
-            fetch(`/api/vacant-position/${item.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ displayOrder: item.displayOrder })
-            })
-          );
+          itemsToUpdate.push({ id: item.id, displayOrder: item.displayOrder });
         }
       });
 
       updatedItems.push(...groupItems);
     }
 
-    // Wait for all updates to complete
-    if (updatePromises.length > 0) {
+    // Optimize: Batch update all items in one request if there are updates
+    if (itemsToUpdate.length > 0) {
       try {
-        await Promise.all(updatePromises);
-        console.log(`Updated displayOrder for ${updatePromises.length} items`);
+        // Could implement a batch update endpoint for better performance
+        // For now, use Promise.all with limit to avoid overwhelming the server
+        const batchSize = 10;
+        for (let i = 0; i < itemsToUpdate.length; i += batchSize) {
+          const batch = itemsToUpdate.slice(i, i + batchSize);
+          await Promise.all(
+            batch.map(item =>
+              fetch(`/api/vacant-position/${item.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayOrder: item.displayOrder })
+              })
+            )
+          );
+        }
+        console.log(`Updated displayOrder for ${itemsToUpdate.length} items`);
       } catch (error) {
         console.error('Error updating displayOrder:', error);
       }
     }
 
     return updatedItems;
-  };
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -1103,41 +1111,46 @@ export default function VacantPositionPage() {
     }
   };
 
-  const updateFilterOptions = () => {
-    // Extract unique requested positions (from requestedPosCode)
-    const requestedPositions = data
-      .filter(item => item.requestedPosCode)
-      .map(item => item.requestedPosCode!)
-      .filter((value, index, self) => 
-        index === self.findIndex((t) => t.id === value.id)
-      )
-      .sort((a, b) => a.id - b.id);
+  // Optimize: Use useCallback for filter options
+  const updateFilterOptions = useCallback(() => {
+    // Optimize: Use Map for faster lookups
+    const positionMap = new Map<number, { id: number; name: string }>();
     
+    data.forEach(item => {
+      if (item.requestedPosCode && !positionMap.has(item.requestedPosCode.id)) {
+        positionMap.set(item.requestedPosCode.id, item.requestedPosCode);
+      }
+    });
+    
+    const requestedPositions = Array.from(positionMap.values()).sort((a, b) => a.id - b.id);
     setRequestedPositionOptions(requestedPositions);
     
     // Update position groups for tabs
     updatePositionGroups();
-  };
+  }, [data]);
 
-  const updatePositionGroups = () => {
-    const groups = data.reduce((acc, item) => {
+  // Optimize: Use useCallback with memoization
+  const updatePositionGroups = useCallback(() => {
+    // Optimize: Use Map for O(1) lookup instead of array.find
+    const groupMap = new Map<number, { id: number; name: string; count: number }>();
+    
+    data.forEach(item => {
       if (item.requestedPosCode) {
-        const existing = acc.find(g => g.id === item.requestedPosCode!.id);
+        const existing = groupMap.get(item.requestedPosCode.id);
         if (existing) {
           existing.count++;
         } else {
-          acc.push({
+          groupMap.set(item.requestedPosCode.id, {
             id: item.requestedPosCode.id,
             name: item.requestedPosCode.name,
             count: 1
           });
         }
       }
-      return acc;
-    }, [] as Array<{ id: number; name: string; count: number }>);
+    });
     
-    // Sort by position ID
-    groups.sort((a, b) => a.id - b.id);
+    // Convert to array and sort
+    const groups = Array.from(groupMap.values()).sort((a, b) => a.id - b.id);
     setPositionGroups(groups);
     
     // Validate selectedTab - if current tab doesn't exist in groups, reset to 'all'
@@ -1147,9 +1160,10 @@ export default function VacantPositionPage() {
         setSelectedTab('all');
       }
     }
-  };
+  }, [data, selectedTab]);
 
-  const applyFilters = () => {
+  // Optimize: Use useCallback for filter function
+  const applyFilters = useCallback(() => {
     let filtered = [...data];
 
     // Apply tab filter
@@ -1176,7 +1190,7 @@ export default function VacantPositionPage() {
 
     setFilteredData(filtered);
     setPage(0); // Reset to first page when filters change
-  };
+  }, [data, selectedTab, requestedPositionFilter]);
 
   const handleResetFilters = () => {
     setRequestedPositionFilter(null);
@@ -1324,17 +1338,7 @@ export default function VacantPositionPage() {
     setItemToDelete(null);
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, item: VacantPositionData) => {
-    setAnchorEl(event.currentTarget);
-    setMenuItem(item);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setMenuItem(null);
-  };
-
-  const handleEdit = (item: VacantPositionData) => {
+  const handleEdit = useCallback((item: VacantPositionData) => {
     setSelectedPersonnel(item);
     setEditFormData({
       nominator: item.nominator || '',
@@ -1343,9 +1347,9 @@ export default function VacantPositionPage() {
     });
     setEditModalOpen(true);
     handleMenuClose();
-  };
+  }, []);
 
-  const handleEditClose = () => {
+  const handleEditClose = useCallback(() => {
     setEditModalOpen(false);
     setSelectedPersonnel(null);
     setEditFormData({
@@ -1353,9 +1357,9 @@ export default function VacantPositionPage() {
       requestedPositionId: null,
       notes: '',
     });
-  };
+  }, []);
 
-  const handleEditSave = async () => {
+  const handleEditSave = useCallback(async () => {
     if (!selectedPersonnel) return;
 
     if (!editFormData.requestedPositionId) {
@@ -1386,19 +1390,19 @@ export default function VacantPositionPage() {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [editFormData, selectedPersonnel, toast]);
 
-  const handleViewDetail = (item: VacantPositionData) => {
+  const handleViewDetail = useCallback((item: VacantPositionData) => {
     setSelectedPersonnel(item);
     setDetailModalOpen(true);
-  };
+  }, []);
 
-  const handleCloseDetailModal = () => {
+  const handleCloseDetailModal = useCallback(() => {
     setDetailModalOpen(false);
-  };
+  }, []);
 
   // Toggle assignment info for a specific card
-  const handleToggleAssignment = (itemId: string) => {
+  const handleToggleAssignment = useCallback((itemId: string) => {
     setExpandedAssignments(prev => {
       const newSet = new Set(prev);
       if (newSet.has(itemId)) {
@@ -1408,7 +1412,17 @@ export default function VacantPositionPage() {
       }
       return newSet;
     });
-  };
+  }, []);
+
+  const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, item: VacantPositionData) => {
+    setAnchorEl(event.currentTarget);
+    setMenuItem(item);
+  }, []);
+
+  const handleMenuClose = useCallback(() => {
+    setAnchorEl(null);
+    setMenuItem(null);
+  }, []);
 
   return (
     <Layout>

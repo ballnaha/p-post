@@ -204,18 +204,31 @@ export default function PolicePersonnelPage() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPersonnel, setMenuPersonnel] = useState<PolicePersonnel | null>(null);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, personnel: PolicePersonnel) => {
+  const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, personnel: PolicePersonnel) => {
     setAnchorEl(event.currentTarget);
     setMenuPersonnel(personnel);
-  };
+  }, []);
 
-  const handleMenuClose = () => {
+  const handleMenuClose = useCallback(() => {
     setAnchorEl(null);
     setMenuPersonnel(null);
-  };
+  }, []);
 
-  // ดึงรายการหน่วยและยศทั้งหมด
-  const fetchUnits = async () => {
+  // Memoize values ที่ใช้บ่อยๆ เพื่อลดการคำนวณซ้ำ
+  const isInSwapList = useMemo(() => (nationalId: string | undefined) => {
+    return nationalId ? swapListData.has(nationalId) : false;
+  }, [swapListData]);
+
+  const isInThreeWayList = useMemo(() => (nationalId: string | undefined) => {
+    return nationalId ? threeWayListData.has(nationalId) : false;
+  }, [threeWayListData]);
+
+  const isInVacantList = useMemo(() => (nationalId: string | undefined) => {
+    return nationalId ? vacantListData.has(nationalId) : false;
+  }, [vacantListData]);
+
+  // ดึงรายการหน่วยและยศทั้งหมด - ใช้ useCallback เพื่อป้องกัน recreation
+  const fetchUnits = useCallback(async () => {
     try {
       const response = await fetch('/api/police-personnel/units');
       const result = await response.json();
@@ -225,9 +238,9 @@ export default function PolicePersonnelPage() {
     } catch (err) {
       console.error('Error fetching units:', err);
     }
-  };
+  }, []);
 
-  const fetchRanks = async () => {
+  const fetchRanks = useCallback(async () => {
     try {
       const response = await fetch('/api/police-personnel/ranks');
       const result = await response.json();
@@ -237,9 +250,9 @@ export default function PolicePersonnelPage() {
     } catch (err) {
       console.error('Error fetching ranks:', err);
     }
-  };
+  }, []);
 
-  const fetchPositionTypes = async () => {
+  const fetchPositionTypes = useCallback(async () => {
     try {
       const response = await fetch('/api/police-personnel/positions');
       const result = await response.json();
@@ -249,9 +262,9 @@ export default function PolicePersonnelPage() {
     } catch (err) {
       console.error('Error fetching position types:', err);
     }
-  };
+  }, []);
 
-  const fetchPosCodes = async () => {
+  const fetchPosCodes = useCallback(async () => {
     try {
       const response = await fetch('/api/police-personnel/pos-codes');
       const result = await response.json();
@@ -261,10 +274,10 @@ export default function PolicePersonnelPage() {
     } catch (err) {
       console.error('Error fetching pos codes:', err);
     }
-  };
+  }, []);
 
-  // ดึงรายการทั้ง 3 ประเภทในครั้งเดียวเพื่อเพิ่ม performance พร้อม caching
-  const fetchAllListsForCurrentYear = async (forceRefresh = false) => {
+  // ดึงรายการทั้ง 3 ประเภทในครั้งเดียวเพื่อเพิ่ม performance พร้อม caching - ใช้ useCallback
+  const fetchAllListsForCurrentYear = useCallback(async (forceRefresh = false) => {
     try {
       const currentYear = new Date().getFullYear() + 543;
       const now = Date.now();
@@ -323,7 +336,7 @@ export default function PolicePersonnelPage() {
     } catch (err) {
       console.error('Error fetching lists:', err);
     }
-  };
+  }, [listDataCache]);
 
   // เก็บ function เดิมไว้สำหรับ backward compatibility
   const fetchSwapListForCurrentYear = async () => {
@@ -381,7 +394,7 @@ export default function PolicePersonnelPage() {
       console.error('Error fetching vacant position list:', err);
     }
   };
-  const fetchNameOptions = async (query: string) => {
+  const fetchNameOptions = useCallback(async (query: string) => {
     if (!query || query.length < 1) {
       setNameOptions([]);
       return;
@@ -399,7 +412,7 @@ export default function PolicePersonnelPage() {
     } finally {
       setLoadingNames(false);
     }
-  };
+  }, []);
 
   // Debounce function สำหรับการค้นหา
   useEffect(() => {
@@ -412,7 +425,7 @@ export default function PolicePersonnelPage() {
     }, 300); // รอ 300ms หลังจากพิมพ์
 
     return () => clearTimeout(timer);
-  }, [nameInputValue]);
+  }, [nameInputValue, fetchNameOptions]);
 
   useEffect(() => {
     fetchUnits();
@@ -421,7 +434,7 @@ export default function PolicePersonnelPage() {
     fetchPosCodes();
     // ใช้ function ใหม่ที่รวมการโหลดทั้ง 3 รายการ
     fetchAllListsForCurrentYear();
-  }, []);
+  }, [fetchUnits, fetchRanks, fetchPositionTypes, fetchPosCodes, fetchAllListsForCurrentYear]);
 
   const fetchData = async (abortSignal?: AbortSignal) => {
     setLoading(true);
@@ -493,44 +506,44 @@ export default function PolicePersonnelPage() {
     setPage(0);
   };
 
-  const handleSwapFilterChange = (value: 'all' | 'in-swap' | 'in-threeway' | 'in-vacant') => {
+  const handleSwapFilterChange = useCallback((value: 'all' | 'in-swap' | 'in-threeway' | 'in-vacant') => {
     setSwapFilter(value);
     setPage(0); // Reset to first page when filter changes
-  };
+  }, []);
 
-  const handlePositionFilterChange = (value: 'all' | 'occupied' | 'vacant' | 'reserved') => {
+  const handlePositionFilterChange = useCallback((value: 'all' | 'occupied' | 'vacant' | 'reserved') => {
     setPositionFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handlePositionTypeFilterChange = (value: string) => {
+  const handlePositionTypeFilterChange = useCallback((value: string) => {
     setPositionTypeFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handleRankFilterChange = (value: string) => {
+  const handleRankFilterChange = useCallback((value: string) => {
     setRankFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handleUnitFilterChange = (value: string) => {
+  const handleUnitFilterChange = useCallback((value: string) => {
     setUnitFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handlePosCodeFilterChange = (value: string) => {
+  const handlePosCodeFilterChange = useCallback((value: string) => {
     setPosCodeFilter(value);
     setPage(0);
-  };
+  }, []);
 
-  const handleViewDetail = (personnel: PolicePersonnel) => {
+  const handleViewDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnel(personnel);
     setDetailModalOpen(true);
-  };
+  }, []);
 
-  const handleCloseDetailModal = () => {
+  const handleCloseDetailModal = useCallback(() => {
     setDetailModalOpen(false);
-  };
+  }, []);
 
   const handleEdit = (personnel: PolicePersonnel) => {
     setSelectedPersonnel(personnel);

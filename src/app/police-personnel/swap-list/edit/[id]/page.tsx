@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -113,18 +113,6 @@ export default function EditSwapTransactionPage() {
   const [groupNumber, setGroupNumber] = useState<string>('');
   const [groupName, setGroupName] = useState<string>('');
 
-  useEffect(() => {
-    if (params.id) {
-      fetchTransaction();
-    }
-  }, [params.id]);
-
-  useEffect(() => {
-    if (transaction) {
-      fetchPersonnelOptions();
-    }
-  }, [transaction]);
-
   // Update notes when personnel A or B changes
   useEffect(() => {
     if (personnelA && personnelB) {
@@ -133,7 +121,7 @@ export default function EditSwapTransactionPage() {
     }
   }, [personnelA, personnelB]);
 
-  const fetchTransaction = async () => {
+  const fetchTransaction = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/swap-transactions/${params.id}`);
@@ -159,9 +147,9 @@ export default function EditSwapTransactionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id, router]); // Removed toast from dependencies
 
-  const fetchPersonnelOptions = async () => {
+  const fetchPersonnelOptions = useCallback(async () => {
     try {
       setSearchLoading(true);
       const currentYear = new Date().getFullYear() + 543;
@@ -241,39 +229,59 @@ export default function EditSwapTransactionPage() {
     } finally {
       setSearchLoading(false);
     }
-  };
+  }, [transaction, params.id]);
 
-  const handleShowDetail = (personnel: PolicePersonnel) => {
+  useEffect(() => {
+    if (params.id) {
+      fetchTransaction();
+    }
+  }, [params.id, fetchTransaction]);
+
+  useEffect(() => {
+    if (transaction) {
+      fetchPersonnelOptions();
+    }
+  }, [transaction, fetchPersonnelOptions]);
+
+  const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnelDetail(personnel);
     setDetailDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
     setDetailDialogOpen(false);
-  };
+  }, []);
 
-  const handleSelectPersonnelA = (newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelA(newValue);
     // If B is selected and same as new A, clear B
-    if (personnelB && newValue && personnelB.id === newValue.id) {
-      setPersonnelB(null);
-    }
-  };
+    setPersonnelB(prev => {
+      if (prev && newValue && prev.id === newValue.id) {
+        return null;
+      }
+      return prev;
+    });
+  }, []);
 
-  const handleSelectPersonnelB = (newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelB(newValue);
-  };
+  }, []);
 
-  // Filter options for B - exclude A and ensure has rank
-  const optionsForB = personnelA
-    ? personnelOptions.filter(
-        (p) =>
-          p.id !== personnelA.id &&
-          p.rank // Ensure has rank
-      )
-    : [];
+  // Memoized filter options for B - exclude A and ensure has rank
+  const optionsForB = useMemo(() => {
+    return personnelA
+      ? personnelOptions.filter(
+          (p) =>
+            p.id !== personnelA.id &&
+            p.rank // Ensure has rank
+        )
+      : [];
+  }, [personnelA, personnelOptions]);
 
-  const canSwap = personnelA && personnelB;
+  const canSwap = useMemo(() => 
+    Boolean(personnelA && personnelB), 
+    [personnelA, personnelB]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,6 +313,7 @@ export default function EditSwapTransactionPage() {
 
       const swapDetails = [
         {
+          sequence: 1, // บุคลากร A ขึ้นก่อน
           personnelId: personnelA.id,
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
@@ -317,6 +326,7 @@ export default function EditSwapTransactionPage() {
           toUnit: personnelB.unit,
         },
         {
+          sequence: 2, // บุคลากร B ขึ้นหลัง
           personnelId: personnelB.id,
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,

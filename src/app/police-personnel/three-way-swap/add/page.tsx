@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -173,37 +173,70 @@ export default function AddThreeWaySwapPage() {
     }
   };
 
-  const handleShowDetail = (personnel: PolicePersonnel) => {
+  // Optimized: Memoized handlers with useCallback
+  const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnelDetail(personnel);
     setDetailDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
     setDetailDialogOpen(false);
-  };
+  }, []);
 
-  const handleSelectPersonnelA = (newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelA(newValue);
-  };
+    // If B or C is selected and same as new A, clear them
+    setPersonnelB(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
+    setPersonnelC(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
+  }, []);
 
-  const handleSelectPersonnelB = (newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelB(newValue);
-  };
+    // If A or C is selected and same as new B, clear them
+    setPersonnelA(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
+    setPersonnelC(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
+  }, []);
 
-  const handleSelectPersonnelC = (newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelC = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelC(newValue);
-  };
+    // If A or B is selected and same as new C, clear them
+    setPersonnelA(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
+    setPersonnelB(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
+  }, []);
 
-  // Filter options - exclude already selected personnel
-  const optionsForB = personnelA
-    ? personnelOptions.filter(p => p.id !== personnelA.id && p.rank)
-    : [];
+  // Optimized: Memoized filter options with useMemo
+  // Filter out already selected personnel
+  const optionsForA = useMemo(() => 
+    personnelOptions.filter(p => 
+      p.rank && 
+      (!personnelB || p.id !== personnelB.id) && 
+      (!personnelC || p.id !== personnelC.id)
+    ), 
+    [personnelOptions, personnelB, personnelC]
+  );
 
-  const optionsForC = personnelA && personnelB
-    ? personnelOptions.filter(p => p.id !== personnelA.id && p.id !== personnelB.id && p.rank)
-    : [];
+  const optionsForB = useMemo(() => 
+    personnelOptions.filter(p => 
+      p.rank && 
+      (!personnelA || p.id !== personnelA.id) && 
+      (!personnelC || p.id !== personnelC.id)
+    ), 
+    [personnelOptions, personnelA, personnelC]
+  );
 
-  const canSwap = personnelA && personnelB && personnelC;
+  const optionsForC = useMemo(() => 
+    personnelOptions.filter(p => 
+      p.rank && 
+      (!personnelA || p.id !== personnelA.id) && 
+      (!personnelB || p.id !== personnelB.id)
+    ), 
+    [personnelOptions, personnelA, personnelB]
+  );
+
+  const canSwap = useMemo(() => 
+    Boolean(personnelA && personnelB && personnelC), 
+    [personnelA, personnelB, personnelC]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,6 +267,7 @@ export default function AddThreeWaySwapPage() {
       // สร้าง swap details สำหรับ 3 คน (A→B, B→C, C→A)
       const swapDetails = [
         {
+          sequence: 1,
           personnelId: personnelA.id,
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
@@ -247,6 +281,7 @@ export default function AddThreeWaySwapPage() {
           posCodeId: personnelA.posCodeId,
         },
         {
+          sequence: 2,
           personnelId: personnelB.id,
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
@@ -260,6 +295,7 @@ export default function AddThreeWaySwapPage() {
           posCodeId: personnelB.posCodeId,
         },
         {
+          sequence: 3,
           personnelId: personnelC.id,
           nationalId: personnelC.nationalId,
           fullName: personnelC.fullName,
@@ -581,13 +617,13 @@ export default function AddThreeWaySwapPage() {
         <form onSubmit={handleSubmit}>
           <Paper sx={{ p: 3, mb: 3 }}>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3 }}>
-              {renderPersonnelCard(personnelA, 'บุคลากร A', handleSelectPersonnelA, personnelOptions, false)}
-              {renderPersonnelCard(personnelB, 'บุคลากร B', handleSelectPersonnelB, optionsForB, !personnelA)}
-              {renderPersonnelCard(personnelC, 'บุคลากร C', handleSelectPersonnelC, optionsForC, !personnelA || !personnelB)}
+              {renderPersonnelCard(personnelA, 'บุคลากร A', handleSelectPersonnelA, optionsForA, false)}
+              {renderPersonnelCard(personnelB, 'บุคลากร B', handleSelectPersonnelB, optionsForB, false)}
+              {renderPersonnelCard(personnelC, 'บุคลากร C', handleSelectPersonnelC, optionsForC, false)}
             </Box>
 
             {/* Swap Result Preview */}
-            {canSwap && (
+            {canSwap && personnelA && personnelB && personnelC && (
               <Alert severity="warning" sx={{ mt: 3 }}>
                 <Typography variant="body2" fontWeight={600} mb={1}>
                   📝 ชื่อกลุ่ม: {personnelA.fullName} → {personnelB.fullName} → {personnelC.fullName}

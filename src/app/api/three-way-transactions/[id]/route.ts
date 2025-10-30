@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
 // GET - ดึงข้อมูล three-way transaction ตาม ID (ใช้ SwapTransaction)
+// Optimized: Selective field selection for better performance
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -12,8 +13,39 @@ export async function GET(
       where: { 
         id: id,
       },
-      include: {
+      select: {
+        id: true,
+        groupNumber: true,
+        groupName: true,
+        swapDate: true,
+        status: true,
+        notes: true,
+        year: true,
+        swapType: true,
+        createdAt: true,
         swapDetails: {
+          select: {
+            id: true,
+            personnelId: true,
+            fullName: true,
+            rank: true,
+            nationalId: true,
+            posCodeId: true,
+            posCodeMaster: {
+              select: {
+                id: true,
+                name: true,
+              }
+            },
+            fromPosition: true,
+            fromPositionNumber: true,
+            fromUnit: true,
+            toPosition: true,
+            toPositionNumber: true,
+            toUnit: true,
+            sequence: true,
+            notes: true,
+          },
           orderBy: { sequence: 'asc' },
         },
       },
@@ -40,6 +72,7 @@ export async function GET(
 }
 
 // PUT - แก้ไข three-way transaction (ใช้ SwapTransaction)
+// Optimized: Better validation and selective field return
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -55,6 +88,19 @@ export async function PUT(
         { success: false, error: 'Three-way swap must have exactly 3 people' },
         { status: 400 }
       );
+    }
+
+    // Validate all personnel have required fields if swapDetails provided
+    if (swapDetails) {
+      const hasInvalidDetail = swapDetails.some((detail: any) => 
+        !detail.personnelId || !detail.fullName
+      );
+      if (hasInvalidDetail) {
+        return NextResponse.json(
+          { success: false, error: 'All personnel must have ID and full name' },
+          { status: 400 }
+        );
+      }
     }
 
     // ลบ details เก่าและสร้างใหม่
@@ -87,8 +133,32 @@ export async function PUT(
           })),
         } : undefined,
       },
-      include: {
+      select: {
+        id: true,
+        groupNumber: true,
+        groupName: true,
+        swapDate: true,
+        status: true,
+        notes: true,
+        year: true,
+        createdAt: true,
         swapDetails: {
+          select: {
+            id: true,
+            personnelId: true,
+            fullName: true,
+            rank: true,
+            nationalId: true,
+            posCodeId: true,
+            fromPosition: true,
+            fromPositionNumber: true,
+            fromUnit: true,
+            toPosition: true,
+            toPositionNumber: true,
+            toUnit: true,
+            sequence: true,
+            notes: true,
+          },
           orderBy: { sequence: 'asc' },
         },
       },
@@ -141,7 +211,7 @@ export async function DELETE(
       .map(detail => detail.personnelId)
       .filter((id): id is string => id !== null);
 
-    // ตรวจสอบว่าบุคลากรเหล่านี้มีการสลับตำแหน่งในปีนี้หรือไม่ (ไม่ใช่สามเส้า)
+    // Optimized: Use select to fetch only necessary fields for conflict checking
     const relatedSwapTransactions = await prisma.swapTransaction.findMany({
       where: {
         year: existingTransaction.year,
@@ -154,8 +224,14 @@ export async function DELETE(
           }
         }
       },
-      include: {
+      select: {
+        id: true,
+        year: true,
         swapDetails: {
+          select: {
+            personnelId: true,
+            fullName: true,
+          },
           where: {
             personnelId: {
               in: personnelIds
@@ -166,19 +242,19 @@ export async function DELETE(
     });
 
     if (relatedSwapTransactions.length > 0) {
-      // หาชื่อบุคลากรที่มีปัญหา
-      const conflictPersonnelNames: string[] = [];
+      // หาชื่อบุคลากรที่มีปัญหา - optimized with Set for better performance
+      const conflictPersonnelNamesSet = new Set<string>();
       relatedSwapTransactions.forEach(transaction => {
         if (transaction.swapDetails) {
           transaction.swapDetails.forEach(detail => {
             if (detail.personnelId && personnelIds.includes(detail.personnelId) && detail.fullName) {
-              conflictPersonnelNames.push(detail.fullName);
+              conflictPersonnelNamesSet.add(detail.fullName);
             }
           });
         }
       });
 
-      const uniqueNames = [...new Set(conflictPersonnelNames)];
+      const uniqueNames = Array.from(conflictPersonnelNamesSet);
       
       return NextResponse.json(
         { 

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -90,15 +90,7 @@ export default function AddSwapTransactionPage() {
   const [notes, setNotes] = useState('');
   const [groupNumber, setGroupNumber] = useState<string>('');
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const swappedIds = await fetchNextGroupNumber();
-      await fetchPersonnelOptions(swappedIds);
-    };
-    fetchData();
-  }, []);
-
-  const fetchNextGroupNumber = async (): Promise<Set<string>> => {
+  const fetchNextGroupNumber = useCallback(async (): Promise<Set<string>> => {
     try {
       const currentYear = new Date().getFullYear() + 543;
       const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=two-way`);
@@ -154,9 +146,9 @@ export default function AddSwapTransactionPage() {
       setGroupNumber(`${currentYear}/2W-001`);
       return new Set<string>();
     }
-  };
+  }, []);
 
-  const fetchPersonnelOptions = async (excludeIds?: Set<string>) => {
+  const fetchPersonnelOptions = useCallback(async (excludeIds?: Set<string>) => {
     try {
       setSearchLoading(true);
       // Fetch from swap-list API to get personnel who are in the current year's swap list
@@ -182,41 +174,49 @@ export default function AddSwapTransactionPage() {
     } finally {
       setSearchLoading(false);
     }
-  };
+  }, [swappedPersonnelIds]);
 
-  const handlePersonnelSearch = (event: React.SyntheticEvent, value: string) => {
-    // Search is now client-side since we already have all swap list data
-    // Filter happens in the Autocomplete component itself
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      const swappedIds = await fetchNextGroupNumber();
+      await fetchPersonnelOptions(swappedIds);
+    };
+    fetchData();
+  }, [fetchNextGroupNumber, fetchPersonnelOptions]);
 
-  const handleShowDetail = (personnel: PolicePersonnel) => {
+  const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnelDetail(personnel);
     setDetailDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseDetail = () => {
+  const handleCloseDetail = useCallback(() => {
     setDetailDialogOpen(false);
-  };
+  }, []);
 
-  const handleSelectPersonnelA = (newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelA(newValue);
     // No need to reset B anymore since position doesn't need to match
-  };
+  }, []);
 
-  const handleSelectPersonnelB = (newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelB(newValue);
-  };
+  }, []);
 
-  // Filter options for B - no need to check same position
-  const optionsForB = personnelA
-    ? personnelOptions.filter(
-        (p) =>
-          p.id !== personnelA.id &&
-          p.rank // Ensure has rank
-      )
-    : [];
+  // Memoized filter options for B - no need to check same position
+  const optionsForB = useMemo(() => {
+    return personnelA
+      ? personnelOptions.filter(
+          (p) =>
+            p.id !== personnelA.id &&
+            p.rank // Ensure has rank
+        )
+      : [];
+  }, [personnelA, personnelOptions]);
 
-  const canSwap = personnelA && personnelB;
+  const canSwap = useMemo(() => 
+    Boolean(personnelA && personnelB), 
+    [personnelA, personnelB]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,6 +268,7 @@ export default function AddSwapTransactionPage() {
 
       const swapDetails = [
         {
+          sequence: 1, // บุคลากร A ขึ้นก่อน
           personnelId: personnelA.id,
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
@@ -280,6 +281,7 @@ export default function AddSwapTransactionPage() {
           toUnit: personnelB.unit, // Swap to B's unit
         },
         {
+          sequence: 2, // บุคลากร B ขึ้นหลัง
           personnelId: personnelB.id,
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
@@ -424,7 +426,6 @@ export default function AddSwapTransactionPage() {
                   value={personnelA}
                   getOptionLabel={(option) => `${option.rank || ''} ${option.fullName || ''} - ${option.position || ''} (${option.unit || ''})`}
                   onChange={(event, newValue) => handleSelectPersonnelA(newValue)}
-                  onInputChange={handlePersonnelSearch}
                   loading={searchLoading}
                   renderInput={(params) => (
                     <TextField 
@@ -818,7 +819,7 @@ export default function AddSwapTransactionPage() {
             </Box>
 
             {/* Swap Result Preview */}
-            {canSwap && (
+            {canSwap && personnelA && personnelB && (
               <Alert severity="success" sx={{ mt: 3 }}>
                 <Typography variant="body2" fontWeight={600} mb={1}>
                   📝 ชื่อกลุ่ม: {personnelA.fullName} ⟷ {personnelB.fullName}

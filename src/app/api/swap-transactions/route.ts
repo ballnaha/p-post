@@ -17,17 +17,42 @@ export async function GET(request: NextRequest) {
     if (status) where.status = status;
     if (swapType) where.swapType = swapType;
 
+    // Optimize: Select only necessary fields to reduce data transfer
     const transactions = await prisma.swapTransaction.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        year: true,
+        swapDate: true,
+        swapType: true,
+        groupName: true,
+        groupNumber: true,
+        status: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
         swapDetails: {
-          include: {
+          select: {
+            id: true,
+            sequence: true,
+            personnelId: true,
+            nationalId: true,
+            fullName: true,
+            rank: true,
+            posCodeId: true,
             posCodeMaster: {
               select: {
                 id: true,
                 name: true
               }
-            }
+            },
+            fromPosition: true,
+            fromPositionNumber: true,
+            fromUnit: true,
+            toPosition: true,
+            toPositionNumber: true,
+            toUnit: true,
+            notes: true
           },
           orderBy: [
             { sequence: 'asc' },
@@ -36,6 +61,8 @@ export async function GET(request: NextRequest) {
         }
       },
       orderBy: [
+        { updatedAt: 'desc' },
+        { createdAt: 'desc' },
         { year: 'desc' },
         { swapDate: 'desc' }
       ]

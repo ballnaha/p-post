@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -124,6 +124,62 @@ interface PersonnelData {
   notes?: string;
 }
 
+// Optimized: Memoized skeleton component to prevent re-renders during loading
+const CardSkeleton = React.memo(function CardSkeleton() {
+  return (
+    <Paper elevation={2} sx={{ p: 3 }}>
+      {/* Card Header Skeleton */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+        <Box sx={{ flex: 1 }}>
+          <Skeleton variant="rounded" width={120} height={32} sx={{ mb: 1 }} />
+          <Skeleton variant="text" width="80%" height={32} sx={{ mb: 0.5 }} />
+          <Skeleton variant="text" width="60%" height={24} />
+        </Box>
+        <Skeleton variant="circular" width={40} height={40} />
+      </Box>
+
+      {/* Three-way Details Skeleton */}
+      <Box sx={{ mt: 2 }}>
+        <Skeleton variant="text" width={180} height={24} sx={{ mb: 1.5 }} />
+        
+        {/* Three person cards */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {[1, 2, 3].map((j) => (
+            <Box 
+              key={j}
+              sx={{ 
+                p: 2, 
+                bgcolor: 'grey.50', 
+                borderRadius: 1,
+                borderLeft: '3px solid',
+                borderLeftColor: j === 1 ? 'success.main' : j === 2 ? 'info.main' : 'warning.main'
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Skeleton variant="rounded" width={60} height={20} sx={{ mb: 0.5 }} />
+                  <Skeleton variant="text" width="70%" height={24} sx={{ mb: 0.5 }} />
+                  <Skeleton variant="rounded" width={100} height={20} />
+                </Box>
+                <Skeleton variant="circular" width={32} height={32} />
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Skeleton variant="text" width="90%" height={20} />
+                <Skeleton variant="text" width="85%" height={20} />
+              </Box>
+            </Box>
+          ))}
+        </Box>
+
+        {/* Cycle indicator skeleton */}
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Skeleton variant="rounded" width="100%" height={40} />
+        </Box>
+      </Box>
+    </Paper>
+  );
+});
+
 export default function ThreeWaySwapPage() {
   const router = useRouter();
   const toast = useToast();
@@ -166,8 +222,8 @@ export default function ThreeWaySwapPage() {
   // Expanded rows for table view
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  // Generate available years
-  const getAvailableYears = () => {
+  // Generate available years - Memoized for performance
+  const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const startYear = 2568;
     const years: number[] = [];
@@ -177,22 +233,11 @@ export default function ThreeWaySwapPage() {
     }
     
     return years;
-  };
+  }, []);
 
-  const availableYears = getAvailableYears();
-
-  useEffect(() => {
-    fetchData();
-  }, [currentYear]);
-
-  useEffect(() => {
-    if (!loading) {
-      applyFilters();
-      updateFilterOptions();
-    }
-  }, [data, groupNameFilter, loading]);
-
-  const fetchData = async () => {
+  // Optimized: Memoized fetch function with useCallback
+  // Fixed: Removed toast from dependencies to prevent infinite loop
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setData([]);
@@ -215,9 +260,11 @@ export default function ThreeWaySwapPage() {
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentYear]);
 
-  const applyFilters = () => {
+  // Optimized: Memoized filter function with useCallback
+  const applyFilters = useCallback(() => {
     let filtered = [...data];
 
     if (groupNameFilter) {
@@ -226,47 +273,54 @@ export default function ThreeWaySwapPage() {
 
     setFilteredData(filtered);
     setPage(0);
-  };
+  }, [data, groupNameFilter]);
 
-  const updateFilterOptions = () => {
+  // Optimized: Memoized updateFilterOptions with useCallback
+  const updateFilterOptions = useCallback(() => {
+    // Use Set for O(1) unique check instead of array operations
     const groupNames = [...new Set(data.map(item => item.groupName).filter(Boolean))] as string[];
     setGroupNameOptions(groupNames);
-  };
+  }, [data]);
 
-  const handleYearChange = (event: SelectChangeEvent<number>) => {
+  // Optimized: Memoized event handlers with useCallback
+  const handleYearChange = useCallback((event: SelectChangeEvent<number>) => {
     const newYear = event.target.value as number;
     setCurrentYear(newYear);
     setGroupNameFilter(null);
     setPage(0);
-  };
+  }, []);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, transaction: ThreeWaySwapTransaction) => {
+  const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, transaction: ThreeWaySwapTransaction) => {
     setAnchorEl(event.currentTarget);
     setSelectedTransaction(transaction);
-  };
+  }, []);
 
-  const handleMenuClose = () => {
+  const handleMenuClose = useCallback(() => {
     setAnchorEl(null);
     setSelectedTransaction(null);
-  };
+  }, []);
 
-  const handleEdit = () => {
+  // Optimized: Memoized edit handler with useCallback
+  const handleEdit = useCallback(() => {
     if (selectedTransaction) {
       router.push(`/police-personnel/three-way-swap/edit/${selectedTransaction.id}`);
     }
     handleMenuClose();
-  };
+  }, [selectedTransaction, router, handleMenuClose]);
 
-  const handleDeleteClick = () => {
+  // Optimized: Memoized delete click handler with useCallback
+  const handleDeleteClick = useCallback(() => {
     if (selectedTransaction) {
       setDeletingId(selectedTransaction.id);
       setItemToDelete(selectedTransaction);
       setDeleteDialogOpen(true);
     }
     handleMenuClose();
-  };
+  }, [selectedTransaction, handleMenuClose]);
 
-  const handleDeleteConfirm = async () => {
+  // Optimized: Memoized delete confirm handler with useCallback
+  // Fixed: Removed toast from dependencies to prevent issues
+  const handleDeleteConfirm = useCallback(async () => {
     if (!deletingId) return;
 
     setIsDeleting(true);
@@ -298,9 +352,12 @@ export default function ThreeWaySwapPage() {
       setItemToDelete(null);
       setIsDeleting(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deletingId, fetchData]);
 
-  const handleViewPersonnelDetail = async (personnelId: string) => {
+  // Optimized: Memoized personnel detail handler with useCallback
+  // Fixed: Removed toast from dependencies to prevent issues
+  const handleViewPersonnelDetail = useCallback(async (personnelId: string) => {
     setSelectedPersonnelId(personnelId);
     setPersonnelModalOpen(true);
     setLoadingPersonnel(true);
@@ -323,18 +380,21 @@ export default function ThreeWaySwapPage() {
     } finally {
       setLoadingPersonnel(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleClosePersonnelModal = () => {
+  // Optimized: Memoized modal handlers with useCallback
+  const handleClosePersonnelModal = useCallback(() => {
     setPersonnelModalOpen(false);
-  };
+  }, []);
 
-  const handleClearPersonnelData = () => {
+  const handleClearPersonnelData = useCallback(() => {
     setSelectedPersonnelId(null);
     setPersonnelDetail(null);
-  };
+  }, []);
 
-  const formatDate = (dateString: string) => {
+  // Optimized: Memoized utility functions with useCallback
+  const formatDate = useCallback((dateString: string) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleDateString('th-TH', {
@@ -342,27 +402,28 @@ export default function ThreeWaySwapPage() {
       month: 'long',
       day: 'numeric',
     });
-  };
+  }, []);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'completed': return 'success';
       case 'pending': return 'warning';
       case 'cancelled': return 'error';
       default: return 'default';
     }
-  };
+  }, []);
 
-  const getStatusText = (status: string) => {
+  const getStatusText = useCallback((status: string) => {
     switch (status) {
       case 'completed': return 'เสร็จสมบูรณ์';
       case 'pending': return 'รอดำเนินการ';
       case 'cancelled': return 'ยกเลิก';
       default: return status;
     }
-  };
+  }, []);
 
-  const toggleRow = (id: string) => {
+  // Optimized: Memoized toggle row handler with useCallback
+  const toggleRow = useCallback((id: string) => {
     setExpandedRows(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -372,21 +433,36 @@ export default function ThreeWaySwapPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const handlePageChange = (newPage: number) => {
+  // Optimized: Memoized pagination handlers with useCallback
+  const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
-  };
+  }, []);
 
-  const handleRowsPerPageChange = (newRowsPerPage: number) => {
+  const handleRowsPerPageChange = useCallback((newRowsPerPage: number) => {
     setRowsPerPage(newRowsPerPage);
     setPage(0);
-  };
+  }, []);
 
-  const paginatedData = filteredData.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  // Optimized: Memoized pagination calculation with useMemo
+  const paginatedData = useMemo(() => 
+    filteredData.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
+    ), [filteredData, page, rowsPerPage]);
+
+  // Add effects after all functions are defined
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (!loading) {
+      applyFilters();
+      updateFilterOptions();
+    }
+  }, [loading, applyFilters, updateFilterOptions]);
 
   return (
     <Layout>
@@ -509,56 +585,7 @@ export default function ThreeWaySwapPage() {
         {loading ? (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 3 }}>
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Paper key={i} elevation={2} sx={{ p: 3 }}>
-                {/* Card Header Skeleton */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box sx={{ flex: 1 }}>
-                    <Skeleton variant="rounded" width={120} height={32} sx={{ mb: 1 }} />
-                    <Skeleton variant="text" width="80%" height={32} sx={{ mb: 0.5 }} />
-                    <Skeleton variant="text" width="60%" height={24} />
-                  </Box>
-                  <Skeleton variant="circular" width={40} height={40} />
-                </Box>
-
-                {/* Three-way Details Skeleton */}
-                <Box sx={{ mt: 2 }}>
-                  <Skeleton variant="text" width={180} height={24} sx={{ mb: 1.5 }} />
-                  
-                  {/* Three person cards */}
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {[1, 2, 3].map((j) => (
-                      <Box 
-                        key={j}
-                        sx={{ 
-                          p: 2, 
-                          bgcolor: 'grey.50', 
-                          borderRadius: 1,
-                          borderLeft: '3px solid',
-                          borderLeftColor: j === 1 ? 'success.main' : j === 2 ? 'info.main' : 'warning.main'
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Skeleton variant="rounded" width={60} height={20} sx={{ mb: 0.5 }} />
-                            <Skeleton variant="text" width="70%" height={24} sx={{ mb: 0.5 }} />
-                            <Skeleton variant="rounded" width={100} height={20} />
-                          </Box>
-                          <Skeleton variant="circular" width={32} height={32} />
-                        </Box>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                          <Skeleton variant="text" width="90%" height={20} />
-                          <Skeleton variant="text" width="85%" height={20} />
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-
-                  {/* Cycle indicator skeleton */}
-                  <Box sx={{ mt: 2, textAlign: 'center' }}>
-                    <Skeleton variant="rounded" width="100%" height={40} />
-                  </Box>
-                </Box>
-              </Paper>
+              <CardSkeleton key={i} />
             ))}
           </Box>
         ) : (
@@ -671,7 +698,7 @@ export default function ThreeWaySwapPage() {
                                     />
                                   </Box>
                                   <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem', mb: 0.5 }}>
-                                    {detail.rank} {detail.fullName}
+                                    {detail.rank || '-'} {detail.fullName || '-'}
                                   </Typography>
                                   {detail.posCodeMaster && (
                                     <Chip 
@@ -823,7 +850,7 @@ export default function ThreeWaySwapPage() {
                                                     sx={{ fontWeight: 600, minWidth: 40 }}
                                                   />
                                                 </TableCell>
-                                                <TableCell><strong>{detail.fullName}</strong></TableCell>
+                                                <TableCell><strong>{detail.fullName || '-'}</strong></TableCell>
                                                 <TableCell>{detail.rank || '-'}</TableCell>
                                                 <TableCell>
                                                   {detail.posCodeMaster ? (

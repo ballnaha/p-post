@@ -25,15 +25,41 @@ export async function GET(request: NextRequest) {
     }
 
     // ดึงรายการ swap list (ข้อมูลสำเนาทั้งหมดอยู่ใน table แล้ว)
+    // Optimize: Select only necessary fields
     const swapList = await prisma.swapList.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
+        noId: true,
+        posCodeId: true,
         posCodeMaster: {
           select: {
             id: true,
             name: true
           }
-        }
+        },
+        position: true,
+        positionNumber: true,
+        unit: true,
+        rank: true,
+        fullName: true,
+        nationalId: true,
+        age: true,
+        yearsOfService: true,
+        seniority: true,
+        birthDate: true,
+        education: true,
+        lastAppointment: true,
+        currentRankSince: true,
+        enrollmentDate: true,
+        retirementDate: true,
+        trainingLocation: true,
+        trainingCourse: true,
+        actingAs: true,
+        year: true,
+        swapType: true,
+        notes: true,
+        createdAt: true
       },
       orderBy: [
         { swapType: 'asc' },

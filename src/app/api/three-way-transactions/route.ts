@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
 // GET - ดึงรายการ three-way transactions (ใช้ SwapTransaction แทน)
+// Optimized: Selective field selection instead of include for better performance
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -12,16 +13,47 @@ export async function GET(request: NextRequest) {
       whereClause.year = parseInt(year);
     }
 
+    // Use select instead of include to fetch only necessary fields
     const transactions = await prisma.swapTransaction.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
+        groupNumber: true,
+        groupName: true,
+        swapDate: true,
+        status: true,
+        notes: true,
+        year: true,
+        createdAt: true,
         swapDetails: {
+          select: {
+            id: true,
+            personnelId: true,
+            fullName: true,
+            rank: true,
+            nationalId: true,
+            posCodeId: true,
+            posCodeMaster: {
+              select: {
+                id: true,
+                name: true,
+              }
+            },
+            fromPosition: true,
+            fromPositionNumber: true,
+            fromUnit: true,
+            toPosition: true,
+            toPositionNumber: true,
+            toUnit: true,
+            sequence: true,
+          },
           orderBy: { sequence: 'asc' },
         },
       },
       orderBy: [
         { year: 'desc' },
         { swapDate: 'desc' },
+        { createdAt: 'desc' },
       ],
     });
 
@@ -39,6 +71,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST - สร้าง three-way transaction ใหม่ (ใช้ SwapTransaction แทน)
+// Optimized: Added validation and selective field return
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -48,6 +81,25 @@ export async function POST(request: NextRequest) {
     if (!swapDetails || swapDetails.length !== 3) {
       return NextResponse.json(
         { success: false, error: 'Three-way swap must have exactly 3 people' },
+        { status: 400 }
+      );
+    }
+
+    // Additional validation
+    if (!year || !swapDate) {
+      return NextResponse.json(
+        { success: false, error: 'Year and swap date are required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate all personnel have required fields
+    const hasInvalidDetail = swapDetails.some((detail: any) => 
+      !detail.personnelId || !detail.fullName
+    );
+    if (hasInvalidDetail) {
+      return NextResponse.json(
+        { success: false, error: 'All personnel must have ID and full name' },
         { status: 400 }
       );
     }
@@ -80,8 +132,31 @@ export async function POST(request: NextRequest) {
           })),
         },
       },
-      include: {
+      select: {
+        id: true,
+        groupNumber: true,
+        groupName: true,
+        swapDate: true,
+        status: true,
+        notes: true,
+        year: true,
+        createdAt: true,
         swapDetails: {
+          select: {
+            id: true,
+            personnelId: true,
+            fullName: true,
+            rank: true,
+            nationalId: true,
+            posCodeId: true,
+            fromPosition: true,
+            fromPositionNumber: true,
+            fromUnit: true,
+            toPosition: true,
+            toPositionNumber: true,
+            toUnit: true,
+            sequence: true,
+          },
           orderBy: { sequence: 'asc' },
         },
       },

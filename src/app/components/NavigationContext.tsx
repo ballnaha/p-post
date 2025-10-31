@@ -30,13 +30,39 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
-  // Sidebar state
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // โหลดสถานะจาก localStorage
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedOpen = localStorage.getItem('sidebar-open');
+      return savedOpen ? JSON.parse(savedOpen) : false;
+    }
+    return false;
+  });
+  
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedCollapsed = localStorage.getItem('sidebar-collapsed');
+      return savedCollapsed ? JSON.parse(savedCollapsed) : true;
+    }
+    return true;
+  });
   
   // Track previous isMobile value
   const prevIsMobileRef = useRef(isMobile);
   const isTransitioningToMobile = !prevIsMobileRef.current && isMobile;
+
+  // บันทึกสถานะลง localStorage เมื่อมีการเปลี่ยนแปลง
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebar-open', JSON.stringify(isSidebarOpen));
+    }
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebar-collapsed', JSON.stringify(isSidebarCollapsed));
+    }
+  }, [isSidebarCollapsed]);
 
   // ปรับ default state ตาม screen size
   useEffect(() => {
@@ -46,9 +72,21 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
       setIsSidebarOpen(false);
       setIsSidebarCollapsed(false);
     } else {
-      // On desktop, opened by default (mini/collapsed)
-      setIsSidebarOpen(true);
-      setIsSidebarCollapsed(true); // Default เป็น mini sidebar
+      // On desktop, ใช้สถานะจาก localStorage หรือเปิดแบบ mini
+      const savedOpen = localStorage.getItem('sidebar-open');
+      const savedCollapsed = localStorage.getItem('sidebar-collapsed');
+      
+      if (savedOpen !== null) {
+        setIsSidebarOpen(JSON.parse(savedOpen));
+      } else {
+        setIsSidebarOpen(true);
+      }
+      
+      if (savedCollapsed !== null) {
+        setIsSidebarCollapsed(JSON.parse(savedCollapsed));
+      } else {
+        setIsSidebarCollapsed(true);
+      }
     }
     // Update ref
     prevIsMobileRef.current = isMobile;
@@ -82,9 +120,9 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
 
   const toggleNavigation = () => {
     if (isMobile) {
-      setIsSidebarOpen((prev) => !prev);
+      setIsSidebarOpen((prev: boolean) => !prev);
     } else {
-      setIsSidebarCollapsed((prev) => !prev);
+      setIsSidebarCollapsed((prev: boolean) => !prev);
       setIsSidebarOpen(true);
     }
   };

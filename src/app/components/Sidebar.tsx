@@ -88,7 +88,7 @@ const Sidebar: React.FC = () => {
           key: 'three-way-swap' 
         },
         { 
-          label: 'รายการยื่นขอตำแหน่ง', 
+          label: 'บุคลากรยื่นขอตำแหน่ง', 
           href: '/police-personnel/vacant-position', 
           icon: <VacantIcon sx={{ fontSize: 20 }} />, 
           key: 'vacant-position' 
@@ -105,12 +105,7 @@ const Sidebar: React.FC = () => {
           icon: <HistoryIcon sx={{ fontSize: 20 }} />, 
           key: 'assignment-history' 
         },
-        { 
-          label: 'Sync ตำแหน่งว่าง', 
-          href: '/police-personnel/vacant-position/sync', 
-          icon: <SyncIcon sx={{ fontSize: 20 }} />, 
-          key: 'vacant-sync' 
-        },
+        
       ]
     },
     {
@@ -128,7 +123,12 @@ const Sidebar: React.FC = () => {
           icon: <ImportIcon sx={{ fontSize: 20 }} />, 
           key: 'police-import' 
         },
-        
+        { 
+          label: 'Sync ตำแหน่งว่าง', 
+          href: '/police-personnel/vacant-position/sync', 
+          icon: <SyncIcon sx={{ fontSize: 20 }} />, 
+          key: 'vacant-sync' 
+        },
       ]
     },
     {

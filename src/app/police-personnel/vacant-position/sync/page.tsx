@@ -21,6 +21,11 @@ import {
   Select,
   MenuItem,
   SelectChangeEvent,
+  Checkbox,
+  FormControlLabel,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   Sync as SyncIcon,
@@ -28,6 +33,8 @@ import {
   Warning as WarningIcon,
   Info as InfoIcon,
   Refresh as RefreshIcon,
+  ExpandMore as ExpandMoreIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
@@ -48,16 +55,23 @@ interface SyncResult {
   skipped: number;
   total: number;
   existingBefore: number;
+  forceResync?: boolean;
   errors?: string[];
 }
 
 export default function SyncVacantPositionsPage() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
+  const [selectedUnit, setSelectedUnit] = useState<string>('all');
+  const [forceResync, setForceResync] = useState<boolean>(false);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [availableUnits, setAvailableUnits] = useState<string[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingUnits, setLoadingUnits] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
   const toast = useToast();
@@ -75,17 +89,41 @@ export default function SyncVacantPositionsPage() {
     setAvailableYears(years);
   }, []);
 
+  // Fetch available units
+  useEffect(() => {
+    fetchUnits();
+  }, []);
+
+  const fetchUnits = async () => {
+    try {
+      setLoadingUnits(true);
+      const response = await fetch('/api/police-personnel/units');
+      const result = await response.json();
+
+      if (result.success) {
+        setAvailableUnits(result.data);
+      } else {
+        console.error('Failed to fetch units:', result.error);
+      }
+    } catch (error) {
+      console.error('Error fetching units:', error);
+    } finally {
+      setLoadingUnits(false);
+    }
+  };
+
   // Fetch sync status
   useEffect(() => {
     if (selectedYear) {
       fetchSyncStatus();
     }
-  }, [selectedYear]);
+  }, [selectedYear, selectedUnit]);
 
   const fetchSyncStatus = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/vacant-position/sync?year=${selectedYear}`);
+      const unitParam = selectedUnit !== 'all' ? `&unit=${encodeURIComponent(selectedUnit)}` : '';
+      const response = await fetch(`/api/vacant-position/sync?year=${selectedYear}${unitParam}`);
       const result = await response.json();
 
       if (result.success) {
@@ -106,6 +144,11 @@ export default function SyncVacantPositionsPage() {
     setSyncResult(null); // Clear previous result
   };
 
+  const handleUnitChange = (event: SelectChangeEvent<string>) => {
+    setSelectedUnit(event.target.value);
+    setSyncResult(null); // Clear previous result
+  };
+
   const handleSyncClick = () => {
     setConfirmDialogOpen(true);
   };
@@ -121,7 +164,11 @@ export default function SyncVacantPositionsPage() {
       const response = await fetch('/api/vacant-position/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year: selectedYear }),
+        body: JSON.stringify({ 
+          year: selectedYear,
+          unit: selectedUnit !== 'all' ? selectedUnit : undefined,
+          forceResync: forceResync
+        }),
       });
 
       if (!response.ok) {
@@ -177,6 +224,38 @@ export default function SyncVacantPositionsPage() {
     }
   };
 
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeleteDialogOpen(false);
+    
+    try {
+      setDeleting(true);
+      const unitParam = selectedUnit !== 'all' ? `&unit=${encodeURIComponent(selectedUnit)}` : '';
+      const response = await fetch(`/api/vacant-position/sync?year=${selectedYear}${unitParam}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(`ลบข้อมูล ${result.data.deletedCount} รายการเรียบร้อย`);
+        setSyncResult(null);
+        // Refresh status
+        await fetchSyncStatus();
+      } else {
+        toast.error(result.error || 'ไม่สามารถลบข้อมูลได้');
+      }
+    } catch (error) {
+      console.error('Error deleting:', error);
+      toast.error('เกิดข้อผิดพลาดในการลบข้อมูล');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Layout>
       <Box>
@@ -190,22 +269,139 @@ export default function SyncVacantPositionsPage() {
           </Typography>
         </Box>
 
-        {/* Year Selector */}
+        {/* Information Note - Accordion */}
+        <Accordion sx={{ mb: 3, bgcolor: 'info.50', borderLeft: 4, borderColor: 'info.main' }}>
+          <AccordionSummary
+            expandIcon={<ExpandMoreIcon />}
+            aria-controls="sync-guide-content"
+            id="sync-guide-header"
+            sx={{
+              '&:hover': { bgcolor: 'info.100' },
+              transition: 'background-color 0.2s'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <InfoIcon sx={{ color: 'info.main', mr: 1.5 }} />
+              <Typography variant="h6" fontWeight={600} color="info.main">
+                📚 คู่มือการใช้งาน Sync ตำแหน่งว่าง
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              <strong>📌 วัตถุประสงค์:</strong> ระบบ Sync ใช้สำหรับคัดลอกตำแหน่งว่างจาก <code>police_personnel</code> มาเก็บเป็น snapshot ใน <code>vacant_position</code> เพื่อใช้ในการจับคู่และจัดสรรตำแหน่ง
+            </Typography>
+
+            <Typography variant="body2" color="text.secondary" paragraph>
+              <strong>🔄 โหมดการ Sync:</strong>
+            </Typography>
+            
+            <Box sx={{ pl: 2, mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" component="div">
+                <strong>1. โหมดปกติ (Normal Sync):</strong>
+                <ul style={{ marginTop: 4, marginBottom: 8 }}>
+                  <li>เพิ่มเฉพาะตำแหน่งว่างที่<strong>ยังไม่มี</strong>ใน vacant_position</li>
+                  <li>ข้ามตำแหน่งที่มีอยู่แล้ว (ไม่อัปเดตข้อมูลเดิม)</li>
+                  <li>เหมาะสำหรับการเพิ่มตำแหน่งใหม่</li>
+                </ul>
+
+                <strong>2. โหมด Force Re-sync ⚠️:</strong>
+                <ul style={{ marginTop: 4, marginBottom: 8 }}>
+                  <li><strong style={{ color: '#d32f2f' }}>ลบข้อมูล vacant_position ทั้งหมด</strong> (หรือเฉพาะหน่วยที่เลือก)</li>
+                  <li>สร้างข้อมูลใหม่ทั้งหมดจาก police_personnel</li>
+                  <li>ใช้เมื่อต้องการอัปเดตข้อมูลให้เป็นปัจจุบัน</li>
+                  <li><strong style={{ color: '#d32f2f' }}>⚠️ ข้อมูลเดิมจะถูกลบถาวร ไม่สามารถกู้คืนได้!</strong></li>
+                </ul>
+              </Typography>
+            </Box>
+
+            <Typography variant="body2" color="text.secondary" paragraph>
+              <strong>📋 เงื่อนไขตำแหน่งว่าง:</strong> ระบบจะ sync เฉพาะตำแหน่งที่มีสถานะว่าง (fullName เป็น null, "", "ว่าง", "ว่าง (กันตำแหน่ง)", "ว่าง(กันตำแหน่ง)")
+            </Typography>
+
+            <Typography variant="body2" color="text.secondary" paragraph>
+              <strong>🎯 การกรองข้อมูล:</strong>
+            </Typography>
+            
+            <Box sx={{ pl: 2, mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" component="div">
+                • <strong>เลือกปี:</strong> sync เฉพาะตำแหน่งว่างสำหรับปีที่เลือก
+                <br />
+                • <strong>เลือกหน่วย:</strong> sync เฉพาะหน่วยที่เลือก หรือเลือก "ทุกหน่วย" เพื่อ sync ทั้งหมด
+              </Typography>
+            </Box>
+
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <strong>⏰ เวลาที่เหมาะสมในการ Sync:</strong>
+              <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
+                <li>เริ่มต้นปีงบประมาณใหม่</li>
+                <li>หลังจาก Import ข้อมูล police_personnel ใหม่</li>
+                <li>เมื่อต้องการอัปเดตข้อมูลตำแหน่งว่างให้เป็นปัจจุบัน (ใช้ Force Re-sync)</li>
+              </ul>
+            </Alert>
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Year and Unit Selector */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <FormControl fullWidth>
-            <InputLabel>เลือกปี (พ.ศ.)</InputLabel>
-            <Select
-              value={selectedYear}
-              label="เลือกปี (พ.ศ.)"
-              onChange={handleYearChange}
-            >
-              {availableYears.map((year) => (
-                <MenuItem key={year} value={year}>
-                  {year}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>เลือกปี (พ.ศ.)</InputLabel>
+              <Select
+                value={selectedYear}
+                label="เลือกปี (พ.ศ.)"
+                onChange={handleYearChange}
+              >
+                {availableYears.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth>
+              <InputLabel>เลือกหน่วย</InputLabel>
+              <Select
+                value={selectedUnit}
+                label="เลือกหน่วย"
+                onChange={handleUnitChange}
+                disabled={loadingUnits}
+              >
+                <MenuItem value="all">
+                  <em>ทุกหน่วย</em>
                 </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                {availableUnits.map((unit) => (
+                  <MenuItem key={unit} value={unit}>
+                    {unit}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Divider sx={{ my: 2 }} />
+
+          {/* Force Re-sync Option */}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={forceResync}
+                onChange={(e) => setForceResync(e.target.checked)}
+                color="warning"
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight={600}>
+                  Force Re-sync (ลบข้อมูลเดิมและ sync ใหม่ทั้งหมด)
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  ⚠️ จะลบข้อมูล vacant_position ที่ sync ไว้แล้วและสร้างใหม่ทั้งหมด
+                </Typography>
+              </Box>
+            }
+          />
         </Paper>
 
         {/* Sync Status */}
@@ -336,16 +532,26 @@ export default function SyncVacantPositionsPage() {
               <Paper sx={{ p: 3, mb: 3, bgcolor: 'success.50', borderLeft: 4, borderColor: 'success.main' }}>
                 <Typography variant="h6" fontWeight={700} color="success.main" mb={2}>
                   <CheckIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-                  Sync สำเร็จ!
+                  {syncResult.forceResync ? 'Force Re-sync สำเร็จ!' : 'Sync สำเร็จ!'}
                 </Typography>
+
+                {syncResult.forceResync && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    ลบข้อมูลเดิมและสร้างใหม่ทั้งหมดเรียบร้อย
+                  </Alert>
+                )}
                 
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2 }}>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Sync ใหม่</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {syncResult.forceResync ? 'สร้างใหม่' : 'Sync ใหม่'}
+                    </Typography>
                     <Typography variant="h5" fontWeight={700}>{syncResult.synced}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">ข้ามไป (มีอยู่แล้ว)</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {syncResult.forceResync ? 'ข้าม (ไม่ควรมี)' : 'ข้ามไป (มีอยู่แล้ว)'}
+                    </Typography>
                     <Typography variant="h5" fontWeight={700}>{syncResult.skipped}</Typography>
                   </Box>
                   <Box>
@@ -368,23 +574,35 @@ export default function SyncVacantPositionsPage() {
             )}
 
             {/* Action Buttons */}
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Button
                 variant="contained"
                 size="large"
                 startIcon={syncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
                 onClick={handleSyncClick}
-                disabled={syncing}
-                sx={{ flex: 1 }}
+                disabled={syncing || deleting}
+                sx={{ flex: { xs: '1 1 100%', sm: '1 1 auto' } }}
               >
                 {syncing ? 'กำลัง Sync...' : 'Sync ตำแหน่งว่าง'}
               </Button>
               <Button
                 variant="outlined"
                 size="large"
+                color="error"
+                startIcon={deleting ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
+                onClick={handleDeleteClick}
+                disabled={syncing || deleting || !syncStatus || syncStatus.syncedCount === 0}
+                sx={{ flex: { xs: '1 1 100%', sm: '0 1 auto' } }}
+              >
+                {deleting ? 'กำลังลบ...' : 'ลบข้อมูล'}
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
                 startIcon={<RefreshIcon />}
                 onClick={fetchSyncStatus}
-                disabled={loading || syncing}
+                disabled={loading || syncing || deleting}
+                sx={{ flex: { xs: '1 1 100%', sm: '0 1 auto' } }}
               >
                 รีเฟรช
               </Button>
@@ -394,19 +612,59 @@ export default function SyncVacantPositionsPage() {
 
         {/* Confirm Dialog */}
         <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>ยืนยันการ Sync ตำแหน่งว่าง</DialogTitle>
+          <DialogTitle>
+            {forceResync ? '⚠️ ยืนยันการ Force Re-sync' : 'ยืนยันการ Sync ตำแหน่งว่าง'}
+          </DialogTitle>
           <DialogContent>
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              คุณกำลังจะ sync ตำแหน่งว่างสำหรับปี <strong>{selectedYear}</strong>
+            <Alert severity={forceResync ? 'error' : 'warning'} sx={{ mb: 2 }}>
+              คุณกำลังจะ {forceResync ? 'Force Re-sync' : 'sync'} ตำแหน่งว่างสำหรับปี <strong>{selectedYear}</strong>
+              {selectedUnit !== 'all' && (
+                <>
+                  {' '}หน่วย <strong>{selectedUnit}</strong>
+                </>
+              )}
             </Alert>
+
+            {forceResync && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                <strong>คำเตือน: Force Re-sync</strong>
+                <br />
+                การกระทำนี้จะ<strong>ลบข้อมูล vacant_position ที่ sync ไว้แล้วทั้งหมด</strong>และสร้างใหม่
+                {selectedUnit !== 'all' ? ` สำหรับหน่วย ${selectedUnit}` : ''}
+                <br />
+                <strong>⚠️ ข้อมูลที่ถูกลบจะไม่สามารถกู้คืนได้!</strong>
+              </Alert>
+            )}
+
             <Typography variant="body2" color="text.secondary">
               การ sync จะคัดลอกตำแหน่งว่างจาก police_personnel ลงใน vacant_position
               <br /><br />
-              • ถ้ามีข้อมูลอยู่แล้ว จะข้ามไป (ไม่ซ้ำ)
-              <br />
-              • ข้อมูลที่ sync แล้วจะเป็น snapshot ถาวร
-              <br />
-              • ใช้สำหรับการจับคู่ตำแหน่งในหน้า assignment
+              {forceResync ? (
+                <>
+                  <strong>โหมด Force Re-sync:</strong>
+                  <br />
+                  • ลบข้อมูล vacant_position ที่มีอยู่แล้วทั้งหมด
+                  {selectedUnit !== 'all' && ` (เฉพาะหน่วย ${selectedUnit})`}
+                  <br />
+                  • สร้างข้อมูลใหม่ทั้งหมดจาก police_personnel
+                  <br />
+                  • ใช้เมื่อต้องการอัปเดตข้อมูลทั้งหมด
+                </>
+              ) : (
+                <>
+                  • ถ้ามีข้อมูลอยู่แล้ว จะข้ามไป (ไม่ซ้ำ)
+                  <br />
+                  • ข้อมูลที่ sync แล้วจะเป็น snapshot ถาวร
+                  <br />
+                  • ใช้สำหรับการจับคู่ตำแหน่งในหน้า assignment
+                  {selectedUnit !== 'all' && (
+                    <>
+                      <br />
+                      • จะ sync เฉพาะหน่วย {selectedUnit} เท่านั้น
+                    </>
+                  )}
+                </>
+              )}
             </Typography>
           </DialogContent>
           <DialogActions>
@@ -419,6 +677,56 @@ export default function SyncVacantPositionsPage() {
               autoFocus
             >
               ยืนยัน Sync
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ color: 'error.main' }}>
+            🗑️ ยืนยันการลบข้อมูล
+          </DialogTitle>
+          <DialogContent>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <strong>คำเตือน: การลบข้อมูลไม่สามารถกู้คืนได้!</strong>
+            </Alert>
+
+            <Typography variant="body1" gutterBottom fontWeight={600}>
+              คุณกำลังจะลบข้อมูล vacant_position ที่ sync แล้ว:
+            </Typography>
+
+            <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1, my: 2 }}>
+              <Typography variant="body2">
+                <strong>ปี:</strong> {selectedYear}
+              </Typography>
+              <Typography variant="body2">
+                <strong>หน่วย:</strong> {selectedUnit === 'all' ? 'ทุกหน่วย' : selectedUnit}
+              </Typography>
+              <Typography variant="body2" color="error.main" mt={1}>
+                <strong>จำนวนที่จะถูกลบ:</strong> {syncStatus?.syncedCount || 0} รายการ
+              </Typography>
+            </Box>
+
+            <Typography variant="body2" color="text.secondary">
+              ข้อมูลที่ถูกลบจะหายไปถาวร คุณสามารถ sync ใหม่ได้ภายหลังหากต้องการ
+            </Typography>
+
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <strong>💡 หมายเหตุ:</strong> ข้อมูลที่ถูกลบจะเป็นเฉพาะตำแหน่งที่ sync มาจาก police_personnel เท่านั้น 
+              (ไม่รวมตำแหน่งที่ผู้ใช้ nominate หรือ request)
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteDialogOpen(false)}>
+              ยกเลิก
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleConfirmDelete}
+              startIcon={<DeleteIcon />}
+            >
+              ยืนยันลบข้อมูล
             </Button>
           </DialogActions>
         </Dialog>

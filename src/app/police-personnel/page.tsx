@@ -1109,7 +1109,10 @@ export default function PolicePersonnelPage() {
           setPage(0); // Reset to first page for consistent view
         }
       } else {
-        toast.error('เกิดข้อผิดพลาดในการลบข้อมูล');
+        // แสดง error message จาก API
+        const errorData = await response.json();
+        const errorMessage = errorData.message || errorData.error || 'เกิดข้อผิดพลาดในการลบข้อมูล';
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error('Remove from vacant position error:', error);

@@ -23,6 +23,9 @@ import {
   IconButton,
   Collapse,
   CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -40,7 +43,6 @@ export default function ImportPolicePersonnelPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
-  const [showInstructions, setShowInstructions] = useState(true);
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -172,71 +174,95 @@ export default function ImportPolicePersonnelPage() {
           </Typography>
         </Paper>
 
-        {/* Instructions */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <InfoIcon color="info" />
-                <Typography variant="h6">คำแนะนำการใช้งาน</Typography>
-              </Box>
-              <IconButton onClick={() => setShowInstructions(!showInstructions)}>
-                {showInstructions ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              </IconButton>
+        {/* Instructions - Accordion */}
+        <Accordion sx={{ mb: 3, bgcolor: 'info.50', borderLeft: 4, borderColor: 'info.main' }}>
+          <AccordionSummary
+            expandIcon={<ExpandMoreIcon />}
+            aria-controls="import-guide-content"
+            id="import-guide-header"
+            sx={{
+              '&:hover': { bgcolor: 'info.100' },
+              transition: 'background-color 0.2s'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <InfoIcon sx={{ color: 'info.main', mr: 1.5 }} />
+              <Typography variant="h6" fontWeight={600} color="info.main">
+                📚 คำแนะนำการใช้งาน Import ข้อมูล
+              </Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              <strong>📌 วัตถุประสงค์:</strong> ระบบ Import ใช้สำหรับนำเข้าข้อมูลบุคลากรตำรวจจากไฟล์ Excel เข้าสู่ระบบฐานข้อมูล
+            </Typography>
+
+            <Typography variant="body2" color="text.secondary" paragraph>
+              <strong>📋 ขั้นตอนการใช้งาน:</strong>
+            </Typography>
+
+            <List dense sx={{ pl: 2, mb: 2 }}>
+              <ListItem>
+                <ListItemText
+                  primary={<Typography variant="body2" fontWeight={600}>1. ดาวน์โหลดไฟล์ Template Excel</Typography>}
+                  secondary={<Typography variant="body2" color="text.secondary">คลิกปุ่ม "ดาวน์โหลด Template" เพื่อดาวน์โหลดไฟล์ตัวอย่างที่มีรูปแบบถูกต้อง</Typography>}
+                />
+              </ListItem>
+              <ListItem>
+                <ListItemText
+                  primary={<Typography variant="body2" fontWeight={600}>2. กรอกข้อมูลตามรูปแบบ</Typography>}
+                  secondary={<Typography variant="body2" color="text.secondary">กรอกข้อมูลในไฟล์ Excel ตามคอลัมน์ที่กำหนด <strong>อย่าลบหรือเปลี่ยนชื่อหัวคอลัมน์</strong></Typography>}
+                />
+              </ListItem>
+              <ListItem>
+                <ListItemText
+                  primary={<Typography variant="body2" fontWeight={600}>3. อัปโหลดไฟล์</Typography>}
+                  secondary={<Typography variant="body2" color="text.secondary">เลือกไฟล์และคลิก "นำเข้าข้อมูล" เพื่ออัปโหลดข้อมูลเข้าระบบ</Typography>}
+                />
+              </ListItem>
+            </List>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="body2" color="text.secondary" paragraph fontWeight={600}>
+              📊 รูปแบบคอลัมน์ใน Excel (เรียงตามลำดับที่กำหนด):
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+              {[
+                'อาวุโส', 'ยศ', 'ชื่อ สกุล','ID', 'POSCODE', 'ตำแหน่ง', 
+                'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ', 
+                'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ', 
+                'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข'
+              ].map((column, index) => (
+                <Chip 
+                  key={column} 
+                  label={`${index + 1}. ${column}`} 
+                  size="small" 
+                  variant="outlined"
+                  sx={{ fontSize: '0.75rem' }}
+                />
+              ))}
             </Box>
 
-            <Collapse in={showInstructions}>
-              <List dense>
-                <ListItem>
-                  <ListItemText
-                    primary="1. ดาวน์โหลดไฟล์ Template Excel"
-                    secondary="คลิกปุ่ม 'ดาวน์โหลด Template' เพื่อดาวน์โหลดไฟล์ตัวอย่าง"
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText
-                    primary="2. กรอกข้อมูลตามรูปแบบ"
-                    secondary="กรอกข้อมูลในไฟล์ Excel ตามคอลัมน์ที่กำหนด อย่าลบหรือเปลี่ยนชื่อหัวคอลัมน์"
-                  />
-                </ListItem>
-                <ListItem>
-                  <ListItemText
-                    primary="3. อัปโหลดไฟล์"
-                    secondary="เลือกไฟล์และคลิก 'นำเข้าข้อมูล' เพื่ออัปโหลด"
-                  />
-                </ListItem>
-              </List>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <strong>⚠️ ข้อควรระวัง:</strong>
+              <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
+                <li>กรุณาเรียงคอลัมน์ในไฟล์ Excel ตามลำดับที่แสดงข้างต้น (1-21)</li>
+                <li>ห้ามลบหรือเปลี่ยนชื่อหัวคอลัมน์ เพราะจะทำให้การ import ผิดพลาด</li>
+                <li>ตรวจสอบรูปแบบข้อมูลให้ถูกต้องก่อนอัปโหลด</li>
+              </ul>
+            </Alert>
 
-              <Divider sx={{ my: 2 }} />
-
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                รูปแบบคอลัมน์ใน Excel (เรียงตามลำดับที่กำหนด):
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {[
-                  'อาวุโส', 'ยศ', 'ชื่อ สกุล','ID', 'POSCODE', 'ตำแหน่ง', 
-                  'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ', 
-                  'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ', 
-                  'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข'
-                ].map((column, index) => (
-                  <Chip 
-                    key={column} 
-                    label={`${index + 1}. ${column}`} 
-                    size="small" 
-                    variant="outlined" 
-                  />
-                ))}
-              </Box>
-              
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  <strong>หมายเหตุ:</strong> กรุณาเรียงคอลัมน์ในไฟล์ Excel ตามลำดับที่แสดงข้างต้น 
-                  (1-20) เพื่อให้การนำเข้าข้อมูลเป็นไปอย่างถูกต้อง
-                </Typography>
-              </Alert>
-            </Collapse>
-          </CardContent>
-        </Card>
+            <Alert severity="info">
+              <strong>💡 เคล็ดลับ:</strong>
+              <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
+                <li>ระบบจะแสดง progress bar ระหว่างการ import</li>
+                <li>หากมีข้อผิดพลาด ระบบจะแสดงรายละเอียดแถวที่มีปัญหา</li>
+                <li>สามารถ import ข้อมูลได้ทีละหลายๆ แถว</li>
+              </ul>
+            </Alert>
+          </AccordionDetails>
+        </Accordion>
 
         {/* Upload Section */}
         <Paper sx={{ p: 3, mb: 3 }}>

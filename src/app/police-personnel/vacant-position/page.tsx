@@ -94,6 +94,8 @@ import {
   School as EducationIcon,
   Work as ServiceIcon,
   AssignmentInd as PositionIcon,
+  LinkOff as UnlinkIcon,
+  ManageAccounts as ManageAccountsIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
@@ -155,12 +157,13 @@ interface SortableCardProps {
   showOrder?: boolean; // เพิ่ม prop เพื่อควบคุมการแสดงลำดับ
   onViewDetail: (item: VacantPositionData) => void;
   onMenuOpen: (event: React.MouseEvent<HTMLElement>, item: VacantPositionData) => void;
+  onUnassign?: (item: VacantPositionData) => void; // เพิ่ม prop สำหรับยกเลิกการจับคู่
   draggedItem?: VacantPositionData | null; // เพิ่ม prop เพื่อรู้ว่า card ไหนกำลังลาก
   isAssignmentExpanded?: boolean; // เพิ่ม prop เพื่อควบคุมการขยายข้อมูลการจับคู่
   onToggleAssignment?: () => void; // เพิ่ม prop สำหรับ toggle
 }
 
-const SortableCard = React.memo(function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDetail, onMenuOpen, draggedItem, isAssignmentExpanded, onToggleAssignment }: SortableCardProps) {
+const SortableCard = React.memo(function SortableCard({ item, displayOrder, compact, showOrder = true, onViewDetail, onMenuOpen, onUnassign, draggedItem, isAssignmentExpanded, onToggleAssignment }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -609,6 +612,43 @@ const SortableCard = React.memo(function SortableCard({ item, displayOrder, comp
                       </Typography>
                     </>
                   )}
+                  
+                  {/* ข้อความแนะนำสำหรับการแก้ไข/ลบ */}
+                  <Alert severity="warning" sx={{ mt: 1.5, py: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
+                      ไม่สามารถแก้ไขหรือลบได้ เนื่องจากได้จับคู่ตำแหน่งแล้ว
+                    </Typography>
+                  </Alert>
+
+                  {/* ปุ่มยกเลิกการจับคู่ */}
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      color="warning"
+                      size="small"
+                      startIcon={<UnlinkIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUnassign?.(item);
+                      }}
+                    >
+                      ยกเลิกการจับคู่
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      size="small"
+                      startIcon={<ManageAccountsIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.href = '/police-personnel/vacant-position/assignment';
+                      }}
+                      sx={{ minWidth: 'auto', px: 1.5 }}
+                    >
+                      จัดการ
+                    </Button>
+                  </Box>
                 </Box>
               </Box>
             </Collapse>
@@ -814,6 +854,12 @@ export default function VacantPositionPage() {
     overItem: VacantPositionData | null;
   }>({ activeItem: null, overItem: null });
   const [isSwapping, setIsSwapping] = useState(false);
+
+  // Unassign confirmation states
+  const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false);
+  const [itemToUnassign, setItemToUnassign] = useState<VacantPositionData | null>(null);
+  const [isUnassigning, setIsUnassigning] = useState(false);
+  const [unassignReason, setUnassignReason] = useState('');
 
   // PosCode options for edit
   const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
@@ -1169,6 +1215,9 @@ export default function VacantPositionPage() {
     // Apply tab filter
     if (selectedTab !== 'all') {
       filtered = filtered.filter(item => item.requestedPositionId === selectedTab);
+    } else {
+      // For "ทั้งหมด" tab, show only personnel who have requested positions
+      filtered = filtered.filter(item => item.requestedPositionId !== null && item.requestedPositionId !== undefined);
     }
 
     // Apply additional filters
@@ -1240,6 +1289,11 @@ export default function VacantPositionPage() {
     page * rowsPerPage + rowsPerPage
   );
 
+  // Calculate count of items with requested position for "ทั้งหมด" tab badge
+  const totalRequestedCount = useMemo(() => {
+    return data.filter(item => item.requestedPositionId !== null && item.requestedPositionId !== undefined).length;
+  }, [data]);
+
   // Helper function to get display order within group
   const getGroupDisplayOrder = (item: VacantPositionData): number => {
     if (selectedTab === 'all') {
@@ -1301,6 +1355,13 @@ export default function VacantPositionPage() {
   };
 
   const handleDelete = async (item: VacantPositionData) => {
+    // Option 3: ตรวจสอบว่าจับคู่แล้วหรือไม่
+    if (item.isAssigned) {
+      toast.error('ไม่สามารถลบได้ เนื่องจากได้จับคู่ตำแหน่งแล้ว กรุณายกเลิกการจับคู่ก่อน');
+      handleMenuClose();
+      return;
+    }
+
     setItemToDelete(item);
     setDeleteConfirmOpen(true);
     handleMenuClose();
@@ -1339,6 +1400,13 @@ export default function VacantPositionPage() {
   };
 
   const handleEdit = useCallback((item: VacantPositionData) => {
+    // Option 3: ตรวจสอบว่าจับคู่แล้วหรือไม่
+    if (item.isAssigned) {
+      toast.error('ไม่สามารถแก้ไขได้ เนื่องจากได้จับคู่ตำแหน่งแล้ว กรุณายกเลิกการจับคู่ก่อน');
+      handleMenuClose();
+      return;
+    }
+
     setSelectedPersonnel(item);
     setEditFormData({
       nominator: item.nominator || '',
@@ -1347,7 +1415,7 @@ export default function VacantPositionPage() {
     });
     setEditModalOpen(true);
     handleMenuClose();
-  }, []);
+  }, [toast]);
 
   const handleEditClose = useCallback(() => {
     setEditModalOpen(false);
@@ -1400,6 +1468,57 @@ export default function VacantPositionPage() {
   const handleCloseDetailModal = useCallback(() => {
     setDetailModalOpen(false);
   }, []);
+
+  // Unassign handlers
+  const handleUnassign = useCallback((item: VacantPositionData) => {
+    if (!item.isAssigned) {
+      toast.error('รายการนี้ยังไม่ได้จับคู่');
+      return;
+    }
+    setItemToUnassign(item);
+    setUnassignReason('');
+    setUnassignConfirmOpen(true);
+    handleMenuClose();
+  }, [toast]);
+
+  const handleUnassignCancel = useCallback(() => {
+    setUnassignConfirmOpen(false);
+    setItemToUnassign(null);
+    setUnassignReason('');
+  }, []);
+
+  const handleUnassignConfirm = useCallback(async () => {
+    if (!itemToUnassign) return;
+
+    setIsUnassigning(true);
+    try {
+      const response = await fetch('/api/vacant-position/unassign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicantId: itemToUnassign.id,
+          reason: unassignReason || 'ยกเลิกการจับคู่จากหน้ารายการยื่นขอตำแหน่ง',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success('ยกเลิกการจับคู่สำเร็จ');
+        setUnassignConfirmOpen(false);
+        setItemToUnassign(null);
+        setUnassignReason('');
+        fetchData();
+      } else {
+        toast.error(result.error || 'เกิดข้อผิดพลาดในการยกเลิกการจับคู่');
+      }
+    } catch (error) {
+      console.error('Unassign error:', error);
+      toast.error('เกิดข้อผิดพลาดในการยกเลิกการจับคู่');
+    } finally {
+      setIsUnassigning(false);
+    }
+  }, [itemToUnassign, unassignReason, toast]);
 
   // Toggle assignment info for a specific card
   const handleToggleAssignment = useCallback((itemId: string) => {
@@ -1579,7 +1698,7 @@ export default function VacantPositionPage() {
                       ทั้งหมด
                     </Typography>
                     <Chip
-                      label={data.length}
+                      label={totalRequestedCount}
                       size="small"
                       sx={{
                         backgroundColor: (theme) => theme.palette.primary.main,
@@ -1863,7 +1982,24 @@ export default function VacantPositionPage() {
                               </TableCell>
                               <TableCell>
                                 {item.isAssigned && item.assignmentInfo ? (
-                                  <Tooltip title={`${item.assignmentInfo.assignedPosition} - ${item.assignmentInfo.assignedUnit}`}>
+                                  <Tooltip 
+                                    title={
+                                      <Box>
+                                        <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>
+                                          จับคู่แล้ว
+                                        </Typography>
+                                        <Typography variant="caption" display="block">
+                                          {item.assignmentInfo.assignedPosition}
+                                        </Typography>
+                                        <Typography variant="caption" display="block">
+                                          {item.assignmentInfo.assignedUnit}
+                                        </Typography>
+                                        <Typography variant="caption" display="block" sx={{ mt: 0.5, fontStyle: 'italic', color: 'warning.light' }}>
+                                          ไม่สามารถแก้ไข/ลบได้
+                                        </Typography>
+                                      </Box>
+                                    }
+                                  >
                                     <Chip
                                       icon={<CheckIcon sx={{ fontSize: 16 }} />}
                                       label="จับคู่แล้ว"
@@ -1981,6 +2117,7 @@ export default function VacantPositionPage() {
                               showOrder={selectedTab !== 'all'}
                               onViewDetail={handleViewDetail}
                               onMenuOpen={handleMenuOpen}
+                              onUnassign={handleUnassign}
                               draggedItem={draggedItem}
                               isAssignmentExpanded={expandedAssignments.has(item.id)}
                               onToggleAssignment={() => handleToggleAssignment(item.id)}
@@ -2062,18 +2199,55 @@ export default function VacantPositionPage() {
             horizontal: 'right',
           }}
         >
-          <MenuItem onClick={() => menuItem && handleEdit(menuItem)}>
+          {/* Option 1: ซ่อนปุ่ม Edit/Delete เมื่อจับคู่แล้ว */}
+          <MenuItem 
+            onClick={() => menuItem && handleEdit(menuItem)}
+            disabled={menuItem?.isAssigned}
+          >
             <ListItemIcon>
-              <EditIcon fontSize="small" color="primary" />
+              <EditIcon 
+                fontSize="small" 
+                color={menuItem?.isAssigned ? "disabled" : "primary"} 
+              />
             </ListItemIcon>
-            <ListItemText>แก้ไข</ListItemText>
+            <ListItemText>
+              {menuItem?.isAssigned ? 'แก้ไข (จับคู่แล้ว)' : 'แก้ไข'}
+            </ListItemText>
           </MenuItem>
-          <MenuItem onClick={() => menuItem && handleDelete(menuItem)}>
+          <MenuItem 
+            onClick={() => menuItem && handleDelete(menuItem)}
+            disabled={menuItem?.isAssigned}
+          >
             <ListItemIcon>
-              <DeleteIcon fontSize="small" color="error" />
+              <DeleteIcon 
+                fontSize="small" 
+                color={menuItem?.isAssigned ? "disabled" : "error"} 
+              />
             </ListItemIcon>
-            <ListItemText>ลบ</ListItemText>
+            <ListItemText>
+              {menuItem?.isAssigned ? 'ลบ (จับคู่แล้ว)' : 'ลบ'}
+            </ListItemText>
           </MenuItem>
+          
+          {/* ปุ่มยกเลิกการจับคู่ - แสดงเฉพาะเมื่อจับคู่แล้ว */}
+          {menuItem?.isAssigned && (
+            <>
+              <Divider />
+              <MenuItem 
+                onClick={() => menuItem && handleUnassign(menuItem)}
+              >
+                <ListItemIcon>
+                  <UnlinkIcon 
+                    fontSize="small" 
+                    color="warning" 
+                  />
+                </ListItemIcon>
+                <ListItemText>
+                  ยกเลิกการจับคู่
+                </ListItemText>
+              </MenuItem>
+            </>
+          )}
         </Menu>
 
         {/* Edit Modal */}
@@ -2381,6 +2555,107 @@ export default function VacantPositionPage() {
               sx={{ order: { xs: 1, sm: 2 } }}
             >
               {isDeleting ? 'กำลังลบ...' : 'ลบ'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Unassign Confirmation Dialog */}
+        <Dialog
+          open={unassignConfirmOpen}
+          onClose={() => !isUnassigning && handleUnassignCancel()}
+          fullScreen={isMobile}
+          PaperProps={{
+            sx: {
+              width: { xs: '100%', sm: '500px' },
+              height: { xs: '100%', sm: 'auto' },
+              maxHeight: { xs: '100%', sm: '90vh' },
+              margin: { xs: 0, sm: '32px' },
+              borderRadius: { xs: 0, sm: 1 },
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }}
+        >
+          <DialogTitle sx={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <UnlinkIcon color="warning" />
+            ยืนยันการยกเลิกจับคู่
+          </DialogTitle>
+          <DialogContent
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              px: { xs: 2, sm: 3 },
+              minHeight: 0
+            }}
+          >
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              คุณต้องการยกเลิกการจับคู่{' '}
+              {itemToUnassign?.rank && itemToUnassign?.fullName && (
+                <>
+                  ของ <strong>{itemToUnassign.rank} {itemToUnassign.fullName}</strong>
+                </>
+              )}{' '}
+              ใช่หรือไม่?
+            </Typography>
+
+            {itemToUnassign?.assignmentInfo && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  ตำแหน่งที่จับคู่ปัจจุบัน:
+                </Typography>
+                <Typography variant="body2">
+                  {itemToUnassign.assignmentInfo.assignedPosition}
+                </Typography>
+                <Typography variant="body2">
+                  {itemToUnassign.assignmentInfo.assignedUnit}
+                </Typography>
+              </Alert>
+            )}
+
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="เหตุผลในการยกเลิก (ไม่บังคับ)"
+              value={unassignReason}
+              onChange={(e) => setUnassignReason(e.target.value)}
+              placeholder="ระบุเหตุผลในการยกเลิกการจับคู่..."
+              sx={{ mb: 2 }}
+            />
+
+            <Alert severity="warning">
+              <Typography variant="body2">
+                การยกเลิกจับคู่จะไม่ลบข้อมูล แต่จะเปลี่ยนสถานะเป็น "รอจับคู่" 
+                และสามารถจับคู่ใหม่ได้ในภายหลัง
+              </Typography>
+            </Alert>
+          </DialogContent>
+          <DialogActions sx={{ 
+            px: { xs: 2, sm: 3 }, 
+            py: { xs: 2, sm: 1.5 },
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 1, sm: 0 },
+            flexShrink: 0,
+            '& .MuiButton-root': {
+              minWidth: { xs: '100%', sm: 'auto' }
+            }
+          }}>
+            <Button 
+              onClick={handleUnassignCancel} 
+              disabled={isUnassigning}
+              sx={{ order: { xs: 2, sm: 1 } }}
+            >
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleUnassignConfirm} 
+              color="warning" 
+              variant="contained"
+              disabled={isUnassigning}
+              startIcon={isUnassigning ? <CircularProgress size={20} color="inherit" /> : <UnlinkIcon />}
+              sx={{ order: { xs: 1, sm: 2 } }}
+            >
+              {isUnassigning ? 'กำลังยกเลิก...' : 'ยืนยันยกเลิกจับคู่'}
             </Button>
           </DialogActions>
         </Dialog>

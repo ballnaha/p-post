@@ -1255,12 +1255,12 @@ export default function VacantPositionAssignmentPage() {
                       sx={{ fontWeight: 600 }}
                     />
                     <Chip 
-                      label={`ว่าง: ${stats.vacantPositions.vacant} (รอ: ${stats.vacantPositions.vacantNotAssigned}, จับคู่แล้ว: ${stats.vacantPositions.vacantAssigned})`} 
+                      label={`ว่าง: ${stats.vacantPositions.vacant} (จับคู่แล้ว: ${stats.vacantPositions.vacantAssigned}, รอจับคู่: ${stats.vacantPositions.vacantNotAssigned})`} 
                       color="warning"
                       sx={{ fontWeight: 600 }}
                     />
                     <Chip 
-                      label={`กันตำแหน่ง: ${stats.vacantPositions.reserved} (รอ: ${stats.vacantPositions.reservedNotAssigned}, จับคู่แล้ว: ${stats.vacantPositions.reservedAssigned})`} 
+                      label={`กันตำแหน่ง: ${stats.vacantPositions.reserved} (จับคู่แล้ว: ${stats.vacantPositions.reservedAssigned}, รอจับคู่: ${stats.vacantPositions.reservedNotAssigned})`} 
                       color="success"
                       sx={{ fontWeight: 600 }}
                     />

@@ -239,6 +239,8 @@ export async function DELETE(request: NextRequest) {
         id: true,
         requestedPositionId: true,
         displayOrder: true,
+        isAssigned: true,
+        fullName: true,
       },
     });
 
@@ -246,6 +248,42 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(
         { error: 'Record not found' },
         { status: 404 }
+      );
+    }
+
+    // ตรวจสอบว่าจับคู่แล้วหรือไม่ (Option 3: เพิ่มการเตือน)
+    if (itemToDelete.isAssigned) {
+      return NextResponse.json(
+        { 
+          error: 'ไม่สามารถลบได้ เนื่องจากได้จับคู่ตำแหน่งแล้ว',
+          message: 'กรุณายกเลิกการจับคู่ก่อน จากหน้า "จัดการจับคู่ตำแหน่ง"'
+        },
+        { status: 400 }
+      );
+    }
+
+    // ตรวจสอบว่ามีข้อมูลในรายการสลับตำแหน่งหรือไม่ (กำลังจับคู่อยู่)
+    const swapListEntry = await prisma.swapList.findFirst({
+      where: {
+        nationalId: nationalId,
+        year: year,
+      },
+      select: {
+        id: true,
+        swapType: true,
+        fullName: true,
+      },
+    });
+
+    if (swapListEntry) {
+      const swapTypeName = swapListEntry.swapType === 'two-way' ? 'สลับตำแหน่ง' : 
+                          swapListEntry.swapType === 'three-way' ? 'สามเส้า' : 'จับคู่';
+      return NextResponse.json(
+        { 
+          error: `ไม่สามารถยกเลิกการยื่นขอตำแหน่งได้`,
+          message: `บุคคลนี้อยู่ในรายการ${swapTypeName}แล้ว กรุณายกเลิกการจับคู่ในหน้า "${swapTypeName}" ก่อน`
+        },
+        { status: 400 }
       );
     }
 

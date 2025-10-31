@@ -38,45 +38,22 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // นับตำแหน่ง "ว่าง" (ที่ยังไม่ถูกจับคู่)
-    const vacantNotAssigned = await prisma.vacantPosition.count({
+    // นับตำแหน่ง "ว่าง" ทั้งหมด (ไม่สนใจ isAssigned)
+    const totalVacantOnly = await prisma.vacantPosition.count({
       where: {
         ...vacantPositionWhere,
-        fullName: { equals: 'ว่าง' },
-        isAssigned: false
+        fullName: { equals: 'ว่าง' }
       }
     });
 
-    // นับตำแหน่ง "ว่าง" (ที่ถูกจับคู่แล้ว)
-    const vacantAssigned = await prisma.vacantPosition.count({
-      where: {
-        ...vacantPositionWhere,
-        fullName: { equals: 'ว่าง' },
-        isAssigned: true
-      }
-    });
-
-    // นับตำแหน่ง "ว่าง (กันตำแหน่ง)" (ที่ยังไม่ถูกจับคู่)
-    const reservedNotAssigned = await prisma.vacantPosition.count({
+    // นับตำแหน่ง "ว่าง (กันตำแหน่ง)" ทั้งหมด (ไม่สนใจ isAssigned)
+    const totalReserved = await prisma.vacantPosition.count({
       where: {
         ...vacantPositionWhere,
         OR: [
           { fullName: { equals: 'ว่าง (กันตำแหน่ง)' } },
           { fullName: { equals: 'ว่าง(กันตำแหน่ง)' } }
-        ],
-        isAssigned: false
-      }
-    });
-
-    // นับตำแหน่ง "ว่าง (กันตำแหน่ง)" (ที่ถูกจับคู่แล้ว)
-    const reservedAssigned = await prisma.vacantPosition.count({
-      where: {
-        ...vacantPositionWhere,
-        OR: [
-          { fullName: { equals: 'ว่าง (กันตำแหน่ง)' } },
-          { fullName: { equals: 'ว่าง(กันตำแหน่ง)' } }
-        ],
-        isAssigned: true
+        ]
       }
     });
 
@@ -105,16 +82,20 @@ export async function GET(request: NextRequest) {
       where: applicantsWhere
     });
 
+    // จับคู่แล้ว = ผู้ยื่นขอที่ requestedPositionId !== null และ isAssigned = true
     const assignedApplicants = await prisma.vacantPosition.count({
       where: {
-        ...applicantsWhere,
+        year: yearNumber,
+        requestedPositionId: { not: null },
         isAssigned: true
       }
     });
 
+    // รอจับคู่ = ผู้ยื่นขอที่ requestedPositionId !== null และ isAssigned = false
     const pendingApplicants = await prisma.vacantPosition.count({
       where: {
-        ...applicantsWhere,
+        year: yearNumber,
+        requestedPositionId: { not: null },
         isAssigned: false
       }
     });
@@ -186,19 +167,73 @@ export async function GET(request: NextRequest) {
       }))
       .sort((a, b) => b.count - a.count); // เรียงจากมากไปน้อย
 
+    // ดึงข้อมูล SwapTransactionDetail เพื่อหาว่าผู้ที่จับคู่แล้วไปจับคู่กับตำแหน่งประเภทใด
+    const assignedDetails = await prisma.swapTransactionDetail.findMany({
+      where: {
+        transaction: {
+          year: yearNumber,
+        },
+      },
+      include: {
+        transaction: true,
+      },
+    });
+
+    // ดึงข้อมูลตำแหน่งว่างเพื่อหา fullName ของแต่ละตำแหน่ง
+    const vacantPositionsData = await prisma.vacantPosition.findMany({
+      where: vacantPositionWhere,
+    });
+
+    // สร้าง Map เพื่อเช็คว่าตำแหน่งแต่ละตำแหน่งเป็น "ว่าง" หรือ "กันตำแหน่ง"
+    const positionTypeMap = new Map<string, string>();
+    vacantPositionsData.forEach(vp => {
+      const key = `${vp.position}|${vp.unit}`;
+      positionTypeMap.set(key, vp.fullName || '');
+    });
+
+    // นับจำนวนผู้ที่จับคู่กับ "ว่าง" และ "กันตำแหน่ง"
+    let vacantAssignedCount = 0;
+    let reservedAssignedCount = 0;
+
+    assignedDetails.forEach(detail => {
+      const key = `${detail.toPosition}|${detail.toUnit}`;
+      const positionType = positionTypeMap.get(key);
+      
+      if (positionType === 'ว่าง') {
+        vacantAssignedCount++;
+      } else if (positionType === 'ว่าง (กันตำแหน่ง)' || positionType === 'ว่าง(กันตำแหน่ง)') {
+        reservedAssignedCount++;
+      }
+    });
+
+    // คำนวณค่าตามตรรกะใหม่
+    // ว่าง = รวมตำแหน่ง "ว่าง" ทั้งหมด - จำนวนผู้ที่จับคู่กับ "ว่าง" แล้ว
+    const vacant = totalVacantOnly - vacantAssignedCount;
+    
+    // จับคู่แล้ว (ของ "ว่าง") = ผู้ยื่นขอที่จับคู่กับ "ว่าง" แล้ว
+    const vacantAssigned = vacantAssignedCount;
+    
+    // รอจับคู่ (ของ "ว่าง") = ผู้ยื่นขอที่รอการจับคู่
+    const vacantNotAssigned = pendingApplicants;
+    
+    // กันตำแหน่ง = รวมตำแหน่ง "กันตำแหน่ง" ทั้งหมด - จำนวนผู้ที่จับคู่กับ "กันตำแหน่ง" แล้ว
+    const reserved = totalReserved - reservedAssignedCount;
+    const reservedAssigned = reservedAssignedCount; // ผู้ที่จับคู่กับกันตำแหน่งแล้ว
+    const reservedNotAssigned = 0; // ผู้ที่รอจับคู่กับกันตำแหน่ง (ยังไม่มีในระบบ)
+
     return NextResponse.json({
       success: true,
       data: {
         vacantPositions: {
-          totalVacant, // รวมทั้งหมด
-          vacant: vacantNotAssigned + vacantAssigned, // รวมทั้งหมดที่เป็น "ว่าง"
-          vacantNotAssigned, // ว่างที่ยังไม่จับคู่
-          vacantAssigned, // ว่างที่จับคู่แล้ว
-          reserved: reservedNotAssigned + reservedAssigned, // รวมทั้งหมดที่เป็น "กันตำแหน่ง"
+          totalVacant, // รวมทั้งหมด (ทุกประเภท)
+          vacant, // ว่าง = รวมทั้งหมด - จับคู่แล้ว
+          vacantNotAssigned, // รอจับคู่ = requestedPositionId !== null และ isAssigned = false
+          vacantAssigned, // จับคู่แล้ว = requestedPositionId !== null และ isAssigned = true
+          reserved, // รวมกันตำแหน่งทั้งหมด
           reservedNotAssigned, // กันตำแหน่งที่ยังไม่จับคู่
           reservedAssigned, // กันตำแหน่งที่จับคู่แล้ว
           emptyName,
-          other: totalVacant - (vacantNotAssigned + vacantAssigned) - (reservedNotAssigned + reservedAssigned) - emptyName
+          other: totalVacant - totalVacantOnly - totalReserved - emptyName
         },
         applicants: {
           total: totalApplicants,

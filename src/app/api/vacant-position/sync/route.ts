@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma';
  */
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { year } = body;
+  const { year, unit, forceResync } = body;
 
   if (!year) {
     return NextResponse.json(
@@ -36,20 +36,54 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        console.log(`🔄 Starting sync for year ${yearNumber}...`);
+        console.log(`🔄 Starting sync for year ${yearNumber}${unit ? ` (unit: ${unit})` : ''}${forceResync ? ' (Force Re-sync)' : ''}...`);
+
+        // ถ้าเลือก Force Re-sync ให้ลบข้อมูลเดิมก่อน
+        if (forceResync) {
+          const deleteWhereCondition: any = {
+            year: yearNumber,
+            nominator: null,
+            requestedPositionId: null
+          };
+
+          // ถ้าระบุ unit ให้ลบเฉพาะ unit นั้น
+          if (unit && unit !== 'all') {
+            deleteWhereCondition.unit = unit;
+          }
+
+          const deletedCount = await prisma.vacantPosition.deleteMany({
+            where: deleteWhereCondition
+          });
+
+          console.log(`🗑️  Deleted ${deletedCount.count} existing records before re-sync`);
+
+          sendProgress({
+            type: 'progress',
+            current: 0,
+            total: 0,
+            message: `ลบข้อมูลเดิม ${deletedCount.count} รายการเรียบร้อย`
+          });
+        }
 
         // ดึงตำแหน่งว่างทั้งหมดจาก police_personnel
+        const whereCondition: any = {
+          posCodeId: { not: null },
+          OR: [
+            { fullName: null },
+            { fullName: '' },
+            { fullName: 'ว่าง' },
+            { fullName: 'ว่าง (กันตำแหน่ง)' },
+            { fullName: 'ว่าง(กันตำแหน่ง)' }
+          ]
+        };
+
+        // เพิ่ม filter unit ถ้ามี
+        if (unit && unit !== 'all') {
+          whereCondition.unit = unit;
+        }
+
         const vacantPositionsFromPersonnel = await prisma.policePersonnel.findMany({
-          where: {
-            posCodeId: { not: null },
-            OR: [
-              { fullName: null },
-              { fullName: '' },
-              { fullName: 'ว่าง' },
-              { fullName: 'ว่าง (กันตำแหน่ง)' },
-              { fullName: 'ว่าง(กันตำแหน่ง)' }
-            ]
-          },
+          where: whereCondition,
           include: {
             posCodeMaster: true
           },
@@ -177,7 +211,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        console.log(`✅ Sync completed: ${synced} synced, ${skipped} skipped`);
+        console.log(`✅ Sync completed: ${synced} synced, ${skipped} skipped${forceResync ? ' (Force Re-sync)' : ''}`);
 
         // ส่งผลลัพธ์สุดท้าย
         sendProgress({
@@ -187,6 +221,7 @@ export async function POST(request: NextRequest) {
             synced,
             skipped,
             total: totalRecords,
+            forceResync: forceResync || false,
             errors: errors.length > 0 ? errors : undefined
           }
         });
@@ -220,6 +255,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const year = searchParams.get('year');
+    const unit = searchParams.get('unit');
 
     if (!year) {
       return NextResponse.json(
@@ -230,38 +266,52 @@ export async function GET(request: NextRequest) {
 
     const yearNumber = parseInt(year);
 
+    // สร้าง where condition สำหรับ police_personnel
+    const personnelWhereCondition: any = {
+      posCodeId: { not: null },
+      OR: [
+        { fullName: null },
+        { fullName: '' },
+        { fullName: 'ว่าง' },
+        { fullName: 'ว่าง (กันตำแหน่ง)' },
+        { fullName: 'ว่าง(กันตำแหน่ง)' }
+      ]
+    };
+
+    // สร้าง where condition สำหรับ vacant_position
+    const vacantWhereCondition: any = {
+      year: yearNumber,
+      nominator: null,
+      requestedPositionId: null
+    };
+
+    // เพิ่ม filter unit ถ้ามี
+    if (unit && unit !== 'all') {
+      personnelWhereCondition.unit = unit;
+      vacantWhereCondition.unit = unit;
+    }
+
     // นับจำนวนตำแหน่งว่างใน police_personnel
     const personnelCount = await prisma.policePersonnel.count({
-      where: {
-        posCodeId: { not: null },
-        OR: [
-          { fullName: null },
-          { fullName: '' },
-          { fullName: 'ว่าง' },
-          { fullName: 'ว่าง (กันตำแหน่ง)' },
-          { fullName: 'ว่าง(กันตำแหน่ง)' }
-        ]
-      }
+      where: personnelWhereCondition
     });
 
     // นับจำนวนตำแหน่งว่างที่ sync แล้วใน vacant_position
     const syncedCount = await prisma.vacantPosition.count({
-      where: {
-        year: yearNumber,
-        nominator: null,
-        requestedPositionId: null
-      }
+      where: vacantWhereCondition
     });
 
-    // นับจำนวนที่ถูกจับคู่แล้ว
-    const assignedCount = await prisma.vacantPosition.count({
+    // นับจำนวนผู้ยื่นขอที่ถูกจับคู่แล้ว (requestedPositionId !== null และ isAssigned = true)
+    const assignedApplicantsCount = await prisma.vacantPosition.count({
       where: {
         year: yearNumber,
-        nominator: null,
-        requestedPositionId: null,
+        requestedPositionId: { not: null },
         isAssigned: true
       }
     });
+
+    // เหลือ = ตำแหน่งว่างทั้งหมด - ผู้ยื่นขอที่จับคู่แล้ว
+    const availableCount = syncedCount - assignedApplicantsCount;
 
     const needsSync = personnelCount > syncedCount;
 
@@ -271,8 +321,8 @@ export async function GET(request: NextRequest) {
         year: yearNumber,
         personnelVacantCount: personnelCount,
         syncedCount: syncedCount,
-        assignedCount: assignedCount,
-        availableCount: syncedCount - assignedCount,
+        assignedCount: assignedApplicantsCount,
+        availableCount: availableCount,
         needsSync,
         syncPercentage: personnelCount > 0 ? Math.round((syncedCount / personnelCount) * 100) : 0
       }
@@ -284,6 +334,75 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: 'Failed to check sync status',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE - ลบข้อมูล vacant_position ที่ sync แล้ว
+ * สามารถลบตามปี และหน่วย (ถ้าระบุ)
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const year = searchParams.get('year');
+    const unit = searchParams.get('unit');
+
+    if (!year) {
+      return NextResponse.json(
+        { success: false, error: 'Year parameter is required' },
+        { status: 400 }
+      );
+    }
+
+    const yearNumber = parseInt(year);
+    if (isNaN(yearNumber) || yearNumber < 2500 || yearNumber > 2600) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid year format (expected Buddhist year 25xx-26xx)' },
+        { status: 400 }
+      );
+    }
+
+    // สร้าง where condition
+    const deleteWhereCondition: any = {
+      year: yearNumber,
+      nominator: null,
+      requestedPositionId: null
+    };
+
+    // ถ้าระบุ unit ให้ลบเฉพาะ unit นั้น
+    if (unit && unit !== 'all') {
+      deleteWhereCondition.unit = unit;
+    }
+
+    console.log(`🗑️  Deleting vacant_position for year ${yearNumber}${unit && unit !== 'all' ? ` (unit: ${unit})` : ''}...`);
+
+    // ลบข้อมูล
+    const result = await prisma.vacantPosition.deleteMany({
+      where: deleteWhereCondition
+    });
+
+    console.log(`✅ Deleted ${result.count} records successfully`);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        year: yearNumber,
+        unit: unit && unit !== 'all' ? unit : 'all',
+        deletedCount: result.count,
+        message: `ลบข้อมูล ${result.count} รายการเรียบร้อย`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error deleting vacant positions:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to delete vacant positions',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }

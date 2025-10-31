@@ -177,6 +177,7 @@ export async function POST(request: NextRequest) {
                           trainingLocation: vacantPos.trainingLocation,
                           trainingCourse: vacantPos.trainingCourse,
                           isAssigned: false,
+                          displayOrder: 1, // ✅ ตั้งค่าเริ่มต้นเป็น 1 เพื่อไม่ให้ต้อง auto-assign ทีหลัง
                           notes: `Synced from police_personnel on ${new Date().toISOString().split('T')[0]}`
                         }
                       });

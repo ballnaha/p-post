@@ -34,9 +34,9 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedOpen = localStorage.getItem('sidebar-open');
-      return savedOpen ? JSON.parse(savedOpen) : false;
+      return savedOpen ? JSON.parse(savedOpen) : true;
     }
-    return false;
+    return true;
   });
   
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {

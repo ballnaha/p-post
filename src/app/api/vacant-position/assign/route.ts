@@ -127,13 +127,11 @@ export async function POST(request: NextRequest) {
       });
       console.log('✅ Updated applicant status:', updatedApplicant.id);
 
-      // อัพเดทสถานะตำแหน่งว่างเป็น "จับคู่แล้ว"
-      console.log('📝 Updating vacant position status to assigned...');
-      await tx.vacantPosition.update({
-        where: { id: vacantPositionId },
-        data: { isAssigned: true },
-      });
-      console.log('✅ Updated vacant position status');
+      // ไม่ update isAssigned สำหรับตำแหน่งว่าง (requested_position_id = null)
+      // เพราะจะทำให้เกิด data inconsistency
+      // ตำแหน่งว่างยังคงเป็น vacant position ที่พร้อมให้คนอื่นยื่นขอได้
+      console.log('ℹ️ Skipping vacant position status update to maintain data consistency');
+      console.log('ℹ️ Vacant position (requested_position_id=null) should remain isAssigned=false');
 
       console.log('✅ Transaction completed:', {
         vacantPositionId: vacantPositionId,

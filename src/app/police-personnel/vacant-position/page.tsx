@@ -1062,6 +1062,19 @@ export default function VacantPositionPage() {
 
   // Optimize: Use useCallback and batch updates
   const autoAssignDisplayOrder = useCallback(async (data: VacantPositionData[]): Promise<VacantPositionData[]> => {
+    // ✅ เช็คว่ามีรายการที่ต้อง update จริงๆ หรือไม่
+    const itemsWithoutOrder = data.filter(item => 
+      item.displayOrder === null || item.displayOrder === undefined
+    );
+
+    // ✅ ถ้าไม่มีรายการที่ต้อง update ให้ return ทันที (ไม่ต้องทำอะไร)
+    if (itemsWithoutOrder.length === 0) {
+      console.log('✅ All items already have displayOrder, skipping auto-assign');
+      return data;
+    }
+
+    console.log(`⚠️ Found ${itemsWithoutOrder.length} items without displayOrder, auto-assigning...`);
+
     // Group data by requestedPositionId
     const groupedData = data.reduce((acc, item) => {
       const groupId = item.requestedPositionId || 0;
@@ -1084,7 +1097,7 @@ export default function VacantPositionPage() {
         return a.displayOrder - b.displayOrder;
       });
 
-      // Assign displayOrder sequentially
+      // Assign displayOrder sequentially only for items without it
       groupItems.forEach((item, index) => {
         if (item.displayOrder === null || item.displayOrder === undefined) {
           item.displayOrder = index + 1;
@@ -1113,9 +1126,9 @@ export default function VacantPositionPage() {
             )
           );
         }
-        console.log(`Updated displayOrder for ${itemsToUpdate.length} items`);
+        console.log(`✅ Updated displayOrder for ${itemsToUpdate.length} items`);
       } catch (error) {
-        console.error('Error updating displayOrder:', error);
+        console.error('❌ Error updating displayOrder:', error);
       }
     }
 
@@ -2230,23 +2243,21 @@ export default function VacantPositionPage() {
           </MenuItem>
           
           {/* ปุ่มยกเลิกการจับคู่ - แสดงเฉพาะเมื่อจับคู่แล้ว */}
+          {menuItem?.isAssigned && <Divider />}
           {menuItem?.isAssigned && (
-            <>
-              <Divider />
-              <MenuItem 
-                onClick={() => menuItem && handleUnassign(menuItem)}
-              >
-                <ListItemIcon>
-                  <UnlinkIcon 
-                    fontSize="small" 
-                    color="warning" 
-                  />
-                </ListItemIcon>
-                <ListItemText>
-                  ยกเลิกการจับคู่
-                </ListItemText>
-              </MenuItem>
-            </>
+            <MenuItem 
+              onClick={() => menuItem && handleUnassign(menuItem)}
+            >
+              <ListItemIcon>
+                <UnlinkIcon 
+                  fontSize="small" 
+                  color="warning" 
+                />
+              </ListItemIcon>
+              <ListItemText>
+                ยกเลิกการจับคู่
+              </ListItemText>
+            </MenuItem>
           )}
         </Menu>
 

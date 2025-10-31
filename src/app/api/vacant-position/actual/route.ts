@@ -99,12 +99,14 @@ export async function GET(request: NextRequest) {
     });
 
     // สร้าง Map ของการจับคู่ (key = vacant_position.id)
-    // ค้นหาจาก toPosition + toUnit ที่ตรงกับตำแหน่งว่าง
+    // ค้นหาจาก toPosition + toUnit + toPositionNumber ที่ตรงกับตำแหน่งว่าง
     const assignmentMap = new Map();
     for (const detail of assignedDetails) {
-      // ค้นหาตำแหน่งที่ตรงกับ toPosition + toUnit
+      // ค้นหาตำแหน่งที่ตรงกับ toPosition + toUnit + toPositionNumber
       const matchedPosition = vacantPositions.find(vp => 
-        vp.position === detail.toPosition && vp.unit === detail.toUnit
+        vp.position === detail.toPosition && 
+        vp.unit === detail.toUnit &&
+        vp.positionNumber === detail.toPositionNumber
       );
       
       if (matchedPosition && !assignmentMap.has(matchedPosition.id)) {

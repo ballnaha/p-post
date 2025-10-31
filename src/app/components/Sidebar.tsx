@@ -73,9 +73,9 @@ const Sidebar: React.FC = () => {
       ]
     },
     {
-      title: 'Transactions', key: 'group-transactions',
+      title: 'Swap Management', key: 'group-swap',
       items: [
-        { 
+      { 
           label: 'สลับตำแหน่ง', 
           href: '/police-personnel/swap-list', 
           icon: <SwapIcon sx={{ fontSize: 20 }} />, 
@@ -87,6 +87,12 @@ const Sidebar: React.FC = () => {
           icon: <ThreeWayIcon sx={{ fontSize: 20 }} />, 
           key: 'three-way-swap' 
         },
+      ]
+    },
+    {
+      title: 'Vacant Position', key: 'group-vacant',
+      items: [
+        
         { 
           label: 'บุคลากรยื่นขอตำแหน่ง', 
           href: '/police-personnel/vacant-position', 
@@ -109,20 +115,21 @@ const Sidebar: React.FC = () => {
       ]
     },
     {
-      title: 'Police Personnel', key: 'group-personnel',
+      title: 'Settings', key: 'group-settings',
       items: [
-        { 
-          label: 'Personnel List', 
-          href: '/police-personnel', 
-          icon: <BadgeIcon sx={{ fontSize: 20 }} />, 
-          key: 'police-list' 
-        },
         { 
           label: 'Import Data', 
           href: '/police-personnel/import', 
           icon: <ImportIcon sx={{ fontSize: 20 }} />, 
           key: 'police-import' 
         },
+        { 
+          label: 'Personnel List', 
+          href: '/police-personnel', 
+          icon: <BadgeIcon sx={{ fontSize: 20 }} />, 
+          key: 'police-list' 
+        },
+        
         { 
           label: 'Sync ตำแหน่งว่าง', 
           href: '/police-personnel/vacant-position/sync', 
@@ -138,19 +145,19 @@ const Sidebar: React.FC = () => {
         
       ]
     },
-    {
-      title: 'Settings', key: 'group-settings',
-      items: [
-        {
-          label: 'Settings (demo)', href: '/settings', icon: <SettingsIcon sx={{ fontSize: 20 }} />, key: 'settings',
-          children: [
-            { label: 'Profile', href: '/settings/profile', key: 'settings-profile' },
-            { label: 'Preferences', href: '/settings/preferences', key: 'settings-preferences' },
-            { label: 'Security', href: '/settings/security', key: 'settings-security' },
-          ]
-        },
-      ]
-    },
+    // {
+    //   title: 'Settings', key: 'group-settings',
+    //   items: [
+    //     {
+    //       label: 'Settings (demo)', href: '/settings', icon: <SettingsIcon sx={{ fontSize: 20 }} />, key: 'settings',
+    //       children: [
+    //         { label: 'Profile', href: '/settings/profile', key: 'settings-profile' },
+    //         { label: 'Preferences', href: '/settings/preferences', key: 'settings-preferences' },
+    //         { label: 'Security', href: '/settings/security', key: 'settings-security' },
+    //       ]
+    //     },
+    //   ]
+    // },
   ]), []);
 
   // Flatten for collapsed (icon-only) view

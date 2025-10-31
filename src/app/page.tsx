@@ -49,6 +49,7 @@ import {
   Tooltip as ChartTooltip,
   Legend,
 } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Bar } from 'react-chartjs-2';
 
 // Register ChartJS components
@@ -58,7 +59,8 @@ ChartJS.register(
   BarElement,
   Title,
   ChartTooltip,
-  Legend
+  Legend,
+  ChartDataLabels
 );
 
 interface PositionDetail {
@@ -74,8 +76,8 @@ interface PositionDetail {
 interface ChartDataItem {
   posCodeId: number;
   posCodeName: string;
-  vacantSlots: number; // ตำแหน่งว่างจาก police_personnel
-  totalApplicants: number; // ผู้ยื่นขอตำแหน่ง
+  vacantSlots: number; // ตำแหน่งว่าง (รอจับคู่)
+  totalApplicants: number; // จับคู่สำเร็จ
 }
 
 interface DashboardStats {
@@ -112,7 +114,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
-  const [selectedUnit, setSelectedUnit] = useState<string>('all'); // filter สำหรับกราฟเท่านั้น
+  const [selectedUnit, setSelectedUnit] = useState<string>('all'); // filter ทั้งหน้า dashboard
   const [availableYears, setAvailableYears] = useState<number[]>([]);
 
   // Generate available years
@@ -128,14 +130,14 @@ export default function HomePage() {
     setAvailableYears(years);
   }, []);
 
-  // Fetch dashboard data (ไม่ขึ้นกับ unit filter)
+  // Fetch dashboard data (ขึ้นกับทั้ง year และ unit filter)
   useEffect(() => {
     async function fetchDashboardData() {
       try {
         setLoading(true);
         setError(null);
-        const url = `/api/dashboard?year=${selectedYear}&unit=all`;
-        console.log('Fetching dashboard data for year:', selectedYear, 'URL:', url);
+        const url = `/api/dashboard?year=${selectedYear}&unit=${selectedUnit}`;
+        console.log('Fetching dashboard data for year:', selectedYear, 'unit:', selectedUnit, 'URL:', url);
         const response = await fetch(url);
         
         if (!response.ok) {
@@ -162,7 +164,7 @@ export default function HomePage() {
     if (selectedYear) {
       fetchDashboardData();
     }
-  }, [selectedYear]); // ลบ selectedUnit ออก
+  }, [selectedYear, selectedUnit]); // ขึ้นกับทั้ง year และ unit
 
   const handleYearChange = (event: SelectChangeEvent<number>) => {
     setSelectedYear(Number(event.target.value));
@@ -199,37 +201,8 @@ export default function HomePage() {
     return stats?.positionDetails?.some(p => p.pendingCount > 0) ?? false;
   }, [stats?.positionDetails]);
 
-  // Fetch chart data แยกต่างหาก (ขึ้นกับ unit filter)
-  const [chartDataRaw, setChartDataRaw] = useState<ChartDataItem[] | null>(null);
-  const [chartLoading, setChartLoading] = useState(false);
-
-  useEffect(() => {
-    async function fetchChartData() {
-      try {
-        setChartLoading(true);
-        const url = `/api/dashboard/chart?year=${selectedYear}&unit=${selectedUnit}`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch chart data');
-        }
-        
-        const result = await response.json();
-        
-        if (result.success) {
-          setChartDataRaw(result.data.chartData);
-        }
-      } catch (error) {
-        console.error('Failed to fetch chart data:', error);
-      } finally {
-        setChartLoading(false);
-      }
-    }
-
-    if (selectedYear) {
-      fetchChartData();
-    }
-  }, [selectedYear, selectedUnit]); // ขึ้นกับทั้ง year และ unit
+  // ไม่ต้อง fetch chart data แยก เพราะมาพร้อมกับ dashboard data แล้ว
+  const chartDataRaw = stats?.chartData || null;
 
   // Prepare chart data
   const chartData = useMemo(() => {
@@ -241,18 +214,34 @@ export default function HomePage() {
       labels: chartDataRaw.map(p => p.posCodeName),
       datasets: [
         {
-          label: 'ตำแหน่งว่าง (จาก police_personnel)',
+          label: 'ตำแหน่งว่าง',
           data: chartDataRaw.map(p => p.vacantSlots),
-          backgroundColor: 'rgba(255, 152, 0, 0.7)',
-          borderColor: 'rgba(255, 152, 0, 1)',
-          borderWidth: 1,
+          backgroundColor: 'rgba(25, 118, 210, 1)',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          borderRadius: {
+            topLeft: 20,
+            topRight: 20,
+            bottomLeft: 20,
+            bottomRight: 20,
+          },
+          borderSkipped: false,
+          barThickness: 28,
         },
         {
-          label: 'ผู้ยื่นขอตำแหน่ง',
+          label: 'จับคู่สำเร็จ',
           data: chartDataRaw.map(p => p.totalApplicants),
-          backgroundColor: 'rgba(33, 150, 243, 0.7)',
-          borderColor: 'rgba(33, 150, 243, 1)',
-          borderWidth: 1,
+          backgroundColor: 'rgba(76, 175, 80, 1)',
+          borderColor: 'transparent',
+          borderWidth: 0,
+          borderRadius: {
+            topLeft: 20,
+            topRight: 20,
+            bottomLeft: 20,
+            bottomRight: 20,
+          },
+          borderSkipped: false,
+          barThickness: 28,
         },
       ],
     };
@@ -263,25 +252,19 @@ export default function HomePage() {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'top' as const,
-        labels: {
-          font: {
-            family: "'Noto Sans Thai', sans-serif",
-            size: 12,
-          },
-          padding: 15,
-          usePointStyle: true,
-        },
+        display: false,
       },
       title: {
         display: false,
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        padding: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        padding: 16,
+        cornerRadius: 8,
         titleFont: {
           family: "'Noto Sans Thai', sans-serif",
           size: 14,
+          weight: 'bold',
         },
         bodyFont: {
           family: "'Noto Sans Thai', sans-serif",
@@ -293,43 +276,79 @@ export default function HomePage() {
             if (label) {
               label += ': ';
             }
-            label += context.parsed.y + ' คน';
+            label += context.parsed.y.toLocaleString() + ' คน';
             return label;
           }
         }
+      },
+      datalabels: {
+        display: function(context: any) {
+          return context.dataset.data[context.dataIndex] > 0;
+        },
+        color: '#ffffff',
+        font: {
+          family: "'Noto Sans Thai', sans-serif",
+          size: 11,
+          weight: 'bold' as const,
+        },
+        formatter: function(value: number) {
+          if (value >= 1000) {
+            return (value / 1000).toFixed(1) + 'k';
+          }
+          return value.toLocaleString();
+        },
+        anchor: 'center' as const,
+        align: 'center' as const,
       },
     },
     scales: {
       x: {
         grid: {
           display: false,
+          drawBorder: false,
         },
         ticks: {
           font: {
             family: "'Noto Sans Thai', sans-serif",
-            size: 11,
+            size: 12,
+            weight: 600,
           },
-          maxRotation: 45,
-          minRotation: 45,
+          color: '#424242',
+          maxRotation: 0,
+          minRotation: 0,
+          padding: 14,
         },
       },
       y: {
         beginAtZero: true,
         grid: {
-          color: 'rgba(0, 0, 0, 0.05)',
+          color: 'rgba(0, 0, 0, 0.08)',
+          drawBorder: false,
+          lineWidth: 1,
         },
         ticks: {
           font: {
             family: "'Noto Sans Thai', sans-serif",
-            size: 11,
+            size: 12,
+            weight: 600,
           },
+          color: '#424242',
+          padding: 14,
           callback: function(value: any) {
-            return value + ' คน';
+            if (value >= 1000) {
+              return (value / 1000).toFixed(0) + 'k';
+            }
+            return value.toLocaleString();
           },
+        },
+        border: {
+          display: false,
         },
       },
     },
-  };
+    barPercentage: 0.6,
+    categoryPercentage: 0.7,
+  } as any;
 
   if (loading) {
     return (
@@ -372,6 +391,7 @@ export default function HomePage() {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               ระบบจัดการตำแหน่งตำรวจ • ปี {selectedYear}
+              {selectedUnit !== 'all' && ` • ${selectedUnit}`}
             </Typography>
           </Box>
           
@@ -385,17 +405,31 @@ export default function HomePage() {
                 label="ปี"
                 onChange={handleYearChange}
               >
-                {/* {availableYears.map((year) => (
+                {availableYears.map((year) => (
                   <MenuItem key={year} value={year}>
                     {year}
                   </MenuItem>
 
-                ))} */}
-                {[2568, 2569].map((year) => (
-                  <MenuItem key={year} value={year}>
-                    {year}
+                ))}
+                
+              </Select>
+            </FormControl>
+            
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel id="unit-filter-label">หน่วย</InputLabel>
+              <Select
+                labelId="unit-filter-label"
+                id="unit-filter"
+                value={selectedUnit}
+                label="หน่วย"
+                onChange={handleUnitChange}
+                disabled={loading}
+              >
+                <MenuItem value="all">ทุกหน่วย</MenuItem>
+                {stats?.availableUnits?.map((unit) => (
+                  <MenuItem key={unit} value={unit}>
+                    {unit}
                   </MenuItem>
-
                 ))}
               </Select>
             </FormControl>
@@ -434,10 +468,13 @@ export default function HomePage() {
                 </Box>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary" fontSize="0.7rem" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Assigned Positions
+                    Position Assignment Rate
                   </Typography>
                   <Typography variant="h6" fontWeight={700} color="text.primary" fontSize="0.95rem">
-                    ตำแหน่งที่จับคู่แล้ว
+                    จับคู่ตำแหน่งกับบุคลากร
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
+                    ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                   </Typography>
                 </Box>
               </Box>
@@ -519,13 +556,16 @@ export default function HomePage() {
                   <Typography variant="h6" fontWeight={700} color="text.primary" fontSize="0.95rem">
                     สลับตำแหน่งทั้งหมด
                   </Typography>
+                  <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
+                    ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
+                  </Typography>
                 </Box>
               </Box>
 
               {/* Main Number */}
               <Box sx={{ mb: 2 }}>
                 <Typography variant="h3" fontWeight={800} color="secondary.main" sx={{ fontSize: '2.25rem', lineHeight: 1, mb: 0.5 }}>
-                  {stats.totalSwapList.toLocaleString()}
+                  {stats.totalSwapList.toLocaleString()} คน
                 </Typography>
                 
               </Box>
@@ -584,13 +624,16 @@ export default function HomePage() {
                   <Typography variant="h6" fontWeight={700} color="text.primary" fontSize="0.95rem">
                     สามเส้าทั้งหมด
                   </Typography>
+                  <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
+                    ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
+                  </Typography>
                 </Box>
               </Box>
 
               {/* Main Number */}
               <Box sx={{ mb: 2 }}>
                 <Typography variant="h3" fontWeight={800} color="error.main" sx={{ fontSize: '2.25rem', lineHeight: 1, mb: 0.5 }}>
-                  {stats.totalThreeWaySwap.toLocaleString()}
+                  {stats.totalThreeWaySwap.toLocaleString()} คน
                 </Typography>
                 
               </Box>
@@ -628,44 +671,48 @@ export default function HomePage() {
           <Box sx={{ 
             p: 3, 
             pb: 2.5,
-            bgcolor: 'grey.50',
+            bgcolor: 'white',
             borderBottom: '1px solid',
             borderColor: 'divider'
           }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <BarChartIcon sx={{ fontSize: 20, color: 'primary.main' }} />
-                <Typography variant="h6" fontWeight={700} color="text.primary">
-                  เปรียบเทียบตำแหน่งว่างกับผู้ยื่นขอตำแหน่ง
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={700} mb={0.5} color="text.primary">
+                  เปรียบเทียบตำแหน่งว่างกับจับคู่สำเร็จ
+                </Typography>
+                <Typography variant="body2" color="text.secondary" fontSize="0.85rem">
+                  ปี {selectedYear}{selectedUnit !== 'all' && ` • หน่วย: ${selectedUnit}`}
                 </Typography>
               </Box>
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel id="unit-filter-label">กรองตามหน่วย</InputLabel>
-                <Select
-                  labelId="unit-filter-label"
-                  id="unit-filter"
-                  value={selectedUnit}
-                  label="กรองตามหน่วย"
-                  onChange={handleUnitChange}
-                  disabled={chartLoading}
-                >
-                  <MenuItem value="all">ทุกหน่วย</MenuItem>
-                  {stats?.availableUnits?.map((unit) => (
-                    <MenuItem key={unit} value={unit}>
-                      {unit}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 12, 
+                    height: 12, 
+                    borderRadius: '50%', 
+                    bgcolor: 'rgb(25, 118, 210)' 
+                  }} />
+                  <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
+                    ตำแหน่งว่าง
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 12, 
+                    height: 12, 
+                    borderRadius: '50%', 
+                    bgcolor: 'rgba(76, 175, 80, 1)' 
+                  }} />
+                  <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
+                    จับคู่สำเร็จ
+                  </Typography>
+                </Box>
+              </Box>
             </Box>
-            <Typography variant="body2" color="text.secondary">
-              ตำแหน่งว่าง: จาก police_personnel (ตำแหน่งที่ไม่มีคนดำรง) • 
-              ผู้ยื่นขอ: จาก vacant_position • แสดงทุก PosCode ที่มีข้อมูล
-              {selectedUnit !== 'all' && ` • กรองตามหน่วย: ${selectedUnit}`}
-            </Typography>
+            
           </Box>
           <Box sx={{ p: 3, bgcolor: 'white', height: { xs: 350, sm: 400, md: 450 }, position: 'relative' }}>
-            {chartLoading ? (
+            {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                 <CircularProgress />
               </Box>
@@ -692,61 +739,98 @@ export default function HomePage() {
             <Box sx={{ 
               p: 3, 
               pb: 2.5,
-              bgcolor: 'grey.50',
+              bgcolor: 'white',
               borderBottom: '1px solid',
               borderColor: 'divider'
             }}>
               <Typography variant="h6" fontWeight={700} mb={0.5} color="text.primary">
                 สถิติตำแหน่งว่างแยกตามประเภท
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                ตำแหน่งว่าง: จาก police_personnel (fullName = null/''/ว่าง/ว่าง(กันตำแหน่ง)) • 
-                ผู้ยื่นขอ: จาก vacant_position ปี {selectedYear}
-                {selectedUnit !== 'all' && ` • กรองตามหน่วย: ${selectedUnit}`}
+              <Typography variant="body2" color="text.secondary" fontSize="0.85rem">
+                ปี {selectedYear} 
+                {selectedUnit !== 'all' && ` • หน่วย: ${selectedUnit}`}
               </Typography>
             </Box>
             <TableContainer sx={{ bgcolor: 'white' }}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: '#f8f9fa' }}>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, fontSize: '0.9rem', color: 'text.secondary', borderBottom: '2px solid #e0e0e0' }}>PosCode</TableCell>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, fontSize: '0.9rem', color: 'text.secondary', borderBottom: '2px solid #e0e0e0' }}>ชื่อตำแหน่ง</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, py: 2.5, fontSize: '0.9rem', color: 'text.secondary', borderBottom: '2px solid #e0e0e0' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                        <LocationOn sx={{ fontSize: 16, color: 'warning.main' }} />
-                        <Tooltip title="ตำแหน่งว่างจริงจาก police_personnel (ไม่มีคนดำรง)">
-                          <Typography variant="caption" fontWeight={700} fontSize="0.9rem">ตำแหน่งว่าง</Typography>
-                        </Tooltip>
-                      </Box>
+                  <TableRow sx={{ bgcolor: '#FAFAFA' }}>
+                    <TableCell sx={{ 
+                      fontWeight: 600, 
+                      py: 2, 
+                      fontSize: '0.8rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      PosCode
                     </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, py: 2.5, fontSize: '0.9rem', color: 'text.secondary', borderBottom: '2px solid #e0e0e0' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                        <PeopleAlt sx={{ fontSize: 16, color: 'info.main' }} />
-                        <Tooltip title="จำนวนผู้ยื่นขอตำแหน่งนี้">
-                          <Typography variant="caption" fontWeight={700} fontSize="0.9rem">ผู้สมัคร</Typography>
-                        </Tooltip>
-                      </Box>
+                    <TableCell sx={{ 
+                      fontWeight: 600, 
+                      py: 2, 
+                      fontSize: '0.8rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      ชื่อตำแหน่ง
                     </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, py: 2.5, fontSize: '0.9rem', color: 'text.secondary', borderBottom: '2px solid #e0e0e0' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                        <CheckCircle sx={{ fontSize: 16, color: 'success.main' }} />
-                        <Tooltip title="จำนวนที่จับคู่สำเร็จแล้ว">
-                          <Typography variant="caption" fontWeight={700} fontSize="0.9rem">จับคู่แล้ว</Typography>
-                        </Tooltip>
-                      </Box>
+                    <TableCell align="center" sx={{ 
+                      fontWeight: 600, 
+                      py: 2, 
+                      fontSize: '0.8rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      ตำแหน่งว่าง
                     </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, py: 2.5, fontSize: '0.9rem', color: 'text.secondary', borderBottom: '2px solid #e0e0e0' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                        <HelpOutline sx={{ fontSize: 16, color: 'grey.500' }} />
-                        <Tooltip title="จำนวนผู้สมัครที่รอจับคู่">
-                          <Typography variant="caption" fontWeight={700} fontSize="0.9rem">รอจับคู่</Typography>
-                        </Tooltip>
-                      </Box>
+                    <TableCell align="center" sx={{ 
+                      fontWeight: 600, 
+                      py: 2, 
+                      fontSize: '0.8rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      ผู้สมัคร
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 700, py: 2.5, minWidth: 200, fontSize: '0.9rem', color: 'text.secondary', borderBottom: '2px solid #e0e0e0' }}>
-                      <Tooltip title="เปอร์เซ็นต์การจับคู่ที่สำเร็จ">
-                        <Typography variant="caption" fontWeight={700} fontSize="0.9rem">อัตราความสำเร็จ</Typography>
-                      </Tooltip>
+                    <TableCell align="center" sx={{ 
+                      fontWeight: 600, 
+                      py: 2, 
+                      fontSize: '0.8rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      จับคู่แล้ว
+                    </TableCell>
+                    <TableCell align="center" sx={{ 
+                      fontWeight: 600, 
+                      py: 2, 
+                      fontSize: '0.8rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      รอจับคู่
+                    </TableCell>
+                    <TableCell align="center" sx={{ 
+                      fontWeight: 600, 
+                      py: 2, 
+                      fontSize: '0.8rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      อัตราความสำเร็จ
                     </TableCell>
                   </TableRow>
                 </TableHead>
@@ -766,113 +850,97 @@ export default function HomePage() {
                       key={position.posCodeId}
                       hover
                       sx={{ 
-                        '&:hover': { bgcolor: '#f5f7ff' },
-                        transition: 'background-color 0.2s',
-                        borderBottom: '1px solid #f0f0f0'
+                        '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.04)' },
+                        transition: 'all 0.2s',
+                        borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
                       }}
                     >
-                      <TableCell sx={{ py: 2 }}>
-                        <Chip 
-                          label={position.posCodeId} 
-                          size="small" 
-                          sx={{ 
-                            fontWeight: 700,
-                            bgcolor: 'primary.50',
-                            color: 'primary.main',
-                            minWidth: 50,
-                            fontSize: '0.75rem'
-                          }} 
-                        />
+                      <TableCell sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                        <Box sx={{ 
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: 'rgba(25, 118, 210, 0.08)',
+                          color: 'rgb(25, 118, 210)',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: 2,
+                          minWidth: 50
+                        }}>
+                          {position.posCodeId}
+                        </Box>
                       </TableCell>
-                      <TableCell sx={{ py: 2 }}>
-                        <Typography variant="body2" fontWeight={600} color="text.primary">
+                      <TableCell sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                        <Typography variant="body2" fontWeight={500} color="#424242" fontSize="0.875rem">
                           {position.posCodeName}
                         </Typography>
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2 }}>
+                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         {hasSlotData ? (
-                          <Tooltip title={`มีตำแหน่งว่าง ${position.availableSlots} ตำแหน่ง`}>
-                            <Chip 
-                              label={position.availableSlots} 
-                              size="small"
-                              sx={{ 
-                                fontWeight: 700,
-                                minWidth: 50,
-                                fontSize: '0.75rem',
-                                bgcolor: slotStatus === 'available' ? '#FFF3E0' : slotStatus === 'full' ? '#F5F5F5' : '#FFEBEE',
-                                color: slotStatus === 'available' ? '#E65100' : slotStatus === 'full' ? '#757575' : '#C62828',
-                                border: '1px solid',
-                                borderColor: slotStatus === 'available' ? '#FFB74D' : slotStatus === 'full' ? '#E0E0E0' : '#EF5350',
-                              }}
-                            />
-                          </Tooltip>
+                          <Box sx={{ 
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            bgcolor: 'rgba(25, 118, 210, 0.1)',
+                            color: 'rgb(25, 118, 210)',
+                            fontWeight: 700,
+                            fontSize: '0.875rem',
+                            px: 2,
+                            py: 0.75,
+                            borderRadius: 2,
+                            minWidth: 60
+                          }}>
+                            {position.availableSlots}
+                          </Box>
                         ) : (
                           <Typography variant="caption" color="text.secondary">-</Typography>
                         )}
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2 }}>
-                        <Chip 
-                          label={position.totalApplicants} 
-                          size="small"
-                          sx={{ 
-                            fontWeight: 700,
-                            minWidth: 50,
-                            fontSize: '0.75rem',
-                            bgcolor: '#E3F2FD',
-                            color: '#1565C0',
-                            border: '1px solid #90CAF9'
-                          }}
-                        />
+                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                        <Typography variant="body2" fontWeight={600} color="#424242" fontSize="0.875rem">
+                          {position.totalApplicants}
+                        </Typography>
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2 }}>
-                        <Chip 
-                          label={position.assignedCount} 
-                          size="small"
-                          sx={{ 
-                            fontWeight: 700,
-                            minWidth: 50,
-                            fontSize: '0.75rem',
-                            bgcolor: '#E8F5E9',
-                            color: '#2E7D32',
-                            border: '1px solid #81C784'
-                          }}
-                        />
+                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                        <Box sx={{ 
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: 'rgba(76, 175, 80, 0.1)',
+                          color: 'rgb(76, 175, 80)',
+                          fontWeight: 700,
+                          fontSize: '0.875rem',
+                          px: 2,
+                          py: 0.75,
+                          borderRadius: 2,
+                          minWidth: 60
+                        }}>
+                          {position.assignedCount}
+                        </Box>
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2 }}>
-                        <Chip 
-                          label={position.pendingCount} 
-                          size="small"
-                          sx={{ 
-                            fontWeight: 700,
-                            minWidth: 50,
-                            fontSize: '0.75rem',
-                            bgcolor: '#FFF3E0',
-                            color: '#E65100',
-                            border: '1px solid #FFB74D'
-                          }}
-                        />
+                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                        <Typography variant="body2" fontWeight={600} color="#757575" fontSize="0.875rem">
+                          {position.pendingCount}
+                        </Typography>
                       </TableCell>
-                      <TableCell sx={{ py: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <LinearProgress 
-                            variant="determinate" 
-                            value={position.assignmentRate} 
-                            sx={{ 
-                              flex: 1, 
-                              height: 8, 
-                              borderRadius: 4,
-                              bgcolor: 'grey.200',
-                              '& .MuiLinearProgress-bar': {
-                                borderRadius: 4,
-                                bgcolor: position.assignmentRate >= 75 
-                                  ? 'success.main'
-                                  : position.assignmentRate >= 50 
-                                    ? 'warning.main'
-                                    : 'error.main'
-                              }
-                            }} 
-                          />
-                          <Typography variant="body2" fontWeight={700} sx={{ minWidth: 50, color: 'text.primary' }}>
+                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                          <Box sx={{ flex: 1, bgcolor: '#F5F5F5', borderRadius: 2, height: 6, overflow: 'hidden' }}>
+                            <Box sx={{ 
+                              height: '100%', 
+                              width: `${position.assignmentRate}%`,
+                              bgcolor: position.assignmentRate >= 75 
+                                ? 'rgb(76, 175, 80)'
+                                : position.assignmentRate >= 50 
+                                  ? 'rgb(255, 152, 0)'
+                                  : 'rgb(244, 67, 54)',
+                              borderRadius: 2,
+                              transition: 'width 0.3s ease'
+                            }} />
+                          </Box>
+                          <Typography variant="body2" fontWeight={700} fontSize="0.875rem" sx={{ minWidth: 45, color: '#424242' }}>
                             {position.assignmentRate.toFixed(0)}%
                           </Typography>
                         </Box>
@@ -884,46 +952,6 @@ export default function HomePage() {
               </Table>
             </TableContainer>
             
-            {/* Summary footer */}
-            {stats.vacantSlotsSummary && (
-              <>
-                <Box sx={{ 
-                  p: 3, 
-                  bgcolor: 'grey.50',
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
-                  display: 'flex', 
-                  justifyContent: 'space-around', 
-                  flexWrap: 'wrap', 
-                  gap: 3 
-                }}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary" display="block" fontWeight={600} sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      ผู้สมัครทั้งหมด
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="primary.main">
-                      {stats.vacantSlotsSummary.totalVacantSlots}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary" display="block" fontWeight={600} sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      จับคู่แล้ว
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="success.main">
-                      {stats.vacantSlotsSummary.filledSlots}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" color="text.secondary" display="block" fontWeight={600} sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      รอจับคู่
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="warning.main">
-                      {stats.vacantSlotsSummary.remainingSlots}
-                    </Typography>
-                  </Box>
-                </Box>
-              </>
-            )}
           </Paper>
         )}
 
@@ -951,6 +979,9 @@ export default function HomePage() {
                     ตำแหน่งที่มีผู้สมัครมากที่สุด
                   </Typography>
                 </Box>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
+                </Typography>
               </Box>
               <CardContent sx={{ p: 2.5, bgcolor: 'white' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1026,6 +1057,9 @@ export default function HomePage() {
                     ตำแหน่งที่รอจับคู่มากที่สุด
                   </Typography>
                 </Box>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
+                </Typography>
               </Box>
               <CardContent sx={{ p: 2.5, bgcolor: 'white' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

@@ -39,17 +39,19 @@ export async function GET(request: NextRequest) {
         orderBy: { unit: 'asc' },
       }),
       
-      // ดึงรหัสตำแหน่งทั้งหมดจากตำแหน่งที่ว่าง
-      prisma.policePersonnel.findMany({
-        where: vacantWhere,
+      // ดึงรหัสตำแหน่งที่บุคคลากรต้องการสมัคร (requestedPositionId) จาก VacantPosition
+      prisma.vacantPosition.findMany({
+        where: {
+          requestedPositionId: { not: null },
+        },
         select: { 
-          posCodeId: true, 
-          posCodeMaster: {
+          requestedPositionId: true, 
+          requestedPosCode: {
             select: { id: true, name: true }
           }
         },
-        distinct: ['posCodeId'],
-        orderBy: { posCodeId: 'asc' },
+        distinct: ['requestedPositionId'],
+        orderBy: { requestedPositionId: 'asc' },
       }),
     ]);
 
@@ -59,10 +61,10 @@ export async function GET(request: NextRequest) {
       .map(u => ({ value: u.unit, label: u.unit }));
 
     const posCodeOptions = posCodes
-      .filter(p => p.posCodeId && p.posCodeMaster)
+      .filter(p => p.requestedPositionId && p.requestedPosCode)
       .map(p => ({
-        value: p.posCodeId!.toString(),
-        label: `${p.posCodeMaster!.name} (รหัส: ${p.posCodeId})`
+        value: p.requestedPositionId!.toString(),
+        label: `${p.requestedPosCode!.name} (รหัส: ${p.requestedPositionId})`
       }));
 
     return NextResponse.json({

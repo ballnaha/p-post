@@ -859,7 +859,6 @@ export default function VacantPositionPage() {
   const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false);
   const [itemToUnassign, setItemToUnassign] = useState<VacantPositionData | null>(null);
   const [isUnassigning, setIsUnassigning] = useState(false);
-  const [unassignReason, setUnassignReason] = useState('');
 
   // PosCode options for edit
   const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
@@ -1489,7 +1488,6 @@ export default function VacantPositionPage() {
       return;
     }
     setItemToUnassign(item);
-    setUnassignReason('');
     setUnassignConfirmOpen(true);
     handleMenuClose();
   }, [toast]);
@@ -1497,7 +1495,6 @@ export default function VacantPositionPage() {
   const handleUnassignCancel = useCallback(() => {
     setUnassignConfirmOpen(false);
     setItemToUnassign(null);
-    setUnassignReason('');
   }, []);
 
   const handleUnassignConfirm = useCallback(async () => {
@@ -1510,7 +1507,6 @@ export default function VacantPositionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           applicantId: itemToUnassign.id,
-          reason: unassignReason || 'ยกเลิกการจับคู่จากหน้ารายการยื่นขอตำแหน่ง',
         }),
       });
 
@@ -1520,7 +1516,6 @@ export default function VacantPositionPage() {
         toast.success('ยกเลิกการจับคู่สำเร็จ');
         setUnassignConfirmOpen(false);
         setItemToUnassign(null);
-        setUnassignReason('');
         fetchData();
       } else {
         toast.error(result.error || 'เกิดข้อผิดพลาดในการยกเลิกการจับคู่');
@@ -1531,7 +1526,7 @@ export default function VacantPositionPage() {
     } finally {
       setIsUnassigning(false);
     }
-  }, [itemToUnassign, unassignReason, toast]);
+  }, [itemToUnassign, toast]);
 
   // Toggle assignment info for a specific card
   const handleToggleAssignment = useCallback((itemId: string) => {
@@ -2623,20 +2618,9 @@ export default function VacantPositionPage() {
               </Alert>
             )}
 
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label="เหตุผลในการยกเลิก (ไม่บังคับ)"
-              value={unassignReason}
-              onChange={(e) => setUnassignReason(e.target.value)}
-              placeholder="ระบุเหตุผลในการยกเลิกการจับคู่..."
-              sx={{ mb: 2 }}
-            />
-
             <Alert severity="warning">
               <Typography variant="body2">
-                การยกเลิกจับคู่จะไม่ลบข้อมูล แต่จะเปลี่ยนสถานะเป็น "รอจับคู่" 
+                การยกเลิกการจับคู่จะลบข้อมูลการจับคู่ออกจากระบบทั้งหมด
                 และสามารถจับคู่ใหม่ได้ในภายหลัง
               </Typography>
             </Alert>

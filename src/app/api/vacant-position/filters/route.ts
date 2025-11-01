@@ -29,11 +29,18 @@ export async function GET(request: NextRequest) {
       ]
     };
 
+    // เงื่อนไขสำหรับกรองเฉพาะตำแหน่งที่ว่าง (ไม่ใช่ผู้สมัคร)
+    const vacantPositionFilter = {
+      nominator: null, // ไม่มีผู้เสนอ = เป็นตำแหน่งว่าง
+      requestedPositionId: null, // ไม่มีตำแหน่งที่ขอ = เป็นตำแหน่งว่าง
+    };
+
     // ดึง distinct values สำหรับ filters
     const [units, posCodes, positions] = await Promise.all([
-      // ดึงหน่วยทั้งหมดจาก VacantPosition
+      // ดึงหน่วยทั้งหมดจาก VacantPosition (เฉพาะตำแหน่งที่ว่าง)
       prisma.vacantPosition.findMany({
         where: {
+          ...vacantPositionFilter,
           unit: { not: null },
         },
         select: { unit: true },
@@ -41,9 +48,10 @@ export async function GET(request: NextRequest) {
         orderBy: { unit: 'asc' },
       }),
       
-      // ดึงรหัสตำแหน่งจากตำแหน่งว่าง (posCodeId) จาก VacantPosition
+      // ดึงรหัสตำแหน่งจากตำแหน่งว่าง (posCodeId) จาก VacantPosition (เฉพาะตำแหน่งที่ว่าง)
       prisma.vacantPosition.findMany({
         where: {
+          ...vacantPositionFilter,
           posCodeId: { not: null },
           unit: { not: null },
         },
@@ -61,10 +69,11 @@ export async function GET(request: NextRequest) {
         ],
       }),
       
-      // ดึงตำแหน่งทั้งหมดจาก VacantPosition
+      // ดึงตำแหน่งทั้งหมดจาก VacantPosition (เฉพาะตำแหน่งที่ว่าง)
       prisma.vacantPosition.groupBy({
         by: ['position', 'posCodeId', 'unit'],
         where: {
+          ...vacantPositionFilter,
           position: { not: null },
           posCodeId: { not: null },
         },

@@ -407,7 +407,6 @@ export default function VacantPositionAssignmentPage() {
   const [assignNotes, setAssignNotes] = useState('');
   const [unassignDialogOpen, setUnassignDialogOpen] = useState(false);
   const [unassignApplicant, setUnassignApplicant] = useState<Applicant | null>(null);
-  const [unassignReason, setUnassignReason] = useState('');
   const [hasOrderChanged, setHasOrderChanged] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showAssignedInModal, setShowAssignedInModal] = useState(false); // Default: ซ่อนคนที่จับคู่แล้ว
@@ -1064,7 +1063,6 @@ export default function VacantPositionAssignmentPage() {
 
   const handleUnassign = useCallback(async (applicant: Applicant) => {
     setUnassignApplicant(applicant);
-    setUnassignReason('');
     setUnassignDialogOpen(true);
   }, []);
 
@@ -1086,7 +1084,6 @@ export default function VacantPositionAssignmentPage() {
         },
         body: JSON.stringify({
           applicantId: unassignApplicant.id,
-          reason: unassignReason || 'ไม่ระบุเหตุผล',
         }),
       });
 
@@ -1099,7 +1096,6 @@ export default function VacantPositionAssignmentPage() {
         
         // เคลียร์ข้อมูล dialog
         setUnassignApplicant(null);
-        setUnassignReason('');
         
         // รีเฟรชข้อมูล (modal ผู้ยื่นขอจะแสดง loading ถ้าเปิดอยู่)
         console.log('🔄 Refreshing data...');
@@ -1148,7 +1144,6 @@ export default function VacantPositionAssignmentPage() {
         
         // เคลียร์ข้อมูล dialog เมื่อเกิด error
         setUnassignApplicant(null);
-        setUnassignReason('');
       }
     } catch (error) {
       console.error('💥 Error unassigning:', error);
@@ -1156,12 +1151,11 @@ export default function VacantPositionAssignmentPage() {
       
       // เคลียร์ข้อมูล dialog เมื่อเกิด error
       setUnassignApplicant(null);
-      setUnassignReason('');
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unassignApplicant, unassignReason, selectedPosition, dialogOpen, currentYear, fetchApplicants, fetchVacantPositions, fetchStats]);
+  }, [unassignApplicant, selectedPosition, dialogOpen, currentYear, fetchApplicants, fetchVacantPositions, fetchStats]);
 
   return (
     <Layout>
@@ -2333,7 +2327,7 @@ export default function VacantPositionAssignmentPage() {
             <Button 
               onClick={() => setAssignDialogOpen(false)}
               disabled={loading}
-              size="small"
+              size="medium"
             >
               ยกเลิก
             </Button>
@@ -2342,7 +2336,7 @@ export default function VacantPositionAssignmentPage() {
               variant="contained"
               startIcon={loading ? <CircularProgress size={16} /> : <CheckIcon fontSize="small" />}
               disabled={loading}
-              size="small"
+              size="medium"
             >
               ยืนยัน
             </Button>
@@ -2404,17 +2398,6 @@ export default function VacantPositionAssignmentPage() {
                     </Typography>
                   </Box>
                 )}
-
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label="เหตุผลในการยกเลิก"
-                  value={unassignReason}
-                  onChange={(e) => setUnassignReason(e.target.value)}
-                  placeholder="ระบุเหตุผล (ไม่บังคับ)..."
-                  helperText="ระบุเหตุผลเพื่อบันทึกไว้ตรวจสอบในอนาคต"
-                />
               </Stack>
             )}
           </DialogContent>
@@ -2424,10 +2407,9 @@ export default function VacantPositionAssignmentPage() {
               onClick={() => {
                 setUnassignDialogOpen(false);
                 setUnassignApplicant(null);
-                setUnassignReason('');
               }}
               disabled={loading}
-              size="small"
+              size="medium"
             >
               ยกเลิก
             </Button>
@@ -2437,7 +2419,7 @@ export default function VacantPositionAssignmentPage() {
               color="error"
               startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CloseIcon fontSize="small" />}
               disabled={loading}
-              size="small"
+              size="medium"
             >
               {loading ? 'กำลังลบ...' : 'ยืนยันลบการจับคู่'}
             </Button>

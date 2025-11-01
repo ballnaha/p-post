@@ -77,6 +77,16 @@ export async function POST(request: NextRequest) {
         throw new Error('CONFLICT:ตำแหน่งนี้ถูกจับคู่ไปแล้ว');
       }
       console.log('✅ Position is available for assignment');
+
+      // ตรวจสอบว่าตำแหน่งว่างไม่ใช่ตำแหน่งปัจจุบันของผู้ยื่นขอ
+      if (
+        applicant.position === vacantPosition.position &&
+        applicant.unit === vacantPosition.unit
+      ) {
+        console.log('❌ Cannot assign applicant to their own current position');
+        throw new Error('CONFLICT:ไม่สามารถจับคู่ผู้ยื่นขอกับตำแหน่งปัจจุบันของตนเองได้');
+      }
+      console.log('✅ Vacant position is not the applicant\'s current position');
       
       // ไม่ต้อง update police_personnel เพราะปีต่อไปจะเป็นชุดข้อมูลใหม่
       // เก็บแค่ประวัติการจับคู่ใน SwapTransaction เท่านั้น

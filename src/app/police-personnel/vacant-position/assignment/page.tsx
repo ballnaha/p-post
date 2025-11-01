@@ -937,6 +937,15 @@ export default function VacantPositionAssignmentPage() {
       return;
     }
 
+    // ตรวจสอบว่าตำแหน่งที่ว่างไม่ใช่ตำแหน่งปัจจุบันของผู้ยื่นขอ
+    if (
+      applicant.position === vacantPosition.position &&
+      applicant.unit === vacantPosition.unit
+    ) {
+      toast.error(`ไม่สามารถจับคู่ ${applicant.fullName} กับตำแหน่งปัจจุบันของตนเองได้`);
+      return;
+    }
+
     setSelectedApplicant(applicant);
     setSelectedVacantSlot(vacantPosition);
     setAssignNotes('');

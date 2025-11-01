@@ -64,11 +64,10 @@ export async function POST(request: NextRequest) {
 
       let deletedDetailsCount = 0;
       let deletedTransactionsCount = 0;
-      let updatedVacantPositionIds: string[] = [];
 
       // ลบ transaction details และ transactions
       for (const transaction of transactions) {
-        console.log(`�️ Deleting transaction ${transaction.id}...`);
+        console.log(`🗑️ Deleting transaction ${transaction.id}...`);
         
         // ลบ swap_transaction_detail ก่อน
         const deletedDetails = await tx.swapTransactionDetail.deleteMany({
@@ -77,20 +76,7 @@ export async function POST(request: NextRequest) {
         deletedDetailsCount += deletedDetails.count;
         console.log(`✅ Deleted ${deletedDetails.count} detail(s)`);
 
-        // เก็บ ID ของตำแหน่งว่างที่ต้อง reset isAssigned
-        for (const detail of transaction.swapDetails) {
-          // ค้นหาตำแหน่งว่างจาก toPosition + toUnit
-          const vacantPositions = await tx.vacantPosition.findMany({
-            where: {
-              position: detail.toPosition,
-              unit: detail.toUnit,
-              isAssigned: true
-            }
-          });
-          updatedVacantPositionIds.push(...vacantPositions.map(vp => vp.id));
-        }
-
-        // ลบ swap_transaction
+        // ลบ swap_transaction (cascade delete จะลบ details อัตโนมัติ)
         await tx.swapTransaction.delete({
           where: { id: transaction.id }
         });
@@ -98,7 +84,9 @@ export async function POST(request: NextRequest) {
         console.log(`✅ Deleted transaction ${transaction.id}`);
       }
 
-      // Reset isAssigned สำหรับผู้ยื่นขอ
+      // Reset isAssigned สำหรับผู้ยื่นขอเท่านั้น
+      // ไม่ต้อง reset ตำแหน่งว่าง (requestedPositionId = null) 
+      // เพราะตำแหน่งว่างไม่มี isAssigned = true ตั้งแต่แรก
       console.log('🔄 Resetting applicant status...');
       const updatedApplicant = await tx.vacantPosition.update({
         where: { id: applicantId },
@@ -106,25 +94,12 @@ export async function POST(request: NextRequest) {
       });
       console.log('✅ Reset applicant status:', updatedApplicant.id);
 
-      // Reset isAssigned สำหรับตำแหน่งว่างที่เกี่ยวข้อง
-      if (updatedVacantPositionIds.length > 0) {
-        console.log(`🔄 Resetting ${updatedVacantPositionIds.length} vacant position(s)...`);
-        await tx.vacantPosition.updateMany({
-          where: {
-            id: { in: updatedVacantPositionIds }
-          },
-          data: { isAssigned: false }
-        });
-        console.log('✅ Reset vacant positions');
-      }
-
       return {
         success: true,
         applicantId: updatedApplicant.id,
         deletedTransactions: deletedTransactionsCount,
         deletedDetails: deletedDetailsCount,
-        resetVacantPositions: updatedVacantPositionIds.length,
-        message: 'ลบการจับคู่สำเร็จ'
+        message: 'ยกเลิกการจับคู่และลบประวัติสำเร็จ'
       };
     }, {
       maxWait: 5000, // รอ transaction เริ่มต้นสูงสุด 5 วินาที

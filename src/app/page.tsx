@@ -152,7 +152,6 @@ export default function HomePage() {
         setLoading(true);
         setError(null);
         const url = `/api/dashboard?year=${selectedYear}&unit=${selectedUnit}`;
-        console.log('Fetching dashboard data for year:', selectedYear, 'unit:', selectedUnit, 'URL:', url);
         const response = await fetch(url);
         
         if (!response.ok) {
@@ -160,11 +159,9 @@ export default function HomePage() {
         }
         
         const result = await response.json();
-        console.log('Dashboard data received:', result);
         
         if (result.success) {
           setStats(result.data);
-          console.log('Stats updated:', result.data);
         } else {
           throw new Error(result.error || 'Failed to load data');
         }
@@ -229,36 +226,56 @@ export default function HomePage() {
       labels: chartDataRaw.map(p => p.posCodeName),
       datasets: [
         {
-          label: 'ตำแหน่งว่าง',
-          data: chartDataRaw.map(p => p.vacantSlots),
-          backgroundColor: DASHBOARD_COLORS.primary,
-          hoverBackgroundColor: '#6E50F0',
-          borderColor: 'transparent',
-          borderWidth: 0,
-          borderRadius: {
-            topLeft: 20,
-            topRight: 20,
-            bottomLeft: 20,
-            bottomRight: 20,
-          },
-          borderSkipped: false,
-          barThickness: 28,
-        },
-        {
           label: 'จับคู่สำเร็จ',
           data: chartDataRaw.map(p => p.totalApplicants),
-          backgroundColor: DASHBOARD_COLORS.teal,
-          hoverBackgroundColor: '#1DE9B6',
+          backgroundColor: (context: any) => {
+            const ctx = context.chart.ctx;
+            const gradient = ctx.createLinearGradient(0, context.chart.height, 0, 0);
+            gradient.addColorStop(0, 'rgba(29, 233, 182, 0.7)');
+            gradient.addColorStop(1, '#00BFA5');
+            return gradient;
+          },
+          borderColor: 'transparent',
+          borderWidth: 0,
+          barThickness: 40,
+          stack: 'stack0',
+          borderRadius: (context: any) => {
+            const dataIndex = context.dataIndex;
+            const vacantValue = chartDataRaw[dataIndex]?.vacantSlots || 0;
+            // ถ้าไม่มีตำแหน่งว่าง (เต็มหมด) ให้ใส่ borderRadius ที่มุมบน
+            if (vacantValue === 0) {
+              return {
+                topLeft: 20,
+                topRight: 20,
+                bottomLeft: 0,
+                bottomRight: 0,
+              };
+            }
+            // ถ้ามีตำแหน่งว่าง ไม่ต้องมี borderRadius
+            return 0;
+          },
+        },
+        {
+          label: 'ตำแหน่งว่าง',
+          data: chartDataRaw.map(p => p.vacantSlots || null), // แปลง 0 เป็น null เพื่อไม่แสดงแท่ง
+          backgroundColor: (context: any) => {
+            const ctx = context.chart.ctx;
+            const gradient = ctx.createLinearGradient(0, context.chart.height, 0, 0);
+            gradient.addColorStop(0, 'rgba(189, 189, 189, 0.25)');
+            gradient.addColorStop(1, 'rgba(158, 158, 158, 0.6)');
+            return gradient;
+          },
           borderColor: 'transparent',
           borderWidth: 0,
           borderRadius: {
             topLeft: 20,
             topRight: 20,
-            bottomLeft: 20,
-            bottomRight: 20,
+            bottomLeft: 0,
+            bottomRight: 0,
           },
           borderSkipped: false,
-          barThickness: 28,
+          barThickness: 40,
+          stack: 'stack0',
         },
       ],
     };
@@ -320,6 +337,7 @@ export default function HomePage() {
     },
     scales: {
       x: {
+        stacked: true,
         grid: {
           display: false,
           drawBorder: false,
@@ -337,6 +355,7 @@ export default function HomePage() {
         },
       },
       y: {
+        stacked: true,
         beginAtZero: true,
         grid: {
           color: 'rgba(0, 0, 0, 0.08)',
@@ -478,9 +497,9 @@ export default function HomePage() {
               position: 'relative',
               borderRadius: 3,
               p: 0,
-              background: 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)',
+              background: 'linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)',
               color: 'common.white',
-              boxShadow: '0 18px 35px rgba(76, 175, 80, 0.32)',
+              boxShadow: '0 18px 35px rgba(29, 233, 182, 0.32)',
               overflow: 'hidden',
             }}
           >
@@ -833,7 +852,7 @@ export default function HomePage() {
                     width: 12, 
                     height: 12, 
                     borderRadius: '50%', 
-                    bgcolor: 'rgba(124, 93, 250, 1)' 
+                    bgcolor: 'rgba(158, 158, 158, 0.8)' 
                   }} />
                   <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
                     ตำแหน่งว่าง
@@ -844,7 +863,7 @@ export default function HomePage() {
                     width: 12, 
                     height: 12, 
                     borderRadius: '50%', 
-                    bgcolor: 'rgba(29, 233, 182, 1)' 
+                    bgcolor: '#1DE9B6' 
                   }} />
                   <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
                     จับคู่สำเร็จ
@@ -1082,20 +1101,16 @@ export default function HomePage() {
                       </TableCell>
                       <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                          <Box sx={{ flex: 1, bgcolor: 'rgba(124, 93, 250, 0.08)', borderRadius: 3, height: 6, overflow: 'hidden' }}>
+                          <Box sx={{ flex: 1, bgcolor: 'rgba(29, 233, 182, 0.12)', borderRadius: 3, height: 6, overflow: 'hidden' }}>
                             <Box sx={{ 
                               height: '100%', 
                               width: `${position.assignmentRate}%`,
-                              background: position.assignmentRate >= 75
-                                ? 'linear-gradient(90deg, #7C5DFA 0%, #FF7EB3 100%)'
-                                : position.assignmentRate >= 50
-                                  ? 'linear-gradient(90deg, #FF9A44 0%, #FF7EB3 100%)'
-                                  : 'linear-gradient(90deg, #FF7EB3 0%, #FF9A44 100%)',
+                              background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
                               borderRadius: 3,
                               transition: 'width 0.3s ease'
                             }} />
                           </Box>
-                          <Typography variant="body2" fontWeight={700} fontSize="0.875rem" sx={{ minWidth: 45, color: DASHBOARD_COLORS.primary }}>
+                          <Typography variant="body2" fontWeight={700} fontSize="0.875rem" sx={{ minWidth: 45, color: '#00BFA5' }}>
                             {position.assignmentRate.toFixed(0)}%
                           </Typography>
                         </Box>

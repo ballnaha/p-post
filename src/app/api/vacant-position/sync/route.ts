@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
           const deleteWhereCondition: any = {
             year: yearNumber,
             nominator: null,
-            requestedPositionId: null
+            requestedPositionId: null,
+            isAssigned: false  // ✅ ลบเฉพาะตำแหน่งที่ยังไม่ได้จับคู่ เพื่อป้องกันข้อมูลเสีย
           };
 
           // ถ้าระบุ unit ให้ลบเฉพาะ unit นั้น
@@ -55,13 +56,13 @@ export async function POST(request: NextRequest) {
             where: deleteWhereCondition
           });
 
-          console.log(`🗑️  Deleted ${deletedCount.count} existing records before re-sync`);
+          console.log(`🗑️  Deleted ${deletedCount.count} unassigned vacant positions before re-sync`);
 
           sendProgress({
             type: 'progress',
             current: 0,
             total: 0,
-            message: `ลบข้อมูลเดิม ${deletedCount.count} รายการเรียบร้อย`
+            message: `ลบตำแหน่งว่างที่ยังไม่จับคู่ ${deletedCount.count} รายการเรียบร้อย`
           });
         }
 

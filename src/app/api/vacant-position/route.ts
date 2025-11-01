@@ -262,6 +262,40 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // ✅ ตรวจสอบว่ามีการใช้งานใน swap_transaction_detail หรือไม่
+    const usedInTransaction = await prisma.swapTransactionDetail.findFirst({
+      where: { personnelId: itemToDelete.id },
+      include: {
+        transaction: {
+          select: {
+            swapDate: true,
+            swapType: true,
+            groupName: true,
+          }
+        }
+      }
+    });
+
+    if (usedInTransaction) {
+      const swapTypeName = usedInTransaction.transaction.swapType === 'vacant-assignment' 
+        ? 'จับคู่ตำแหน่ง'
+        : usedInTransaction.transaction.swapType === 'two-way'
+          ? 'สลับตำแหน่ง'
+          : 'สามเส้า';
+      
+      return NextResponse.json(
+        { 
+          error: 'ไม่สามารถลบได้ เนื่องจากมีประวัติการจับคู่ในระบบ',
+          message: `บุคคลนี้มีประวัติ${swapTypeName}แล้ว กรุณาลบประวัติการจับคู่ในหน้า "ประวัติการจับคู่" ก่อน`,
+          details: {
+            transactionDate: usedInTransaction.transaction.swapDate,
+            transactionType: swapTypeName,
+          }
+        },
+        { status: 400 }
+      );
+    }
+
     // ตรวจสอบว่ามีข้อมูลในรายการสลับตำแหน่งหรือไม่ (กำลังจับคู่อยู่)
     const swapListEntry = await prisma.swapList.findFirst({
       where: {

@@ -303,12 +303,18 @@ export async function GET(request: NextRequest) {
     });
 
     // นับจำนวนผู้ยื่นขอที่ถูกจับคู่แล้ว (requestedPositionId !== null และ isAssigned = true)
+    const assignedWhereCondition: any = {
+      year: yearNumber,
+      requestedPositionId: { not: null },
+      isAssigned: true,
+    };
+
+    if (unit && unit !== 'all') {
+      assignedWhereCondition.unit = unit;
+    }
+
     const assignedApplicantsCount = await prisma.vacantPosition.count({
-      where: {
-        year: yearNumber,
-        requestedPositionId: { not: null },
-        isAssigned: true
-      }
+      where: assignedWhereCondition
     });
 
     // เหลือ = ตำแหน่งว่างทั้งหมด - ผู้ยื่นขอที่จับคู่แล้ว

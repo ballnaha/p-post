@@ -30,28 +30,52 @@ export async function GET(request: NextRequest) {
     };
 
     // ดึง distinct values สำหรับ filters
-    const [units, posCodes] = await Promise.all([
-      // ดึงหน่วยทั้งหมดจากตำแหน่งที่ว่าง
-      prisma.policePersonnel.findMany({
-        where: vacantWhere,
+    const [units, posCodes, positions] = await Promise.all([
+      // ดึงหน่วยทั้งหมดจาก VacantPosition
+      prisma.vacantPosition.findMany({
+        where: {
+          unit: { not: null },
+        },
         select: { unit: true },
         distinct: ['unit'],
         orderBy: { unit: 'asc' },
       }),
       
-      // ดึงรหัสตำแหน่งที่บุคคลากรต้องการสมัคร (requestedPositionId) จาก VacantPosition
+      // ดึงรหัสตำแหน่งจากตำแหน่งว่าง (posCodeId) จาก VacantPosition
       prisma.vacantPosition.findMany({
         where: {
-          requestedPositionId: { not: null },
+          posCodeId: { not: null },
+          unit: { not: null },
         },
         select: { 
-          requestedPositionId: true, 
-          requestedPosCode: {
+          posCodeId: true, 
+          unit: true,
+          posCodeMaster: {
             select: { id: true, name: true }
           }
         },
-        distinct: ['requestedPositionId'],
-        orderBy: { requestedPositionId: 'asc' },
+        distinct: ['posCodeId', 'unit'],
+        orderBy: [
+          { unit: 'asc' },
+          { posCodeId: 'asc' },
+        ],
+      }),
+      
+      // ดึงตำแหน่งทั้งหมดจาก VacantPosition
+      prisma.vacantPosition.groupBy({
+        by: ['position', 'posCodeId', 'unit'],
+        where: {
+          position: { not: null },
+          posCodeId: { not: null },
+        },
+        _count: {
+          _all: true,
+        },
+        orderBy: [
+          { unit: 'asc' },
+          { position: 'asc' },
+          { posCodeId: 'asc' },
+        ],
       }),
     ]);
 
@@ -61,10 +85,21 @@ export async function GET(request: NextRequest) {
       .map(u => ({ value: u.unit, label: u.unit }));
 
     const posCodeOptions = posCodes
-      .filter(p => p.requestedPositionId && p.requestedPosCode)
+      .filter(p => p.posCodeId && p.posCodeMaster)
       .map(p => ({
-        value: p.requestedPositionId!.toString(),
-        label: `${p.requestedPosCode!.name} (รหัส: ${p.requestedPositionId})`
+        value: p.posCodeId!.toString(),
+        label: `${p.posCodeMaster!.name} (รหัส: ${p.posCodeId})`,
+        unit: p.unit ?? null,
+      }));
+
+    const positionOptions = positions
+      .filter(p => p.position && p.position.trim() !== '' && p.posCodeId)
+      .map(p => ({
+        value: p.position!,
+        label: p.position!,
+        posCodeId: p.posCodeId!.toString(),
+        unit: p.unit ?? null,
+        count: p._count._all,
       }));
 
     return NextResponse.json({
@@ -72,6 +107,7 @@ export async function GET(request: NextRequest) {
       data: {
         units: unitOptions,
         posCodes: posCodeOptions,
+        positions: positionOptions,
       },
     });
   } catch (error) {

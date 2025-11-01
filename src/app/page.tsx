@@ -20,11 +20,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  LinearProgress,
   Tooltip,
   Card,
   CardContent,
   Divider,
+  Stack
 } from '@mui/material';
 import { 
   AssignmentTurnedIn,
@@ -51,6 +51,7 @@ import {
 } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Bar } from 'react-chartjs-2';
+import { teal } from '@mui/material/colors';
 
 // Register ChartJS components
 ChartJS.register(
@@ -62,6 +63,20 @@ ChartJS.register(
   Legend,
   ChartDataLabels
 );
+
+const DASHBOARD_COLORS = {
+  primary: '#7C5DFA',
+  primarySoft: 'rgba(124, 93, 250, 0.14)',
+  accent: '#FF9A44',
+  accentSoft: 'rgba(255, 154, 68, 0.16)',
+  pink: '#FF7EB3',
+  pinkSoft: 'rgba(255, 126, 179, 0.16)',
+  neutralSoft: 'rgba(255, 255, 255, 0.18)',
+  alternativeBlue: '#4FC3F7',
+  alternativeBlueSoft: 'rgba(79, 195, 247, 0.14)',
+  teal: '#1DE9B6',
+  tealSoft: 'rgba(29, 233, 182, 0.14)',
+};
 
 interface PositionDetail {
   posCodeId: number;
@@ -216,7 +231,8 @@ export default function HomePage() {
         {
           label: 'ตำแหน่งว่าง',
           data: chartDataRaw.map(p => p.vacantSlots),
-          backgroundColor: 'rgba(25, 118, 210, 1)',
+          backgroundColor: DASHBOARD_COLORS.primary,
+          hoverBackgroundColor: '#6E50F0',
           borderColor: 'transparent',
           borderWidth: 0,
           borderRadius: {
@@ -231,7 +247,8 @@ export default function HomePage() {
         {
           label: 'จับคู่สำเร็จ',
           data: chartDataRaw.map(p => p.totalApplicants),
-          backgroundColor: 'rgba(76, 175, 80, 1)',
+          backgroundColor: DASHBOARD_COLORS.teal,
+          hoverBackgroundColor: '#1DE9B6',
           borderColor: 'transparent',
           borderWidth: 0,
           borderRadius: {
@@ -353,9 +370,26 @@ export default function HomePage() {
   if (loading) {
     return (
       <Layout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
-          <CircularProgress />
-        </Box>
+<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
+  <Stack 
+    direction="column" // ตั้งให้จัดเรียงในแนวตั้ง
+    alignItems="center" // จัดให้อยู่ตรงกลางแนวนอน
+    spacing={2} // ระยะห่างระหว่าง CircularProgress กับ Typography
+  >
+    <CircularProgress />
+    <Typography 
+      variant="body2" 
+      color="text.secondary"
+      sx={{ 
+        fontWeight: 500,
+        letterSpacing: 0.5,
+      }}
+    >
+      กำลังโหลด...
+    </Typography>
+  </Stack>
+</Box>
+        
       </Layout>
     );
   }
@@ -439,41 +473,75 @@ export default function HomePage() {
         {/* Stats Cards Row 1 */}
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
           {/* Vacant Position Summary Card */}
-          <Card sx={{ 
-            borderRadius: 2,
-            bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
-            transition: 'all 0.3s ease',
-            '&:hover': {
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              transform: 'translateY(-2px)',
-            }
-          }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+          <Card
+            sx={{
+              position: 'relative',
+              borderRadius: 3,
+              p: 0,
+              background: 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)',
+              color: 'common.white',
+              boxShadow: '0 18px 35px rgba(76, 175, 80, 0.32)',
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                width: 210,
+                height: 210,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.12)',
+                top: -90,
+                right: -60,
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                width: 170,
+                height: 170,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.08)',
+                bottom: -80,
+                left: -60,
+              }}
+            />
+            <CardContent sx={{ p: 3, '&:last-child': { pb: 3 }, position: 'relative', zIndex: 1 }}>
               {/* Header with Icon and Title */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                <Box sx={{ 
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  bgcolor: 'primary.main',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)',
-                }}>
-                  <AssignmentTurnedIn sx={{ fontSize: 20, color: 'white' }} />
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255,255,255,0.18)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 10px 24px rgba(22, 63, 161, 0.25)',
+                    color: 'common.white',
+                  }}
+                >
+                  <AssignmentTurnedIn sx={{ fontSize: 22 }} />
                 </Box>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary" fontSize="0.7rem" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={600}
+                    fontSize="0.7rem"
+                    sx={{ textTransform: 'uppercase', letterSpacing: 0.6, color: 'rgba(255,255,255,0.78)' }}
+                  >
                     Position Assignment Rate
                   </Typography>
-                  <Typography variant="h6" fontWeight={700} color="text.primary" fontSize="0.95rem">
+                  <Typography
+                    variant="h6"
+                    fontWeight={700}
+                    fontSize="0.98rem"
+                    sx={{ color: 'rgba(255,255,255,0.95)' }}
+                  >
                     จับคู่ตำแหน่งกับบุคลากร
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
+                  <Typography variant="caption" fontSize="0.72rem" sx={{ color: 'rgba(255,255,255,0.75)' }}>
                     ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                   </Typography>
                 </Box>
@@ -481,39 +549,42 @@ export default function HomePage() {
 
               {/* Main Number */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="h3" fontWeight={800} color="primary.main" sx={{ fontSize: '2.25rem', lineHeight: 1, mb: 0.5 }}>
-                  {stats.assignmentRate.toFixed(1)}% 
+                <Typography
+                  variant="h3"
+                  fontWeight={800}
+                  sx={{ fontSize: '2.35rem', lineHeight: 1, mb: 0.5, color: 'common.white' }}
+                >
+                  {stats.assignmentRate.toFixed(1)}%
                 </Typography>
-
               </Box>
 
-              <Divider sx={{ my: 2 }} />
+              <Divider sx={{ my: 2.5, borderColor: 'rgba(255,255,255,0.22)' }} />
 
               {/* Sub Stats Grid */}
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
-                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 1.5, bgcolor: 'success.50' }}>
-                  <Typography variant="h6" fontWeight={700} color="success.dark" fontSize="1.1rem" sx={{ mb: 0.25 }}>
+                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
+                  <Typography variant="h6" fontWeight={700} fontSize="1.12rem" sx={{ mb: 0.25, color: 'common.white' }}>
                     {stats.assignedPositions.toLocaleString()}
                   </Typography>
-                  <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
                     จับคู่สำเร็จ
                   </Typography>
                 </Box>
-                
-                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 1.5, bgcolor: 'warning.50' }}>
-                  <Typography variant="h6" fontWeight={700} color="warning.dark" fontSize="1.1rem" sx={{ mb: 0.25 }}>
+
+                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
+                  <Typography variant="h6" fontWeight={700} fontSize="1.12rem" sx={{ mb: 0.25, color: 'common.white' }}>
                     {stats.pendingPositions.toLocaleString()}
                   </Typography>
-                  <Typography variant="caption" color="warning.dark" sx={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
                     รอดำเนินการ
                   </Typography>
                 </Box>
-                
-                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 1.5, bgcolor: 'info.50' }}>
-                  <Typography variant="h6" fontWeight={700} color="info.dark" fontSize="1.1rem" sx={{ mb: 0.25 }}>
+
+                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
+                  <Typography variant="h6" fontWeight={700} fontSize="1.12rem" sx={{ mb: 0.25, color: 'common.white' }}>
                     {stats.totalApplicants.toLocaleString()}
                   </Typography>
-                  <Typography variant="caption" color="info.dark" sx={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
                     ผู้สมัคร
                   </Typography>
                 </Box>
@@ -522,41 +593,75 @@ export default function HomePage() {
           </Card>
 
           {/* Swap Position Card */}
-          <Card sx={{ 
-            borderRadius: 2,
-            bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
-            transition: 'all 0.3s ease',
-            '&:hover': {
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              transform: 'translateY(-2px)',
-            }
-          }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+          <Card
+            sx={{
+              position: 'relative',
+              borderRadius: 3,
+              p: 0,
+              background: 'linear-gradient(135deg, #42a5f5 0%, #64b5f6 100%)',
+              color: 'common.white',
+              boxShadow: '0 18px 36px rgba(66, 165, 245, 0.32)',
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                width: 200,
+                height: 200,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.14)',
+                top: -80,
+                right: -70,
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                width: 150,
+                height: 150,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.09)',
+                bottom: -70,
+                left: -40,
+              }}
+            />
+            <CardContent sx={{ p: 3, '&:last-child': { pb: 3 }, position: 'relative', zIndex: 1 }}>
               {/* Header with Icon and Title */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                <Box sx={{ 
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  bgcolor: 'secondary.main',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(156, 39, 176, 0.3)',
-                }}>
-                  <SwapHoriz sx={{ fontSize: 20, color: 'white' }} />
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 10px 24px rgba(137, 42, 24, 0.25)',
+                    color: 'common.white',
+                  }}
+                >
+                  <SwapHoriz sx={{ fontSize: 22 }} />
                 </Box>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary" fontSize="0.7rem" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={600}
+                    fontSize="0.7rem"
+                    sx={{ textTransform: 'uppercase', letterSpacing: 0.6, color: 'rgba(255,255,255,0.78)' }}
+                  >
                     Swap Positions
                   </Typography>
-                  <Typography variant="h6" fontWeight={700} color="text.primary" fontSize="0.95rem">
+                  <Typography
+                    variant="h6"
+                    fontWeight={700}
+                    fontSize="0.98rem"
+                    sx={{ color: 'rgba(255,255,255,0.95)' }}
+                  >
                     สลับตำแหน่งทั้งหมด
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
+                  <Typography variant="caption" fontSize="0.72rem" sx={{ color: 'rgba(255,255,255,0.75)' }}>
                     ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                   </Typography>
                 </Box>
@@ -564,24 +669,26 @@ export default function HomePage() {
 
               {/* Main Number */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="h3" fontWeight={800} color="secondary.main" sx={{ fontSize: '2.25rem', lineHeight: 1, mb: 0.5 }}>
+                <Typography
+                  variant="h3"
+                  fontWeight={800}
+                  sx={{ fontSize: '2.35rem', lineHeight: 1, mb: 0.5, color: 'common.white' }}
+                >
                   {stats.totalSwapList.toLocaleString()} คน
                 </Typography>
-                
               </Box>
 
-              <Divider sx={{ my: 2 }} />
+              <Divider sx={{ my: 2.5, borderColor: 'rgba(255,255,255,0.22)' }} />
 
               {/* Additional Info */}
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 1.5 }}>
-                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 1.5, bgcolor: 'secondary.50' }}>
+                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, mb: 0.25 }}>
-                    
-                    <Typography variant="caption" color="secondary.dark" sx={{ fontSize: '1.1rem', fontWeight: 600 }}>
+                    <Typography variant="body1" sx={{ fontSize: '1.1rem', fontWeight: 600, color: 'common.white' }}>
                       {((stats.completedSwapCount / stats.totalSwapList) * 100 || 0).toFixed(1)}%
                     </Typography>
                   </Box>
-                  <Typography variant="caption" color="secondary.dark" sx={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
                     สลับสำเร็จ
                   </Typography>
                 </Box>
@@ -590,41 +697,75 @@ export default function HomePage() {
           </Card>
 
           {/* Three-Way Swap Card */}
-          <Card sx={{ 
-            borderRadius: 2,
-            bgcolor: 'white',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-            border: '1px solid',
-            borderColor: 'divider',
-            transition: 'all 0.3s ease',
-            '&:hover': {
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              transform: 'translateY(-2px)',
-            }
-          }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+          <Card
+            sx={{
+              position: 'relative',
+              borderRadius: 3,
+              p: 0,
+              background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+              color: 'common.white',
+              boxShadow: '0 18px 36px rgba(255, 152, 0, 0.32)',
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                width: 210,
+                height: 210,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.14)',
+                top: -80,
+                right: -80,
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                width: 160,
+                height: 160,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.09)',
+                bottom: -70,
+                left: -50,
+              }}
+            />
+            <CardContent sx={{ p: 3, '&:last-child': { pb: 3 }, position: 'relative', zIndex: 1 }}>
               {/* Header with Icon and Title */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                <Box sx={{ 
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  bgcolor: 'error.main',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(211, 47, 47, 0.3)',
-                }}>
-                  <ChangeHistory sx={{ fontSize: 20, color: 'white' }} />
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 10px 24px rgba(140, 33, 74, 0.25)',
+                    color: 'common.white',
+                  }}
+                >
+                  <ChangeHistory sx={{ fontSize: 22 }} />
                 </Box>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={600} color="text.secondary" fontSize="0.7rem" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={600}
+                    fontSize="0.7rem"
+                    sx={{ textTransform: 'uppercase', letterSpacing: 0.6, color: 'rgba(255,255,255,0.78)' }}
+                  >
                     Three-Way Swap
                   </Typography>
-                  <Typography variant="h6" fontWeight={700} color="text.primary" fontSize="0.95rem">
+                  <Typography
+                    variant="h6"
+                    fontWeight={700}
+                    fontSize="0.98rem"
+                    sx={{ color: 'rgba(255,255,255,0.95)' }}
+                  >
                     สามเส้าทั้งหมด
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
+                  <Typography variant="caption" fontSize="0.72rem" sx={{ color: 'rgba(255,255,255,0.75)' }}>
                     ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                   </Typography>
                 </Box>
@@ -632,24 +773,26 @@ export default function HomePage() {
 
               {/* Main Number */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="h3" fontWeight={800} color="error.main" sx={{ fontSize: '2.25rem', lineHeight: 1, mb: 0.5 }}>
+                <Typography
+                  variant="h3"
+                  fontWeight={800}
+                  sx={{ fontSize: '2.35rem', lineHeight: 1, mb: 0.5, color: 'common.white' }}
+                >
                   {stats.totalThreeWaySwap.toLocaleString()} คน
                 </Typography>
-                
               </Box>
 
-              <Divider sx={{ my: 2 }} />
+              <Divider sx={{ my: 2.5, borderColor: 'rgba(255,255,255,0.22)' }} />
 
               {/* Additional Info */}
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 1.5 }}>
-                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 1.5, bgcolor: 'error.50' }}>
+                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, mb: 0.25 }}>
-                    
-                    <Typography variant="caption" color="error.dark" sx={{ fontSize: '1.1rem', fontWeight: 600 }}>
+                    <Typography variant="body1" sx={{ fontSize: '1.1rem', fontWeight: 600, color: 'common.white' }}>
                       {((stats.completedThreeWaySwapCount / stats.totalThreeWaySwap) * 100 || 0).toFixed(1)}%
                     </Typography>
                   </Box>
-                  <Typography variant="caption" color="error.dark" sx={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
                     สลับสำเร็จ
                   </Typography>
                 </Box>
@@ -690,7 +833,7 @@ export default function HomePage() {
                     width: 12, 
                     height: 12, 
                     borderRadius: '50%', 
-                    bgcolor: 'rgb(25, 118, 210)' 
+                    bgcolor: 'rgba(124, 93, 250, 1)' 
                   }} />
                   <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
                     ตำแหน่งว่าง
@@ -701,7 +844,7 @@ export default function HomePage() {
                     width: 12, 
                     height: 12, 
                     borderRadius: '50%', 
-                    bgcolor: 'rgba(76, 175, 80, 1)' 
+                    bgcolor: 'rgba(29, 233, 182, 1)' 
                   }} />
                   <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
                     จับคู่สำเร็จ
@@ -850,7 +993,7 @@ export default function HomePage() {
                       key={position.posCodeId}
                       hover
                       sx={{ 
-                        '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.04)' },
+                        '&:hover': { bgcolor: 'rgba(124, 93, 250, 0.08)' },
                         transition: 'all 0.2s',
                         borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
                       }}
@@ -860,8 +1003,8 @@ export default function HomePage() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          bgcolor: 'rgba(25, 118, 210, 0.08)',
-                          color: 'rgb(25, 118, 210)',
+                          bgcolor: DASHBOARD_COLORS.primarySoft,
+                          color: DASHBOARD_COLORS.primary,
                           fontWeight: 700,
                           fontSize: '0.8rem',
                           px: 1.5,
@@ -883,8 +1026,8 @@ export default function HomePage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            bgcolor: 'rgba(25, 118, 210, 0.1)',
-                            color: 'rgb(25, 118, 210)',
+                            bgcolor: DASHBOARD_COLORS.primarySoft,
+                            color: DASHBOARD_COLORS.primary,
                             fontWeight: 700,
                             fontSize: '0.875rem',
                             px: 2,
@@ -908,8 +1051,8 @@ export default function HomePage() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          bgcolor: 'rgba(76, 175, 80, 0.1)',
-                          color: 'rgb(76, 175, 80)',
+                          bgcolor: DASHBOARD_COLORS.accentSoft,
+                          color: DASHBOARD_COLORS.accent,
                           fontWeight: 700,
                           fontSize: '0.875rem',
                           px: 2,
@@ -921,26 +1064,38 @@ export default function HomePage() {
                         </Box>
                       </TableCell>
                       <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        <Typography variant="body2" fontWeight={600} color="#757575" fontSize="0.875rem">
+                        <Box sx={{ 
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: DASHBOARD_COLORS.pinkSoft,
+                          color: DASHBOARD_COLORS.pink,
+                          fontWeight: 700,
+                          fontSize: '0.875rem',
+                          px: 2,
+                          py: 0.75,
+                          borderRadius: 2,
+                          minWidth: 60
+                        }}>
                           {position.pendingCount}
-                        </Typography>
+                        </Box>
                       </TableCell>
                       <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                          <Box sx={{ flex: 1, bgcolor: '#F5F5F5', borderRadius: 2, height: 6, overflow: 'hidden' }}>
+                          <Box sx={{ flex: 1, bgcolor: 'rgba(124, 93, 250, 0.08)', borderRadius: 3, height: 6, overflow: 'hidden' }}>
                             <Box sx={{ 
                               height: '100%', 
                               width: `${position.assignmentRate}%`,
-                              bgcolor: position.assignmentRate >= 75 
-                                ? 'rgb(76, 175, 80)'
-                                : position.assignmentRate >= 50 
-                                  ? 'rgb(255, 152, 0)'
-                                  : 'rgb(244, 67, 54)',
-                              borderRadius: 2,
+                              background: position.assignmentRate >= 75
+                                ? 'linear-gradient(90deg, #7C5DFA 0%, #FF7EB3 100%)'
+                                : position.assignmentRate >= 50
+                                  ? 'linear-gradient(90deg, #FF9A44 0%, #FF7EB3 100%)'
+                                  : 'linear-gradient(90deg, #FF7EB3 0%, #FF9A44 100%)',
+                              borderRadius: 3,
                               transition: 'width 0.3s ease'
                             }} />
                           </Box>
-                          <Typography variant="body2" fontWeight={700} fontSize="0.875rem" sx={{ minWidth: 45, color: '#424242' }}>
+                          <Typography variant="body2" fontWeight={700} fontSize="0.875rem" sx={{ minWidth: 45, color: DASHBOARD_COLORS.primary }}>
                             {position.assignmentRate.toFixed(0)}%
                           </Typography>
                         </Box>
@@ -974,7 +1129,7 @@ export default function HomePage() {
                 borderColor: 'divider'
               }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <TrendingUp sx={{ fontSize: 20, color: 'primary.main' }} />
+                  <TrendingUp sx={{ fontSize: 20, color: DASHBOARD_COLORS.primary }} />
                   <Typography variant="subtitle1" fontWeight={700} color="text.primary">
                     ตำแหน่งที่มีผู้สมัครมากที่สุด
                   </Typography>
@@ -1052,7 +1207,7 @@ export default function HomePage() {
                 borderColor: 'divider'
               }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <LocationOn sx={{ fontSize: 20, color: 'warning.main' }} />
+                  <LocationOn sx={{ fontSize: 20, color: DASHBOARD_COLORS.accent }} />
                   <Typography variant="subtitle1" fontWeight={700} color="text.primary">
                     ตำแหน่งที่รอจับคู่มากที่สุด
                   </Typography>
@@ -1109,7 +1264,7 @@ export default function HomePage() {
                   ))}
                   {!hasPendingPositions && (
                     <Box sx={{ textAlign: 'center', py: 3 }}>
-                      <CheckCircle sx={{ fontSize: 48, color: 'success.light', mb: 1 }} />
+                      <CheckCircle sx={{ fontSize: 48, color: DASHBOARD_COLORS.primary, mb: 1 }} />
                       <Typography variant="body2" color="text.secondary" fontWeight={600}>
                         ไม่มีตำแหน่งที่รอจับคู่
                       </Typography>

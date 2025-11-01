@@ -140,9 +140,20 @@ interface FilterOption {
   label: string;
 }
 
+interface PosCodeFilterOption extends FilterOption {
+  unit: string | null;
+}
+
+interface PositionFilterOption extends FilterOption {
+  posCodeId: string;
+  unit: string | null;
+  count: number;
+}
+
 interface FilterOptions {
   units: FilterOption[];
-  posCodes: FilterOption[];
+  posCodes: PosCodeFilterOption[];
+  positions: PositionFilterOption[];
 }
 
 // Sortable Item Component
@@ -440,12 +451,83 @@ export default function VacantPositionAssignmentPage() {
   const [isSwapping, setIsSwapping] = useState(false);
   
   // Filter states
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ units: [], posCodes: [] });
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ units: [], posCodes: [], positions: [] });
   const [filters, setFilters] = useState({
     search: '',
     unit: 'all',
     posCode: 'all',
+    position: 'all',
   });
+  const [isFilterLoading, setIsFilterLoading] = useState(false);
+
+  const posCodeFilterOptions = useMemo(() => {
+    if (filters.unit === 'all') {
+      const uniquePosCodes = new Map<string, FilterOption>();
+      filterOptions.posCodes.forEach((posCode) => {
+        if (!uniquePosCodes.has(posCode.value)) {
+          uniquePosCodes.set(posCode.value, { value: posCode.value, label: posCode.label });
+        }
+      });
+      return Array.from(uniquePosCodes.values()).sort((a, b) => a.label.localeCompare(b.label));
+    }
+
+    return filterOptions.posCodes
+      .filter((posCode) => posCode.unit === filters.unit)
+      .map((posCode) => ({ value: posCode.value, label: posCode.label }));
+  }, [filterOptions.posCodes, filters.unit]);
+
+  const positionFilterOptions = useMemo(() => {
+    const relevantPositions = filterOptions.positions.filter((pos) => {
+      if (filters.unit !== 'all' && pos.unit !== filters.unit) {
+        return false;
+      }
+      if (filters.posCode !== 'all' && pos.posCodeId !== filters.posCode) {
+        return false;
+      }
+      return true;
+    });
+
+    const aggregated = new Map<string, { value: string; label: string; count: number }>();
+
+    relevantPositions.forEach((pos) => {
+      const existing = aggregated.get(pos.value);
+      if (existing) {
+        existing.count += pos.count;
+      } else {
+        aggregated.set(pos.value, {
+          value: pos.value,
+          label: pos.label,
+          count: pos.count,
+        });
+      }
+    });
+
+    return Array.from(aggregated.values())
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map((item) => ({ value: item.value, label: `${item.label} (${item.count})` }));
+  }, [filterOptions.positions, filters.posCode, filters.unit]);
+
+  useEffect(() => {
+    if (filters.posCode === 'all') {
+      return;
+    }
+
+    const hasMatchingPosCode = posCodeFilterOptions.some((option) => option.value === filters.posCode);
+    if (!hasMatchingPosCode) {
+      setFilters((prev) => ({ ...prev, posCode: 'all', position: 'all' }));
+    }
+  }, [posCodeFilterOptions, filters.posCode]);
+
+  useEffect(() => {
+    if (filters.position === 'all') {
+      return;
+    }
+
+    const hasMatchingOption = positionFilterOptions.some((option) => option.value === filters.position);
+    if (!hasMatchingOption) {
+      setFilters((prev) => ({ ...prev, position: 'all' }));
+    }
+  }, [positionFilterOptions, filters.position]);
   
   // Vacant position type tab state
   const [vacantTypeTab, setVacantTypeTab] = useState<'all' | 'vacant' | 'reserved'>('all');
@@ -505,17 +587,24 @@ export default function VacantPositionAssignmentPage() {
   }, [currentYear]);
 
   useEffect(() => {
-    // แสดงข้อมูลเฉพาะเมื่อมีการเลือก filter หน่วยหรือ pos code
-    if (filters.unit !== 'all' || filters.posCode !== 'all' || filters.search) {
+    // แสดงข้อมูลเมื่อมีการเลือก filter ใด ๆ หรือเลือกสถานะการจับคู่
+    if (
+      filters.unit !== 'all' ||
+      filters.posCode !== 'all' ||
+      filters.position !== 'all' ||
+      filters.search ||
+      applicantFilterTab !== 'all'
+    ) {
       fetchVacantPositions();
     } else {
       // ถ้าไม่มี filter ให้ล้างข้อมูล
       setAllVacantPositions([]);
       setVacantPositions([]);
       setTotal(0);
+      setIsFilterLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.search, filters.unit, filters.posCode, currentYear]);
+  }, [filters.search, filters.unit, filters.posCode, filters.position, applicantFilterTab, currentYear]);
 
   const fetchFilterOptions = useCallback(async () => {
     try {
@@ -554,6 +643,7 @@ export default function VacantPositionAssignmentPage() {
         ...(filters.search && { search: filters.search }),
         ...(filters.unit !== 'all' && { unit: filters.unit }),
         ...(filters.posCode !== 'all' && { posCode: filters.posCode }),
+        ...(filters.position !== 'all' && { position: filters.position }),
         year: currentYear.toString(), // เพิ่ม year parameter
       });
 
@@ -573,9 +663,10 @@ export default function VacantPositionAssignmentPage() {
       toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
     } finally {
       setLoading(false);
+      setIsFilterLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.search, filters.unit, filters.posCode, currentYear]);
+  }, [filters.search, filters.unit, filters.posCode, filters.position, currentYear]);
 
   // Memoize filtered positions
   const filteredVacantPositions = useMemo(() => {
@@ -617,20 +708,48 @@ export default function VacantPositionAssignmentPage() {
   }, [filteredVacantPositions]);
 
   const handleFilterChange = useCallback((filterType: string, value: string) => {
-    setFilters(prev => ({ ...prev, [filterType]: value }));
+    setIsFilterLoading(true);
+    setFilters(prev => {
+      if (filterType === 'unit') {
+        return {
+          ...prev,
+          unit: value,
+          posCode: 'all',
+          position: 'all',
+        };
+      }
+
+      if (filterType === 'posCode') {
+        return {
+          ...prev,
+          posCode: value,
+          position: 'all',
+        };
+      }
+
+      return { ...prev, [filterType]: value };
+    });
     // ไม่ต้องรีเซ็ต page เพราะไม่มี pagination
   }, []);
 
   const handleSearchChange = useCallback((value: string) => {
+    setIsFilterLoading(true);
     setFilters(prev => ({ ...prev, search: value }));
     // ไม่ต้องรีเซ็ต page เพราะไม่มี pagination
   }, []);
 
+  const handleApplicantFilterChange = useCallback((value: 'all' | 'assigned' | 'pending') => {
+    setIsFilterLoading(true);
+    setApplicantFilterTab(value);
+  }, []);
+
   const resetFilters = useCallback(() => {
+    setIsFilterLoading(true);
     setFilters({
       search: '',
       unit: 'all',
       posCode: 'all',
+      position: 'all',
     });
     setVacantTypeTab('all'); // รีเซ็ต tab ด้วย
     setApplicantFilterTab('all'); // รีเซ็ต applicant filter ด้วย
@@ -651,6 +770,7 @@ export default function VacantPositionAssignmentPage() {
   }, []);
 
   const handleYearChange = useCallback((event: SelectChangeEvent<number>) => {
+    setIsFilterLoading(true);
     setCurrentYear(Number(event.target.value));
     setPage(0); // Reset page when year changes
   }, []);
@@ -1101,50 +1221,53 @@ export default function VacantPositionAssignmentPage() {
             </Box>
             
             <Box sx={{ 
-              display: 'grid', 
-              gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 2fr' }, 
+              display: 'flex',
+              flexDirection: 'column',
               gap: 2,
-              alignItems: 'start'
             }}>
               
-              {/* Search */}
-              <TextField
-                label="ค้นหา"
-                placeholder="ค้นหาชื่อตำแหน่ง..."
-                value={filters.search}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                size="small"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
+              {/* First Row: Search, Year, Unit */}
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 1fr' }, 
+                gap: 2,
+              }}>
+                {/* Search */}
+                <TextField
+                  label="ค้นหา"
+                  placeholder="ค้นหาชื่อบุคลากร , ชื่อตำแหน่ง..."
+                  value={filters.search}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  size="small"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
 
-              {/* Year Filter */}
-              <FormControl size="small">
-                <InputLabel id="year-filter-label">ปี</InputLabel>
-                <Select
-                  labelId="year-filter-label"
-                  id="year-filter"
-                  value={currentYear}
-                  label="ปี"
-                  onChange={handleYearChange}
-                >
-                  {availableYears.map((year) => (
-                    <MenuItem key={year} value={year}>
-                      {year}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                {/* Year Filter */}
+                <FormControl size="small">
+                  <InputLabel id="year-filter-label">ปี</InputLabel>
+                  <Select
+                    labelId="year-filter-label"
+                    id="year-filter"
+                    value={currentYear}
+                    label="ปี"
+                    onChange={handleYearChange}
+                  >
+                    {availableYears.map((year) => (
+                      <MenuItem key={year} value={year}>
+                        {year}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-              {/* Unit and PosCode in one column */}
-              <Box sx={{ display: 'flex', gap: 2 }}>
                 {/* Unit Filter */}
-                <FormControl size="small" sx={{ flex: 1 }}>
+                <FormControl size="small">
                   <InputLabel>หน่วย</InputLabel>
                   <Select
                     value={filters.unit}
@@ -1159,9 +1282,16 @@ export default function VacantPositionAssignmentPage() {
                     ))}
                   </Select>
                 </FormControl>
-                
+              </Box>
+
+              {/* Second Row: Position Code, Position, Assignment Status */}
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, 
+                gap: 2,
+              }}>
                 {/* Position Code Filter */}
-                <FormControl size="small" sx={{ flex: 1 }}>
+                <FormControl size="small">
                   <InputLabel>รหัสตำแหน่ง</InputLabel>
                   <Select
                     value={filters.posCode}
@@ -1169,21 +1299,38 @@ export default function VacantPositionAssignmentPage() {
                     onChange={(e) => handleFilterChange('posCode', e.target.value)}
                   >
                     <MenuItem value="all">ทั้งหมด</MenuItem>
-                    {filterOptions.posCodes.map((posCode) => (
+                    {posCodeFilterOptions.map((posCode) => (
                       <MenuItem key={posCode.value} value={posCode.value}>
                         {posCode.label}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
+
+                {/* Position Filter */}
+                <FormControl size="small">
+                  <InputLabel>ตำแหน่ง</InputLabel>
+                  <Select
+                    value={filters.position}
+                    label="ตำแหน่ง"
+                    onChange={(e) => handleFilterChange('position', e.target.value)}
+                  >
+                    <MenuItem value="all">ทั้งหมด</MenuItem>
+                    {positionFilterOptions.map((position) => (
+                      <MenuItem key={position.value} value={position.value}>
+                        {position.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 
                 {/* Assignment Status Filter */}
-                <FormControl size="small" sx={{ flex: 1 }}>
+                <FormControl size="small">
                   <InputLabel>สถานะการจับคู่</InputLabel>
                   <Select
                     value={applicantFilterTab}
                     label="สถานะการจับคู่"
-                    onChange={(e) => setApplicantFilterTab(e.target.value as 'all' | 'assigned' | 'pending')}
+                    onChange={(e) => handleApplicantFilterChange(e.target.value as 'all' | 'assigned' | 'pending')}
                   >
                     <MenuItem value="all">ทั้งหมด</MenuItem>
                     <MenuItem value="assigned">จับคู่แล้ว</MenuItem>
@@ -1206,7 +1353,7 @@ export default function VacantPositionAssignmentPage() {
                     
                   </Typography>
                 )}
-                {(filters.search || filters.unit !== 'all' || filters.posCode !== 'all') && (
+                {(filters.search || filters.unit !== 'all' || filters.posCode !== 'all' || filters.position !== 'all') && (
                   <Chip
                     label="มีการกรองข้อมูล"
                     color="primary"
@@ -1217,7 +1364,7 @@ export default function VacantPositionAssignmentPage() {
               </Box>
               
               {/* Reset Button */}
-              {(filters.search || filters.unit !== 'all' || filters.posCode !== 'all') && (
+              {(filters.search || filters.unit !== 'all' || filters.posCode !== 'all' || filters.position !== 'all') && (
                 <Button
                   variant="outlined"
                   startIcon={<RefreshIcon />}
@@ -1369,7 +1516,7 @@ export default function VacantPositionAssignmentPage() {
 
 
         {/* Vacant Position Type Tabs - Minimal Style */}
-        {(filters.unit !== 'all' || filters.posCode !== 'all' || filters.search) && (
+        {(filters.unit !== 'all' || filters.posCode !== 'all' || filters.position !== 'all' || filters.search) && (
           <Box sx={{ mb: 3 }}>
             <Tabs
               value={vacantTypeTab}
@@ -1413,7 +1560,7 @@ export default function VacantPositionAssignmentPage() {
           </Box>
         )}
 
-        {loading && vacantPositions.length === 0 ? (
+  {loading && (isFilterLoading || vacantPositions.length === 0) ? (
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { 
@@ -1835,16 +1982,16 @@ export default function VacantPositionAssignmentPage() {
         )}
 
         {/* แสดงข้อความแนะนำเมื่อยังไม่มีการ filter */}
-        {!loading && vacantPositions.length === 0 && filters.unit === 'all' && filters.posCode === 'all' && !filters.search && (
+        {!loading && vacantPositions.length === 0 && filters.unit === 'all' && filters.posCode === 'all' && filters.position === 'all' && !filters.search && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
-              กรุณาเลือกหน่วยหรือรหัสตำแหน่งเพื่อแสดงตำแหน่งที่ว่าง
+              กรุณาเลือกหน่วย รหัสตำแหน่ง หรือตำแหน่งเพื่อแสดงตำแหน่งที่ว่าง
             </Typography>
           </Alert>
         )}
 
         {/* แสดงข้อความเมื่อไม่พบข้อมูลตามเงื่อนไข */}
-        {!loading && vacantPositions.length === 0 && (filters.unit !== 'all' || filters.posCode !== 'all' || filters.search) && (
+        {!loading && vacantPositions.length === 0 && (filters.unit !== 'all' || filters.posCode !== 'all' || filters.position !== 'all' || filters.search) && (
           <Alert severity="warning" sx={{ mt: 2 }}>
             ไม่พบตำแหน่งที่ว่างตามเงื่อนไขที่กำหนด
           </Alert>

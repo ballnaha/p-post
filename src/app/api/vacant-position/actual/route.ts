@@ -7,9 +7,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : null;
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : null;
-    const search = searchParams.get('search') || '';
+    const search = searchParams.get('search')?.trim() || '';
     const unitFilter = searchParams.get('unit') || 'all';
     const posCodeFilter = searchParams.get('posCode') || 'all';
+    const positionFilter = searchParams.get('position') || 'all';
     const year = searchParams.get('year'); // เพิ่ม year parameter
 
     // ตรวจสอบ year (required)
@@ -23,9 +24,8 @@ export async function GET(request: NextRequest) {
     const yearNumber = parseInt(year);
 
     // ถ้าไม่มี page และ limit จะดึงทั้งหมด
-    const usePagination = page !== null && limit !== null;
-    const skip = usePagination ? (page - 1) * limit : 0;
-    const take = usePagination ? limit : undefined;
+  const usePagination = page !== null && limit !== null;
+  const skip = usePagination && limit !== null ? (page! - 1) * limit : 0;
 
     // สร้าง where clause สำหรับตำแหน่งที่ว่าง จาก vacant_position
     // ดึงเฉพาะตำแหน่งว่าง (ไม่ใช่ผู้ยื่นขอ) - แสดงทั้งที่จับคู่แล้วและยังไม่จับคู่
@@ -49,31 +49,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // เพิ่ม search filter
-    if (search) {
-      where.OR = [
-        { position: { contains: search } },
-        { unit: { contains: search } },
-        { positionNumber: { contains: search } },
-      ];
+    // เพิ่ม position filter
+    if (positionFilter !== 'all') {
+      where.position = positionFilter;
     }
 
     // ดึงข้อมูลตำแหน่งที่ว่างจาก vacant_position
-    const [vacantPositions, total] = await Promise.all([
-      prisma.vacantPosition.findMany({
-        where,
-        ...(usePagination ? { skip, take: take! } : {}),
-        include: {
-          posCodeMaster: true,
-        },
-        orderBy: [
-          { unit: 'asc' },
-          { position: 'asc' },
-          { positionNumber: 'asc' },
-        ],
-      }),
-      prisma.vacantPosition.count({ where }),
-    ]);
+    const vacantPositions = await prisma.vacantPosition.findMany({
+      where,
+      include: {
+        posCodeMaster: true,
+      },
+      orderBy: [
+        { unit: 'asc' },
+        { position: 'asc' },
+        { positionNumber: 'asc' },
+      ],
+    });
 
     // เช็คว่าตำแหน่งเหล่านี้ถูกจับคู่แล้วหรือยัง (จาก swap_transaction_detail)
     // ค้นหาจาก toPosition + toUnit ที่ตรงกับตำแหน่งว่าง
@@ -122,7 +114,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return individual vacant positions with assignmentInfo
-    const result = vacantPositions.map(position => {
+    const resultWithAssignments = vacantPositions.map(position => {
       const assignmentInfo = assignmentMap.get(position.id) || null;
       return {
         id: position.id,
@@ -140,24 +132,51 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Apply search filter (รองรับการค้นหาชื่อผู้ถูกจับคู่)
+    let filteredResult = resultWithAssignments;
+    if (search) {
+      const normalizedSearch = search.toLowerCase();
+      filteredResult = resultWithAssignments.filter((position) => {
+        const fieldsToSearch = [
+          position.position,
+          position.unit,
+          position.positionNumber,
+          position.posCodeName,
+          position.assignmentInfo?.assignedPersonName,
+          position.assignmentInfo?.assignedPersonRank,
+          position.assignmentInfo?.fromUnit,
+          position.assignmentInfo?.fromPosition,
+        ];
+
+        return fieldsToSearch.some((value) =>
+          value ? value.toLowerCase().includes(normalizedSearch) : false
+        );
+      });
+    }
+
+    const filteredTotal = filteredResult.length;
+    const paginatedResult = usePagination && limit
+      ? filteredResult.slice(skip, skip + limit)
+      : filteredResult;
+
     // Return different format based on pagination
     if (usePagination && limit) {
       return NextResponse.json({
         success: true,
-        data: result,
+        data: paginatedResult,
         pagination: {
           page: page!,
           limit: limit,
-          total,
-          totalPages: Math.ceil(total / limit),
+          total: filteredTotal,
+          totalPages: Math.ceil(filteredTotal / limit),
         },
       });
     } else {
       // Return all data without pagination
       return NextResponse.json({
         success: true,
-        data: result,
-        total,
+        data: paginatedResult,
+        total: filteredTotal,
       });
     }
   } catch (error) {

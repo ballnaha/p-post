@@ -182,7 +182,8 @@ export default function AddSwapTransactionPage() {
       await fetchPersonnelOptions(swappedIds);
     };
     fetchData();
-  }, [fetchNextGroupNumber, fetchPersonnelOptions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ เรียกแค่ครั้งเดียวตอน mount
 
   const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnelDetail(personnel);

@@ -212,11 +212,11 @@ export default function SwapListPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentYear]); // Removed toast from dependencies
+  }, [currentYear, toast]);
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [currentYear]); // ✅ เปลี่ยนเป็น currentYear แทน fetchData
 
   const handleResetFilters = useCallback(() => {
     setGroupNameFilter(null);

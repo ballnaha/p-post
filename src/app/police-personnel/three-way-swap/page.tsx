@@ -827,8 +827,9 @@ export default function ThreeWaySwapPage() {
                                           <TableHead>
                                             <TableRow sx={{ bgcolor: 'white' }}>
                                               <TableCell>ลำดับ</TableCell>
-                                              <TableCell>ชื่อ-สกุล</TableCell>
                                               <TableCell>ยศ</TableCell>
+                                              <TableCell>ชื่อ-สกุล</TableCell>
+                                              
                                               <TableCell>POSCODE</TableCell>
                                               <TableCell>จากตำแหน่ง</TableCell>
                                               <TableCell>จากหน่วย</TableCell>
@@ -850,8 +851,8 @@ export default function ThreeWaySwapPage() {
                                                     sx={{ fontWeight: 600, minWidth: 40 }}
                                                   />
                                                 </TableCell>
-                                                <TableCell><strong>{detail.fullName || '-'}</strong></TableCell>
                                                 <TableCell>{detail.rank || '-'}</TableCell>
+                                                <TableCell><strong>{detail.fullName || '-'}</strong></TableCell>                                         
                                                 <TableCell>
                                                   {detail.posCodeMaster ? (
                                                     <Chip 

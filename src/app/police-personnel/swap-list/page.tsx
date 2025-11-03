@@ -688,8 +688,9 @@ export default function SwapListPage() {
                               <Table size="small">
                                 <TableHead>
                                   <TableRow sx={{ bgcolor: 'white' }}>
-                                    <TableCell>ชื่อ-สกุล</TableCell>
                                     <TableCell>ยศ</TableCell>
+                                    <TableCell>ชื่อ-สกุล</TableCell>
+                                    
                                     <TableCell>POSCODE</TableCell>
                                     <TableCell>จากตำแหน่ง</TableCell>
                                     <TableCell>จากหน่วย</TableCell>
@@ -701,8 +702,9 @@ export default function SwapListPage() {
                                 <TableBody>
                                   {row.swapDetails.map((detail) => (
                                     <TableRow key={detail.id} sx={{ bgcolor: 'white' }}>
-                                      <TableCell><strong>{detail.fullName}</strong></TableCell>
                                       <TableCell>{detail.rank || '-'}</TableCell>
+                                      <TableCell><strong>{detail.fullName}</strong></TableCell>
+                                      
                                       <TableCell>
                                         {detail.posCodeMaster ? (
                                           <Chip 

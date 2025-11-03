@@ -14,6 +14,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import {
   FirstPage as FirstPageIcon,
   LastPage as LastPageIcon,
@@ -31,6 +32,10 @@ export type DataTablePaginationProps = {
   disabled?: boolean;
   label?: string;
   variant?: 'standard' | 'minimal';
+  dense?: boolean; // ultra compact spacing
+  showLabel?: boolean; // show left info label
+  showRowsPerPage?: boolean; // show rows per page selector
+  sx?: SxProps<Theme>; // allow custom spacing overrides
 };
 
 export default function DataTablePagination({
@@ -43,6 +48,10 @@ export default function DataTablePagination({
   disabled,
   label,
   variant = 'standard',
+  dense = false,
+  showLabel = true,
+  showRowsPerPage = true,
+  sx,
 }: DataTablePaginationProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -56,62 +65,67 @@ export default function DataTablePagination({
     const startItem = count === 0 ? 0 : page * rowsPerPage + 1;
     const endItem = Math.min((page + 1) * rowsPerPage, count);
 
-    return (
-      <Box sx={{ 
+    const baseMinimalSx = { 
         display: 'flex', 
         flexDirection: isMobile ? 'column' : 'row',
         alignItems: isMobile ? 'stretch' : 'center', 
         justifyContent: 'space-between', 
-        px: { xs: 1.5, sm: 2 }, 
-        py: { xs: 1, sm: 1.5 }, 
-        gap: isMobile ? 1.5 : 0,
+        px: dense ? { xs: 1, sm: 1.25 } : { xs: 1.5, sm: 2 }, 
+        py: dense ? { xs: 0.5, sm: 0.75 } : { xs: 1, sm: 1.5 }, 
+        gap: isMobile ? (dense ? 1 : 1.5) : 0,
         borderTop: '1px solid', 
         borderColor: 'divider' 
-      }}>
-        <Typography 
-          variant="body2" 
-          color="text.secondary"
-          sx={{ 
-            fontSize: { xs: '0.75rem', sm: '0.8rem', md: '0.875rem' },
-            textAlign: isMobile ? 'center' : 'left'
-          }}
-        >
-          {label ?? `แสดง ${startItem}-${endItem} จาก ${count} รายการ`}
-        </Typography>
+      } as const;
+    return (
+      <Box sx={(sx ? [baseMinimalSx, sx] : baseMinimalSx) as any}>
+        {showLabel && (
+          <Typography 
+            variant="body2" 
+            color="text.secondary"
+            sx={{ 
+              fontSize: dense ? { xs: '0.7rem', sm: '0.75rem' } : { xs: '0.75rem', sm: '0.8rem', md: '0.875rem' },
+              textAlign: isMobile ? 'center' : 'left'
+            }}
+          >
+            {label ?? `แสดง ${startItem}-${endItem} จาก ${count} รายการ`}
+          </Typography>
+        )}
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: isMobile ? 'space-between' : 'flex-end',
-          gap: { xs: 1, sm: 1.5, md: 2 }
+          gap: dense ? { xs: 0.75, sm: 1, md: 1.25 } : { xs: 1, sm: 1.5, md: 2 }
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography 
-              variant="caption" 
-              color="text.secondary"
-              sx={{ fontSize: { xs: '0.7rem', sm: '0.72rem', md: '0.75rem' } }}
-            >
-              แสดง
-            </Typography>
-            <FormControl size="small" variant="standard" sx={{ minWidth: 50 }} disabled={disabled}>
-              <Select
-                value={rowsPerPage}
-                onChange={(e) => onRowsPerPageChange(parseInt(String(e.target.value), 10))}
-                sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem', md: '0.875rem' } }}
+          {showRowsPerPage && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: dense ? 0.25 : 0.5 }}>
+              <Typography 
+                variant="caption" 
+                color="text.secondary"
+                sx={{ fontSize: dense ? { xs: '0.68rem', sm: '0.7rem' } : { xs: '0.7rem', sm: '0.72rem', md: '0.75rem' } }}
               >
-                {rowsPerPageOptions.map((opt) => (
-                  <MenuItem key={opt} value={opt}>
-                    {opt}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
+                แสดง
+              </Typography>
+              <FormControl size="small" variant="standard" sx={{ minWidth: dense ? 45 : 50 }} disabled={disabled}>
+                <Select
+                  value={rowsPerPage}
+                  onChange={(e) => onRowsPerPageChange(parseInt(String(e.target.value), 10))}
+                  sx={{ fontSize: dense ? { xs: '0.72rem', sm: '0.76rem' } : { xs: '0.75rem', sm: '0.8rem', md: '0.875rem' } }}
+                >
+                  {rowsPerPageOptions.map((opt) => (
+                    <MenuItem key={opt} value={opt}>
+                      {opt}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          )}
           <Pagination
             count={totalPages}
             page={page + 1}
             onChange={(_, p) => onPageChange(p - 1)}
             color="primary"
-            size={isSmallScreen ? "small" : "medium"}
+            size={dense || isSmallScreen ? "small" : "medium"}
             shape="rounded"
             showFirstButton={!isSmallScreen}
             showLastButton={!isSmallScreen}
@@ -124,8 +138,7 @@ export default function DataTablePagination({
     );
   }
 
-  return (
-    <Box sx={{ 
+  const baseStandardSx = { 
       display: 'flex', 
       flexDirection: isMobile ? 'column' : 'row',
       alignItems: isMobile ? 'stretch' : 'center', 
@@ -133,7 +146,9 @@ export default function DataTablePagination({
       px: { xs: 1.5, sm: 2 }, 
       py: { xs: 1, sm: 1, md: 1 },
       gap: isMobile ? 1 : 0
-    }}>
+    } as const;
+  return (
+    <Box sx={(sx ? [baseStandardSx, sx] : baseStandardSx) as any}>
       <Typography 
         variant="body2" 
         color="text.secondary"

@@ -1,6 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+// GET - ดึงข้อมูลรายการยื่นขอตำแหน่งตาม ID
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = await params;
+
+    const vacantPosition = await prisma.vacantPosition.findUnique({
+      where: { id },
+      include: {
+        posCodeMaster: true,
+        requestedPosCode: true,
+      },
+    });
+
+    if (!vacantPosition) {
+      return NextResponse.json(
+        { success: false, error: 'ไม่พบข้อมูลตำแหน่งว่าง' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, data: vacantPosition });
+  } catch (error) {
+    console.error('Error fetching vacant position:', error);
+    return NextResponse.json(
+      { success: false, error: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
 // PUT - แก้ไขข้อมูลรายการยื่นขอตำแหน่ง
 export async function PUT(
   request: NextRequest,

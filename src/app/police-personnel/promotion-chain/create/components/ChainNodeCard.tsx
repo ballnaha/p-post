@@ -1,25 +1,7 @@
 'use client';
 import React from 'react';
-import {
-  Card,
-  CardContent,
-  Box,
-  Typography,
-  IconButton,
-  Chip,
-  Divider,
-  alpha,
-  Stack,
-  Tooltip,
-} from '@mui/material';
-import {
-  Delete as DeleteIcon,
-  TrendingUp as TrendingUpIcon,
-  Check as CheckIcon,
-  Warning as WarningIcon,
-  Person as PersonIcon,
-  Business as BusinessIcon,
-} from '@mui/icons-material';
+import { Card, CardContent, Box, Typography, IconButton, Divider, Stack, Tooltip } from '@mui/material';
+import { Delete as DeleteIcon } from '@mui/icons-material';
 
 interface ChainNode {
   id: string;
@@ -53,196 +35,106 @@ export default function ChainNodeCard({ node, onRemove, isLastNode }: ChainNodeC
 
   return (
     <Card
+      elevation={2}
       sx={{
-        position: 'relative',
         border: '2px solid',
         borderColor: node.isPromotionValid ? 'success.main' : 'error.main',
-        bgcolor: node.isPromotionValid ? alpha('#4caf50', 0.05) : alpha('#f44336', 0.05),
+        bgcolor: 'background.paper',
+        transition: 'all 0.2s',
         '&:hover': {
           boxShadow: 4,
-        },
+        }
       }}
     >
-      {/* Node Order Badge */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: -12,
-          left: 16,
-          bgcolor: node.isPromotionValid ? 'success.main' : 'error.main',
-          color: 'white',
-          px: 1.5,
-          py: 0.5,
-          borderRadius: 2,
-          fontSize: '0.75rem',
-          fontWeight: 'bold',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-        }}
-      >
-        {node.isPromotionValid ? <CheckIcon sx={{ fontSize: 16 }} /> : <WarningIcon sx={{ fontSize: 16 }} />}
-        ขั้นที่ {node.nodeOrder}
-      </Box>
-
-      <CardContent sx={{ pt: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          {/* Left: Person Info */}
-          <Box sx={{ flex: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              <PersonIcon color="action" />
-              <Box>
-                <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-                  {node.fullName}
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                  <Chip label={node.rank} size="small" color="primary" />
-                  {node.seniority && (
-                    <Chip label={node.seniority} size="small" variant="outlined" />
-                  )}
-                </Box>
-              </Box>
-            </Box>
-
-            <Divider sx={{ my: 2 }} />
-
-            {/* Position Movement */}
-            <Stack spacing={2}>
-              {/* From Position */}
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <BusinessIcon sx={{ fontSize: 14 }} />
-                  ตำแหน่งเดิม (จะว่าง)
-                </Typography>
-                <Box
-                  sx={{
-                    mt: 0.5,
-                    p: 1.5,
-                    borderRadius: 1,
-                    bgcolor: alpha('#f44336', 0.1),
-                    border: '1px solid',
-                    borderColor: alpha('#f44336', 0.3),
-                  }}
-                >
-                  <Typography variant="body2" fontWeight="medium">
-                    {node.fromPosition}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {node.fromUnit}
-                    {node.fromPositionNumber && ` • ${node.fromPositionNumber}`}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Arrow */}
-              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    px: 2,
-                    py: 0.5,
-                    borderRadius: 2,
-                    bgcolor: isPromotion ? alpha('#4caf50', 0.2) : alpha('#2196f3', 0.2),
-                    border: '1px solid',
-                    borderColor: isPromotion ? 'success.main' : 'primary.main',
-                  }}
-                >
-                  <TrendingUpIcon
-                    sx={{
-                      color: isPromotion ? 'success.main' : 'primary.main',
-                      fontSize: 20,
-                    }}
-                  />
-                  <Typography variant="caption" fontWeight="bold" color={isPromotion ? 'success.main' : 'primary.main'}>
-                    {isPromotion ? 'เลื่อนขึ้น' : 'ย้าย'}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* To Position */}
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <BusinessIcon sx={{ fontSize: 14 }} />
-                  ตำแหน่งใหม่
-                </Typography>
-                <Box
-                  sx={{
-                    mt: 0.5,
-                    p: 1.5,
-                    borderRadius: 1,
-                    bgcolor: alpha('#4caf50', 0.1),
-                    border: '1px solid',
-                    borderColor: alpha('#4caf50', 0.3),
-                  }}
-                >
-                  <Typography variant="body2" fontWeight="medium">
-                    {node.toPosition}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {node.toUnit}
-                    {node.toPositionNumber && ` • ${node.toPositionNumber}`}
-                  </Typography>
-                </Box>
-              </Box>
-            </Stack>
-
-            {/* Validation Message */}
-            {!node.isPromotionValid && (
-              <Box
-                sx={{
-                  mt: 2,
-                  p: 1,
-                  borderRadius: 1,
-                  bgcolor: alpha('#f44336', 0.1),
-                  border: '1px solid',
-                  borderColor: 'error.main',
-                }}
-              >
-                <Typography variant="caption" color="error">
-                  ⚠️ การเลื่อนตำแหน่งนี้ไม่ถูกต้องตามลำดับชั้น
-                </Typography>
-              </Box>
-            )}
+      <CardContent sx={{ p: 2.5 }}>
+        {/* Header with step number and actions */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ 
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 1,
+            px: 1.5,
+            py: 0.5,
+            bgcolor: node.isPromotionValid ? 'success.50' : 'error.50',
+            borderRadius: 10,
+            border: '1px solid',
+            borderColor: node.isPromotionValid ? 'success.main' : 'error.main',
+          }}>
+            <Typography variant="caption" fontWeight={700} color={node.isPromotionValid ? 'success.main' : 'error.main'}>
+              ขั้นที่ {node.nodeOrder}
+            </Typography>
           </Box>
-
-          {/* Right: Actions */}
           {isLastNode && (
             <Tooltip title="ลบขั้นนี้">
-              <IconButton
-                onClick={onRemove}
-                color="error"
-                size="small"
-                sx={{
-                  bgcolor: alpha('#f44336', 0.1),
-                  '&:hover': {
-                    bgcolor: alpha('#f44336', 0.2),
-                  },
-                }}
-              >
-                <DeleteIcon />
+              <IconButton onClick={onRemove} color="error" size="small">
+                <DeleteIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
         </Box>
-      </CardContent>
 
-      {/* Next Vacant Position Indicator */}
-      {isLastNode && (
-        <Box
-          sx={{
-            p: 1.5,
-            bgcolor: alpha('#ff9800', 0.1),
-            borderTop: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            💡 ตำแหน่ง <strong>{node.fromPosition}</strong> จะว่าง → ต้องหาคนมาแทนในขั้นถัดไป
+        {/* Person Info - Compact */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', lineHeight: 1.2 }}>
+            {node.rank} {node.fullName}
           </Typography>
+          {node.seniority && (
+            <Typography variant="caption" color="text.secondary">
+              อาวุโส {node.seniority}
+            </Typography>
+          )}
         </Box>
-      )}
+
+        {/* Position Movement - Single Line Flow */}
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 2,
+          p: 1.5,
+          bgcolor: 'grey.50',
+          borderRadius: 1,
+        }}>
+          {/* From */}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">จาก</Typography>
+            <Typography variant="body2" fontWeight={600} noWrap>{node.fromPosition}</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {node.fromUnit}
+            </Typography>
+          </Box>
+
+          {/* Arrow */}
+          <Box sx={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            px: 1,
+            flexShrink: 0,
+          }}>
+            <Typography variant="h6" color="success.main">→</Typography>
+            <Typography variant="caption" color="success.main" fontWeight={600}>เลื่อน</Typography>
+          </Box>
+
+          {/* To */}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">ไป</Typography>
+            <Typography variant="body2" fontWeight={600} color="success.main" noWrap>
+              {node.toPosition}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {node.toUnit}
+            </Typography>
+          </Box>
+        </Box>
+
+        {!node.isPromotionValid && (
+          <Box sx={{ mt: 1.5, p: 1, bgcolor: 'error.50', borderRadius: 1, border: '1px solid', borderColor: 'error.main' }}>
+            <Typography variant="caption" color="error" fontWeight={600}>
+              ⚠️ การเลื่อนตำแหน่งนี้ไม่ถูกต้องตามลำดับชั้น
+            </Typography>
+          </Box>
+        )}
+      </CardContent>
     </Card>
   );
 }

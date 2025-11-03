@@ -75,7 +75,7 @@ const Sidebar: React.FC = () => {
     {
       title: 'Swap Management', key: 'group-swap',
       items: [
-      { 
+        { 
           label: 'สลับตำแหน่ง', 
           href: '/police-personnel/swap-list', 
           icon: <SwapIcon sx={{ fontSize: 20 }} />, 
@@ -87,33 +87,15 @@ const Sidebar: React.FC = () => {
           icon: <ThreeWayIcon sx={{ fontSize: 20 }} />, 
           key: 'three-way-swap' 
         },
-      ]
-    },
-    {
-      title: 'Vacant Position', key: 'group-vacant',
-      items: [
-        
         { 
-          label: 'บุคลากรยื่นขอตำแหน่ง', 
-          href: '/police-personnel/vacant-position', 
+          label: 'จัดคนเข้าตำแหน่งว่าง', 
+          href: '/police-personnel/promotion-chain', 
           icon: <VacantIcon sx={{ fontSize: 20 }} />, 
-          key: 'vacant-position' 
+          key: 'vacant-filling' 
         },
-        { 
-          label: 'จัดการจับคู่ตำแหน่ง', 
-          href: '/police-personnel/vacant-position/assignment', 
-          icon: <AssignmentIcon sx={{ fontSize: 20 }} />, 
-          key: 'vacant-assignment' 
-        },
-        { 
-          label: 'ประวัติการจับคู่', 
-          href: '/police-personnel/vacant-position/assignment-history', 
-          icon: <HistoryIcon sx={{ fontSize: 20 }} />, 
-          key: 'assignment-history' 
-        },
-        
       ]
     },
+
     {
       title: 'Settings', key: 'group-settings',
       items: [

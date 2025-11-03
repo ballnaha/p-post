@@ -1,27 +1,7 @@
 'use client';
 import React, { useState } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  Button,
-  Card,
-  CardContent,
-  Alert,
-  IconButton,
-  Chip,
-  Divider,
-  alpha,
-  Stack,
-} from '@mui/material';
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  ArrowDownward as ArrowDownIcon,
-  TrendingUp as TrendingUpIcon,
-  Check as CheckIcon,
-  Warning as WarningIcon,
-} from '@mui/icons-material';
+import { Box, Paper, Typography, Button, Divider, Stack, Chip } from '@mui/material';
+import { Add as AddIcon, ArrowDownward as ArrowDownIcon } from '@mui/icons-material';
 import ChainNodeCard from './ChainNodeCard';
 import CandidateSelector from './CandidateSelector';
 
@@ -63,19 +43,6 @@ interface PromotionChainBuilderProps {
   onRemoveNode: (nodeId: string) => void;
 }
 
-const RANK_HIERARCHY = [
-  { rankName: 'รอง ผบ.ตร.', rankLevel: 1 },
-  { rankName: 'ผู้ช่วย', rankLevel: 2 },
-  { rankName: 'ผบช.', rankLevel: 3 },
-  { rankName: 'รอง ผบช.', rankLevel: 4 },
-  { rankName: 'ผบก.', rankLevel: 6 },
-  { rankName: 'รอง ผบก.', rankLevel: 7 },
-  { rankName: 'ผกก.', rankLevel: 8 },
-  { rankName: 'รอง ผกก.', rankLevel: 9 },
-  { rankName: 'สว.', rankLevel: 11 },
-  { rankName: 'รอง สว.', rankLevel: 12 },
-];
-
 export default function PromotionChainBuilder({
   vacantPosition,
   nodes,
@@ -99,14 +66,21 @@ export default function PromotionChainBuilder({
   };
 
   const getRankLevelByPosCode = (posCodeId: number): number => {
-    // สมมติว่า posCodeId = rankLevel (สำหรับ demo)
-    // ในความเป็นจริงต้องดึงจาก PosCodeMaster
+    // ใช้ posCodeId จาก pos_code_master เป็นตัวกำหนดระดับโดยตรง
     return posCodeId;
   };
 
-  const getRankNameByLevel = (level: number): string => {
-    const rank = RANK_HIERARCHY.find((r) => r.rankLevel === level);
-    return rank?.rankName || `ระดับ ${level}`;
+  const getRankNameByPosCodeId = (posCodeId: number): string => {
+    // ใช้ position name จาก vacantPosition หรือ nodes
+    if (vacantPosition?.posCodeId === posCodeId) {
+      return vacantPosition.position;
+    }
+    // ค้นหาจาก nodes
+    const node = nodes.find(n => n.fromPosCodeId === posCodeId || n.toPosCodeId === posCodeId);
+    if (node) {
+      return node.fromPosCodeId === posCodeId ? node.fromPosition : node.toPosition;
+    }
+    return `PosCode ${posCodeId}`;
   };
 
   const currentVacantRankLevel = getCurrentVacantRankLevel();
@@ -140,134 +114,161 @@ export default function PromotionChainBuilder({
 
   return (
     <Box>
-      {/* Instruction */}
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2">
-          <strong>วิธีการสร้าง Chain:</strong>
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          1. เริ่มจากตำแหน่งว่าง → เลือกคนที่จะมาแทน<br />
-          2. ตำแหน่งเดิมของเขาจะว่าง → เลือกคนมาแทนต่อ<br />
-          3. ทำซ้ำจนถึงระดับล่างสุดที่ต้องการ
-        </Typography>
-      </Alert>
-
       {/* Chain Visualization */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <TrendingUpIcon />
-          ลูกโซ่การเลื่อนตำแหน่ง
-        </Typography>
-        <Divider sx={{ mb: 3 }} />
-
-        {/* Origin Position */}
-        <Box
-          sx={{
-            p: 2,
-            borderRadius: 2,
-            bgcolor: alpha('#2196f3', 0.1),
-            border: '2px solid',
-            borderColor: 'primary.main',
-            mb: 2,
-          }}
-        >
-          <Typography variant="caption" color="primary" sx={{ fontWeight: 'bold' }}>
-            ตำแหน่งว่างต้นทาง
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h6" fontWeight={600}>
+            ลูกโซ่การเลื่อนตำแหน่ง
           </Typography>
-          <Typography variant="h6">
-            {vacantPosition?.position || 'ไม่ระบุ'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {vacantPosition?.unit || ''}
-          </Typography>
+          {nodes.length === 0 ? (
+            <Chip label="เริ่มต้น" size="small" variant="outlined" />
+          ) : (
+            <Chip 
+              label={`${nodes.length} ขั้น`} 
+              size="small" 
+              color="primary" 
+            />
+          )}
         </Box>
 
-        {/* Arrow Down */}
-        {nodes.length > 0 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
-            <ArrowDownIcon color="action" />
-          </Box>
-        )}
-
-        {/* Nodes */}
+        {/* Nodes Flow */}
         <Stack spacing={2}>
           {nodes.map((node, index) => (
             <Box key={node.id}>
+              {/* Flow Indicator */}
+              {index === 0 && (
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1, 
+                  mb: 2,
+                  p: 1.5,
+                  bgcolor: 'grey.50',
+                  borderRadius: 1,
+                }}>
+                  <Box sx={{ 
+                    width: 8, 
+                    height: 8, 
+                    borderRadius: '50%', 
+                    bgcolor: 'primary.main',
+                    animation: 'pulse 2s infinite',
+                    '@keyframes pulse': {
+                      '0%, 100%': { opacity: 1 },
+                      '50%': { opacity: 0.5 },
+                    }
+                  }} />
+                  <Typography variant="caption" color="text.secondary">
+                    เริ่มจาก: {vacantPosition?.position} ({vacantPosition?.unit})
+                  </Typography>
+                </Box>
+              )}
+
               <ChainNodeCard
                 node={node}
                 onRemove={() => onRemoveNode(node.id)}
                 isLastNode={index === nodes.length - 1}
               />
+
+              {/* Arrow between nodes */}
               {index < nodes.length - 1 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
-                  <ArrowDownIcon color="action" />
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    color: 'text.secondary',
+                  }}>
+                    <Box>↓</Box>
+                    <Typography variant="caption">ตำแหน่งว่าง</Typography>
+                  </Box>
                 </Box>
               )}
             </Box>
           ))}
         </Stack>
 
-        {/* Add Next Node */}
-        {canAddMore ? (
+        {/* Add Next Node - Prominent CTA */}
+        {canAddMore && (
           <>
             {nodes.length > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-                <ArrowDownIcon color="action" />
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  color: 'text.secondary',
+                }}>
+                  <Box>↓</Box>
+                  <Typography variant="caption">ตำแหน่งว่าง</Typography>
+                </Box>
               </Box>
             )}
             
-            <Box
-              sx={{
-                p: 3,
-                borderRadius: 2,
-                border: '2px dashed',
-                borderColor: 'divider',
-                textAlign: 'center',
-                bgcolor: alpha('#000', 0.02),
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                {nodes.length === 0 ? 'เลือกคนมาแทนตำแหน่งว่าง' : `ตำแหน่งที่ว่าง: ${nodes[nodes.length - 1].fromPosition}`}
+            <Box sx={{ 
+              p: 3, 
+              borderRadius: 2,
+              border: '2px dashed',
+              borderColor: 'primary.main',
+              bgcolor: 'primary.50',
+              textAlign: 'center',
+              transition: 'all 0.2s',
+              '&:hover': {
+                bgcolor: 'primary.100',
+                borderColor: 'primary.dark',
+              }
+            }}>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                {nodes.length === 0 ? '🎯 เลือกคนมาแทนตำแหน่งว่าง' : `📍 ตำแหน่งที่ว่าง: ${nodes[nodes.length - 1].fromPosition}`}
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                ต้องการ: ยศที่ต่ำกว่า {getRankNameByLevel(currentVacantRankLevel || 0)} (สามารถเลื่อนขึ้นได้)
+                ต้องการยศต่ำกว่า {getRankNameByPosCodeId(currentVacantRankLevel || 0)} เพื่อเลื่อนขึ้นมา
               </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<AddIcon />}
+              <Button 
+                variant="contained" 
+                size="large"
+                startIcon={<AddIcon />} 
                 onClick={() => setShowCandidateSelector(true)}
               >
                 เลือกผู้สมัคร
               </Button>
             </Box>
           </>
-        ) : (
-          nodes.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Alert severity="success" icon={<CheckIcon />}>
-                Chain สมบูรณ์แล้ว! จบที่ระดับ {getRankNameByLevel(nodes[nodes.length - 1].fromRankLevel)}
-              </Alert>
+        )}
+
+        {!canAddMore && nodes.length > 0 && (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center',
+                color: 'success.main',
+              }}>
+                <Box>✓</Box>
+                <Typography variant="caption" fontWeight={600}>สมบูรณ์</Typography>
+              </Box>
             </Box>
-          )
+            <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.50', borderRadius: 1, border: '1px solid', borderColor: 'success.main' }}>
+              <Typography variant="body2" color="success.main" fontWeight={600}>
+                ✓ Chain สมบูรณ์แล้ว • จบที่ระดับ {getRankNameByPosCodeId(nodes[nodes.length - 1].fromRankLevel)}
+              </Typography>
+            </Box>
+          </>
         )}
       </Paper>
 
-      {/* Summary */}
+      {/* Summary - Compact */}
       {nodes.length > 0 && (
-        <Paper sx={{ p: 2, bgcolor: alpha('#4caf50', 0.05) }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            สรุปลูกโซ่
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            📋 สรุปลูกโซ่
           </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-            <Chip label={vacantPosition?.position} size="small" color="primary" />
-            {nodes.map((node, index) => (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+            <Typography variant="body2" fontWeight={600}>{vacantPosition?.position}</Typography>
+            {nodes.map((node) => (
               <React.Fragment key={node.id}>
-                <ArrowDownIcon fontSize="small" color="action" />
-                <Chip
-                  label={`${node.rank} ${node.fullName}`}
-                  size="small"
-                  variant="outlined"
-                />
+                <Typography variant="body2" color="text.secondary">→</Typography>
+                <Typography variant="body2">{node.rank} {node.fullName}</Typography>
               </React.Fragment>
             ))}
           </Box>

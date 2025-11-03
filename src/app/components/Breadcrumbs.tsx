@@ -93,6 +93,15 @@ const Breadcrumbs: React.FC = () => {
           });
           break;
 
+        case 'promotion-chain':
+          breadcrumbs.push({
+            label: 'จัดคนเข้าตำแหน่งว่าง',
+            href: isLast ? undefined : '/police-personnel/promotion-chain',
+            icon: <VacantIcon sx={{ fontSize: 16 }} />,
+            isActive: isLast,
+          });
+          break;
+
         case 'vacant-position':
           breadcrumbs.push({
             label: 'ยื่นขอตำแหน่งว่าง',
@@ -144,6 +153,14 @@ const Breadcrumbs: React.FC = () => {
             href: isLast ? undefined : '/settings',
             icon: <ReportsIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
+          });
+          break;
+
+        case 'create':
+          breadcrumbs.push({
+            label: 'สร้างรายการใหม่',
+            icon: <AddIcon sx={{ fontSize: 16 }} />,
+            isActive: true,
           });
           break;
 

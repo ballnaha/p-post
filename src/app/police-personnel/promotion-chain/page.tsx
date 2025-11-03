@@ -17,10 +17,7 @@ import {
   Chip,
   Stack,
   TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Drawer,
   Table,
   TableBody,
   TableCell,
@@ -30,6 +27,16 @@ import {
   CircularProgress,
   alpha,
   MenuItem,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemButton,
+  Slide,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  SelectChangeEvent,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,8 +48,12 @@ import {
   Visibility as VisibilityIcon,
   Edit as EditIcon,
   TrendingUp as TrendingUpIcon,
+  Search as SearchIcon,
+  FilterList as FilterListIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
+import Layout from '@/app/components/Layout';
+import DataTablePagination from '@/components/DataTablePagination';
 
 // Types
 interface ChainNode {
@@ -86,6 +97,7 @@ interface VacantPosition {
   posCodeId: number;
   position: string;
   unit: string;
+  positionNumber?: string;
   requestedPositionId?: number;
   requestedPosition?: string;
 }
@@ -119,8 +131,20 @@ export default function PromotionChainPage() {
   const [loading, setLoading] = useState(false);
   const [chains, setChains] = useState<PromotionChain[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  // Compact drawer header height (px) for sticky calculations
+  const drawerHeaderHeight = 56;
   const [vacantPositions, setVacantPositions] = useState<VacantPosition[]>([]);
+  const [allVacantPositions, setAllVacantPositions] = useState<VacantPosition[]>([]); // เก็บข้อมูลทั้งหมด
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear() + 543);
+  
+  // Pagination for drawer
+  const [drawerPage, setDrawerPage] = useState(0);
+  const [drawerRowsPerPage, setDrawerRowsPerPage] = useState(10);
+  
+  // Filter for drawer
+  const [searchText, setSearchText] = useState('');
+  const [filterPosCode, setFilterPosCode] = useState<string>('all');
+  const [posCodeOptions, setPosCodeOptions] = useState<Array<{ id: number; name: string }>>([]);
 
   // Load chains
   useEffect(() => {
@@ -147,36 +171,79 @@ export default function PromotionChainPage() {
 
   const loadVacantPositions = async () => {
     try {
-      // TODO: Implement API call
-      // const response = await fetch(`/api/vacant-position?year=${selectedYear}`);
-      // const data = await response.json();
-      // setVacantPositions(data);
+      const response = await fetch(`/api/vacant-position/available?year=${selectedYear}&unassignedOnly=true`);
       
-      // Mock data for demonstration
-      setVacantPositions([
-        {
-          id: 'vp-1',
-          posCodeId: 8,
-          position: 'ผกก-นครปฐม',
-          unit: 'สถ.นครปฐม',
-        },
-        {
-          id: 'vp-2',
-          posCodeId: 6,
-          position: 'ผบก.-สมุทรสาคร',
-          unit: 'สถ.สมุทรสาคร',
-        },
-        {
-          id: 'vp-3',
-          posCodeId: 11,
-          position: 'สว.-กาญจนบุรี',
-          unit: 'สถ.กาญจนบุรี',
-        },
-      ]);
+      if (!response.ok) {
+        throw new Error('Failed to fetch vacant positions');
+      }
+      
+      const data = await response.json();
+      
+      // แปลง grouped data เป็น flat list สำหรับ dialog
+      const flatPositions: VacantPosition[] = [];
+      const posCodeSet = new Set<string>();
+      
+      data.groups.forEach((group: any) => {
+        // เก็บ posCode options
+        if (group.posCodeId && group.posCodeName) {
+          posCodeSet.add(JSON.stringify({ id: group.posCodeId, name: group.posCodeName }));
+        }
+        
+        group.positions.forEach((pos: any) => {
+          flatPositions.push({
+            id: pos.id,
+            posCodeId: group.posCodeId,
+            position: pos.position,
+            unit: pos.unit,
+            positionNumber: pos.positionNumber,
+            requestedPositionId: group.posCodeId,
+            requestedPosition: group.posCodeName,
+          });
+        });
+      });
+      
+      // แปลง Set เป็น Array
+      const posCodeList = Array.from(posCodeSet).map(item => JSON.parse(item));
+      setPosCodeOptions(posCodeList);
+      
+      setAllVacantPositions(flatPositions);
+      setVacantPositions(flatPositions);
     } catch (error) {
       console.error('Error loading vacant positions:', error);
+      setAllVacantPositions([]);
+      setVacantPositions([]);
+      setPosCodeOptions([]);
     }
   };
+
+  // Filter function
+  const applyFilters = () => {
+    let filtered = [...allVacantPositions];
+    
+    // Filter by search text
+    if (searchText) {
+      const search = searchText.toLowerCase();
+      filtered = filtered.filter(vp => 
+        vp.position?.toLowerCase().includes(search) ||
+        vp.unit?.toLowerCase().includes(search) ||
+        vp.requestedPosition?.toLowerCase().includes(search) ||
+        (vp.positionNumber ? String(vp.positionNumber).toLowerCase().includes(search) : false)
+      );
+    }
+    
+    // Filter by posCode
+    if (filterPosCode !== 'all') {
+      filtered = filtered.filter(vp => vp.posCodeId?.toString() === filterPosCode);
+    }
+    
+    setVacantPositions(filtered);
+    setDrawerPage(0); // Reset to first page
+  };
+
+  // Apply filters when search or filter changes
+  useEffect(() => {
+    applyFilters();
+  }, [searchText, filterPosCode, allVacantPositions]);
 
   const handleCreateChain = () => {
     setShowCreateDialog(false);
@@ -204,27 +271,35 @@ export default function PromotionChainPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TrendingUpIcon sx={{ fontSize: 40 }} />
-            จัดการลูกโซ่การเลื่อนตำแหน่ง (Promotion Chain)
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            จัดการการเลื่อนตำแหน่งแบบลูกโซ่ เมื่อมีตำแหน่งว่างและต้องการเลื่อนคนขึ้นมาแทนตามลำดับชั้น
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setShowCreateDialog(true)}
-          size="large"
-        >
-          สร้าง Chain ใหม่
-        </Button>
-      </Box>
+    <Layout>
+      <Box>
+        {/* Header */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 2
+          }}>
+            <Box>
+              <Typography variant="h5" component="h1" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TrendingUpIcon />
+                จัดคนเข้าตำแหน่งว่าง (Vacant Position Filling)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                จัดบุคลากรเข้าตำแหน่งว่างแบบทอดต่อ เมื่อมีตำแหน่งว่างและต้องการเลือกคนมาแทนตามลำดับชั้น
+              </Typography>
+            </Box>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setShowCreateDialog(true)}
+            >
+              สร้างรายการใหม่
+            </Button>
+          </Box>
+        </Paper>
 
       {/* Year Selector */}
       <Paper sx={{ p: 2, mb: 3 }}>
@@ -247,7 +322,7 @@ export default function PromotionChainPage() {
       {/* Info Alert */}
       <Alert severity="info" sx={{ mb: 3 }}>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          <strong>Promotion Chain คืออะไร?</strong>
+          <strong>การจัดคนเข้าตำแหน่งว่างคืออะไร?</strong>
         </Typography>
         <Typography variant="body2">
           เมื่อมีตำแหน่งว่าง (เช่น ผกก-นครปฐม) และเลือกคนมาแทน (เช่น รอง ผบก.-ราชบุรี)
@@ -265,10 +340,10 @@ export default function PromotionChainPage() {
         <Paper sx={{ p: 5, textAlign: 'center' }}>
           <TrendingUpIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
-            ยังไม่มี Promotion Chain
+            ยังไม่มีรายการ
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            เริ่มต้นสร้าง Promotion Chain แรกของคุณ
+            เริ่มต้นจัดคนเข้าตำแหน่งว่างแรกของคุณ
           </Typography>
           <Button
             variant="contained"
@@ -362,56 +437,303 @@ export default function PromotionChainPage() {
         </Box>
       )}
 
-      {/* Create Dialog */}
-      <Dialog open={showCreateDialog} onClose={() => setShowCreateDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>สร้าง Promotion Chain ใหม่</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            เลือกตำแหน่งว่างที่ต้องการเริ่มต้นสร้าง Promotion Chain
-          </Typography>
-          
-          {vacantPositions.length === 0 ? (
-            <Alert severity="warning">
-              ไม่มีตำแหน่งว่างในระบบ กรุณาเพิ่มตำแหน่งว่างก่อน
-            </Alert>
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ตำแหน่ง</TableCell>
-                    <TableCell>หน่วย</TableCell>
-                    <TableCell align="center">เลือก</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {vacantPositions.map((vp) => (
-                    <TableRow key={vp.id} hover>
-                      <TableCell>{vp.position}</TableCell>
-                      <TableCell>{vp.unit}</TableCell>
-                      <TableCell align="center">
-                        <Button
-                          size="small"
-                          variant="outlined"
+      {/* Create Drawer */}
+      <Drawer
+        anchor="right"
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        ModalProps={{
+          sx: {
+            zIndex: 1400, // สูงกว่า AppBar (1200)
+          }
+        }}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: '90%', md: 700 },
+            backgroundImage: 'none',
+          }
+        }}
+        SlideProps={{
+          timeout: { enter: 300, exit: 250 }
+        }}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Header */}
+          <Box sx={{ 
+            p: 1, 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            position: 'sticky',
+            top: 0,
+            zIndex: 2,
+          }}>
+            <Box sx={{ lineHeight: 1 , pl:1.5 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                จับคู่ตำแหน่งว่าง • พบ {vacantPositions.length} ตำแหน่งว่าง
+              </Typography>
+              
+            </Box>
+            <IconButton onClick={() => setShowCreateDialog(false)} size="small">
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Box>
+
+          {/* Search and Filter */}
+          <Box sx={{ 
+            p: 1, 
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            position: 'sticky',
+            top: drawerHeaderHeight, // ความสูงของ header ที่ย่อขนาด
+            zIndex: 10, // เพิ่ม zIndex ให้สูงกว่า
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+          }}>
+            <Stack spacing={1}>
+              {/* Search and Filter in one row */}
+              <Stack direction="row" spacing={1}>
+                <TextField
+                  size="small"
+                  placeholder="ค้นหา..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{ flex: 1 }}
+                />
+                
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <Select
+                    value={filterPosCode}
+                    onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
+                    displayEmpty
+                    renderValue={(selected) => {
+                      if (selected === 'all') {
+                        return (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <FilterListIcon fontSize="small" />
+                            <Typography variant="body2">ทั้งหมด</Typography>
+                          </Box>
+                        );
+                      }
+                      const posCode = posCodeOptions.find(p => p.id.toString() === selected);
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <FilterListIcon fontSize="small" />
+                          <Typography variant="body2">{posCode?.name || selected}</Typography>
+                        </Box>
+                      );
+                    }}
+                    MenuProps={{
+                      // Ensure the popover/menu renders above Drawer and sticky bars
+                      sx: { zIndex: 9999 },
+                      PaperProps: {
+                        sx: {
+                          zIndex: 9999,
+                          maxHeight: 300,
+                        }
+                      },
+                      disablePortal: false,
+                      anchorOrigin: {
+                        vertical: 'bottom',
+                        horizontal: 'left',
+                      },
+                      transformOrigin: {
+                        vertical: 'top',
+                        horizontal: 'left',
+                      },
+                    }}
+                    sx={{
+                      '& .MuiSelect-select': {
+                        py: 1,
+                      }
+                    }}
+                  >
+                    <MenuItem value="all">ทั้งหมด</MenuItem>
+                    {posCodeOptions.map((posCode) => (
+                      <MenuItem key={posCode.id} value={posCode.id.toString()}>
+                        {posCode.id} - {posCode.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+              
+              {(searchText || filterPosCode !== 'all') && (
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  px: 0.5,
+                }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {vacantPositions.length}/{allVacantPositions.length} รายการ
+                  </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setSearchText('');
+                      setFilterPosCode('all');
+                    }}
+                    sx={{ 
+                      minWidth: 'auto', 
+                      textTransform: 'none',
+                      fontSize: '0.75rem',
+                      py: 0.25,
+                    }}
+                  >
+                    ล้าง
+                  </Button>
+                </Box>
+              )}
+            </Stack>
+          </Box>
+
+          {/* Content */}
+          <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+            
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : vacantPositions.length === 0 ? (
+              <Alert severity="warning" sx={{ fontSize: '0.875rem' }}>
+                {(searchText || filterPosCode !== 'all') 
+                  ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา'
+                  : <>ไม่มีตำแหน่งว่างที่พร้อมใช้งานในปี {selectedYear}</>
+                }
+              </Alert>
+            ) : (
+              <List disablePadding>
+                {vacantPositions
+                  .slice(drawerPage * drawerRowsPerPage, drawerPage * drawerRowsPerPage + drawerRowsPerPage)
+                  .map((vp) => (
+                    <ListItem
+                      key={vp.id}
+                      disablePadding
+                      sx={{ mb: 0.5 }}
+                    >
+                      <Paper 
+                        elevation={0}
+                        sx={{ 
+                          width: '100%',
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          borderRadius: 0.75,
+                          overflow: 'hidden',
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            boxShadow: 1,
+                            bgcolor: 'action.hover',
+                          },
+                        }}
+                      >
+                        <ListItemButton
                           onClick={() => {
                             router.push(`/police-personnel/promotion-chain/create?vacantId=${vp.id}`);
                             setShowCreateDialog(false);
                           }}
+                          sx={{ 
+                            p: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                          }}
                         >
-                          เลือก
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          {/* Content - Ultra Compact Layout */}
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}>
+                              <Chip 
+                                label={vp.requestedPosition || 'ไม่ระบุ'} 
+                                size="small" 
+                                color="primary"
+                                sx={{ 
+                                  height: 18,
+                                  fontSize: '0.85rem',
+                                  '& .MuiChip-label': { px: 0.75 }
+                                }}
+                              />
+                              <Typography 
+                                variant="caption" 
+                                fontWeight={600}
+                                sx={{ 
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  fontSize: '0.85rem',
+                                }}
+                              >
+                                {vp.position || '-'}
+                              </Typography>
+                            </Box>
+                            <Typography 
+                              variant="caption" 
+                              color="text.secondary"
+                              sx={{ 
+                                display: 'block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontSize: '0.8rem',
+                                lineHeight: 1.2,
+                              }}
+                            >
+                                หน่วย: {vp.unit || '-'}{vp.positionNumber ? ` - เลขที่ ${vp.positionNumber}` : ''}
+                            </Typography>
+                          </Box>
+                          
+                          {/* Action Icon - Smaller */}
+                          <Box sx={{ 
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: 28,
+                            height: 28,
+                            borderRadius: 0.75,
+                            bgcolor: 'primary.50',
+                            color: 'primary.main',
+                          }}>
+                            <AddIcon sx={{ fontSize: 18 }} />
+                          </Box>
+                        </ListItemButton>
+                      </Paper>
+                    </ListItem>
+                ))}
+              </List>
+            )}
+          </Box>
+
+          {/* Footer with Pagination */}
+          {vacantPositions.length > 0 && (
+            <DataTablePagination
+              count={vacantPositions.length}
+              page={drawerPage}
+              rowsPerPage={drawerRowsPerPage}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              onPageChange={(newPage) => setDrawerPage(newPage)}
+              onRowsPerPageChange={(newRowsPerPage) => {
+                setDrawerRowsPerPage(newRowsPerPage);
+                setDrawerPage(0);
+              }}
+              variant="minimal"
+              dense
+              showLabel={false}
+              sx={{ py: { xs: 0.75, sm: 1 } }}
+            />
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCreateDialog(false)}>ยกเลิก</Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+        </Box>
+      </Drawer>
+      </Box>
+    </Layout>
   );
 }

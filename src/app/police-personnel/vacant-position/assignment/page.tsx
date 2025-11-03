@@ -156,8 +156,8 @@ interface FilterOptions {
   positions: PositionFilterOption[];
 }
 
-// Sortable Item Component
-function SortableApplicantItem({ 
+// Sortable Item Component - ใช้ React.memo เพื่อป้องกัน re-render ที่ไม่จำเป็น
+const SortableApplicantItem = React.memo(function SortableApplicantItem({ 
   applicant, 
   index, 
   onAssign, 
@@ -391,7 +391,7 @@ function SortableApplicantItem({
       />
     </ListItem>
   );
-}
+});
 
 export default function VacantPositionAssignmentPage() {
   const [allVacantPositions, setAllVacantPositions] = useState<VacantPosition[]>([]); // เก็บข้อมูลทั้งหมด
@@ -576,34 +576,61 @@ export default function VacantPositionAssignmentPage() {
     })
   );
 
+  // โหลดข้อมูลแรกเริ่ม: เฉพาะ filters และ stats
   useEffect(() => {
     fetchFilterOptions();
-    fetchStats(); // ดึงสถิติทันทีเมื่อโหลดหน้า
+    fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // อัพเดทสถิติเมื่อเปลี่ยนปี
   useEffect(() => {
-    fetchStats(); // อัพเดทสถิติเมื่อเปลี่ยนปี
+    fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
+  // Debounce search - รอ 500ms หลังจากพิมพ์เสร็จค่อย query
   useEffect(() => {
-    // แสดงข้อมูลเมื่อมีการเลือก filter ใด ๆ หรือเลือกสถานะการจับคู่
+    if (!filters.search) {
+      // ถ้าไม่มีการค้นหา ให้ query ทันที
+      return;
+    }
+
+    const debounceTimer = setTimeout(() => {
+      // Query หลังจาก debounce
+      if (
+        filters.unit !== 'all' ||
+        filters.posCode !== 'all' ||
+        filters.position !== 'all' ||
+        filters.search ||
+        applicantFilterTab !== 'all'
+      ) {
+        fetchVacantPositions();
+      }
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search]);
+
+  // Query ทันทีสำหรับ filter อื่น ๆ (ไม่ใช่ search)
+  useEffect(() => {
     if (
       filters.unit !== 'all' ||
       filters.posCode !== 'all' ||
       filters.position !== 'all' ||
-      filters.search ||
       applicantFilterTab !== 'all'
     ) {
       fetchVacantPositions();
-    } else {
-      // ถ้าไม่มี filter ให้ล้างข้อมูล
+    } else if (!filters.search) {
+      // ถ้าไม่มี filter เลยให้ล้างข้อมูล
       setAllVacantPositions([]);
       setVacantPositions([]);
       setTotal(0);
       setIsFilterLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.search, filters.unit, filters.posCode, filters.position, applicantFilterTab, currentYear]);
+  }, [filters.unit, filters.posCode, filters.position, applicantFilterTab, currentYear]);
 
   const fetchFilterOptions = useCallback(async () => {
     try {
@@ -2006,12 +2033,14 @@ export default function VacantPositionAssignmentPage() {
           onClose={() => setDialogOpen(false)}
           maxWidth="md"
           fullWidth
-          fullScreen={isMobile}
+          fullScreen
           sx={{
             '& .MuiDialog-paper': {
-              margin: { xs: 0, sm: 2 },
-              width: { xs: '100%' },
-              maxHeight: { xs: '100%', sm: 'calc(100% - 64px)' },
+              margin: 0,
+              width: '100%',
+              height: '100%',
+              maxHeight: '100%',
+              borderRadius: 0,
             },
           }}
         >
@@ -2063,10 +2092,10 @@ export default function VacantPositionAssignmentPage() {
           <DialogContent sx={{ 
             pt: 0, 
             px: { xs: 1.5, sm: 3 },
-            minHeight: { xs: '300px', sm: '400px' }, 
-            maxHeight: { xs: 'none', sm: '600px' }, 
+            flex: 1,
             overflow: 'auto', 
-            position: 'relative' 
+            position: 'relative',
+            height: '100%',
           }}>
             {loadingApplicants || loading ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: { xs: '300px', sm: '400px' }, gap: 2 }}>
@@ -2260,7 +2289,8 @@ export default function VacantPositionAssignmentPage() {
           <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 } }}>
             <Button 
               onClick={() => setDialogOpen(false)} 
-              size="small"
+              size="medium"
+              variant="outlined"
               fullWidth={isMobile}
               sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
             >

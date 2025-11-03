@@ -67,15 +67,35 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    // เช็คว่าตำแหน่งเหล่านี้ถูกจับคู่แล้วหรือยัง (จาก swap_transaction_detail)
-    // ค้นหาจาก toPosition + toUnit ที่ตรงกับตำแหน่งว่าง
+    // ถ้าไม่มีข้อมูลให้ return เลย
+    if (vacantPositions.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0,
+      });
+    }
+
+    // สร้าง key สำหรับ match (position-unit-positionNumber) เพื่อลด complexity
+    const positionKeys = vacantPositions.map(vp => 
+      `${vp.position}|${vp.unit}|${vp.positionNumber}`
+    );
+
+    // ดึงข้อมูล assignment เฉพาะที่ match กับตำแหน่งที่มี (ใช้ IN clause)
+    // แทนที่จะดึงทั้งหมดแล้วค่อย filter
     const assignedDetails = await prisma.swapTransactionDetail.findMany({
       where: {
         transaction: {
           swapType: 'vacant-assignment',
           status: 'completed',
-          year: yearNumber, // เฉพาะปีที่เลือก
-        }
+          year: yearNumber,
+        },
+        // ใช้ OR เพื่อให้ MySQL optimize การค้นหา
+        OR: vacantPositions.map(vp => ({
+          toPosition: vp.position,
+          toUnit: vp.unit,
+          toPositionNumber: vp.positionNumber,
+        })),
       },
       include: {
         transaction: {
@@ -90,32 +110,28 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // สร้าง Map ของการจับคู่ (key = vacant_position.id)
-    // ค้นหาจาก toPosition + toUnit + toPositionNumber ที่ตรงกับตำแหน่งว่าง
+    // สร้าง Map ของการจับคู่โดยใช้ composite key
     const assignmentMap = new Map();
-    for (const detail of assignedDetails) {
-      // ค้นหาตำแหน่งที่ตรงกับ toPosition + toUnit + toPositionNumber
-      const matchedPosition = vacantPositions.find(vp => 
-        vp.position === detail.toPosition && 
-        vp.unit === detail.toUnit &&
-        vp.positionNumber === detail.toPositionNumber
-      );
-      
-      if (matchedPosition && !assignmentMap.has(matchedPosition.id)) {
-        assignmentMap.set(matchedPosition.id, {
+    assignedDetails.forEach(detail => {
+      const key = `${detail.toPosition}|${detail.toUnit}|${detail.toPositionNumber}`;
+      if (!assignmentMap.has(key)) { // เอาเฉพาะรายการแรก (ล่าสุด)
+        assignmentMap.set(key, {
           assignedPersonName: detail.fullName || 'ไม่ระบุ',
           assignedPersonRank: detail.rank || '',
           assignedPosition: detail.toPosition,
           assignedUnit: detail.toUnit,
           assignedDate: detail.transaction?.swapDate || new Date(),
           assignedYear: detail.transaction?.year || yearNumber,
+          fromPosition: detail.fromPosition,
+          fromUnit: detail.fromUnit,
         });
       }
-    }
+    });
 
     // Return individual vacant positions with assignmentInfo
     const resultWithAssignments = vacantPositions.map(position => {
-      const assignmentInfo = assignmentMap.get(position.id) || null;
+      const key = `${position.position}|${position.unit}|${position.positionNumber}`;
+      const assignmentInfo = assignmentMap.get(key) || null;
       return {
         id: position.id,
         posCodeId: position.posCodeId,

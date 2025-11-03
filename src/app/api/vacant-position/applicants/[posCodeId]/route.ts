@@ -40,8 +40,15 @@ export async function GET(
       ],
     });
 
-    // เช็คว่าผู้ยื่นขอแต่ละคนถูกจับคู่แล้วหรือยัง
+    // ถ้าไม่มีข้อมูลให้ return เลย
+    if (applicants.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    // เช็คว่าผู้ยื่นขอแต่ละคนถูกจับคู่แล้วหรือยัง (ใช้ personnelId)
     const applicantIds = applicants.map(a => a.id);
+    
+    // Query เฉพาะ applicants ที่มีอยู่ เพื่อลดจำนวนข้อมูล
     const assignedApplicants = await prisma.swapTransactionDetail.findMany({
       where: {
         personnelId: { in: applicantIds },
@@ -50,7 +57,10 @@ export async function GET(
           status: 'completed', // เฉพาะที่ยังไม่ถูกยกเลิก
         }
       },
-      include: {
+      select: {
+        personnelId: true,
+        toPosition: true,
+        toUnit: true,
         transaction: {
           select: {
             swapDate: true,
@@ -63,7 +73,7 @@ export async function GET(
       }
     });
 
-    // สร้าง Map ของการจับคู่
+    // สร้าง Map ของการจับคู่ (เก็บเฉพาะรายการแรก = ล่าสุด)
     const assignmentMap = new Map();
     assignedApplicants.forEach(detail => {
       if (!assignmentMap.has(detail.personnelId)) {

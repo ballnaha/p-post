@@ -349,12 +349,7 @@ const Sidebar: React.FC = () => {
     );
   }
 
-  // Desktop: ใช้ Fixed position
-  // ซ่อนถ้า sidebar ปิด (isSidebarOpen = false)
-  if (!isSidebarOpen) {
-    return null;
-  }
-
+  // Desktop: ใช้ Fixed position และแสดง sidebar เสมอ (แบบ mini หรือแบบเต็ม)
   return (
     <Box
       sx={{

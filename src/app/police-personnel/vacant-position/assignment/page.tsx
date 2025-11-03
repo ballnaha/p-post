@@ -2044,12 +2044,25 @@ export default function VacantPositionAssignmentPage() {
             },
           }}
         >
-          <DialogTitle sx={{ pb: 1, px: { xs: 2, sm: 3 } }}>
+          <DialogTitle sx={{ pb: 1, px: { xs: 2, sm: 3 }, position: 'relative' }}>
+            <IconButton
+              aria-label="close"
+              onClick={() => setDialogOpen(false)}
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 8,
+                color: (theme) => theme.palette.grey[500],
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
             <Stack 
               direction={{ xs: 'column', sm: 'row' }} 
               spacing={{ xs: 1, sm: 1 }} 
               alignItems={{ xs: 'flex-start', sm: 'center' }} 
               justifyContent="space-between"
+              sx={{ pr: { xs: 5, sm: 6 } }}
             >
               <Stack direction="row" spacing={1} alignItems="center" sx={{ width: { xs: '100%', sm: 'auto' } }}>
                 <AccountBoxIcon fontSize="small" sx={{ display: { xs: 'none', sm: 'inline-flex' } }} />
@@ -2285,14 +2298,15 @@ export default function VacantPositionAssignmentPage() {
               </>
             )}
           </DialogContent>
-          
+          <Divider/>
           <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 } }}>
+            
             <Button 
               onClick={() => setDialogOpen(false)} 
               size="medium"
               variant="outlined"
               fullWidth={isMobile}
-              sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}
+              sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } , backgroundColor: 'primary.main' , color: 'white' , minWidth: { xs: '100%', sm: '100px' } , margin:'0 auto' , padding: '8px 16px' }}
             >
               ปิด
             </Button>

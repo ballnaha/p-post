@@ -49,7 +49,7 @@ const Sidebar: React.FC = () => {
     if (isMobile && isSidebarOpen) {
       closeAllMenus();
     }
-  }, [pathname]); // เมื่อ pathname เปลี่ยน
+  }, [pathname, isMobile, isSidebarOpen, closeAllMenus]); // เพิ่ม dependencies ให้ครบ
 
   type MenuItem = {
     label: string;

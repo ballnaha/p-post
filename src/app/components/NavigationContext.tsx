@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useState, ReactNode, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useTheme, useMediaQuery } from '@mui/material';
 
 interface NavigationContextType {
@@ -30,39 +30,29 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
-  // โหลดสถานะจาก localStorage
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const savedOpen = localStorage.getItem('sidebar-open');
-      return savedOpen ? JSON.parse(savedOpen) : true;
-    }
-    return true;
-  });
+  // State สำหรับ sidebar
+  // Desktop: isSidebarOpen ควรเป็น true เสมอ, ใช้ isSidebarCollapsed ควบคุมแทน
+  // Mobile: isSidebarOpen ควบคุมการเปิด/ปิด drawer
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default เป็น true (Desktop แสดงเสมอ)
   
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedCollapsed = localStorage.getItem('sidebar-collapsed');
       return savedCollapsed ? JSON.parse(savedCollapsed) : true;
     }
-    return true;
+    return true; // Default: collapsed (mini icon)
   });
   
   // Track previous isMobile value
   const prevIsMobileRef = useRef(isMobile);
   const isTransitioningToMobile = !prevIsMobileRef.current && isMobile;
 
-  // บันทึกสถานะลง localStorage เมื่อมีการเปลี่ยนแปลง
+  // บันทึกสถานะ collapsed ลง localStorage (เฉพาะ Desktop)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sidebar-open', JSON.stringify(isSidebarOpen));
-    }
-  }, [isSidebarOpen]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isMobile) {
       localStorage.setItem('sidebar-collapsed', JSON.stringify(isSidebarCollapsed));
     }
-  }, [isSidebarCollapsed]);
+  }, [isSidebarCollapsed, isMobile]);
 
   // ปรับ default state ตาม screen size
   useEffect(() => {
@@ -72,20 +62,15 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
       setIsSidebarOpen(false);
       setIsSidebarCollapsed(false);
     } else {
-      // On desktop, ใช้สถานะจาก localStorage หรือเปิดแบบ mini
-      const savedOpen = localStorage.getItem('sidebar-open');
+      // On desktop, sidebar แสดงเสมอ (isSidebarOpen = true) แต่ควบคุมการแสดงผลด้วย isSidebarCollapsed
+      setIsSidebarOpen(true); // Desktop: sidebar แสดงเสมอ
+      
+      // โหลดสถานะ collapsed จาก localStorage
       const savedCollapsed = localStorage.getItem('sidebar-collapsed');
-      
-      if (savedOpen !== null) {
-        setIsSidebarOpen(JSON.parse(savedOpen));
-      } else {
-        setIsSidebarOpen(true);
-      }
-      
       if (savedCollapsed !== null) {
         setIsSidebarCollapsed(JSON.parse(savedCollapsed));
       } else {
-        setIsSidebarCollapsed(true);
+        setIsSidebarCollapsed(true); // Default: collapsed (mini icon)
       }
     }
     // Update ref
@@ -118,22 +103,25 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
     };
   }, [isMobile, isSidebarOpen]);
 
-  const toggleNavigation = () => {
+  const toggleNavigation = useCallback(() => {
     if (isMobile) {
       setIsSidebarOpen((prev: boolean) => !prev);
     } else {
       setIsSidebarCollapsed((prev: boolean) => !prev);
       setIsSidebarOpen(true);
     }
-  };
+  }, [isMobile]);
 
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     toggleNavigation();
-  };
+  }, [toggleNavigation]);
 
-  const closeAllMenus = () => {
-    setIsSidebarOpen(false);
-  };
+  const closeAllMenus = useCallback(() => {
+    // ปิด sidebar เฉพาะบน mobile เท่านั้น (Desktop ไม่ต้องปิด)
+    if (isMobile) {
+      setIsSidebarOpen(false);
+    }
+  }, [isMobile]);
 
   return (
     <NavigationContext.Provider value={{ 

@@ -8,6 +8,10 @@ import prisma from '@/lib/prisma';
  * Query Parameters:
  * - year: ปีงบประมาณ (required)
  * - unassignedOnly: true/false - กรองเฉพาะตำแหน่งที่ยังไม่ถูกจับคู่ (default: true)
+ * - page: หน้าที่ต้องการ (0-based, optional)
+ * - limit: จำนวนรายการต่อหน้า (optional)
+ * - search: ค้นหาจาก position, unit, positionNumber (optional)
+ * - posCodeId: กรองตาม posCodeId (optional)
  * - minRankLevel: เลขระดับยศขั้นต่ำ (optional)
  * - maxRankLevel: เลขระดับยศสูงสุด (optional)
  */
@@ -16,6 +20,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const year = searchParams.get('year');
     const unassignedOnly = searchParams.get('unassignedOnly') !== 'false'; // default true
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
+    const search = searchParams.get('search');
+    const posCodeId = searchParams.get('posCodeId');
     const minRankLevel = searchParams.get('minRankLevel');
     const maxRankLevel = searchParams.get('maxRankLevel');
 
@@ -26,6 +34,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Parse pagination parameters
+    const page = pageParam ? parseInt(pageParam, 10) : undefined;
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+    const usePagination = page !== undefined && limit !== undefined;
+
     const whereClause: any = {
       year: parseInt(year),
     };
@@ -35,11 +48,31 @@ export async function GET(request: NextRequest) {
       whereClause.isAssigned = false;
     }
 
+    // Filter by search text
+    if (search) {
+      whereClause.OR = [
+        { position: { contains: search } },
+        { unit: { contains: search } },
+        { positionNumber: { contains: search } },
+        { requestedPosition: { contains: search } },
+      ];
+    }
+
+    // Filter by posCodeId
+    if (posCodeId) {
+      whereClause.requestedPositionId = parseInt(posCodeId);
+    }
+
     // Note: rankLevel filtering is removed as PosCodeMaster doesn't have this field
     // Filter by posCodeId instead if needed
 
+    // นับจำนวนทั้งหมด (สำหรับ pagination)
+    const totalCount = await prisma.vacantPosition.count({
+      where: whereClause,
+    });
+
     // ดึงข้อมูลตำแหน่งว่าง
-    const vacantPositions = await prisma.vacantPosition.findMany({
+    const queryOptions: any = {
       where: whereClause,
       include: {
         posCodeMaster: true,
@@ -49,10 +82,18 @@ export async function GET(request: NextRequest) {
         { requestedPositionId: 'asc' },
         { displayOrder: 'asc' },
       ],
-    });
+    };
+
+    // เพิ่ม pagination ถ้ามีการระบุ
+    if (usePagination && page !== undefined && limit !== undefined) {
+      queryOptions.skip = page * limit;
+      queryOptions.take = limit;
+    }
+
+    const vacantPositions = await prisma.vacantPosition.findMany(queryOptions);
 
     // จัดกลุ่มตามตำแหน่งที่ขอ
-    const groupedPositions = vacantPositions.reduce((acc, position) => {
+    const groupedPositions = vacantPositions.reduce((acc, position: any) => {
       const posCodeId = position.requestedPosCode?.id || position.posCodeMaster?.id;
       const posCodeName = position.requestedPosCode?.name || position.posCodeMaster?.name;
       const key = `${posCodeId}-${posCodeName}`;
@@ -89,9 +130,17 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       year: parseInt(year),
-      total: vacantPositions.length,
+      total: totalCount,
+      count: vacantPositions.length,
       unassignedOnly,
       groups: formattedData,
+      ...(usePagination && { 
+        pagination: {
+          page,
+          limit,
+          totalPages: Math.ceil(totalCount / (limit || 1)),
+        }
+      }),
     });
 
   } catch (error) {

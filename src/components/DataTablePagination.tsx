@@ -110,6 +110,13 @@ export default function DataTablePagination({
                   value={rowsPerPage}
                   onChange={(e) => onRowsPerPageChange(parseInt(String(e.target.value), 10))}
                   sx={{ fontSize: dense ? { xs: '0.72rem', sm: '0.76rem' } : { xs: '0.75rem', sm: '0.8rem', md: '0.875rem' } }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        zIndex: 1500, // สูงกว่า Drawer (1400)
+                      }
+                    }
+                  }}
                 >
                   {rowsPerPageOptions.map((opt) => (
                     <MenuItem key={opt} value={opt}>

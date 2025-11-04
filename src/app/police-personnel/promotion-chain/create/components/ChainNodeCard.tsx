@@ -1,24 +1,37 @@
 'use client';
 import React from 'react';
-import { Card, CardContent, Box, Typography, IconButton, Divider, Stack, Tooltip } from '@mui/material';
-import { Delete as DeleteIcon } from '@mui/icons-material';
+import { Card, CardContent, Box, Typography, IconButton, Divider, Stack, Tooltip, Chip, Button } from '@mui/material';
+import { Delete as DeleteIcon, InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 
+// Types - ตรงกับ PolicePersonnel schema
 interface ChainNode {
   id: string;
   nodeOrder: number;
-  personnelId?: string;
-  nationalId: string;
-  fullName: string;
-  rank: string;
-  seniority?: string;
-  fromPosCodeId: number;
-  fromPosition: string;
-  fromPositionNumber?: string;
-  fromUnit: string;
+  personnelId?: string; // อ้างอิง police_personnel.id
+  
+  // ข้อมูลบุคคล (Person Information)
+  nationalId: string; // police_personnel.nationalId
+  fullName: string; // police_personnel.fullName
+  rank: string; // police_personnel.rank
+  seniority?: string; // police_personnel.seniority
+  
+  // ข้อมูลตำแหน่งเดิม (From Position)
+  fromPosCodeId: number; // police_personnel.posCodeId
+  fromPosCodeName?: string; // posCodeMaster.name
+  fromPosition: string; // police_personnel.position
+  fromPositionNumber?: string; // police_personnel.positionNumber
+  fromUnit: string; // police_personnel.unit
+  actingAs?: string; // police_personnel.actingAs - ทำหน้าที่
+  toActingAs?: string; // ทำหน้าที่ของตำแหน่งปลายทาง
+  
+  // ข้อมูลตำแหน่งใหม่ (To Position)
   toPosCodeId: number;
+  toPosCodeName?: string;
   toPosition: string;
   toPositionNumber?: string;
   toUnit: string;
+  
+  // Metadata
   fromRankLevel: number;
   toRankLevel: number;
   isPromotionValid: boolean;
@@ -28,110 +41,243 @@ interface ChainNodeCardProps {
   node: ChainNode;
   onRemove: () => void;
   isLastNode: boolean;
+  onShowDetail?: () => void; // เปิด modal รายละเอียดบุคลากร
 }
 
-export default function ChainNodeCard({ node, onRemove, isLastNode }: ChainNodeCardProps) {
+export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail }: ChainNodeCardProps) {
   const isPromotion = node.toRankLevel < node.fromRankLevel;
 
   return (
     <Card
-      elevation={2}
+      elevation={3}
       sx={{
         border: '2px solid',
         borderColor: node.isPromotionValid ? 'success.main' : 'error.main',
         bgcolor: 'background.paper',
-        transition: 'all 0.2s',
+        borderRadius: 2,
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         '&:hover': {
-          boxShadow: 4,
+          boxShadow: node.isPromotionValid 
+            ? '0 8px 24px rgba(16, 185, 129, 0.25)'
+            : '0 8px 24px rgba(239, 68, 68, 0.25)',
+          transform: 'translateY(-4px)',
+        },
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 4,
+          bgcolor: node.isPromotionValid 
+            ? 'success.main'
+            : 'error.main',
         }
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent sx={{ p: 1.5, pt: 1.25 }}>
         {/* Header with step number and actions */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
           <Box sx={{ 
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 1,
+            gap: 0.75,
             px: 1.5,
             py: 0.5,
-            bgcolor: node.isPromotionValid ? 'success.50' : 'error.50',
+            bgcolor: node.isPromotionValid 
+              ? 'success.main'
+              : 'error.main',
             borderRadius: 10,
-            border: '1px solid',
-            borderColor: node.isPromotionValid ? 'success.main' : 'error.main',
+            boxShadow: node.isPromotionValid
+              ? '0 2px 8px rgba(16, 185, 129, 0.3)'
+              : '0 2px 8px rgba(239, 68, 68, 0.3)',
           }}>
-            <Typography variant="caption" fontWeight={700} color={node.isPromotionValid ? 'success.main' : 'error.main'}>
+            <Typography variant="body2" fontWeight={700} sx={{ color: 'white', fontSize: '0.875rem' }}>
               ขั้นที่ {node.nodeOrder}
             </Typography>
           </Box>
-          {isLastNode && (
-            <Tooltip title="ลบขั้นนี้">
-              <IconButton onClick={onRemove} color="error" size="small">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+            {onShowDetail && (
+              <Tooltip title="รายละเอียดบุคลากร">
+                <Button
+                  onClick={onShowDetail}
+                  size="small"
+                  variant="contained"
+                  color="primary"
+                  startIcon={<InfoOutlinedIcon fontSize="small" />}
+                  sx={{
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    boxShadow: '0 2px 8px rgba(102,126,234,0.35)',
+                    '&:hover': { boxShadow: '0 3px 10px rgba(102,126,234,0.45)' },
+                  }}
+                >
+                  ดูข้อมูล
+                </Button>
+              </Tooltip>
+            )}
+            {isLastNode && (
+              <Tooltip title="ลบขั้นนี้">
+                <IconButton 
+                  onClick={onRemove} 
+                  size="small"
+                  sx={{
+                    bgcolor: 'error.50',
+                    '&:hover': {
+                      bgcolor: 'error.main',
+                      color: 'white',
+                    }
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
         </Box>
 
         {/* Person Info - Compact */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', lineHeight: 1.2 }}>
+        <Box sx={{ mb: 1.25, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
             {node.rank} {node.fullName}
           </Typography>
           {node.seniority && (
-            <Typography variant="caption" color="text.secondary">
-              อาวุโส {node.seniority}
-            </Typography>
+            <Chip 
+              label={`อาวุโส ${node.seniority}`}
+              size="small"
+              sx={{ 
+                height: 20,
+                fontSize: '0.7rem',
+                bgcolor: 'grey.100',
+                fontWeight: 600,
+              }}
+            />
           )}
         </Box>
 
-        {/* Position Movement - Single Line Flow */}
+        {/* Position Movement - Compact Flow */}
         <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 2,
-          p: 1.5,
-          bgcolor: 'grey.50',
-          borderRadius: 1,
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
+          gap: 0,
+          borderRadius: 1.5,
+          overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}>
           {/* From */}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary">จาก</Typography>
-            <Typography variant="body2" fontWeight={600} noWrap>{node.fromPosition}</Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {node.fromUnit}
+          <Box sx={{ 
+            p: 1.25,
+            bgcolor: 'grey.50',
+            borderRight: '2px solid white',
+          }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 0.25 }}>
+              📍 ตำแหน่งเดิม
             </Typography>
+            <Typography variant="body2" fontWeight={700} sx={{ mb: 0.25, color: 'text.primary' }}>
+              {node.fromPosition}
+            </Typography>
+            {node.fromPosCodeName && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                {node.fromPosCodeName}
+              </Typography>
+            )}
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.9rem' }}>
+              หน่วย: {node.fromUnit}
+            </Typography>
+            {node.actingAs && node.actingAs !== '-' && (
+              <Typography variant="body2" sx={{ display: 'block', color: 'primary.main', mt: 0.25 }}>
+                💼 ทำหน้าที่: {node.actingAs}
+              </Typography>
+            )}
           </Box>
 
           {/* Arrow */}
           <Box sx={{ 
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
-            px: 1,
-            flexShrink: 0,
+            justifyContent: 'center',
+            px: 1.25,
+            bgcolor: 'success.main',
+            position: 'relative',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              right: -6,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid',
+              borderLeftColor: 'success.main',
+              borderTop: '6px solid transparent',
+              borderBottom: '6px solid transparent',
+            }
           }}>
-            <Typography variant="h6" color="success.main">→</Typography>
-            <Typography variant="caption" color="success.main" fontWeight={600}>เลื่อน</Typography>
+            <Typography variant="h6" sx={{ color: 'white', fontWeight: 700 }}>
+              →
+            </Typography>
           </Box>
 
           {/* To */}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary">ไป</Typography>
-            <Typography variant="body2" fontWeight={600} color="success.main" noWrap>
+          <Box sx={{ 
+            p: 1.25,
+            bgcolor: 'success.50',
+            borderLeft: '2px solid white',
+          }}>
+            <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600, display: 'block', mb: 0.25 }}>
+              🎯 ตำแหน่งใหม่
+            </Typography>
+            <Typography variant="body2" fontWeight={700} sx={{ mb: 0.25, color: 'success.main' }}>
               {node.toPosition}
             </Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {node.toUnit}
+            {node.toPosCodeName && (
+              <Typography variant="caption" sx={{ color: 'success.dark', display: 'block' }}>
+                {node.toPosCodeName}
+              </Typography>
+            )}
+            <Typography variant="caption" sx={{ color: 'success.dark', display: 'block', fontSize: '0.9rem' }}>
+              หน่วย: {node.toUnit}
             </Typography>
+              {node.toActingAs && node.toActingAs !== '-' && (
+                <Typography variant="body2" sx={{ color: 'success.dark', display: 'block' }}>
+                  💼 ทำหน้าที่: {node.toActingAs}
+                </Typography>
+              )}
           </Box>
         </Box>
 
+        
         {!node.isPromotionValid && (
-          <Box sx={{ mt: 1.5, p: 1, bgcolor: 'error.50', borderRadius: 1, border: '1px solid', borderColor: 'error.main' }}>
-            <Typography variant="caption" color="error" fontWeight={600}>
-              ⚠️ การเลื่อนตำแหน่งนี้ไม่ถูกต้องตามลำดับชั้น
-            </Typography>
+          <Box sx={{ 
+            mt: 1.5, 
+            p: 1.25, 
+            bgcolor: 'error.50',
+            borderRadius: 1.5, 
+            border: '2px solid', 
+            borderColor: 'error.main',
+            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.2)',
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box sx={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                bgcolor: 'error.main',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '1.1rem',
+                flexShrink: 0,
+              }}>
+                ⚠️
+              </Box>
+              <Typography variant="body2" color="error.main" fontWeight={700}>
+                การเลื่อนตำแหน่งนี้ไม่ถูกต้องตามลำดับชั้น
+              </Typography>
+            </Box>
           </Box>
         )}
       </CardContent>

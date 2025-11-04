@@ -326,7 +326,7 @@ export default function PersonnelDetailModal({
                       )}
                       {personnel.trainingCourse && (
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หลักสูตร (นรต.)</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>นรต.</Typography>
                           <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.trainingCourse}</Typography>
                         </Box>
                       )}

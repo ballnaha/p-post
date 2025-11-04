@@ -1469,191 +1469,40 @@ export default function PolicePersonnelPage() {
                   />
                 )}
                 
-                {/* Swap, สามเส้า, ยื่นขอตำแหน่ง (ซ้าย) | Menu (ขวา) */}
-                <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                  {/* ปุ่มฝั่งซ้าย: Swap, สามเส้า, ยื่นขอตำแหน่ง */}
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    {!person.rank && (!person.fullName || (person.fullName !== 'ว่าง' && !isReservedPosition(person.fullName))) ? (
-                      // ถ้าไม่มีบุคคล (ว่าง) แสดงปุ่มยื่นขอตำแหน่งเท่านั้น
-                      <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener>
-                        <IconButton
-                          size="medium"
-                          color="success"
-                          sx={{
-                            border: 2,
-                            borderColor: 'success.main',
-                            borderRadius: '50%',
-                            width: 32,
-                            height: 32,
-                          }}
-                        >
-                          <VacantIcon />
-                        </IconButton>
-                      </Tooltip>
-                    ) : person.rank ? (
-                      // ถ้ามีบุคคล แสดง Swap, สามเส้า, ยื่นขอตำแหน่ง
-                      <>
-                        <Tooltip 
-                          title={getPersonnelStatus(person.nationalId).isInSwap ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"} 
-                          leaveDelay={0}
-                          disableFocusListener
-                          enterDelay={200}
-                        >
-                          <IconButton
-                            size="medium"
-                            color="info"
-                            onClick={() => {
-                              const status = getPersonnelStatus(person.nationalId);
-                              if (status.isInSwap && person.nationalId) {
-                                handleRemoveFromSwap(person.nationalId);
-                              } else {
-                                handleAddToSwap(person);
-                              }
-                            }}
-                            disabled={person.nationalId ? loadingSwap.has(person.nationalId) : false}
-                            onMouseDown={(e) => e.currentTarget.blur()}
-                            sx={{
-                              borderRadius: '50%',
-                              width: 32,
-                              height: 32,
-                              ...(getPersonnelStatus(person.nationalId).isInSwap ? {
-                                // Contained style (เต็มสี)
-                                bgcolor: 'info.main',
-                                color: 'white',
-                                '&:hover': {
-                                  bgcolor: 'info.dark',
-                                },
-                              } : {
-                                // Outlined style (ขอบเส้น)
-                                border: 2,
-                                borderColor: 'info.main',
-                              }),
-                            }}
-                          >
-                            {person.nationalId && loadingSwap.has(person.nationalId) ? (
-                              <CircularProgress size={20} color="inherit" />
-                            ) : (
-                              <SwapHorizIcon />
-                            )}
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip 
-                          title={person.nationalId && threeWayListData.has(person.nationalId) ? "ลบออกจากสามเส้า" : "เพิ่มเข้าสามเส้า"} 
-                          leaveDelay={0}
-                          disableFocusListener
-                          enterDelay={200}
-                        >
-                          <IconButton
-                            size="medium"
-                            color="warning"
-                            onClick={() => person.nationalId && threeWayListData.has(person.nationalId) ? handleRemoveFromThreeWay(person.nationalId) : handleAddToThreeWay(person)}
-                            disabled={person.nationalId ? loadingThreeWay.has(person.nationalId) : false}
-                            onMouseDown={(e) => e.currentTarget.blur()}
-                            sx={{
-                              borderRadius: '50%',
-                              width: 32,
-                              height: 32,
-                              ...(person.nationalId && threeWayListData.has(person.nationalId) ? {
-                                // Contained style (เต็มสี)
-                                bgcolor: 'warning.main',
-                                color: 'white',
-                                '&:hover': {
-                                  bgcolor: 'warning.dark',
-                                },
-                              } : {
-                                // Outlined style (ขอบเส้น)
-                                border: 2,
-                                borderColor: 'warning.main',
-                              }),
-                            }}
-                          >
-                            {person.nationalId && loadingThreeWay.has(person.nationalId) ? (
-                              <CircularProgress size={20} color="inherit" />
-                            ) : (
-                              <ChangeHistoryIcon />
-                            )}
-                          </IconButton>
-                        </Tooltip>
-                        
-                        <Tooltip 
-                          title={person.nationalId && vacantListData.has(person.nationalId) ? "ยกเลิกการยื่นขอตำแหน่ง" : "ยื่นขอตำแหน่ง"} 
-                          leaveDelay={0}
-                          disableFocusListener
-                          enterDelay={200}
-                        >
-                          <IconButton
-                            size="medium"
-                            color="success"
-                            onClick={() => person.nationalId && vacantListData.has(person.nationalId) ? handleRemoveFromVacant(person.nationalId) : handleAddToVacant(person)}
-                            disabled={person.nationalId ? loadingVacant.has(person.nationalId) : false}
-                            onMouseDown={(e) => e.currentTarget.blur()}
-                            sx={{
-                              borderRadius: '50%',
-                              width: 32,
-                              height: 32,
-                              ...(person.nationalId && vacantListData.has(person.nationalId) ? {
-                                // Contained style (เต็มสี)
-                                bgcolor: 'success.main',
-                                color: 'white',
-                                '&:hover': {
-                                  bgcolor: 'success.dark',
-                                },
-                              } : {
-                                // Outlined style (ขอบเส้น)
-                                border: 2,
-                                borderColor: 'success.main',
-                              }),
-                            }}
-                          >
-                            {person.nationalId && loadingVacant.has(person.nationalId) ? (
-                              <CircularProgress size={20} color="inherit" />
-                            ) : (
-                              <VacantIcon />
-                            )}
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    ) : null}
-                  </Box>
-
-                  {/* เส้นคั่น */}
-                  <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-
-                  {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleViewDetail(person)}
-                        sx={{
-                          border: 1,
-                          borderColor: 'primary.main',
-                          borderRadius: 2,
-                          color: 'primary.main',
-                          '&:hover': {
-                            bgcolor: 'primary.main',
-                            color: 'white',
-                          }
-                        }}
-                      >
-                        <InfoOutlinedIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    
-                    <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => handleMenuOpen(e, person)}
-                        sx={{
-                          border: 1,
-                          borderColor: 'grey.400',
-                          borderRadius: 2,
-                        }}
-                      >
-                        <MoreVertIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
+                {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
+                <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
+                  <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleViewDetail(person)}
+                      sx={{
+                        border: 1,
+                        borderColor: 'primary.main',
+                        borderRadius: 2,
+                        color: 'primary.main',
+                        '&:hover': {
+                          bgcolor: 'primary.main',
+                          color: 'white',
+                        }
+                      }}
+                    >
+                      <InfoOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  
+                  <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => handleMenuOpen(e, person)}
+                      sx={{
+                        border: 1,
+                        borderColor: 'grey.400',
+                        borderRadius: 2,
+                      }}
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Box>
               </CardActions>
             </Card>
@@ -2058,189 +1907,40 @@ export default function PolicePersonnelPage() {
                             />
                           )}
                           
-                          {/* Swap, สามเส้า, ยื่นขอตำแหน่ง (ซ้าย) | Menu (ขวา) */}
-                          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            {/* ปุ่มฝั่งซ้าย */}
-                            <Box sx={{ display: 'flex', gap: 0.5 }}>
-                              {!row.rank && (!row.fullName || (row.fullName !== 'ว่าง' && !isReservedPosition(row.fullName))) ? (
-                                // ถ้าไม่มีบุคคล (ว่าง) แสดงปุ่มยื่นขอตำแหน่งเท่านั้น
-                                <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener>
-                                  <IconButton
-                                    size="small"
-                                    color="success"
-                                    sx={{
-                                      border: 1.5,
-                                      borderColor: 'success.main',
-                                      borderRadius: '50%',
-                                      width: 32,
-                                      height: 32,
-                                    }}
-                                  >
-                                    <VacantIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              ) : row.rank ? (
-                                // ถ้ามีบุคคล แสดง Swap, สามเส้า, ยื่นขอตำแหน่ง
-                                <>
-                                  <Tooltip 
-                                    title={getPersonnelStatus(row.nationalId).isInSwap ? "ลบออกจาก Swap List" : "เพิ่มเข้า Swap List"} 
-                                    leaveDelay={0}
-                                    disableFocusListener
-                                    enterDelay={200}
-                                  >
-                                    <IconButton
-                                      size="small"
-                                      color="info"
-                                      onClick={() => {
-                                        const status = getPersonnelStatus(row.nationalId);
-                                        if (status.isInSwap && row.nationalId) {
-                                          handleRemoveFromSwap(row.nationalId);
-                                        } else {
-                                          handleAddToSwap(row);
-                                        }
-                                      }}
-                                      disabled={row.nationalId ? loadingSwap.has(row.nationalId) : false}
-                                      onMouseDown={(e) => e.currentTarget.blur()}
-                                      sx={{
-                                        borderRadius: '50%',
-                                        width: 32,
-                                        height: 32,
-                                        ...(getPersonnelStatus(row.nationalId).isInSwap ? {
-                                          // Contained style (เต็มสี)
-                                          bgcolor: 'info.main',
-                                          color: 'white',
-                                          '&:hover': {
-                                            bgcolor: 'info.dark',
-                                          },
-                                        } : {
-                                          // Outlined style (ขอบเส้น)
-                                          border: 1.5,
-                                          borderColor: 'info.main',
-                                        }),
-                                      }}
-                                    >
-                                      {row.nationalId && loadingSwap.has(row.nationalId) ? (
-                                        <CircularProgress size={16} color="inherit" />
-                                      ) : (
-                                        <SwapHorizIcon fontSize="small" />
-                                      )}
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip 
-                                    title={row.nationalId && threeWayListData.has(row.nationalId) ? "ลบออกจากสามเส้า" : "เพิ่มเข้าสามเส้า"} 
-                                    leaveDelay={0}
-                                    disableFocusListener
-                                    enterDelay={200}
-                                  >
-                                    <IconButton
-                                      size="small"
-                                      color="warning"
-                                      onClick={() => row.nationalId && threeWayListData.has(row.nationalId) ? handleRemoveFromThreeWay(row.nationalId) : handleAddToThreeWay(row)}
-                                      disabled={row.nationalId ? loadingThreeWay.has(row.nationalId) : false}
-                                      onMouseDown={(e) => e.currentTarget.blur()}
-                                      sx={{
-                                        borderRadius: '50%',
-                                        width: 32,
-                                        height: 32,
-                                        ...(row.nationalId && threeWayListData.has(row.nationalId) ? {
-                                          // Contained style (เต็มสี)
-                                          bgcolor: 'warning.main',
-                                          color: 'white',
-                                          '&:hover': {
-                                            bgcolor: 'warning.dark',
-                                          },
-                                        } : {
-                                          // Outlined style (ขอบเส้น)
-                                          border: 1.5,
-                                          borderColor: 'warning.main',
-                                        }),
-                                      }}
-                                    >
-                                      {row.nationalId && loadingThreeWay.has(row.nationalId) ? (
-                                        <CircularProgress size={16} color="inherit" />
-                                      ) : (
-                                        <ChangeHistoryIcon fontSize="small" />
-                                      )}
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="ยื่นขอตำแหน่ง" leaveDelay={0} disableFocusListener enterDelay={200}>
-                                    <IconButton
-                                      size="small"
-                                      color="success"
-                                      onClick={() =>
-                                        row.nationalId && vacantListData.has(row.nationalId)
-                                          ? handleRemoveFromVacant(row.nationalId)
-                                          : handleAddToVacant(row)
-                                      }
-                                      disabled={row.nationalId ? loadingVacant.has(row.nationalId) : false}
-                                      onMouseDown={(e) => e.currentTarget.blur()}
-                                      sx={{
-                                        ...(row.nationalId && vacantListData.has(row.nationalId) ? {
-                                          // Contained style (มีพื้นสี)
-                                          bgcolor: 'success.main',
-                                          color: 'white',
-                                          '&:hover': {
-                                            bgcolor: 'success.dark',
-                                          },
-                                        } : {
-                                          // Outlined style (ขอบเส้น)
-                                          border: 1.5,
-                                          borderColor: 'success.main',
-                                        }),
-                                        borderRadius: '50%',
-                                        width: 32,
-                                        height: 32,
-                                      }}
-                                    >
-                                      {row.nationalId && loadingVacant.has(row.nationalId) ? (
-                                        <CircularProgress size={16} color="inherit" />
-                                      ) : (
-                                        <VacantIcon fontSize="small" />
-                                      )}
-                                    </IconButton>
-                                  </Tooltip>
-                                </>
-                              ) : null}
-                            </Box>
-
-                            {/* เส้นคั่น */}
-                            <Divider orientation="vertical" flexItem sx={{ height: 32 }} />
-
-                            {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
-                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                              <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleViewDetail(row)}
-                                  sx={{
-                                    border: 1,
-                                    borderColor: 'primary.main',
-                                    borderRadius: 1,
-                                    color: 'primary.main',
-                                    '&:hover': {
-                                      bgcolor: 'primary.main',
-                                      color: 'white',
-                                    }
-                                  }}
-                                >
-                                  <ViewIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              
-                              <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
-                                <IconButton 
-                                  size="small"
-                                  onClick={(e) => handleMenuOpen(e, row)}
-                                  sx={{
-                                    border: 1,
-                                    borderColor: 'grey.400',
-                                    borderRadius: 1,
-                                  }}
-                                >
-                                  <MoreVertIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
+                          {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
+                          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
+                            <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleViewDetail(row)}
+                                sx={{
+                                  border: 1,
+                                  borderColor: 'primary.main',
+                                  borderRadius: 1,
+                                  color: 'primary.main',
+                                  '&:hover': {
+                                    bgcolor: 'primary.main',
+                                    color: 'white',
+                                  }
+                                }}
+                              >
+                                <ViewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            
+                            <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
+                              <IconButton 
+                                size="small"
+                                onClick={(e) => handleMenuOpen(e, row)}
+                                sx={{
+                                  border: 1,
+                                  borderColor: 'grey.400',
+                                  borderRadius: 1,
+                                }}
+                              >
+                                <MoreVertIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           </Box>
                         </Box>
                       </TableCell>

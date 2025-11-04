@@ -152,7 +152,7 @@ export default function SwapListPage() {
   const [rowsPerPage, setRowsPerPage] = useState(12); // Default for card view
 
   // Generate available years (from 2568 to current year)
-  const getAvailableYears = () => {
+  const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const startYear = 2568;
     const years: number[] = [];
@@ -162,9 +162,7 @@ export default function SwapListPage() {
     }
     
     return years;
-  };
-
-  const availableYears = getAvailableYears();
+  }, []);
 
   // Memoized filter options - only recalculate when data changes
   const groupNameOptions = useMemo(() => {

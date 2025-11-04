@@ -7,23 +7,33 @@ import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
 import PromotionChainBuilder from './components/PromotionChainBuilder';
 
-// Types
+// Types - ตรงกับ PolicePersonnel schema
 interface ChainNode {
   id: string;
   nodeOrder: number;
-  personnelId?: string;
-  nationalId: string;
-  fullName: string;
-  rank: string;
-  seniority?: string;
-  fromPosCodeId: number;
-  fromPosition: string;
-  fromPositionNumber?: string;
-  fromUnit: string;
+  personnelId?: string; // อ้างอิง police_personnel.id
+  
+  // ข้อมูลบุคคล (Person Information)
+  nationalId: string; // police_personnel.nationalId
+  fullName: string; // police_personnel.fullName
+  rank: string; // police_personnel.rank
+  seniority?: string; // police_personnel.seniority
+  
+  // ข้อมูลตำแหน่งเดิม (From Position)
+  fromPosCodeId: number; // police_personnel.posCodeId
+  fromPosCodeName?: string; // posCodeMaster.name
+  fromPosition: string; // police_personnel.position
+  fromPositionNumber?: string; // police_personnel.positionNumber
+  fromUnit: string; // police_personnel.unit
+  
+  // ข้อมูลตำแหน่งใหม่ (To Position)
   toPosCodeId: number;
+  toPosCodeName?: string;
   toPosition: string;
   toPositionNumber?: string;
   toUnit: string;
+  
+  // Metadata
   fromRankLevel: number;
   toRankLevel: number;
   isPromotionValid: boolean;
@@ -31,12 +41,14 @@ interface ChainNode {
 
 interface VacantPosition {
   id: string;
-  posCodeId: number;
-  position: string;
-  unit: string;
+  posCodeId: number; // police_personnel.posCodeId
+  posCodeName?: string; // posCodeMaster.name
+  position: string; // police_personnel.position
+  unit: string; // police_personnel.unit
   requestedPositionId?: number;
   requestedPosition?: string;
-  positionNumber?: string;
+  positionNumber?: string; // police_personnel.positionNumber
+  actingAs?: string; // police_personnel.actingAs - ทำหน้าที่
 }
 
 function CreatePromotionChainContent() {
@@ -47,6 +59,7 @@ function CreatePromotionChainContent() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [groupNumber, setGroupNumber] = useState<string>('');
   const [vacantPosition, setVacantPosition] = useState<VacantPosition | null>(null);
   const [nodes, setNodes] = useState<ChainNode[]>([]);
   const [activeStep, setActiveStep] = useState(0);
@@ -60,6 +73,35 @@ function CreatePromotionChainContent() {
       router.push('/police-personnel/promotion-chain');
     }
   }, [vacantId]);
+
+  // Generate next group number like 2568/PC-001 based on existing promotion-chain records
+  useEffect(() => {
+    const fetchNextGroupNumber = async () => {
+      try {
+        const currentYear = new Date().getFullYear() + 543;
+        const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=promotion-chain`);
+        if (!response.ok) throw new Error('Failed to fetch promotion-chain transactions');
+        const result = await response.json();
+        const transactions: any[] = Array.isArray(result?.data) ? result.data : [];
+        let maxNumber = 0;
+        for (const t of transactions) {
+          if (t.groupNumber) {
+            const match = String(t.groupNumber).match(/\/PC-(\d+)$/);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (num > maxNumber) maxNumber = num;
+            }
+          }
+        }
+        const next = String(maxNumber + 1).padStart(3, '0');
+        setGroupNumber(`${currentYear}/PC-${next}`);
+      } catch (e) {
+        const currentYear = new Date().getFullYear() + 543;
+        setGroupNumber(`${currentYear}/PC-001`);
+      }
+    };
+    fetchNextGroupNumber();
+  }, []);
 
   const loadVacantPosition = async (id: string) => {
     setLoading(true);
@@ -89,18 +131,28 @@ function CreatePromotionChainContent() {
         return;
       }
       
+      // Debug: ตรวจสอบข้อมูล posCodeMaster
+      console.log('Raw data from API:', {
+        id: data.id,
+        posCodeId: data.posCodeId,
+        posCodeName: data.posCodeName, // API ส่ง posCodeName มาโดยตรง
+        position: data.position,
+      });
+      
       // Map API response to VacantPosition format
       const vacantPos: VacantPosition = {
         id: data.id,
         posCodeId: data.posCodeId,
-        position: data.posCodeMaster?.name || data.position || '-',
+        posCodeName: data.posCodeName, // API ส่ง posCodeName มาโดยตรง (แทน posCodeMaster?.name)
+        position: data.position || '-', // ชื่อตำแหน่งจาก police_personnel
         unit: data.unit || '-',
         requestedPositionId: data.requestedPositionId,
         requestedPosition: data.requestedPosition,
         positionNumber: data.positionNumber,
+        actingAs: data.actingAs,
       };
       
-      console.log('Loaded vacant position:', vacantPos);
+      console.log('Mapped vacant position:', vacantPos);
       setVacantPosition(vacantPos);
     } catch (error) {
       console.error('Error loading vacant position:', error);
@@ -126,21 +178,55 @@ function CreatePromotionChainContent() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // TODO: Implement API call
-      // const response = await fetch('/api/promotion-chain', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     originVacantPositionId: vacantId,
-      //     nodes,
-      //   }),
-      // });
+      if (!vacantPosition || nodes.length === 0) {
+        toast.error('ข้อมูลไม่ครบถ้วน');
+        return;
+      }
+
+      const year = new Date().getFullYear() + 543; // พ.ศ.
+      const swapDetails = nodes.map((node) => ({
+        sequence: node.nodeOrder,
+        personnelId: node.personnelId,
+        nationalId: node.nationalId,
+        fullName: node.fullName,
+        rank: node.rank,
+        posCodeId: node.fromPosCodeId,
+        fromPosition: node.fromPosition,
+        fromPositionNumber: node.fromPositionNumber,
+        fromUnit: node.fromUnit,
+        toPosition: node.toPosition,
+        toPositionNumber: node.toPositionNumber,
+        toUnit: node.toUnit,
+        notes: null,
+      }));
+
+      const payload = {
+        year,
+        swapDate: new Date().toISOString(),
+        swapType: 'promotion-chain',
+        groupName: `เลื่อนตำแหน่ง ${vacantPosition.posCodeName || ''} • ${vacantPosition.position || ''}${vacantPosition.positionNumber ? ` (${vacantPosition.positionNumber})` : ''}`,
+        groupNumber: groupNumber || null,
+        status: 'completed',
+        notes: undefined,
+        swapDetails,
+      };
+
+      const response = await fetch('/api/swap-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'บันทึกข้อมูลไม่สำเร็จ');
+      }
 
       toast.success('บันทึกรายการสำเร็จ');
       router.push('/police-personnel/promotion-chain');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving chain:', error);
-      toast.error('เกิดข้อผิดพลาดในการบันทึก');
+      toast.error(error?.message || 'เกิดข้อผิดพลาดในการบันทึก');
     } finally {
       setSaving(false);
     }
@@ -165,47 +251,43 @@ function CreatePromotionChainContent() {
             gap: 2,
           }}>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
                 จัดคนเข้าตำแหน่งว่าง
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 เลือกบุคลากรทีละขั้นเพื่อจัดเข้าตำแหน่งว่างแบบทอดต่อ
               </Typography>
 
-              {/* Vacant Position Info - Inline */}
+              {/* Vacant Position Info - Compact */}
               {loading ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                  <CircularProgress size={24} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <CircularProgress size={20} />
                   <Typography variant="body2" color="text.secondary">กำลังโหลด...</Typography>
                 </Box>
               ) : vacantPosition && (
                 <Box sx={{ 
-                  p: 2,
+                  p: 1.5,
                   bgcolor: 'primary.50',
                   borderRadius: 1,
-                  borderLeft: '4px solid',
+                  borderLeft: '3px solid',
                   borderColor: 'primary.main',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 2,
                 }}>
-                  <Box>
-                    <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
                       🎯 ตำแหน่งว่างต้นทาง
                     </Typography>
-                    <Typography variant="h6" sx={{ mt: 0.5, lineHeight: 1.2 }}>
-                      {vacantPosition.position}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      หน่วย: {vacantPosition.unit} | เลขตำแหน่ง: {vacantPosition.positionNumber || '-'}
-                    </Typography>
+                    <Chip label={`${nodes.length} ขั้น`} size="small" color="primary" sx={{ height: 30, fontSize: '0.85rem' }} />
                   </Box>
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Typography variant="caption" color="text.secondary">ขั้นในโซ่</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 700, color: nodes.length > 0 ? 'primary.main' : 'text.secondary' }}>
-                      {nodes.length}
-                    </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                    {vacantPosition.posCodeName} • {vacantPosition.position} 
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.85rem' }}>
+                     • {vacantPosition.unit} • เลขตำแหน่ง {vacantPosition.positionNumber || '-'} • ทำหน้าที่: {vacantPosition.actingAs || '-'}
+                  </Typography>
+                  {/* Group Number Display (ตามแบบหน้า สลับตำแหน่ง) */}
+                  <Box sx={{ mt: 1.25, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Chip label="เลขกลุ่ม" size="small" color="primary" sx={{ height: 22 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{groupNumber || '-'}</Typography>
                   </Box>
                 </Box>
               )}
@@ -217,7 +299,7 @@ function CreatePromotionChainContent() {
               onClick={() => router.push('/police-personnel/promotion-chain')}
               sx={{ flexShrink: 0 }}
             >
-              ย้อนกลับ
+              กลับ
             </Button>
           </Box>
         </Paper>

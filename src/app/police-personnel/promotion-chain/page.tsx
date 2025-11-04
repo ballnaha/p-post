@@ -663,9 +663,18 @@ export default function PromotionChainPage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setShowCreateDialog(true)}
+            onClick={async () => {
+              // Reset filters และ pagination ก่อนเปิด drawer
+              setSearchText('');
+              setFilterPosCode('all');
+              setDrawerPage(0);
+              setShowCreateDialog(true);
+              // Reload vacant positions when opening to ensure used positions are filtered out
+              // ส่ง chains ปัจจุบันเข้าไปเพื่อให้กรองตำแหน่งที่ใช้ไปแล้วได้ถูกต้อง
+              await loadVacantPositions(chains);
+            }}
           >
-            สร้าง Chain ใหม่
+            สร้างรายการใหม่
           </Button>
         </Paper>
       ) : (

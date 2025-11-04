@@ -144,15 +144,10 @@ export default function PolicePersonnelPage() {
   const [total, setTotal] = useState(0);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
   const [positionFilter, setPositionFilter] = useState<'all' | 'occupied' | 'vacant' | 'reserved'>('all');
-  const [positionTypeFilter, setPositionTypeFilter] = useState<string>('all');
-  const [unitFilter, setUnitFilter] = useState<string>('all');
-  const [rankFilter, setRankFilter] = useState<string>('all');
-  const [swapFilter, setSwapFilter] = useState<'all' | 'in-swap' | 'in-threeway' | 'in-vacant'>('all');
   const [posCodeFilter, setPosCodeFilter] = useState<string>('all');
-  const [units, setUnits] = useState<string[]>([]);
-  const [ranks, setRanks] = useState<string[]>([]);
-  const [positionTypes, setPositionTypes] = useState<string[]>([]);
+  const [unitFilter, setUnitFilter] = useState<string>('all');
   const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
+  const [units, setUnits] = useState<string[]>([]);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -227,54 +222,7 @@ export default function PolicePersonnelPage() {
     return nationalId ? vacantListData.has(nationalId) : false;
   }, [vacantListData]);
 
-  // ดึงรายการหน่วยและยศทั้งหมด - ใช้ useCallback เพื่อป้องกัน recreation
-  const fetchUnits = useCallback(async () => {
-    try {
-      const response = await fetch('/api/police-personnel/units');
-      const result = await response.json();
-      if (result.success) {
-        setUnits(result.data);
-      }
-    } catch (err) {
-      console.error('Error fetching units:', err);
-    }
-  }, []);
 
-  const fetchRanks = useCallback(async () => {
-    try {
-      const response = await fetch('/api/police-personnel/ranks');
-      const result = await response.json();
-      if (result.success) {
-        setRanks(result.data);
-      }
-    } catch (err) {
-      console.error('Error fetching ranks:', err);
-    }
-  }, []);
-
-  const fetchPositionTypes = useCallback(async () => {
-    try {
-      const response = await fetch('/api/police-personnel/positions');
-      const result = await response.json();
-      if (result.success) {
-        setPositionTypes(result.data);
-      }
-    } catch (err) {
-      console.error('Error fetching position types:', err);
-    }
-  }, []);
-
-  const fetchPosCodes = useCallback(async () => {
-    try {
-      const response = await fetch('/api/police-personnel/pos-codes');
-      const result = await response.json();
-      if (result.success) {
-        setPosCodes(result.data);
-      }
-    } catch (err) {
-      console.error('Error fetching pos codes:', err);
-    }
-  }, []);
 
   // ดึงรายการทั้ง 3 ประเภทในครั้งเดียวเพื่อเพิ่ม performance พร้อม caching - ใช้ useCallback
   const fetchAllListsForCurrentYear = useCallback(async (forceRefresh = false) => {
@@ -414,6 +362,32 @@ export default function PolicePersonnelPage() {
     }
   }, []);
 
+  // Fetch pos codes for vacant position dialog and filter
+  const fetchPosCodes = useCallback(async () => {
+    try {
+      const response = await fetch('/api/police-personnel/pos-codes');
+      const result = await response.json();
+      if (result.success) {
+        setPosCodes(result.data);
+      }
+    } catch (err) {
+      console.error('Error fetching pos codes:', err);
+    }
+  }, []);
+
+  // Fetch units for filter
+  const fetchUnits = useCallback(async () => {
+    try {
+      const response = await fetch('/api/police-personnel/units');
+      const result = await response.json();
+      if (result.success) {
+        setUnits(result.data);
+      }
+    } catch (err) {
+      console.error('Error fetching units:', err);
+    }
+  }, []);
+
   // Debounce function สำหรับการค้นหา
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -428,13 +402,11 @@ export default function PolicePersonnelPage() {
   }, [nameInputValue, fetchNameOptions]);
 
   useEffect(() => {
-    fetchUnits();
-    fetchRanks();
-    fetchPositionTypes();
     fetchPosCodes();
+    fetchUnits();
     // ใช้ function ใหม่ที่รวมการโหลดทั้ง 3 รายการ
     fetchAllListsForCurrentYear();
-  }, [fetchUnits, fetchRanks, fetchPositionTypes, fetchPosCodes, fetchAllListsForCurrentYear]);
+  }, [fetchPosCodes, fetchUnits, fetchAllListsForCurrentYear]);
 
   const fetchData = async (abortSignal?: AbortSignal) => {
     setLoading(true);
@@ -447,7 +419,7 @@ export default function PolicePersonnelPage() {
     try {
       const searchParam = nameSearch || search || '';
       const response = await fetch(
-        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&positionType=${positionTypeFilter}&unit=${unitFilter}&rank=${rankFilter}&swapFilter=${swapFilter}&posCode=${posCodeFilter}`,
+        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}`,
         abortSignal ? { signal: abortSignal } : {}
       );
       
@@ -485,12 +457,7 @@ export default function PolicePersonnelPage() {
       clearTimeout(timer);
       abortController.abort();
     };
-  }, [page, rowsPerPage, positionFilter, positionTypeFilter, unitFilter, rankFilter, nameSearch, swapFilter, posCodeFilter]);
-
-  const handleSearch = () => {
-    setPage(0);
-    fetchData();
-  };
+  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter]);
 
   const handleReset = () => {
     setSearch('');
@@ -498,31 +465,18 @@ export default function PolicePersonnelPage() {
     setNameInputValue('');
     setNameOptions([]);
     setPositionFilter('all');
-    setPositionTypeFilter('all');
-    setUnitFilter('all');
-    setRankFilter('all');
-    setSwapFilter('all');
     setPosCodeFilter('all');
+    setUnitFilter('all');
     setPage(0);
   };
-
-  const handleSwapFilterChange = useCallback((value: 'all' | 'in-swap' | 'in-threeway' | 'in-vacant') => {
-    setSwapFilter(value);
-    setPage(0); // Reset to first page when filter changes
-  }, []);
 
   const handlePositionFilterChange = useCallback((value: 'all' | 'occupied' | 'vacant' | 'reserved') => {
     setPositionFilter(value);
     setPage(0);
   }, []);
 
-  const handlePositionTypeFilterChange = useCallback((value: string) => {
-    setPositionTypeFilter(value);
-    setPage(0);
-  }, []);
-
-  const handleRankFilterChange = useCallback((value: string) => {
-    setRankFilter(value);
+  const handlePosCodeFilterChange = useCallback((value: string) => {
+    setPosCodeFilter(value);
     setPage(0);
   }, []);
 
@@ -531,10 +485,7 @@ export default function PolicePersonnelPage() {
     setPage(0);
   }, []);
 
-  const handlePosCodeFilterChange = useCallback((value: string) => {
-    setPosCodeFilter(value);
-    setPage(0);
-  }, []);
+
 
   const handleViewDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnel(personnel);
@@ -695,11 +646,8 @@ export default function PolicePersonnelPage() {
           setSwapListData(prev => new Set(prev).add(selectedPersonnel.nationalId!));
         }
         
-        // อัพเดท swap list และ reset page ถ้ากำลัง filter swap list อยู่
+        // อัพเดท swap list
         fetchSwapListForCurrentYear();
-        if (swapFilter === 'in-swap') {
-          setPage(0); // Reset to first page to see the newly added person
-        }
       } else {
         toast.error(result.error || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
       }
@@ -787,9 +735,6 @@ export default function PolicePersonnelPage() {
         }
         
         fetchThreeWayListForCurrentYear();
-        if (swapFilter === 'in-threeway') {
-          setPage(0); // Reset to first page to see the newly added person
-        }
       } else {
         const result = await response.json();
         toast.error(result.error || 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
@@ -875,9 +820,6 @@ export default function PolicePersonnelPage() {
         });
         
         fetchAllListsForCurrentYear(true); // force refresh เพื่อให้ได้ข้อมูลล่าสุด
-        if (swapFilter === 'in-threeway') {
-          setPage(0); // Reset to first page for consistent view
-        }
       } else {
         // แสดงข้อความ error ที่ละเอียดจาก API
         throw new Error(result.error || 'เกิดข้อผิดพลาดในการลบข้อมูล');
@@ -953,10 +895,6 @@ export default function PolicePersonnelPage() {
         });
         
         fetchAllListsForCurrentYear(true); // force refresh เพื่อให้ได้ข้อมูลล่าสุด
-        // ถ้ากำลัง filter swap list และลบคนที่อยู่ในหน้าปัจจุบันออก อาจต้อง reset page
-        if (swapFilter === 'in-swap') {
-          setPage(0); // Reset to first page for consistent view
-        }
       } else {
         // แสดง error message ที่ละเอียดขึ้น
         throw new Error(result.error || 'เกิดข้อผิดพลาดในการลบข้อมูล');
@@ -1052,9 +990,6 @@ export default function PolicePersonnelPage() {
         }
         
         fetchVacantListForCurrentYear();
-        if (swapFilter === 'in-vacant') {
-          setPage(0); // Reset to first page to see the newly added person
-        }
 
         // ปิด modal และ clear form
         setAddToVacantModalOpen(false);
@@ -1105,9 +1040,6 @@ export default function PolicePersonnelPage() {
         });
         
         fetchVacantListForCurrentYear();
-        if (swapFilter === 'in-vacant') {
-          setPage(0); // Reset to first page for consistent view
-        }
       } else {
         // แสดง error message จาก API
         const errorData = await response.json();
@@ -1583,7 +1515,7 @@ export default function PolicePersonnelPage() {
             </Box>
           </Box>
 
-          {/* Search by Name - Autocomplete + Filter รายการ + สถานะตำแหน่ง + รหัสตำแหน่ง */}
+          {/* Search by Name - Autocomplete + Filters */}
           <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Autocomplete
               size="small"
@@ -1654,7 +1586,7 @@ export default function PolicePersonnelPage() {
               flex: { 
                 xs: '1 1 100%',              // Mobile: full width
                 sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
-                md: '0 1 180px'              // Desktop/iPad landscape: fixed width
+                md: '0 1 200px'              // Desktop/iPad landscape: fixed width
               }, 
               minWidth: 150 
             }}>
@@ -1677,40 +1609,44 @@ export default function PolicePersonnelPage() {
               flex: { 
                 xs: '1 1 100%',              // Mobile: full width
                 sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
-                md: '0 1 180px'              // Desktop/iPad landscape: fixed width
+                md: '0 1 200px'              // Desktop/iPad landscape: fixed width
               }, 
               minWidth: 150 
             }}>
-              <InputLabel>รายการ</InputLabel>
+              <InputLabel>หน่วย</InputLabel>
               <Select
-                value={swapFilter}
-                label="รายการ"
-                onChange={(e) => handleSwapFilterChange(e.target.value as 'all' | 'in-swap' | 'in-threeway' | 'in-vacant')}
+                value={unitFilter}
+                label="หน่วย"
+                onChange={(e) => handleUnitFilterChange(e.target.value)}
               >
                 <MenuItem value="all">ทั้งหมด</MenuItem>
-                <MenuItem value="in-swap">อยู่ในสลับตำแหน่ง</MenuItem>
-                <MenuItem value="in-threeway">อยู่ในสามเส้า</MenuItem>
-                <MenuItem value="in-vacant">ยื่นขอตำแหน่ง</MenuItem>
+                {units.map((unit) => (
+                  <MenuItem key={unit} value={unit}>
+                    {unit}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Box>
 
-          {/* Search and Filter */}
+          {/* Search */}
           <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
-            {/* ช่องค้นหาหลัก - ให้ใหญ่ขึ้นบน iPad */}
+            {/* ช่องค้นหาหลัก */}
             <TextField
               size="small"
               placeholder="ค้นหาด้วย เลขบัตรประชาชน, เลขตำแหน่ง, หมายเหตุ..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
               sx={{ 
                 flex: { 
                   xs: '1 1 100%',           // Mobile: full width
-                  sm: '1 1 100%',           // Tablet: full width
+                  sm: '1 1 auto',           // Tablet: auto flex
                   md: '1 1 auto'            // Desktop: auto flex
                 },
-                minWidth: { xs: '100%', sm: '100%', md: 300 }
+                minWidth: { xs: '100%', sm: 300, md: 300 }
               }}
               InputProps={{
                 startAdornment: (
@@ -1721,77 +1657,10 @@ export default function PolicePersonnelPage() {
               }}
             />
 
-            <Autocomplete
-              size="small"
-              options={['ทั้งหมด', ...positionTypes]}
-              value={positionTypeFilter === 'all' ? 'ทั้งหมด' : positionTypeFilter}
-              onChange={(event, newValue) => {
-                handlePositionTypeFilterChange(newValue === 'ทั้งหมด' ? 'all' : newValue || 'all');
-              }}
-              sx={{ 
-                flex: { 
-                  xs: '1 1 100%',                    // Mobile: full width
-                  sm: '1 1 calc(33.33% - 11px)',     // Tablet: 3 columns
-                  md: '0 1 200px'                    // Desktop: fixed width
-                },
-                minWidth: { xs: '100%', sm: 150, md: 200 }
-              }}
-              renderInput={(params) => <TextField {...params} label="ตำแหน่ง" />}
-            />
-
-            <Autocomplete
-              size="small"
-              options={['ทั้งหมด', ...ranks]}
-              value={rankFilter === 'all' ? 'ทั้งหมด' : rankFilter}
-              onChange={(event, newValue) => {
-                handleRankFilterChange(newValue === 'ทั้งหมด' ? 'all' : newValue || 'all');
-              }}
-              sx={{ 
-                flex: { 
-                  xs: '1 1 100%',                    // Mobile: full width
-                  sm: '1 1 calc(33.33% - 11px)',     // Tablet: 3 columns
-                  md: '0 1 200px'                    // Desktop: fixed width
-                },
-                minWidth: { xs: '100%', sm: 150, md: 200 }
-              }}
-              renderInput={(params) => <TextField {...params} label="ยศ" />}
-            />
-
-            <Autocomplete
-              size="small"
-              options={['ทั้งหมด', ...units]}
-              value={unitFilter === 'all' ? 'ทั้งหมด' : unitFilter}
-              onChange={(event, newValue) => {
-                handleUnitFilterChange(newValue === 'ทั้งหมด' ? 'all' : newValue || 'all');
-              }}
-              sx={{ 
-                flex: { 
-                  xs: '1 1 100%',                    // Mobile: full width
-                  sm: '1 1 calc(33.33% - 11px)',     // Tablet: 3 columns
-                  md: '0 1 200px'                    // Desktop: fixed width
-                },
-                minWidth: { xs: '100%', sm: 150, md: 200 }
-              }}
-              renderInput={(params) => <TextField {...params} label="หน่วย" />}
-            />
-
-            <Button 
-              variant="contained" 
-              onClick={handleSearch} 
-              sx={{ 
-                minWidth: { xs: '100%', sm: 100, md: 100 },
-                flex: { xs: '1 1 100%', sm: '0 0 auto' }
-              }}
-            >
-              ค้นหา
-            </Button>
             <Tooltip title="รีเซ็ต" leaveDelay={0} disableFocusListener>
               <IconButton 
                 onClick={handleReset} 
                 color="secondary"
-                sx={{ 
-                  display: { xs: 'none', sm: 'inline-flex' }  // ซ่อนบน mobile เพื่อประหยัดพื้นที่
-                }}
               >
                 <ResetIcon />
               </IconButton>

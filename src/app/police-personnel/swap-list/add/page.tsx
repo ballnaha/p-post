@@ -8,15 +8,9 @@ import {
   TextField,
   Alert,
   CircularProgress,
-  Autocomplete,
   Stack,
   Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   IconButton,
-  Chip,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -33,11 +27,13 @@ import {
   Badge as BadgeIcon,
   CalendarToday as CalendarIcon,
   School as EducationIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import PersonnelDrawer from './components/PersonnelDrawer';
 
 interface PolicePersonnel {
   id: string;
@@ -72,8 +68,6 @@ export default function AddSwapTransactionPage() {
   const router = useRouter();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [personnelOptions, setPersonnelOptions] = useState<PolicePersonnel[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [swappedPersonnelIds, setSwappedPersonnelIds] = useState<Set<string>>(new Set());
   
   // Personnel selections
@@ -83,6 +77,10 @@ export default function AddSwapTransactionPage() {
   // Dialog state
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedPersonnelDetail, setSelectedPersonnelDetail] = useState<PolicePersonnel | null>(null);
+  
+  // Drawer state
+  const [drawerAOpen, setDrawerAOpen] = useState(false);
+  const [drawerBOpen, setDrawerBOpen] = useState(false);
   
   // Form data
   const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
@@ -148,38 +146,11 @@ export default function AddSwapTransactionPage() {
     }
   }, []);
 
-  const fetchPersonnelOptions = useCallback(async (excludeIds?: Set<string>) => {
-    try {
-      setSearchLoading(true);
-      // Fetch from swap-list API to get personnel who are in the current year's swap list
-      // Filter by swapType=two-way to get only personnel for two-way swap
-      const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/swap-list?year=${currentYear}&swapType=two-way`);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch swap list');
-      }
-
-      const json = await response.json();
-      const list: PolicePersonnel[] = Array.isArray(json?.data) ? json.data : [];
-      // Filter only personnel with rank and who haven't swapped yet this year
-      const idsToExclude = excludeIds || swappedPersonnelIds;
-      setPersonnelOptions(
-        list.filter((p: PolicePersonnel) => 
-          !!p.rank && !idsToExclude.has(p.id)
-        )
-      );
-    } catch (error) {
-      console.error('Error fetching swap list:', error);
-    } finally {
-      setSearchLoading(false);
-    }
-  }, [swappedPersonnelIds]);
 
   useEffect(() => {
     const fetchData = async () => {
-      const swappedIds = await fetchNextGroupNumber();
-      await fetchPersonnelOptions(swappedIds);
+      await fetchNextGroupNumber();
     };
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,25 +165,18 @@ export default function AddSwapTransactionPage() {
     setDetailDialogOpen(false);
   }, []);
 
-  const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel) => {
     setPersonnelA(newValue);
+    setDrawerAOpen(false);
     // No need to reset B anymore since position doesn't need to match
   }, []);
 
-  const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel) => {
     setPersonnelB(newValue);
+    setDrawerBOpen(false);
   }, []);
 
-  // Memoized filter options for B - no need to check same position
-  const optionsForB = useMemo(() => {
-    return personnelA
-      ? personnelOptions.filter(
-          (p) =>
-            p.id !== personnelA.id &&
-            p.rank // Ensure has rank
-        )
-      : [];
-  }, [personnelA, personnelOptions]);
+
 
   const canSwap = useMemo(() => 
     Boolean(personnelA && personnelB), 
@@ -422,41 +386,35 @@ export default function AddSwapTransactionPage() {
                   บุคลากร A
                 </Typography>
                 
-                <Autocomplete
-                  fullWidth
-                  size="small"
-                  options={personnelOptions}
-                  value={personnelA}
-                  getOptionLabel={(option) => `${option.rank || ''} ${option.fullName || ''} - ${option.position || ''} (${option.unit || ''})`}
-                  onChange={(event, newValue) => handleSelectPersonnelA(newValue)}
-                  loading={searchLoading}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label="🔍 เลือกบุคลากร A" 
-                      placeholder="ค้นหา..."
-                      InputProps={{
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {searchLoading ? <CircularProgress size={20} /> : null}
-                            {params.InputProps.endAdornment}
-                          </>
-                        ),
-                      }}
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <li {...props} key={option.id}>
-                      <Box>
-                        <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          เลขตำแหน่ง: {option.positionNumber || '-'} | ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
-                        </Typography>
-                      </Box>
-                    </li>
-                  )}
-                />
+                {!personnelA ? (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="large"
+                    startIcon={<SearchIcon />}
+                    onClick={() => setDrawerAOpen(true)}
+                    sx={{ 
+                      py: 1.5,
+                      borderStyle: 'dashed',
+                      borderWidth: 2,
+                    }}
+                  >
+                    เลือกบุคลากร A
+                  </Button>
+                ) : (
+                  <Box>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      startIcon={<SearchIcon />}
+                      onClick={() => setDrawerAOpen(true)}
+                      sx={{ mb: 1 }}
+                    >
+                      เปลี่ยนบุคลากร A
+                    </Button>
+                  </Box>
+                )}
 
                 {personnelA && (
                   <Box sx={{ mt: 2 }}>
@@ -633,6 +591,7 @@ export default function AddSwapTransactionPage() {
                   border: 2,
                   borderColor: personnelB ? 'success.main' : 'grey.300',
                   transition: 'all 0.3s',
+                  opacity: !personnelA ? 0.6 : 1,
                 }}
               >
                 <Typography variant="h6" fontWeight={600} mb={2} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -640,37 +599,36 @@ export default function AddSwapTransactionPage() {
                   บุคลากร B
                 </Typography>
                 
-                <Autocomplete
-                  fullWidth
-                  size="small"
-                  options={optionsForB}
-                  value={personnelB}
-                  getOptionLabel={(option) => `${option.rank || ''} ${option.fullName || ''} - ${option.position || ''} (${option.unit || ''})`}
-                  onChange={(event, newValue) => handleSelectPersonnelB(newValue)}
-                  disabled={!personnelA}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label="🔍 เลือกบุคลากร B" 
-                      placeholder={personnelA ? "ค้นหา..." : "เลือก A ก่อน"} 
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <li {...props} key={option.id}>
-                      <Box>
-                        <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          เลขที่: {option.noId || '-'} | ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
-                        </Typography>
-                      </Box>
-                    </li>
-                  )}
-                  noOptionsText={
-                    personnelA 
-                      ? "ไม่พบบุคลากร" 
-                      : "เลือกบุคลากร A ก่อน"
-                  }
-                />
+                {!personnelB ? (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="large"
+                    startIcon={<SearchIcon />}
+                    onClick={() => setDrawerBOpen(true)}
+                    disabled={!personnelA}
+                    sx={{ 
+                      py: 1.5,
+                      borderStyle: 'dashed',
+                      borderWidth: 2,
+                    }}
+                  >
+                    {personnelA ? 'เลือกบุคลากร B' : 'เลือก A ก่อน'}
+                  </Button>
+                ) : (
+                  <Box>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      startIcon={<SearchIcon />}
+                      onClick={() => setDrawerBOpen(true)}
+                      sx={{ mb: 1 }}
+                    >
+                      เปลี่ยนบุคลากร B
+                    </Button>
+                  </Box>
+                )}
 
                 {personnelB && (
                   <Box sx={{ mt: 2 }}>
@@ -887,6 +845,26 @@ export default function AddSwapTransactionPage() {
           personnel={selectedPersonnelDetail}
           loading={false}
           onClearData={() => setSelectedPersonnelDetail(null)}
+        />
+
+        {/* Personnel Drawer for A */}
+        <PersonnelDrawer
+          open={drawerAOpen}
+          onClose={() => setDrawerAOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelA(personnel as any)}
+          title="เลือกบุคลากร A"
+          excludePersonnelId={personnelB?.id}
+        />
+
+        {/* Personnel Drawer for B - กรองตามหน่วยและ posCode เดียวกับ A */}
+        <PersonnelDrawer
+          open={drawerBOpen}
+          onClose={() => setDrawerBOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelB(personnel as any)}
+          title="เลือกบุคลากร B"
+          excludePersonnelId={personnelA?.id}
+          initialFilterUnit={personnelA?.unit}
+          initialFilterPosCode={personnelA?.posCodeId}
         />
       </Box>
     </Layout>

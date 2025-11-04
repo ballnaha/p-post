@@ -522,8 +522,12 @@ export default function PromotionChainBuilder({
                       }}
                     />
                     <Typography variant="body2" sx={{ mt: 0.25, fontSize: '0.8rem', color: 'text.primary', fontWeight: 600 }}>
+                      • {node.toPositionNumber}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.25, fontSize: '0.9rem', color: 'text.primary', fontWeight: 600 }}>
                       - {node.rank} {node.fullName}
                     </Typography>
+
                   </Box>
                 </React.Fragment>
               );

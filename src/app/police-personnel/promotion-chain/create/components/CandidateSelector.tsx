@@ -91,6 +91,9 @@ export default function CandidateSelector({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20); // เพิ่มจาก 10 เป็น 20 เพื่อลดการ re-render
   const [initialLoading, setInitialLoading] = useState(false);
+  
+  // Track if filter options are loaded
+  const [filterOptionsLoaded, setFilterOptionsLoaded] = useState(false);
 
   // Debounce search term
   useEffect(() => {
@@ -103,27 +106,42 @@ export default function CandidateSelector({
 
   useEffect(() => {
     if (open) {
-      // Default unit to vacantPosition's unit on first open
-      if (vacantPosition?.unit) {
-        setFilterUnit(vacantPosition.unit);
-      } else {
-        setFilterUnit('all');
-      }
-
+      // Set initial loading FIRST to prevent other useEffects from triggering
+      setInitialLoading(true);
+      setFilterOptionsLoaded(false);
+      
       // Reset transient states to avoid flashing stale content
       setCandidates([]);
       setTotalCandidates(0);
       setSearchTerm('');
       setFilterPosCode('all');
+      setPage(0);
+
+      // Determine initial filter unit
+      const initialUnit = vacantPosition?.unit || 'all';
+      setFilterUnit(initialUnit);
 
       // Load all initial data before showing content
-      setInitialLoading(true);
       (async () => {
-        await Promise.all([loadAllUnits(), loadCandidates(), loadPosCodes()]);
+        // Load filter options and candidates in parallel
+        await Promise.all([
+          loadAllUnits(), 
+          loadPosCodes()
+        ]);
+        
+        // After filter options are loaded, load candidates with correct filters
+        await loadCandidatesWithFilter(initialUnit, 'all', '', 0, rowsPerPage);
+        
+        // Mark as loaded
+        setFilterOptionsLoaded(true);
         setInitialLoading(false);
       })();
+    } else {
+      // When closing, reset states
+      setInitialLoading(false);
+      setFilterOptionsLoaded(false);
     }
-  }, [open, targetRankLevel, vacantPosition?.unit]);
+  }, [open, targetRankLevel, vacantPosition?.unit, rowsPerPage]);
   const loadPosCodes = async () => {
     try {
       const res = await fetch('/api/police-personnel/pos-codes');
@@ -154,16 +172,22 @@ export default function CandidateSelector({
     }
   };
 
-  const loadCandidates = async () => {
+  const loadCandidatesWithFilter = async (
+    unit: string, 
+    posCode: string, 
+    search: string, 
+    currentPage: number, 
+    pageSize: number
+  ) => {
     setLoading(true);
     try {
       // Server-side pagination and filters
       const params = new URLSearchParams();
-      if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
-      if (filterUnit && filterUnit !== 'all') params.set('unit', filterUnit);
-      if (filterPosCode && filterPosCode !== 'all') params.set('posCodeId', filterPosCode);
-      params.set('page', page.toString());
-      params.set('limit', rowsPerPage.toString());
+      if (search) params.set('search', search);
+      if (unit && unit !== 'all') params.set('unit', unit);
+      if (posCode && posCode !== 'all') params.set('posCodeId', posCode);
+      params.set('page', currentPage.toString());
+      params.set('limit', pageSize.toString());
       
       // ส่งปีปัจจุบัน (พ.ศ.) เพื่อกรองบุคลากรที่มีอยู่ใน swap transaction แล้ว
       const currentYear = new Date().getFullYear() + 543;
@@ -184,6 +208,16 @@ export default function CandidateSelector({
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadCandidates = async () => {
+    await loadCandidatesWithFilter(
+      filterUnit, 
+      filterPosCode, 
+      debouncedSearchTerm, 
+      page, 
+      rowsPerPage
+    );
   };
 
   
@@ -266,10 +300,12 @@ export default function CandidateSelector({
 
   // Reset page when search or filter changes (ใช้ debouncedSearchTerm แทน searchTerm)
   useEffect(() => {
-    setPage(0);
-  }, [debouncedSearchTerm, filterUnit, filterPosCode]);
+    if (!initialLoading) {
+      setPage(0);
+    }
+  }, [debouncedSearchTerm, filterUnit, filterPosCode, initialLoading]);
 
-  // Fetch when paging or filters change
+  // Fetch when paging or filters change (but not during initial loading)
   useEffect(() => {
     if (open && !initialLoading) {
       loadCandidates();
@@ -377,11 +413,14 @@ export default function CandidateSelector({
 
         {/* Content */}
         <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
-        {initialLoading ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <CircularProgress size={40} />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              กำลังเตรียมข้อมูลผู้สมัคร...
+        {(initialLoading || !filterOptionsLoaded) ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '400px' }}>
+            <CircularProgress size={48} />
+            <Typography variant="body1" color="text.secondary" sx={{ mt: 3, fontWeight: 500 }}>
+              กำลังโหลดและกรองข้อมูลผู้สมัคร...
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {!filterOptionsLoaded ? 'กำลังโหลด...' : 'กรุณารอสักครู่'}
             </Typography>
           </Box>
   ) : (
@@ -481,9 +520,6 @@ export default function CandidateSelector({
               }}
             />
             
-            {initialLoading ? (
-              <Skeleton variant="rounded" width={180} height={36} sx={{ borderRadius: 1 }} />
-            ) : (
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <Select
                 value={filterUnit}
@@ -544,11 +580,7 @@ export default function CandidateSelector({
                   ))}
               </Select>
             </FormControl>
-            )}
 
-            {initialLoading ? (
-              <Skeleton variant="rounded" width={180} height={36} sx={{ borderRadius: 1 }} />
-            ) : (
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <Select
                 value={filterPosCode}
@@ -610,10 +642,9 @@ export default function CandidateSelector({
                   ))}
               </Select>
             </FormControl>
-            )}
           </Box>
           
-          {(initialLoading || loading) ? (
+          {loading ? (
             <Skeleton variant="rounded" height={28} sx={{ borderRadius: 0.75 }} />
           ) : totalCandidates > 0 && (
             <Paper 

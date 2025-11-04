@@ -8,7 +8,6 @@ import {
   TextField,
   Alert,
   CircularProgress,
-  Autocomplete,
   IconButton,
   Chip,
   Divider,
@@ -26,11 +25,13 @@ import {
   SwapHoriz as SwapHorizIcon,
   Person as PersonIcon,
   Info as InfoIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter, useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import PersonnelDrawer from '../../add/components/PersonnelDrawer';
 
 interface PolicePersonnel {
   id: string;
@@ -95,8 +96,6 @@ export default function EditSwapTransactionPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [transaction, setTransaction] = useState<SwapTransaction | null>(null);
-  const [personnelOptions, setPersonnelOptions] = useState<PolicePersonnel[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
   
   // Personnel selections
   const [personnelA, setPersonnelA] = useState<PolicePersonnel | null>(null);
@@ -105,6 +104,10 @@ export default function EditSwapTransactionPage() {
   // Dialog state
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedPersonnelDetail, setSelectedPersonnelDetail] = useState<PolicePersonnel | null>(null);
+  
+  // Drawer state
+  const [drawerAOpen, setDrawerAOpen] = useState(false);
+  const [drawerBOpen, setDrawerBOpen] = useState(false);
   
   // Form data
   const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
@@ -121,127 +124,71 @@ export default function EditSwapTransactionPage() {
     }
   }, [personnelA, personnelB]);
 
-  const fetchTransaction = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/swap-transactions/${params.id}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch transaction');
-      }
-
-      const result = await response.json();
-      const data = result.data;
+  // Load transaction and set personnel from transaction data
+  useEffect(() => {
+    const loadTransaction = async () => {
+      if (!params.id) return;
       
-      setTransaction(data);
-      setYear(data.year);
-      setSwapDate(dayjs(data.swapDate));
-      setNotes(data.notes || '');
-      setGroupNumber(data.groupNumber || '');
-      setGroupName(data.groupName || '');
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/swap-transactions/${params.id}`);
 
-    } catch (error) {
-      console.error('Error fetching transaction:', error);
-      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
-      router.push('/police-personnel/swap-list');
-    } finally {
-      setLoading(false);
-    }
-  }, [params.id, router]); // Removed toast from dependencies
-
-  const fetchPersonnelOptions = useCallback(async () => {
-    try {
-      setSearchLoading(true);
-      const currentYear = new Date().getFullYear() + 543;
-      
-      // 1. Fetch swap-list (available personnel)
-      const response = await fetch(`/api/swap-list?year=${currentYear}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch swap list');
-      }
-
-      const json = await response.json();
-      const list: PolicePersonnel[] = Array.isArray(json?.data) ? json.data : [];
-      
-      // 2. Get current transaction's personnel IDs (so we can include them in options)
-      const currentPersonnelIds = transaction?.swapDetails.map(d => d.personnelId) || [];
-      
-      // 3. Fetch all swap transactions to get already swapped IDs
-      const transactionsResponse = await fetch(`/api/swap-transactions?year=${currentYear}`);
-      const transactionsResult = await transactionsResponse.json();
-      const transactions = transactionsResult.data || [];
-      
-      // 4. Build a Set of personnel IDs who have already been swapped (excluding current transaction)
-      const swappedIds = new Set<string>();
-      transactions.forEach((t: any) => {
-        // Skip current transaction being edited
-        if (t.id !== params.id) {
-          if (Array.isArray(t.swapDetails)) {
-            t.swapDetails.forEach((detail: any) => {
-              if (detail.personnelId) {
-                swappedIds.add(detail.personnelId);
-              }
-            });
-          }
+        if (!response.ok) {
+          throw new Error('Failed to fetch transaction');
         }
-      });
 
-      // 5. Filter personnel: must have rank AND not already swapped (except current transaction personnel)
-      setPersonnelOptions(
-        list.filter((p: PolicePersonnel) => 
-          !!p.rank && !swappedIds.has(p.id)
-        )
-      );
+        const result = await response.json();
+        const data = result.data;
+        
+        setTransaction(data);
+        setYear(data.year);
+        setSwapDate(dayjs(data.swapDate));
+        setNotes(data.notes || '');
+        setGroupNumber(data.groupNumber || '');
+        setGroupName(data.groupName || '');
 
-      // 6. Set current personnel from transaction
-      if (transaction && transaction.swapDetails.length >= 2) {
-        const detailA = transaction.swapDetails[0];
-        const detailB = transaction.swapDetails[1];
+        // Set personnel from transaction details
+        if (data.swapDetails && data.swapDetails.length >= 2) {
+          const detailA = data.swapDetails[0];
+          const detailB = data.swapDetails[1];
 
-        // Find matching personnel from options or create from detail
-        const pA = list.find(p => p.id === detailA.personnelId) || {
-          id: detailA.personnelId,
-          fullName: detailA.fullName,
-          rank: detailA.rank,
-          position: detailA.fromPosition,
-          positionNumber: detailA.fromPositionNumber,
-          unit: detailA.fromUnit,
-          nationalId: detailA.nationalId,
-        };
+          const pA: PolicePersonnel = {
+            id: detailA.personnelId,
+            fullName: detailA.fullName,
+            rank: detailA.rank,
+            position: detailA.fromPosition,
+            positionNumber: detailA.fromPositionNumber,
+            unit: detailA.fromUnit,
+            nationalId: detailA.nationalId,
+            posCodeId: detailA.posCodeId,
+          };
 
-        const pB = list.find(p => p.id === detailB.personnelId) || {
-          id: detailB.personnelId,
-          fullName: detailB.fullName,
-          rank: detailB.rank,
-          position: detailB.fromPosition,
-          positionNumber: detailB.fromPositionNumber,
-          unit: detailB.fromUnit,
-          nationalId: detailB.nationalId,
-        };
+          const pB: PolicePersonnel = {
+            id: detailB.personnelId,
+            fullName: detailB.fullName,
+            rank: detailB.rank,
+            position: detailB.fromPosition,
+            positionNumber: detailB.fromPositionNumber,
+            unit: detailB.fromUnit,
+            nationalId: detailB.nationalId,
+            posCodeId: detailB.posCodeId,
+          };
 
-        setPersonnelA(pA);
-        setPersonnelB(pB);
+          setPersonnelA(pA);
+          setPersonnelB(pB);
+        }
+
+      } catch (error) {
+        console.error('Error fetching transaction:', error);
+        toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        router.push('/police-personnel/swap-list');
+      } finally {
+        setLoading(false);
       }
+    };
 
-    } catch (error) {
-      console.error('Error fetching swap list:', error);
-    } finally {
-      setSearchLoading(false);
-    }
-  }, [transaction, params.id]);
-
-  useEffect(() => {
-    if (params.id) {
-      fetchTransaction();
-    }
-  }, [params.id, fetchTransaction]);
-
-  useEffect(() => {
-    if (transaction) {
-      fetchPersonnelOptions();
-    }
-  }, [transaction, fetchPersonnelOptions]);
+    loadTransaction();
+  }, [params.id, router]);
 
   const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnelDetail(personnel);
@@ -252,8 +199,9 @@ export default function EditSwapTransactionPage() {
     setDetailDialogOpen(false);
   }, []);
 
-  const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel) => {
     setPersonnelA(newValue);
+    setDrawerAOpen(false);
     // If B is selected and same as new A, clear B
     setPersonnelB(prev => {
       if (prev && newValue && prev.id === newValue.id) {
@@ -263,20 +211,10 @@ export default function EditSwapTransactionPage() {
     });
   }, []);
 
-  const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel | null) => {
+  const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel) => {
     setPersonnelB(newValue);
+    setDrawerBOpen(false);
   }, []);
-
-  // Memoized filter options for B - exclude A and ensure has rank
-  const optionsForB = useMemo(() => {
-    return personnelA
-      ? personnelOptions.filter(
-          (p) =>
-            p.id !== personnelA.id &&
-            p.rank // Ensure has rank
-        )
-      : [];
-  }, [personnelA, personnelOptions]);
 
   const canSwap = useMemo(() => 
     Boolean(personnelA && personnelB), 
@@ -520,43 +458,35 @@ export default function EditSwapTransactionPage() {
                   บุคลากร A
                 </Typography>
 
-                <Autocomplete
-                  options={personnelOptions}
-                  getOptionLabel={(option) =>
-                    `${option.rank || ''} ${option.fullName || '-'}`
-                  }
-                  value={personnelA}
-                  onChange={(event, newValue) => handleSelectPersonnelA(newValue)}
-                  loading={searchLoading}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="เลือกบุคลากร A *"
-                      placeholder="พิมพ์ชื่อหรือเลขที่"
-                      InputProps={{
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {searchLoading ? <CircularProgress size={20} /> : null}
-                            {params.InputProps.endAdornment}
-                          </>
-                        ),
-                      }}
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <li {...props} key={option.id}>
-                      <Box>
-                        <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {option.posCodeMaster && `POSCODE: ${option.posCodeMaster.id} | `}
-                          เลขตำแหน่ง: {option.positionNumber || '-'} | ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
-                        </Typography>
-                      </Box>
-                    </li>
-                  )}
-                  noOptionsText="ไม่พบข้อมูล"
-                />
+                {!personnelA ? (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="large"
+                    startIcon={<SearchIcon />}
+                    onClick={() => setDrawerAOpen(true)}
+                    sx={{ 
+                      py: 1.5,
+                      borderStyle: 'dashed',
+                      borderWidth: 2,
+                    }}
+                  >
+                    เลือกบุคลากร A
+                  </Button>
+                ) : (
+                  <Box>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      startIcon={<SearchIcon />}
+                      onClick={() => setDrawerAOpen(true)}
+                      sx={{ mb: 1 }}
+                    >
+                      เปลี่ยนบุคลากร A
+                    </Button>
+                  </Box>
+                )}
 
                 {personnelA && (
                   <Box sx={{ mt: 2 }}>
@@ -740,44 +670,36 @@ export default function EditSwapTransactionPage() {
                   บุคลากร B
                 </Typography>
 
-                <Autocomplete
-                  options={optionsForB}
-                  getOptionLabel={(option) =>
-                    `${option.rank || ''} ${option.fullName || '-'}`
-                  }
-                  value={personnelB}
-                  onChange={(event, newValue) => handleSelectPersonnelB(newValue)}
-                  disabled={false}
-                  loading={searchLoading}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="เลือกบุคลากร B *"
-                      placeholder="พิมพ์ชื่อหรือเลขที่"
-                      InputProps={{
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {searchLoading ? <CircularProgress size={20} /> : null}
-                            {params.InputProps.endAdornment}
-                          </>
-                        ),
-                      }}
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <li {...props} key={option.id}>
-                      <Box>
-                        <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {option.posCodeMaster && `POSCODE: ${option.posCodeMaster.id} | `}
-                          เลขที่: {option.noId || '-'} | ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
-                        </Typography>
-                      </Box>
-                    </li>
-                  )}
-                  noOptionsText={!personnelA ? "กรุณาเลือกบุคลากร A ก่อน" : "ไม่พบข้อมูล"}
-                />
+                {!personnelB ? (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    size="large"
+                    startIcon={<SearchIcon />}
+                    onClick={() => setDrawerBOpen(true)}
+                    disabled={!personnelA}
+                    sx={{ 
+                      py: 1.5,
+                      borderStyle: 'dashed',
+                      borderWidth: 2,
+                    }}
+                  >
+                    {personnelA ? 'เลือกบุคลากร B' : 'เลือก A ก่อน'}
+                  </Button>
+                ) : (
+                  <Box>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      startIcon={<SearchIcon />}
+                      onClick={() => setDrawerBOpen(true)}
+                      sx={{ mb: 1 }}
+                    >
+                      เปลี่ยนบุคลากร B
+                    </Button>
+                  </Box>
+                )}
 
                 {personnelB && (
                   <Box sx={{ mt: 2 }}>
@@ -990,6 +912,26 @@ export default function EditSwapTransactionPage() {
           personnel={selectedPersonnelDetail}
           loading={false}
           onClearData={() => setSelectedPersonnelDetail(null)}
+        />
+
+        {/* Personnel Drawer for A */}
+        <PersonnelDrawer
+          open={drawerAOpen}
+          onClose={() => setDrawerAOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelA(personnel as any)}
+          title="เลือกบุคลากร A"
+          excludePersonnelId={personnelB?.id}
+        />
+
+        {/* Personnel Drawer for B - กรองตามหน่วยและ posCode เดียวกับ A */}
+        <PersonnelDrawer
+          open={drawerBOpen}
+          onClose={() => setDrawerBOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelB(personnel as any)}
+          title="เลือกบุคลากร B"
+          excludePersonnelId={personnelA?.id}
+          initialFilterUnit={personnelA?.unit}
+          initialFilterPosCode={personnelA?.posCodeId}
         />
       </Box>
     </Layout>

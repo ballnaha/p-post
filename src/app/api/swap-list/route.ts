@@ -3,71 +3,90 @@ import prisma from '@/lib/prisma';
 
 /**
  * GET /api/swap-list
- * ดึงรายการที่เลือกไว้สำหรับสลับตำแหน่ง
+ * ดึงรายการ swap transactions (แทนที่ swap_list เดิม)
  * Query params:
  *   - year: ปีที่ต้องการดู (optional, ถ้าไม่ระบุจะใช้ปีปัจจุบัน)
  *   - swapType: ประเภทการสลับ (optional) two-way, three-way, vacant-position
+ *   - status: สถานะ (optional) completed, pending, cancelled
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const yearParam = searchParams.get('year');
     const swapType = searchParams.get('swapType');
+    const status = searchParams.get('status') || 'completed';
     
     // ใช้ปีปัจจุบัน (พ.ศ.) ถ้าไม่ระบุ
     const currentYear = new Date().getFullYear() + 543;
     const year = yearParam ? parseInt(yearParam) : currentYear;
 
     // Build where clause
-    const whereClause: any = { year };
+    const whereClause: any = { year, status };
     if (swapType) {
       whereClause.swapType = swapType;
     }
 
-    // ดึงรายการ swap list (ข้อมูลสำเนาทั้งหมดอยู่ใน table แล้ว)
-    // Optimize: Select only necessary fields
-    const swapList = await prisma.swapList.findMany({
+    // ดึงรายการ swap transactions พร้อมรายละเอียด
+    const transactions = await prisma.swapTransaction.findMany({
       where: whereClause,
-      select: {
-        id: true,
-        noId: true,
-        posCodeId: true,
-        posCodeMaster: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        position: true,
-        positionNumber: true,
-        unit: true,
-        rank: true,
-        fullName: true,
-        nationalId: true,
-        age: true,
-        yearsOfService: true,
-        seniority: true,
-        birthDate: true,
-        education: true,
-        lastAppointment: true,
-        currentRankSince: true,
-        enrollmentDate: true,
-        retirementDate: true,
-        trainingLocation: true,
-        trainingCourse: true,
-        actingAs: true,
-        year: true,
-        swapType: true,
-        notes: true,
-        createdAt: true
+      include: {
+        swapDetails: {
+          include: {
+            posCodeMaster: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
+          orderBy: [
+            { sequence: 'asc' },
+            { fullName: 'asc' }
+          ]
+        }
       },
       orderBy: [
         { swapType: 'asc' },
-        { unit: 'asc' },
-        { position: 'asc' },
         { createdAt: 'desc' }
       ]
     });
+
+    // แปลงข้อมูลให้เป็นรูปแบบเดิม (flat list of personnel)
+    const swapList = transactions.flatMap(transaction => 
+      transaction.swapDetails.map(detail => ({
+        id: detail.personnelId || detail.id,
+        transactionId: transaction.id,
+        groupNumber: transaction.groupNumber,
+        groupName: transaction.groupName,
+        posCodeId: detail.posCodeId,
+        posCodeMaster: detail.posCodeMaster,
+        position: detail.fromPosition,
+        positionNumber: detail.fromPositionNumber,
+        unit: detail.fromUnit,
+        rank: detail.rank,
+        fullName: detail.fullName,
+        nationalId: detail.nationalId,
+        age: detail.age,
+        yearsOfService: detail.yearsOfService,
+        seniority: detail.seniority,
+        birthDate: detail.birthDate,
+        education: detail.education,
+        lastAppointment: detail.lastAppointment,
+        currentRankSince: detail.currentRankSince,
+        enrollmentDate: detail.enrollmentDate,
+        retirementDate: detail.retirementDate,
+        trainingLocation: detail.trainingLocation,
+        trainingCourse: detail.trainingCourse,
+        year: transaction.year,
+        swapType: transaction.swapType,
+        notes: detail.notes || transaction.notes,
+        createdAt: transaction.createdAt,
+        // ข้อมูลตำแหน่งปลายทาง
+        toPosition: detail.toPosition,
+        toPositionNumber: detail.toPositionNumber,
+        toUnit: detail.toUnit,
+      }))
+    );
 
     return NextResponse.json({
       success: true,
@@ -87,171 +106,60 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/swap-list
- * เพิ่มบุคลากรเข้า swap list (เก็บสำเนาข้อมูลทั้งหมด)
- * Body: { personnel: PolicePersonnel, year?: number, notes?: string, swapType?: string }
+ * API นี้ไม่ใช้แล้ว - ใช้ /api/swap-transactions แทน
+ * เก็บไว้เพื่อ backward compatibility
  */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { personnel, year, notes, swapType } = body;
-
-    if (!personnel || !personnel.id) {
-      return NextResponse.json(
-        { success: false, error: 'กรุณาระบุข้อมูลบุคลากร' },
-        { status: 400 }
-      );
-    }
-
-    // Validate swapType
-    const validSwapTypes = ['two-way', 'three-way', 'vacant-position'];
-    const selectedSwapType = swapType && validSwapTypes.includes(swapType) ? swapType : 'two-way';
-
-    // ใช้ปีปัจจุบัน (พ.ศ.) ถ้าไม่ระบุ
-    const currentYear = new Date().getFullYear() + 543;
-    const swapYear = year || currentYear;
-
-    // ตรวจสอบว่ามีในรายการแล้วหรือไม่ (ตรวจสอบด้วยเลขบัตรประชาชนและ swapType)
-    if (personnel.nationalId) {
-      const existing = await prisma.swapList.findFirst({
-        where: {
-          nationalId: personnel.nationalId,
-          year: swapYear,
-          swapType: selectedSwapType
-        }
-      });
-
-      if (existing) {
-        const swapTypeText = selectedSwapType === 'two-way' ? 'สลับตำแหน่ง 2 คน' : 
-                             selectedSwapType === 'three-way' ? 'สลับตำแหน่งสามเส้า' : 
-                             'รายการยื่นขอตำแหน่ง';
-        return NextResponse.json(
-          { success: false, error: `บุคลากรนี้อยู่ในรายการ${swapTypeText}ปี ${swapYear} แล้ว` },
-          { status: 400 }
-        );
-      }
-    }
-
-    // เพิ่มเข้า swap list พร้อมสำเนาข้อมูลทั้งหมด
-    const swapItem = await prisma.swapList.create({
-      data: {
-        year: swapYear,
-        swapType: selectedSwapType,
-        notes: notes || null,
-        
-        // ข้อมูลอ้างอิง
-        noId: personnel.noId,
-
-        // สำเนาข้อมูลตำแหน่ง
-        posCodeId: personnel.posCodeId,
-        position: personnel.position,
-        positionNumber: personnel.positionNumber,
-        unit: personnel.unit,
-        actingAs: personnel.actingAs,
-
-        // สำเนาข้อมูลบุคคล
-        seniority: personnel.seniority,
-        rank: personnel.rank,
-        fullName: personnel.fullName,
-        nationalId: personnel.nationalId,
-        birthDate: personnel.birthDate,
-        age: personnel.age,
-        education: personnel.education,
-
-        // สำเนาข้อมูลการแต่งตั้ง
-        lastAppointment: personnel.lastAppointment,
-        currentRankSince: personnel.currentRankSince,
-        enrollmentDate: personnel.enrollmentDate,
-        retirementDate: personnel.retirementDate,
-        yearsOfService: personnel.yearsOfService,
-
-        // สำเนาข้อมูลการฝึกอบรม
-        trainingLocation: personnel.trainingLocation,
-        trainingCourse: personnel.trainingCourse,
-
-        // Metadata
-        createdBy: null, // TODO: เพิ่มจาก session
-        updatedBy: null
-      }
-    });
-
-    const swapTypeText = selectedSwapType === 'two-way' ? 'สลับตำแหน่ง 2 คน' : 
-                         selectedSwapType === 'three-way' ? 'สลับตำแหน่งสามเส้า' : 
-                         'รายการยื่นขอตำแหน่ง';
-
-    return NextResponse.json({
-      success: true,
-      data: swapItem,
-      message: `เพิ่ม ${personnel.rank} ${personnel.fullName} เข้ารายการ${swapTypeText}ปี ${swapYear} สำเร็จ`
-    });
-  } catch (error: any) {
-    console.error('Error adding to swap list:', error);
-    return NextResponse.json(
-      { success: false, error: 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล' },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(
+    { 
+      success: false, 
+      error: 'API นี้ไม่ใช้แล้ว กรุณาใช้ /api/swap-transactions แทน',
+      redirect: '/api/swap-transactions'
+    },
+    { status: 410 } // Gone
+  );
 }
 
 /**
  * DELETE /api/swap-list
- * ลบบุคลากรออกจาก swap list
- * Body: { nationalId: string, year: number }
+ * ลบ transaction ทั้งกลุ่ม (ใช้ transactionId แทน)
+ * Body: { transactionId: string }
  */
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nationalId, year } = body;
+    const { transactionId } = body;
 
-    if (!nationalId || !year) {
+    if (!transactionId) {
       return NextResponse.json(
-        { success: false, error: 'กรุณาระบุ nationalId และ year' },
+        { success: false, error: 'กรุณาระบุ transactionId' },
         { status: 400 }
       );
     }
 
-    // ตรวจสอบว่าบุคลากรนี้มีการจับคู่ใน swap_transaction_detail หรือไม่
-    const hasSwapTransaction = await prisma.swapTransactionDetail.findFirst({
-      where: {
-        nationalId: nationalId
-      },
-      include: {
-        transaction: true
-      }
+    // ตรวจสอบว่า transaction มีอยู่จริง
+    const transaction = await prisma.swapTransaction.findUnique({
+      where: { id: transactionId }
     });
 
-    if (hasSwapTransaction) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'ไม่สามารถลบได้ เนื่องจากบุคลากรนี้มีการจับคู่แลกตำแหน่งอยู่',
-          detail: 'กรุณาลบกลุ่มการจับคู่ใน Swap Transaction ก่อน',
-          transactionId: hasSwapTransaction.transactionId
-        },
-        { status: 400 }
-      );
-    }
-
-    // ลบด้วย nationalId + year (เพราะบุคคลเดียวกันอาจมีหลายปี)
-    const deleted = await prisma.swapList.deleteMany({
-      where: { 
-        nationalId: nationalId,
-        year: year
-      }
-    });
-
-    if (deleted.count === 0) {
+    if (!transaction) {
       return NextResponse.json(
         { success: false, error: 'ไม่พบข้อมูลที่ต้องการลบ' },
         { status: 404 }
       );
     }
 
+    // ลบ transaction (จะลบ details ด้วยอัตโนมัติเพราะมี onDelete: Cascade)
+    await prisma.swapTransaction.delete({
+      where: { id: transactionId }
+    });
+
     return NextResponse.json({
       success: true,
-      message: 'ลบออกจากรายการสลับตำแหน่งสำเร็จ'
+      message: 'ลบรายการสลับตำแหน่งสำเร็จ'
     });
   } catch (error: any) {
-    console.error('Error deleting from swap list:', error);
+    console.error('Error deleting transaction:', error);
 
     return NextResponse.json(
       { success: false, error: 'เกิดข้อผิดพลาดในการลบข้อมูล' },

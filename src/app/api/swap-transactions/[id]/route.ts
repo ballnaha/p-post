@@ -91,7 +91,7 @@ export async function PUT(
         where: { transactionId: id }
       });
 
-      // สร้าง swapDetails ใหม่
+      // สร้าง swapDetails ใหม่ พร้อมข้อมูลครบถ้วน
       updateData.swapDetails = {
         create: swapDetails.map((detail: any) => ({
           sequence: detail.sequence,
@@ -99,7 +99,22 @@ export async function PUT(
           nationalId: detail.nationalId,
           fullName: detail.fullName,
           rank: detail.rank,
+          seniority: detail.seniority,
           posCodeId: detail.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: detail.birthDate,
+          age: detail.age,
+          education: detail.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: detail.lastAppointment,
+          currentRankSince: detail.currentRankSince,
+          enrollmentDate: detail.enrollmentDate,
+          retirementDate: detail.retirementDate,
+          yearsOfService: detail.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: detail.trainingLocation,
+          trainingCourse: detail.trainingCourse,
+          // ตำแหน่ง
           fromPosition: detail.fromPosition,
           fromPositionNumber: detail.fromPositionNumber,
           fromUnit: detail.fromUnit,

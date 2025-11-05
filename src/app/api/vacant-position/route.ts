@@ -296,30 +296,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // ตรวจสอบว่ามีข้อมูลในรายการสลับตำแหน่งหรือไม่ (กำลังจับคู่อยู่)
-    const swapListEntry = await prisma.swapList.findFirst({
-      where: {
-        nationalId: nationalId,
-        year: year,
-      },
-      select: {
-        id: true,
-        swapType: true,
-        fullName: true,
-      },
-    });
-
-    if (swapListEntry) {
-      const swapTypeName = swapListEntry.swapType === 'two-way' ? 'สลับตำแหน่ง' : 
-                          swapListEntry.swapType === 'three-way' ? 'สามเส้า' : 'จับคู่';
-      return NextResponse.json(
-        { 
-          error: `ไม่สามารถยกเลิกการยื่นขอตำแหน่งได้`,
-          message: `บุคคลนี้อยู่ในรายการ${swapTypeName}แล้ว กรุณายกเลิกการจับคู่ในหน้า "${swapTypeName}" ก่อน`
-        },
-        { status: 400 }
-      );
-    }
+    // หมายเหตุ: เอาการตรวจสอบ swap_list ออก เนื่องจากตารางนี้ถูกลบแล้ว
+    // การตรวจสอบ usedInTransaction ด้านบนเพียงพอแล้ว
 
     // ลบข้อมูล
     await prisma.vacantPosition.delete({

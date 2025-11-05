@@ -270,6 +270,7 @@ export default function EditPromotionChainPage() {
                 nodes={nodes}
                 onAddNode={(n) => setNodes([...nodes, n])}
                 onRemoveNode={(id) => setNodes(nodes.filter((x) => x.id !== id))}
+                excludeTransactionId={id}
               />
             </Box>
 

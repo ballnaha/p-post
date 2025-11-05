@@ -63,6 +63,7 @@ interface CandidateSelectorProps {
   onSelect: (candidate: SwapListPerson) => void;
   vacantPosition: VacantPosition | null;
   selectedPersonnelIds?: string[]; // รายชื่อผู้ที่ถูกเลือกแล้วใน chain เพื่อแสดงตัวบ่งชี้
+  excludeTransactionId?: string; // Transaction ID ที่กำลังแก้ไข (ไม่กรองบุคลากรใน transaction นี้ออก)
 }
 
 export default function CandidateSelector({
@@ -72,6 +73,7 @@ export default function CandidateSelector({
   onSelect,
   vacantPosition,
   selectedPersonnelIds = [],
+  excludeTransactionId,
 }: CandidateSelectorProps) {
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<SwapListPerson[]>([]);
@@ -192,6 +194,11 @@ export default function CandidateSelector({
       // ส่งปีปัจจุบัน (พ.ศ.) เพื่อกรองบุคลากรที่มีอยู่ใน swap transaction แล้ว
       const currentYear = new Date().getFullYear() + 543;
       params.set('year', currentYear.toString());
+      
+      // ส่ง transaction ID ที่กำลังแก้ไข เพื่อไม่กรองบุคลากรใน transaction นี้ออก
+      if (excludeTransactionId) {
+        params.set('excludeTransactionId', excludeTransactionId);
+      }
 
       const response = await fetch(`/api/police-personnel/candidates?${params.toString()}`);
 

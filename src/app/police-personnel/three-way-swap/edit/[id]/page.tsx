@@ -8,7 +8,6 @@ import {
   TextField,
   Alert,
   CircularProgress,
-  Autocomplete,
   IconButton,
   Divider,
   Stack,
@@ -25,11 +24,17 @@ import {
   Person as PersonIcon,
   Info as InfoIcon,
   ChangeHistory as ThreeWayIcon,
+  Close as CloseIcon,
+  Badge as BadgeIcon,
+  CalendarToday as CalendarIcon,
+  School as EducationIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter, useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import PersonnelDrawer from '../../add/components/PersonnelDrawer';
 
 interface PolicePersonnel {
   id: string;
@@ -95,8 +100,6 @@ export default function EditThreeWaySwapPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [transaction, setTransaction] = useState<SwapTransaction | null>(null);
-  const [personnelOptions, setPersonnelOptions] = useState<PolicePersonnel[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
   
   // Personnel selections - 3 คน
   const [personnelA, setPersonnelA] = useState<PolicePersonnel | null>(null);
@@ -106,6 +109,11 @@ export default function EditThreeWaySwapPage() {
   // Dialog state
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedPersonnelDetail, setSelectedPersonnelDetail] = useState<PolicePersonnel | null>(null);
+  
+  // Drawer state
+  const [drawerAOpen, setDrawerAOpen] = useState(false);
+  const [drawerBOpen, setDrawerBOpen] = useState(false);
+  const [drawerCOpen, setDrawerCOpen] = useState(false);
   
   // Form data
   const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
@@ -119,12 +127,6 @@ export default function EditThreeWaySwapPage() {
       fetchTransaction();
     }
   }, [params.id]);
-
-  useEffect(() => {
-    if (transaction) {
-      fetchPersonnelOptions();
-    }
-  }, [transaction]);
 
   // Update notes and groupName when personnel A, B, or C changes
   useEffect(() => {
@@ -155,98 +157,89 @@ export default function EditThreeWaySwapPage() {
       setGroupNumber(data.groupNumber || '');
       setGroupName(data.groupName || '');
 
-    } catch (error) {
-      console.error('Error fetching transaction:', error);
-      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
-      router.push('/police-personnel/three-way-swap');
-    } finally {
-      setLoading(false);
-    }
-  };
+      // Set personnel from transaction details - ใช้ข้อมูลจาก swap_transaction_detail โดยตรง
+      if (data.swapDetails && data.swapDetails.length >= 3) {
+        const detailA = data.swapDetails[0];
+        const detailB = data.swapDetails[1];
+        const detailC = data.swapDetails[2];
 
-  const fetchPersonnelOptions = async () => {
-    try {
-      setSearchLoading(true);
-      const currentYear = new Date().getFullYear() + 543;
-      
-      // 1. Fetch swap-list (available personnel)
-      const response = await fetch(`/api/swap-list?year=${currentYear}&swapType=three-way`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch swap list');
-      }
-
-      const json = await response.json();
-      const list: PolicePersonnel[] = Array.isArray(json?.data) ? json.data : [];
-      
-      // 2. Get current transaction's personnel IDs (so we can include them in options)
-      const currentPersonnelIds = transaction?.swapDetails.map(d => d.personnelId) || [];
-      
-      // 3. Fetch all swap transactions to get already swapped IDs
-      const transactionsResponse = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=three-way`);
-      const transactionsResult = await transactionsResponse.json();
-      const transactions = transactionsResult.data || [];
-      
-      // 4. Build a Set of personnel IDs who have already been swapped (excluding current transaction)
-      const swappedIds = new Set<string>();
-      transactions.forEach((t: any) => {
-        // Skip current transaction being edited
-        if (t.id !== params.id) {
-          if (Array.isArray(t.swapDetails)) {
-            t.swapDetails.forEach((detail: any) => {
-              if (detail.personnelId) {
-                swappedIds.add(detail.personnelId);
-              }
-            });
-          }
-        }
-      });
-
-      // 5. Filter personnel: must have rank AND not already swapped (except current transaction personnel)
-      setPersonnelOptions(
-        list.filter((p: PolicePersonnel) => 
-          !!p.rank && !swappedIds.has(p.id)
-        )
-      );
-
-      // 6. Set current personnel from transaction (must be exactly 3)
-      if (transaction && transaction.swapDetails.length >= 3) {
-        const detailA = transaction.swapDetails[0];
-        const detailB = transaction.swapDetails[1];
-        const detailC = transaction.swapDetails[2];
-
-        // Find matching personnel from options or create from detail
-        const pA = list.find(p => p.id === detailA.personnelId) || {
-          id: detailA.personnelId,
+        // ใช้ข้อมูลจาก swap_transaction_detail ที่มีข้อมูลครบถ้วนแล้ว
+        const pA: PolicePersonnel = {
+          id: detailA.personnelId || '',
           fullName: detailA.fullName,
           rank: detailA.rank,
+          seniority: detailA.seniority,
           position: detailA.fromPosition,
           positionNumber: detailA.fromPositionNumber,
           unit: detailA.fromUnit,
           nationalId: detailA.nationalId,
           posCodeId: detailA.posCodeId,
+          posCodeMaster: detailA.posCodeMaster,
+          // ข้อมูลส่วนตัว
+          birthDate: detailA.birthDate,
+          age: detailA.age,
+          education: detailA.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: detailA.lastAppointment,
+          currentRankSince: detailA.currentRankSince,
+          enrollmentDate: detailA.enrollmentDate,
+          retirementDate: detailA.retirementDate,
+          yearsOfService: detailA.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: detailA.trainingLocation,
+          trainingCourse: detailA.trainingCourse,
         };
 
-        const pB = list.find(p => p.id === detailB.personnelId) || {
-          id: detailB.personnelId,
+        const pB: PolicePersonnel = {
+          id: detailB.personnelId || '',
           fullName: detailB.fullName,
           rank: detailB.rank,
+          seniority: detailB.seniority,
           position: detailB.fromPosition,
           positionNumber: detailB.fromPositionNumber,
           unit: detailB.fromUnit,
           nationalId: detailB.nationalId,
           posCodeId: detailB.posCodeId,
+          posCodeMaster: detailB.posCodeMaster,
+          // ข้อมูลส่วนตัว
+          birthDate: detailB.birthDate,
+          age: detailB.age,
+          education: detailB.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: detailB.lastAppointment,
+          currentRankSince: detailB.currentRankSince,
+          enrollmentDate: detailB.enrollmentDate,
+          retirementDate: detailB.retirementDate,
+          yearsOfService: detailB.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: detailB.trainingLocation,
+          trainingCourse: detailB.trainingCourse,
         };
 
-        const pC = list.find(p => p.id === detailC.personnelId) || {
-          id: detailC.personnelId,
+        const pC: PolicePersonnel = {
+          id: detailC.personnelId || '',
           fullName: detailC.fullName,
           rank: detailC.rank,
+          seniority: detailC.seniority,
           position: detailC.fromPosition,
           positionNumber: detailC.fromPositionNumber,
           unit: detailC.fromUnit,
           nationalId: detailC.nationalId,
           posCodeId: detailC.posCodeId,
+          posCodeMaster: detailC.posCodeMaster,
+          // ข้อมูลส่วนตัว
+          birthDate: detailC.birthDate,
+          age: detailC.age,
+          education: detailC.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: detailC.lastAppointment,
+          currentRankSince: detailC.currentRankSince,
+          enrollmentDate: detailC.enrollmentDate,
+          retirementDate: detailC.retirementDate,
+          yearsOfService: detailC.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: detailC.trainingLocation,
+          trainingCourse: detailC.trainingCourse,
         };
 
         setPersonnelA(pA);
@@ -255,9 +248,11 @@ export default function EditThreeWaySwapPage() {
       }
 
     } catch (error) {
-      console.error('Error fetching swap list:', error);
+      console.error('Error fetching transaction:', error);
+      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      router.push('/police-personnel/three-way-swap');
     } finally {
-      setSearchLoading(false);
+      setLoading(false);
     }
   };
 
@@ -273,6 +268,7 @@ export default function EditThreeWaySwapPage() {
 
   const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelA(newValue);
+    setDrawerAOpen(false); // ปิด drawer หลังเลือกเสร็จ
     // If B or C is selected and same as new A, clear them
     setPersonnelB(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
     setPersonnelC(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
@@ -280,6 +276,7 @@ export default function EditThreeWaySwapPage() {
 
   const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelB(newValue);
+    setDrawerBOpen(false); // ปิด drawer หลังเลือกเสร็จ
     // If A or C is selected and same as new B, clear them
     setPersonnelA(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
     setPersonnelC(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
@@ -287,30 +284,11 @@ export default function EditThreeWaySwapPage() {
 
   const handleSelectPersonnelC = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelC(newValue);
+    setDrawerCOpen(false); // ปิด drawer หลังเลือกเสร็จ
     // If A or B is selected and same as new C, clear them
     setPersonnelA(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
     setPersonnelB(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
   }, []);
-
-  // Optimized: Memoized filter options with useMemo to avoid recalculation on every render
-  const optionsForA = useMemo(() => 
-    personnelOptions.filter(p => p.rank), 
-    [personnelOptions]
-  );
-
-  const optionsForB = useMemo(() => 
-    personnelOptions.filter(p => 
-      p.rank && (!personnelA || p.id !== personnelA.id) && (!personnelC || p.id !== personnelC.id)
-    ), 
-    [personnelOptions, personnelA, personnelC]
-  );
-
-  const optionsForC = useMemo(() => 
-    personnelOptions.filter(p => 
-      p.rank && (!personnelA || p.id !== personnelA.id) && (!personnelB || p.id !== personnelB.id)
-    ), 
-    [personnelOptions, personnelA, personnelB]
-  );
 
   const canSwap = useMemo(() => 
     Boolean(personnelA && personnelB && personnelC), 
@@ -427,62 +405,61 @@ export default function EditThreeWaySwapPage() {
   const renderPersonnelCard = (
     personnel: PolicePersonnel | null,
     label: string,
-    onSelect: (value: PolicePersonnel | null) => void,
-    options: PolicePersonnel[],
+    onOpenDrawer: () => void,
     disabled: boolean = false
   ) => (
     <Paper 
       elevation={3} 
       sx={{ 
         p: 3, 
-        bgcolor: personnel ? 'warning.50' : 'grey.50',
+        bgcolor: personnel ? 'success.50' : 'grey.50',
         border: 2,
-        borderColor: personnel ? 'warning.main' : 'grey.300',
+        borderColor: personnel ? 'success.main' : 'grey.300',
         transition: 'all 0.3s',
+        opacity: disabled ? 0.6 : 1,
       }}
     >
-      <Typography variant="h6" fontWeight={600} mb={2} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="h6" fontWeight={600} mb={1} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <PersonIcon />
         {label}
       </Typography>
+      {personnel && (
+        <Typography variant="body1" fontWeight={600} color="success.main" sx={{ mb: 2 }}>
+          {personnel.rank} {personnel.fullName}
+        </Typography>
+      )}
       
-      <Autocomplete
-        fullWidth
-        size="small"
-        options={options}
-        value={personnel}
-        getOptionLabel={(option) => `${option.rank || ''} ${option.fullName || ''} - ${option.position || ''} (${option.unit || ''})`}
-        onChange={(event, newValue) => onSelect(newValue)}
-        disabled={disabled}
-        loading={searchLoading}
-        renderInput={(params) => (
-          <TextField 
-            {...params} 
-            label={`🔍 เลือก${label}`}
-            placeholder={disabled ? "เลือกบุคลากรก่อนหน้าก่อน" : "ค้นหา..."}
-            InputProps={{
-              ...params.InputProps,
-              endAdornment: (
-                <>
-                  {searchLoading ? <CircularProgress size={20} /> : null}
-                  {params.InputProps.endAdornment}
-                </>
-              ),
-            }}
-          />
-        )}
-        renderOption={(props, option) => (
-          <li {...props} key={option.id}>
-            <Box>
-              <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {option.posCodeMaster && `POSCODE: ${option.posCodeMaster.id} | `}
-                ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
-              </Typography>
-            </Box>
-          </li>
-        )}
-      />
+      {!personnel ? (
+        <Button
+          fullWidth
+          variant="outlined"
+          size="large"
+          startIcon={<SearchIcon />}
+          onClick={onOpenDrawer}
+          disabled={disabled}
+          sx={{ 
+            py: 1.5,
+            borderStyle: 'dashed',
+            borderWidth: 2,
+          }}
+        >
+          {disabled ? 'เลือกบุคลากร A ก่อน' : `เลือก${label}`}
+        </Button>
+      ) : (
+        <Box>
+          <Button
+            fullWidth
+            variant="outlined"
+            size="small"
+            startIcon={<SearchIcon />}
+            onClick={onOpenDrawer}
+            disabled={disabled}
+            sx={{ mb: 1 }}
+          >
+            เปลี่ยน{label}
+          </Button>
+        </Box>
+      )}
 
       {personnel && (
         <Box sx={{ mt: 2 }}>
@@ -752,10 +729,19 @@ export default function EditThreeWaySwapPage() {
         {/* Main Form */}
         <form onSubmit={handleSubmit}>
           <Paper sx={{ p: 3, mb: 3 }}>
+            {/* Alert แจ้งเตือนให้เลือก A ก่อน */}
+            {!personnelA && (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" fontWeight={600}>
+                  📌 กรุณาเลือกบุคลากร A ก่อน จากนั้นระบบจะกรองเฉพาะบุคลากรที่อยู่ในหน่วยและตำแหน่งเดียวกันสำหรับ B และ C
+                </Typography>
+              </Alert>
+            )}
+            
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3 }}>
-              {renderPersonnelCard(personnelA, 'บุคลากร A', handleSelectPersonnelA, optionsForA, false)}
-              {renderPersonnelCard(personnelB, 'บุคลากร B', handleSelectPersonnelB, optionsForB, false)}
-              {renderPersonnelCard(personnelC, 'บุคลากร C', handleSelectPersonnelC, optionsForC, false)}
+              {renderPersonnelCard(personnelA, 'บุคลากร A', () => setDrawerAOpen(true), false)}
+              {renderPersonnelCard(personnelB, 'บุคลากร B', () => setDrawerBOpen(true), !personnelA)}
+              {renderPersonnelCard(personnelC, 'บุคลากร C', () => setDrawerCOpen(true), !personnelA)}
             </Box>
 
             {/* Swap Result Preview */}
@@ -824,6 +810,42 @@ export default function EditThreeWaySwapPage() {
           personnel={selectedPersonnelDetail}
           loading={false}
           onClearData={() => setSelectedPersonnelDetail(null)}
+        />
+
+        {/* Personnel Drawer for A */}
+        <PersonnelDrawer
+          open={drawerAOpen}
+          onClose={() => setDrawerAOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelA(personnel as any)}
+          title="เลือกบุคลากร A"
+          excludePersonnelId={[personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
+          excludeTransactionId={params.id as string}
+        />
+
+        {/* Personnel Drawer for B - กรองตามหน่วยและ posCode เดียวกับ A */}
+        <PersonnelDrawer
+          key={`drawer-b-${personnelA?.id || 'none'}`}
+          open={drawerBOpen}
+          onClose={() => setDrawerBOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelB(personnel as any)}
+          title="เลือกบุคลากร B (หน่วยและตำแหน่งเดียวกับ A)"
+          excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
+          initialFilterUnit={personnelA?.unit}
+          initialFilterPosCode={personnelA?.posCodeId}
+          excludeTransactionId={params.id as string}
+        />
+
+        {/* Personnel Drawer for C - กรองตามหน่วยและ posCode เดียวกับ A */}
+        <PersonnelDrawer
+          key={`drawer-c-${personnelA?.id || 'none'}`}
+          open={drawerCOpen}
+          onClose={() => setDrawerCOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelC(personnel as any)}
+          title="เลือกบุคลากร C (หน่วยและตำแหน่งเดียวกับ A)"
+          excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
+          initialFilterUnit={personnelA?.unit}
+          initialFilterPosCode={personnelA?.posCodeId}
+          excludeTransactionId={params.id as string}
         />
       </Box>
     </Layout>

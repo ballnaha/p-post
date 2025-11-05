@@ -156,7 +156,9 @@ export default function AddSwapTransactionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ เรียกแค่ครั้งเดียวตอน mount
 
-  const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
+  const handleShowDetail = useCallback(async (personnel: PolicePersonnel) => {
+    // ใน add page ข้อมูล personnel จาก PersonnelDrawer ควรจะครบอยู่แล้ว
+    // แต่ถ้าต้องการข้อมูลล่าสุดจาก swap_list สามารถเปิดใช้งาน code ด้านล่างได้
     setSelectedPersonnelDetail(personnel);
     setDetailDialogOpen(true);
   }, []);
@@ -238,13 +240,28 @@ export default function AddSwapTransactionPage() {
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
           rank: personnelA.rank,
+          seniority: personnelA.seniority,
           posCodeId: personnelA.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelA.birthDate,
+          age: personnelA.age,
+          education: personnelA.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelA.lastAppointment,
+          currentRankSince: personnelA.currentRankSince,
+          enrollmentDate: personnelA.enrollmentDate,
+          retirementDate: personnelA.retirementDate,
+          yearsOfService: personnelA.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelA.trainingLocation,
+          trainingCourse: personnelA.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
-          toPosition: personnelB.position, // Same position
+          toPosition: personnelB.position,
           toPositionNumber: personnelB.positionNumber,
-          toUnit: personnelB.unit, // Swap to B's unit
+          toUnit: personnelB.unit,
         },
         {
           sequence: 2, // บุคลากร B ขึ้นหลัง
@@ -252,13 +269,28 @@ export default function AddSwapTransactionPage() {
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
           rank: personnelB.rank,
+          seniority: personnelB.seniority,
           posCodeId: personnelB.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelB.birthDate,
+          age: personnelB.age,
+          education: personnelB.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelB.lastAppointment,
+          currentRankSince: personnelB.currentRankSince,
+          enrollmentDate: personnelB.enrollmentDate,
+          retirementDate: personnelB.retirementDate,
+          yearsOfService: personnelB.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelB.trainingLocation,
+          trainingCourse: personnelB.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
-          toPosition: personnelA.position, // Same position
+          toPosition: personnelA.position,
           toPositionNumber: personnelA.positionNumber,
-          toUnit: personnelA.unit, // Swap to A's unit
+          toUnit: personnelA.unit,
         },
       ];
 
@@ -381,10 +413,15 @@ export default function AddSwapTransactionPage() {
                   transition: 'all 0.3s',
                 }}
               >
-                <Typography variant="h6" fontWeight={600} mb={2} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h6" fontWeight={600} mb={1} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <PersonIcon />
                   บุคลากร A
                 </Typography>
+                {personnelA && (
+                  <Typography variant="body1" fontWeight={600} color="success.main" sx={{ mb: 2 }}>
+                    {personnelA.rank} {personnelA.fullName}
+                  </Typography>
+                )}
                 
                 {!personnelA ? (
                   <Button
@@ -494,7 +531,7 @@ export default function AddSwapTransactionPage() {
                         {personnelA.age && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุ</Typography>
-                            <Typography variant="body2">{personnelA.age} ปี</Typography>
+                            <Typography variant="body2">{personnelA.age}</Typography>
                           </Box>
                         )}
                       </Stack>
@@ -523,7 +560,7 @@ export default function AddSwapTransactionPage() {
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุราชการ</Typography>
                             <Typography variant="body2" fontWeight={600} color="success.main">
-                              {personnelA.yearsOfService} ปี
+                              {personnelA.yearsOfService}
                             </Typography>
                           </Box>
                         )}
@@ -594,10 +631,15 @@ export default function AddSwapTransactionPage() {
                   opacity: !personnelA ? 0.6 : 1,
                 }}
               >
-                <Typography variant="h6" fontWeight={600} mb={2} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h6" fontWeight={600} mb={1} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <PersonIcon />
                   บุคลากร B
                 </Typography>
+                {personnelB && (
+                  <Typography variant="body1" fontWeight={600} color="success.main" sx={{ mb: 2 }}>
+                    {personnelB.rank} {personnelB.fullName}
+                  </Typography>
+                )}
                 
                 {!personnelB ? (
                   <Button
@@ -707,7 +749,7 @@ export default function AddSwapTransactionPage() {
                         {personnelB.age && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุ</Typography>
-                            <Typography variant="body2">{personnelB.age} ปี</Typography>
+                            <Typography variant="body2">{personnelB.age}</Typography>
                           </Box>
                         )}
                       </Stack>
@@ -736,7 +778,7 @@ export default function AddSwapTransactionPage() {
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุราชการ</Typography>
                             <Typography variant="body2" fontWeight={600} color="success.main">
-                              {personnelB.yearsOfService} ปี
+                              {personnelB.yearsOfService}
                             </Typography>
                           </Box>
                         )}
@@ -801,41 +843,75 @@ export default function AddSwapTransactionPage() {
           </Paper>
 
           {/* Notes Section */}
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" fontWeight={600} mb={3}>
-              หมายเหตุ
-            </Typography>
-            <TextField
-              label="หมายเหตุ"
-              multiline
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
-              size="small"
-              fullWidth
-            />
-          </Paper>
-
-          {/* Submit Buttons */}
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              onClick={() => router.back()}
-              disabled={loading}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
-              disabled={loading || !canSwap}
-            >
-              {loading ? 'กำลังบันทึก...' : 'บันทึกผลการสลับ'}
-            </Button>
+          <Box sx={{ pb: 12 }}> {/* Add bottom padding to prevent sticky footer overlap */}
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" fontWeight={600} mb={3}>
+                หมายเหตุ
+              </Typography>
+              <TextField
+                label="หมายเหตุ"
+                multiline
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+                size="small"
+                fullWidth
+              />
+            </Paper>
           </Box>
+
+          {/* Actions - Sticky Footer */}
+          <Paper 
+            sx={{ 
+              p: 2.5, 
+              position: 'sticky', 
+              bottom: 0, 
+              zIndex: 10,
+              display: 'flex', 
+              gap: 2, 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 -4px 12px rgba(0,0,0,0.08)',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Box>
+              {personnelA && personnelB ? (
+                <>
+                  <Typography variant="body2" fontWeight={600}>
+                    {canSwap ? '✓ พร้อมบันทึก' : '⚠ ยังไม่สมบูรณ์'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    สลับตำแหน่ง: {personnelA.fullName} ↔ {personnelB.fullName}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  {personnelA ? 'เลือกบุคลากร B เพื่อทำการสลับตำแหน่ง' : 'เลือกบุคลากร A เพื่อเริ่มต้น'}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={() => router.back()}
+                disabled={loading}
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                size="large"
+                startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+                disabled={loading || !canSwap}
+              >
+                {loading ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
+              </Button>
+            </Box>
+          </Paper>
         </form>
 
         {/* Personnel Detail Modal - Using Reusable Component */}

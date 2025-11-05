@@ -107,14 +107,6 @@ export async function DELETE(
     const errors: string[] = [];
 
     if (personnel.nationalId) {
-      // ตรวจสอบว่ามีใน swap-list หรือไม่
-      const inSwapList = await prisma.swapList.findFirst({
-        where: { nationalId: personnel.nationalId }
-      });
-      if (inSwapList) {
-        errors.push('อยู่ในรายการ Swap List');
-      }
-
       // ตรวจสอบว่ามีใน vacant-position หรือไม่
       const inVacantPosition = await prisma.vacantPosition.findFirst({
         where: { nationalId: personnel.nationalId }

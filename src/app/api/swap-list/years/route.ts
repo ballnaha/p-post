@@ -7,10 +7,10 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(request: NextRequest) {
   try {
-    // ดึงปีทั้งหมดที่มีข้อมูล (distinct)
+    // ดึงปีทั้งหมดที่มีข้อมูล (distinct) จาก swap_transaction
     const years = await prisma.$queryRaw<Array<{ year: number }>>`
       SELECT DISTINCT year 
-      FROM swap_list 
+      FROM swap_transaction 
       ORDER BY year DESC
     `;
 

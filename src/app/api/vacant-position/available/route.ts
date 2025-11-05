@@ -43,24 +43,18 @@ export async function GET(request: NextRequest) {
       year: parseInt(year),
     };
 
-    // กรองเฉพาะตำแหน่งที่ยังไม่ถูกจับคู่
-    if (unassignedOnly) {
-      whereClause.isAssigned = false;
-    }
-
     // Filter by search text
     if (search) {
       whereClause.OR = [
         { position: { contains: search } },
         { unit: { contains: search } },
         { positionNumber: { contains: search } },
-        { requestedPosition: { contains: search } },
       ];
     }
 
     // Filter by posCodeId
     if (posCodeId) {
-      whereClause.requestedPositionId = parseInt(posCodeId);
+      whereClause.posCodeId = parseInt(posCodeId);
     }
 
     // Note: rankLevel filtering is removed as PosCodeMaster doesn't have this field
@@ -76,11 +70,10 @@ export async function GET(request: NextRequest) {
       where: whereClause,
       include: {
         posCodeMaster: true,
-        requestedPosCode: true,
       },
       orderBy: [
-        { requestedPositionId: 'asc' },
-        { displayOrder: 'asc' },
+        { posCodeId: 'asc' },
+        { position: 'asc' },
       ],
     };
 
@@ -92,10 +85,39 @@ export async function GET(request: NextRequest) {
 
     const vacantPositions = await prisma.vacantPosition.findMany(queryOptions);
 
-    // จัดกลุ่มตามตำแหน่งที่ขอ
-    const groupedPositions = vacantPositions.reduce((acc, position: any) => {
-      const posCodeId = position.requestedPosCode?.id || position.posCodeMaster?.id;
-      const posCodeName = position.requestedPosCode?.name || position.posCodeMaster?.name;
+    // ถ้าต้องการเฉพาะตำแหน่งที่ยังไม่ถูกจับคู่ ให้กรองออกตำแหน่งที่มีใน swap_transaction_detail
+    let filteredPositions = vacantPositions;
+    if (unassignedOnly) {
+      // ดึงรายการตำแหน่งที่ถูกจับคู่แล้ว (จาก swap_transaction_detail)
+      const assignedPositions = await prisma.swapTransactionDetail.findMany({
+        where: {
+          transaction: {
+            year: parseInt(year)
+          },
+          toPosition: { not: null }
+        },
+        select: {
+          toPosition: true,
+          toUnit: true,
+          toPositionNumber: true
+        }
+      });
+
+      // สร้าง Set สำหรับเช็คว่าตำแหน่งถูกจับคู่แล้วหรือไม่
+      const assignedSet = new Set(
+        assignedPositions.map(p => `${p.toPosition}-${p.toUnit}-${p.toPositionNumber}`)
+      );
+
+      // กรองออกตำแหน่งที่ถูกจับคู่แล้ว
+      filteredPositions = vacantPositions.filter(position => 
+        !assignedSet.has(`${position.position}-${position.unit}-${position.positionNumber}`)
+      );
+    }
+
+    // จัดกลุ่มตามตำแหน่ง
+    const groupedPositions = filteredPositions.reduce((acc, position: any) => {
+      const posCodeId = position.posCodeMaster?.id;
+      const posCodeName = position.posCodeMaster?.name;
       const key = `${posCodeId}-${posCodeName}`;
 
       if (!acc[key]) {
@@ -116,7 +138,6 @@ export async function GET(request: NextRequest) {
         nationalId: position.nationalId,
         nominator: position.nominator,
         notes: position.notes,
-        displayOrder: position.displayOrder,
       });
 
       return acc;
@@ -131,14 +152,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       year: parseInt(year),
       total: totalCount,
-      count: vacantPositions.length,
+      count: filteredPositions.length,
       unassignedOnly,
       groups: formattedData,
       ...(usePagination && { 
         pagination: {
           page,
           limit,
-          totalPages: Math.ceil(totalCount / (limit || 1)),
+          totalPages: Math.ceil(filteredPositions.length / (limit || 1)),
         }
       }),
     });

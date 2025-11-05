@@ -148,24 +148,32 @@ export async function GET(request: NextRequest) {
       const nationalIds = personnel.map(p => p.nationalId).filter(Boolean) as string[];
 
       if (swapFilter === 'in-swap') {
-        const swapList = await prisma.swapList.findMany({
+        // ใช้ swap_transaction_detail แทน swap_list
+        const swapList = await prisma.swapTransactionDetail.findMany({
           where: {
-            year: currentYear,
-            nationalId: { in: nationalIds },
-            swapType: 'two-way'
+            transaction: {
+              year: currentYear,
+              swapType: 'two-way'
+            },
+            nationalId: { in: nationalIds }
           },
-          select: { nationalId: true }
+          select: { nationalId: true },
+          distinct: ['nationalId']
         });
         const swapNationalIds = new Set(swapList.map(s => s.nationalId).filter(Boolean));
         filteredPersonnel = personnel.filter(p => p.nationalId && swapNationalIds.has(p.nationalId));
       } else if (swapFilter === 'in-threeway') {
-        const threeWayList = await prisma.swapList.findMany({
+        // ใช้ swap_transaction_detail แทน swap_list
+        const threeWayList = await prisma.swapTransactionDetail.findMany({
           where: {
-            year: currentYear,
-            nationalId: { in: nationalIds },
-            swapType: 'three-way'
+            transaction: {
+              year: currentYear,
+              swapType: 'three-way'
+            },
+            nationalId: { in: nationalIds }
           },
-          select: { nationalId: true }
+          select: { nationalId: true },
+          distinct: ['nationalId']
         });
         const threeWayNationalIds = new Set(threeWayList.map(s => s.nationalId).filter(Boolean));
         filteredPersonnel = personnel.filter(p => p.nationalId && threeWayNationalIds.has(p.nationalId));

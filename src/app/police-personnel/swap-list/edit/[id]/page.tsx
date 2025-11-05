@@ -8,10 +8,9 @@ import {
   TextField,
   Alert,
   CircularProgress,
-  IconButton,
-  Chip,
-  Divider,
   Stack,
+  Divider,
+  IconButton,
   Skeleton,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -25,6 +24,10 @@ import {
   SwapHoriz as SwapHorizIcon,
   Person as PersonIcon,
   Info as InfoIcon,
+  Close as CloseIcon,
+  Badge as BadgeIcon,
+  CalendarToday as CalendarIcon,
+  School as EducationIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
@@ -67,6 +70,26 @@ interface SwapDetail {
   nationalId?: string;
   fullName: string;
   rank?: string;
+  seniority?: string;
+  posCodeId?: number;
+  posCodeMaster?: {
+    id: number;
+    name: string;
+  };
+  // ข้อมูลส่วนตัว
+  birthDate?: string;
+  age?: string;
+  education?: string;
+  // ข้อมูลการแต่งตั้ง
+  lastAppointment?: string;
+  currentRankSince?: string;
+  enrollmentDate?: string;
+  retirementDate?: string;
+  yearsOfService?: string;
+  // ข้อมูลการฝึกอบรม
+  trainingLocation?: string;
+  trainingCourse?: string;
+  // ตำแหน่ง
   fromPosition?: string;
   fromPositionNumber?: string;
   fromUnit?: string;
@@ -147,31 +170,62 @@ export default function EditSwapTransactionPage() {
         setGroupNumber(data.groupNumber || '');
         setGroupName(data.groupName || '');
 
-        // Set personnel from transaction details
+        // Set personnel from transaction details - ใช้ข้อมูลจาก swap_transaction_detail โดยตรง
         if (data.swapDetails && data.swapDetails.length >= 2) {
           const detailA = data.swapDetails[0];
           const detailB = data.swapDetails[1];
 
+          // ใช้ข้อมูลจาก swap_transaction_detail ที่มีข้อมูลครบถ้วนแล้ว
           const pA: PolicePersonnel = {
-            id: detailA.personnelId,
+            id: detailA.personnelId || '',
             fullName: detailA.fullName,
             rank: detailA.rank,
+            seniority: detailA.seniority,
             position: detailA.fromPosition,
             positionNumber: detailA.fromPositionNumber,
             unit: detailA.fromUnit,
             nationalId: detailA.nationalId,
             posCodeId: detailA.posCodeId,
+            posCodeMaster: detailA.posCodeMaster,
+            // ข้อมูลส่วนตัว
+            birthDate: detailA.birthDate,
+            age: detailA.age,
+            education: detailA.education,
+            // ข้อมูลการแต่งตั้ง
+            lastAppointment: detailA.lastAppointment,
+            currentRankSince: detailA.currentRankSince,
+            enrollmentDate: detailA.enrollmentDate,
+            retirementDate: detailA.retirementDate,
+            yearsOfService: detailA.yearsOfService,
+            // ข้อมูลการฝึกอบรม
+            trainingLocation: detailA.trainingLocation,
+            trainingCourse: detailA.trainingCourse,
           };
 
           const pB: PolicePersonnel = {
-            id: detailB.personnelId,
+            id: detailB.personnelId || '',
             fullName: detailB.fullName,
             rank: detailB.rank,
+            seniority: detailB.seniority,
             position: detailB.fromPosition,
             positionNumber: detailB.fromPositionNumber,
             unit: detailB.fromUnit,
             nationalId: detailB.nationalId,
             posCodeId: detailB.posCodeId,
+            posCodeMaster: detailB.posCodeMaster,
+            // ข้อมูลส่วนตัว
+            birthDate: detailB.birthDate,
+            age: detailB.age,
+            education: detailB.education,
+            // ข้อมูลการแต่งตั้ง
+            lastAppointment: detailB.lastAppointment,
+            currentRankSince: detailB.currentRankSince,
+            enrollmentDate: detailB.enrollmentDate,
+            retirementDate: detailB.retirementDate,
+            yearsOfService: detailB.yearsOfService,
+            // ข้อมูลการฝึกอบรม
+            trainingLocation: detailB.trainingLocation,
+            trainingCourse: detailB.trainingCourse,
           };
 
           setPersonnelA(pA);
@@ -190,10 +244,16 @@ export default function EditSwapTransactionPage() {
     loadTransaction();
   }, [params.id, router]);
 
-  const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
-    setSelectedPersonnelDetail(personnel);
-    setDetailDialogOpen(true);
-  }, []);
+  const handleShowDetail = useCallback(async (personnel: PolicePersonnel) => {
+    try {
+      setDetailDialogOpen(true);
+      // ใช้ข้อมูลจาก personnel ที่มีอยู่แล้วครบถ้วน (จาก swap_transaction_detail)
+      setSelectedPersonnelDetail(personnel);
+    } catch (error: any) {
+      console.error('Error showing personnel details:', error);
+      toast.error('เกิดข้อผิดพลาดในการแสดงข้อมูลบุคลากร');
+    }
+  }, [toast]);
 
   const handleCloseDetail = useCallback(() => {
     setDetailDialogOpen(false);
@@ -256,7 +316,22 @@ export default function EditSwapTransactionPage() {
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
           rank: personnelA.rank,
+          seniority: personnelA.seniority,
           posCodeId: personnelA.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelA.birthDate,
+          age: personnelA.age,
+          education: personnelA.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelA.lastAppointment,
+          currentRankSince: personnelA.currentRankSince,
+          enrollmentDate: personnelA.enrollmentDate,
+          retirementDate: personnelA.retirementDate,
+          yearsOfService: personnelA.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelA.trainingLocation,
+          trainingCourse: personnelA.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
@@ -270,7 +345,22 @@ export default function EditSwapTransactionPage() {
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
           rank: personnelB.rank,
+          seniority: personnelB.seniority,
           posCodeId: personnelB.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelB.birthDate,
+          age: personnelB.age,
+          education: personnelB.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelB.lastAppointment,
+          currentRankSince: personnelB.currentRankSince,
+          enrollmentDate: personnelB.enrollmentDate,
+          retirementDate: personnelB.retirementDate,
+          yearsOfService: personnelB.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelB.trainingLocation,
+          trainingCourse: personnelB.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
@@ -411,9 +501,12 @@ export default function EditSwapTransactionPage() {
               />
               <TextField
                 label="ประจำปี *"
-                type="number"
+                type="text"
                 value={year || ''}
-                onChange={(e) => setYear(parseInt(e.target.value) || 0)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value;
+                  setYear(value === '' ? 0 : parseInt(value) || 0);
+                }}
                 required
                 inputProps={{ min: 2500, max: 2700 }}
                 size="small"
@@ -453,11 +546,16 @@ export default function EditSwapTransactionPage() {
                   transition: 'all 0.3s',
                 }}
               >
-                <Typography variant="h6" fontWeight={600} mb={2} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h6" fontWeight={600} mb={1} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <PersonIcon />
                   บุคลากร A
                 </Typography>
-
+                {personnelA && (
+                  <Typography variant="body1" fontWeight={600} color="success.main" sx={{ mb: 2 }}>
+                    {personnelA.rank} {personnelA.fullName}
+                  </Typography>
+                )}
+                
                 {!personnelA ? (
                   <Button
                     fullWidth
@@ -514,10 +612,10 @@ export default function EditSwapTransactionPage() {
                         {personnelA.posCodeMaster && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">POSCODE</Typography>
-                            
                             <Typography variant="body2" fontWeight={600} color="primary.main">
                               {personnelA.posCodeMaster.id} - {personnelA.posCodeMaster.name}
                             </Typography>
+                            
                           </Box>
                         )}
                         <Box>
@@ -566,7 +664,7 @@ export default function EditSwapTransactionPage() {
                         {personnelA.age && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุ</Typography>
-                            <Typography variant="body2">{personnelA.age} ปี</Typography>
+                            <Typography variant="body2">{personnelA.age}</Typography>
                           </Box>
                         )}
                       </Stack>
@@ -595,7 +693,7 @@ export default function EditSwapTransactionPage() {
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุราชการ</Typography>
                             <Typography variant="body2" fontWeight={600} color="success.main">
-                              {personnelA.yearsOfService} ปี
+                              {personnelA.yearsOfService}
                             </Typography>
                           </Box>
                         )}
@@ -663,13 +761,19 @@ export default function EditSwapTransactionPage() {
                   border: 2,
                   borderColor: personnelB ? 'success.main' : 'grey.300',
                   transition: 'all 0.3s',
+                  opacity: !personnelA ? 0.6 : 1,
                 }}
               >
-                <Typography variant="h6" fontWeight={600} mb={2} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h6" fontWeight={600} mb={1} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <PersonIcon />
                   บุคลากร B
                 </Typography>
-
+                {personnelB && (
+                  <Typography variant="body1" fontWeight={600} color="success.main" sx={{ mb: 2 }}>
+                    {personnelB.rank} {personnelB.fullName}
+                  </Typography>
+                )}
+                
                 {!personnelB ? (
                   <Button
                     fullWidth
@@ -728,9 +832,8 @@ export default function EditSwapTransactionPage() {
                           <Box>
                             <Typography variant="caption" color="text.secondary">POSCODE</Typography>
                             <Typography variant="body2" fontWeight={600} color="primary.main">
-                                {personnelB.posCodeMaster.id} - {personnelB.posCodeMaster.name}
+                              {personnelB.posCodeMaster.id} - {personnelB.posCodeMaster.name}
                             </Typography>
-                            
                           </Box>
                         )}
                         <Box>
@@ -779,7 +882,7 @@ export default function EditSwapTransactionPage() {
                         {personnelB.age && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุ</Typography>
-                            <Typography variant="body2">{personnelB.age} ปี</Typography>
+                            <Typography variant="body2">{personnelB.age}</Typography>
                           </Box>
                         )}
                       </Stack>
@@ -808,7 +911,7 @@ export default function EditSwapTransactionPage() {
                           <Box>
                             <Typography variant="caption" color="text.secondary">อายุราชการ</Typography>
                             <Typography variant="body2" fontWeight={600} color="success.main">
-                              {personnelB.yearsOfService} ปี
+                              {personnelB.yearsOfService}
                             </Typography>
                           </Box>
                         )}
@@ -852,26 +955,32 @@ export default function EditSwapTransactionPage() {
             </Box>
 
             {/* Swap Result Preview */}
-            {canSwap && (
-              <Box sx={{ mt: 3 }}>
-                <Divider sx={{ mb: 2 }}>
-                  <Chip label="ผลการสลับ" color="primary" />
-                </Divider>
-                <Alert severity="success">
+            {canSwap && personnelA && personnelB && (
+              <Alert severity="success" sx={{ mt: 3 }}>
+                <Typography variant="body2" fontWeight={600} mb={1}>
+                  📝 ชื่อกลุ่ม: {personnelA.fullName} ⟷ {personnelB.fullName}
+                </Typography>
+                <Typography variant="body2" fontWeight={600} mb={1}>
+                  ✅ ผลการสลับตำแหน่ง:
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <Typography variant="body2">
-                    <strong>{personnelA?.fullName}</strong> จาก <strong>{personnelA?.position}</strong> → 
-                    ไปที่ <strong>{personnelB?.position}</strong>
+                    • <strong>{personnelA.fullName}</strong> จาก <strong>{personnelA.position}</strong> → ไป <strong style={{ color: 'green' }}>{personnelB.position}</strong>
                   </Typography>
                   <Typography variant="body2">
-                    <strong>{personnelB?.fullName}</strong> จาก <strong>{personnelB?.position}</strong> → 
-                    ไปที่ <strong>{personnelA?.position}</strong>
+                    • <strong>{personnelB.fullName}</strong> จาก <strong>{personnelB.position}</strong> → ไป <strong style={{ color: 'green' }}>{personnelA.position}</strong>
                   </Typography>
-                </Alert>
-              </Box>
+                </Box>
+              </Alert>
             )}
+          </Paper>
 
-            {/* Notes */}
-            <Box sx={{ mt: 3 }}>
+          {/* Notes Section */}
+          <Box sx={{ pb: 12 }}> {/* Add bottom padding to prevent sticky footer overlap */}
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" fontWeight={600} mb={3}>
+                หมายเหตุ
+              </Typography>
               <TextField
                 label="หมายเหตุ"
                 multiline
@@ -879,12 +988,44 @@ export default function EditSwapTransactionPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+                size="small"
                 fullWidth
               />
-            </Box>
+            </Paper>
+          </Box>
 
-            {/* Submit Buttons */}
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 3 }}>
+          {/* Actions - Sticky Footer */}
+          <Paper 
+            sx={{ 
+              p: 2.5, 
+              position: 'sticky', 
+              bottom: 0, 
+              zIndex: 10,
+              display: 'flex', 
+              gap: 2, 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 -4px 12px rgba(0,0,0,0.08)',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Box>
+              {personnelA && personnelB ? (
+                <>
+                  <Typography variant="body2" fontWeight={600}>
+                    {canSwap ? '✓ พร้อมบันทึก' : '⚠ ยังไม่สมบูรณ์'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    สลับตำแหน่ง: {personnelA.fullName} ↔ {personnelB.fullName}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  {personnelA ? 'เลือกบุคลากร B เพื่อทำการสลับตำแหน่ง' : 'เลือกบุคลากร A เพื่อเริ่มต้น'}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="outlined"
                 onClick={() => router.back()}
@@ -896,7 +1037,8 @@ export default function EditSwapTransactionPage() {
                 type="submit"
                 variant="contained"
                 color="primary"
-                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                size="large"
+                startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
                 disabled={saving || !canSwap}
               >
                 {saving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
@@ -910,7 +1052,7 @@ export default function EditSwapTransactionPage() {
           open={detailDialogOpen}
           onClose={handleCloseDetail}
           personnel={selectedPersonnelDetail}
-          loading={false}
+          loading={!selectedPersonnelDetail && detailDialogOpen}
           onClearData={() => setSelectedPersonnelDetail(null)}
         />
 
@@ -920,18 +1062,21 @@ export default function EditSwapTransactionPage() {
           onClose={() => setDrawerAOpen(false)}
           onSelect={(personnel) => handleSelectPersonnelA(personnel as any)}
           title="เลือกบุคลากร A"
-          excludePersonnelId={personnelB?.id}
+          excludePersonnelId={personnelB?.id ? [personnelB.id] : undefined}
+          excludeTransactionId={params.id as string}
         />
 
         {/* Personnel Drawer for B - กรองตามหน่วยและ posCode เดียวกับ A */}
         <PersonnelDrawer
+          key={`drawer-b-${personnelA?.id || 'none'}`}
           open={drawerBOpen}
           onClose={() => setDrawerBOpen(false)}
           onSelect={(personnel) => handleSelectPersonnelB(personnel as any)}
           title="เลือกบุคลากร B"
-          excludePersonnelId={personnelA?.id}
+          excludePersonnelId={[personnelA?.id, personnelB?.id].filter((id): id is string => !!id)}
           initialFilterUnit={personnelA?.unit}
           initialFilterPosCode={personnelA?.posCodeId}
+          excludeTransactionId={params.id as string}
         />
       </Box>
     </Layout>

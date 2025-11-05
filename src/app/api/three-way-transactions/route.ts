@@ -46,6 +46,21 @@ export async function GET(request: NextRequest) {
             toPositionNumber: true,
             toUnit: true,
             sequence: true,
+            // ข้อมูลส่วนตัว
+            birthDate: true,
+            age: true,
+            education: true,
+            seniority: true,
+            // ข้อมูลการแต่งตั้ง
+            lastAppointment: true,
+            currentRankSince: true,
+            enrollmentDate: true,
+            retirementDate: true,
+            yearsOfService: true,
+            // ข้อมูลการฝึกอบรม
+            trainingLocation: true,
+            trainingCourse: true,
+            notes: true,
           },
           orderBy: { sequence: 'asc' },
         },

@@ -28,12 +28,9 @@ export async function GET(request: NextRequest) {
   const skip = usePagination && limit !== null ? (page! - 1) * limit : 0;
 
     // สร้าง where clause สำหรับตำแหน่งที่ว่าง จาก vacant_position
-    // ดึงเฉพาะตำแหน่งว่าง (ไม่ใช่ผู้ยื่นขอ) - แสดงทั้งที่จับคู่แล้วและยังไม่จับคู่
+    // ตอนนี้ vacant_position เป็น snapshot ของตำแหน่งว่างทั้งหมด
     const where: any = {
-      year: yearNumber,
-      nominator: null, // เฉพาะตำแหน่งว่าง (ไม่ใช่ผู้ยื่นขอ)
-      requestedPositionId: null
-      // ไม่กรอง isAssigned เพื่อให้แสดงทั้งที่จับคู่แล้วและยังไม่จับคู่
+      year: yearNumber
     };
 
     // เพิ่ม unit filter

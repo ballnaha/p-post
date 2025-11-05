@@ -28,7 +28,6 @@ import {
   InputLabel,
   Select,
   SelectChangeEvent,
-  Autocomplete,
   TextField,
   Skeleton,
   Fade,
@@ -37,6 +36,7 @@ import {
   Tooltip,
   Stack,
   Divider,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -55,6 +55,7 @@ import {
   Person as PersonIcon,
   Badge as BadgeIcon,
   School as EducationIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter } from 'next/navigation';
@@ -110,6 +111,19 @@ interface SwapDetail {
   toPositionNumber?: string;
   toUnit?: string;
   notes?: string;
+  // ข้อมูลส่วนตัวที่บันทึกไว้ใน swap_transaction_detail
+  birthDate?: string;
+  age?: string;
+  education?: string;
+  lastAppointment?: string;
+  currentRankSince?: string;
+  enrollmentDate?: string;
+  retirementDate?: string;
+  yearsOfService?: string;
+  seniority?: string;
+  trainingLocation?: string;
+  trainingCourse?: string;
+  actingAs?: string;
 }
 
 interface SwapTransaction {
@@ -144,8 +158,8 @@ export default function SwapListPage() {
   const [selectedPersonnel, setSelectedPersonnel] = useState<PolicePersonnel | null>(null);
   const [loadingPersonnel, setLoadingPersonnel] = useState(false);
   
-  // Filter states
-  const [groupNameFilter, setGroupNameFilter] = useState<string | null>(null);
+  // Search state - using simple text search
+  const [searchText, setSearchText] = useState<string>('');
   
   // Pagination states
   const [page, setPage] = useState(0);
@@ -162,116 +176,6 @@ export default function SwapListPage() {
     }
     
     return years;
-  }, []);
-
-  // Memoized filter options - only recalculate when data changes
-  const groupNameOptions = useMemo(() => {
-    const names = Array.from(new Set(data.map(item => item.groupName).filter(Boolean))) as string[];
-    return names.sort();
-  }, [data]);
-
-  // Memoized filtered data - only recalculate when dependencies change
-  const filteredData = useMemo(() => {
-    let filtered = [...data];
-
-    if (groupNameFilter) {
-      filtered = filtered.filter(item => item.groupName === groupNameFilter);
-    }
-
-    return filtered;
-  }, [data, groupNameFilter]);
-
-  // Memoized paginated data
-  const paginatedData = useMemo(() => {
-    return filteredData.slice(
-      page * rowsPerPage,
-      page * rowsPerPage + rowsPerPage
-    );
-  }, [filteredData, page, rowsPerPage]);
-
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Clear data immediately when starting to load
-      setData([]);
-      
-      // Filter by swapType=two-way to get only two-way swap transactions
-      const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=two-way`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const result = await response.json();
-      setData(result.data || []);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
-    } finally {
-      setLoading(false);
-    }
-  }, [currentYear, toast]);
-
-  useEffect(() => {
-    fetchData();
-  }, [currentYear]); // ✅ เปลี่ยนเป็น currentYear แทน fetchData
-
-  const handleResetFilters = useCallback(() => {
-    setGroupNameFilter(null);
-    setPage(0); // Reset to first page when filters are reset
-  }, []);
-
-  const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, item: SwapTransaction) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedItem(item);
-  }, []);
-
-  const handleMenuClose = useCallback(() => {
-    setAnchorEl(null);
-    setSelectedItem(null);
-  }, []);
-
-  const handleEdit = useCallback(() => {
-    if (selectedItem) {
-      router.push(`/police-personnel/swap-list/edit/${selectedItem.id}`);
-    }
-    handleMenuClose();
-  }, [selectedItem, router, handleMenuClose]);
-
-  const handleDeleteClick = useCallback(() => {
-    if (selectedItem) {
-      setItemToDelete(selectedItem);
-      setDeleteDialogOpen(true);
-    }
-    handleMenuClose();
-  }, [selectedItem, handleMenuClose]);
-
-  const handleViewPersonnelDetail = useCallback(async (personnelId: string) => {
-    try {
-      setLoadingPersonnel(true);
-      setPersonnelDetailModalOpen(true);
-      
-      // ดึงข้อมูลจาก swap_list แทน police_personnel
-      const response = await fetch(`/api/swap-list/personnel/${personnelId}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch personnel details');
-      }
-
-      const result = await response.json();
-      setSelectedPersonnel(result.data);
-    } catch (error: any) {
-      console.error('Error fetching personnel details:', error);
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูลบุคลากร');
-      setPersonnelDetailModalOpen(false);
-    } finally {
-      setLoadingPersonnel(false);
-    }
-  }, []); // Removed toast from dependencies
-
-  const handleClosePersonnelDetailModal = useCallback(() => {
-    setPersonnelDetailModalOpen(false);
   }, []);
 
   const formatDate = (dateString?: string | null) => {
@@ -318,6 +222,150 @@ export default function SwapListPage() {
     
     return dateString;
   };
+
+  // Memoized filtered data - only recalculate when dependencies change
+  const filteredData = useMemo(() => {
+    let filtered = [...data];
+
+    if (searchText.trim()) {
+      const lower = searchText.toLowerCase();
+      filtered = filtered.filter(item => {
+        // Search in group name, group number, swap date, and personnel names
+        const gn = (item.groupName || '').toLowerCase();
+        const gnum = (item.groupNumber || '').toLowerCase();
+        const date = formatDate(item.swapDate).toLowerCase();
+        const detailText = item.swapDetails?.map(d => `${d.fullName} ${d.fromUnit} ${d.toUnit}`).join(' ').toLowerCase() || '';
+        
+        return gn.includes(lower) || gnum.includes(lower) || date.includes(lower) || detailText.includes(lower);
+      });
+    }
+
+    return filtered;
+  }, [data, searchText]);
+
+  // Memoized paginated data
+  const paginatedData = useMemo(() => {
+    return filteredData.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
+    );
+  }, [filteredData, page, rowsPerPage]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Clear data immediately when starting to load
+      setData([]);
+      
+      // Filter by swapType=two-way to get only two-way swap transactions
+      const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=two-way`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const result = await response.json();
+      setData(result.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentYear, toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [currentYear]); // ✅ เปลี่ยนเป็น currentYear แทน fetchData
+
+  const handleResetFilters = useCallback(() => {
+    setSearchText('');
+    setPage(0); // Reset to first page when filters are reset
+  }, []);
+
+  const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, item: SwapTransaction) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedItem(item);
+  }, []);
+
+  const handleMenuClose = useCallback(() => {
+    setAnchorEl(null);
+    setSelectedItem(null);
+  }, []);
+
+  const handleEdit = useCallback(() => {
+    if (selectedItem) {
+      router.push(`/police-personnel/swap-list/edit/${selectedItem.id}`);
+    }
+    handleMenuClose();
+  }, [selectedItem, router, handleMenuClose]);
+
+  const handleDeleteClick = useCallback(() => {
+    if (selectedItem) {
+      setItemToDelete(selectedItem);
+      setDeleteDialogOpen(true);
+    }
+    handleMenuClose();
+  }, [selectedItem, handleMenuClose]);
+
+  const handleViewPersonnelDetail = useCallback(async (personnelId: string) => {
+    if (!personnelId) return;
+    try {
+      setLoadingPersonnel(true);
+      setPersonnelDetailModalOpen(true);
+      
+      // ค้นหาข้อมูลจาก swap transaction details ที่บันทึกไว้
+      // เพื่อให้แสดงข้อมูล ณ เวลานั้น ไม่ได้รับผลกระทบจากการ import ข้อมูลใหม่
+      let personnelData: PolicePersonnel | null = null;
+      
+      for (const transaction of data) {
+        const detail = transaction.swapDetails?.find(d => d.personnelId === personnelId);
+        if (detail) {
+          personnelData = {
+            id: detail.personnelId || '',
+            fullName: detail.fullName,
+            rank: detail.rank,
+            nationalId: detail.nationalId,
+            posCodeId: detail.posCodeId,
+            posCodeMaster: detail.posCodeMaster,
+            position: detail.fromPosition,
+            positionNumber: detail.fromPositionNumber,
+            unit: detail.fromUnit,
+            notes: detail.notes,
+            // ข้อมูลส่วนตัวที่บันทึกไว้
+            birthDate: detail.birthDate,
+            age: detail.age,
+            education: detail.education,
+            lastAppointment: detail.lastAppointment,
+            currentRankSince: detail.currentRankSince,
+            enrollmentDate: detail.enrollmentDate,
+            retirementDate: detail.retirementDate,
+            yearsOfService: detail.yearsOfService,
+            seniority: detail.seniority,
+            trainingLocation: detail.trainingLocation,
+            trainingCourse: detail.trainingCourse,
+          };
+          break;
+        }
+      }
+
+      if (personnelData) {
+        setSelectedPersonnel(personnelData);
+      } else {
+        throw new Error('ไม่พบข้อมูลบุคลากร');
+      }
+    } catch (error: any) {
+      console.error('Error fetching personnel details:', error);
+      toast.error(error.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูลบุคลากร');
+      setPersonnelDetailModalOpen(false);
+    } finally {
+      setLoadingPersonnel(false);
+    }
+  }, [data, toast]);
+
+  const handleClosePersonnelDetailModal = useCallback(() => {
+    setPersonnelDetailModalOpen(false);
+  }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!itemToDelete) return;
@@ -417,7 +465,7 @@ export default function SwapListPage() {
   // Reset page when filter changes
   useEffect(() => {
     setPage(0);
-  }, [groupNameFilter]);
+  }, [searchText]);
 
   return (
     <Layout>
@@ -467,7 +515,7 @@ export default function SwapListPage() {
                 color="primary"
                 startIcon={<AddIcon />}
                 onClick={() => router.push('/police-personnel/swap-list/add')}
-                size="large"
+                size="small"
               >
                 เพิ่มรายการสลับตำแหน่ง
               </Button>
@@ -501,22 +549,30 @@ export default function SwapListPage() {
             </FormControl>
             
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <Autocomplete
+              <TextField
                 fullWidth
-                options={groupNameOptions}
-                value={groupNameFilter}
-                onChange={(event, newValue) => setGroupNameFilter(newValue)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="ชื่อกลุ่ม" 
-                    placeholder="ค้นหาชื่อกลุ่ม..."
-                    size="small"
-                  />
-                )}
-                noOptionsText="ไม่พบข้อมูล"
+                label="ค้นหา"
+                placeholder="ค้นหาชื่อกลุ่ม, หมายเลข, ชื่อบุคคล, หน่วยงาน..."
+                size="small"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                slotProps={{
+                  input: {
+                    endAdornment: searchText && (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => setSearchText('')}
+                          edge="end"
+                        >
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
-              {groupNameFilter && (
+              {searchText && (
                 <Button
                   variant="outlined"
                   size="medium"
@@ -588,13 +644,13 @@ export default function SwapListPage() {
                 <Paper sx={{ borderRadius: 2 }}>
                   <EmptyState
                     icon={SwapHorizIcon}
-                    title={groupNameFilter ? 'ไม่พบข้อมูลที่ตรงกับการกรอง' : 'ไม่พบข้อมูลการสลับตำแหน่ง'}
-                    description={groupNameFilter 
-                      ? 'ลองปรับเปลี่ยนตัวกรองหรือล้างตัวกรอง' 
+                    title={searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูลการสลับตำแหน่ง'}
+                    description={searchText 
+                      ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' 
                       : `ยังไม่มีรายการสลับตำแหน่งในปี ${currentYear}`
                     }
-                    actionLabel={!groupNameFilter ? 'เพิ่มรายการสลับตำแหน่ง' : undefined}
-                    onAction={!groupNameFilter ? () => router.push('/police-personnel/swap-list/add') : undefined}
+                    actionLabel={!searchText ? 'เพิ่มรายการสลับตำแหน่ง' : undefined}
+                    onAction={!searchText ? () => router.push('/police-personnel/swap-list/add') : undefined}
                   />
                 </Paper>
               </Fade>

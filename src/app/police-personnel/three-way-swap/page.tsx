@@ -21,7 +21,6 @@ import {
   InputLabel,
   Select,
   SelectChangeEvent,
-  Autocomplete,
   TextField,
   Skeleton,
   Fade,
@@ -39,6 +38,7 @@ import {
   TableHead,
   TableRow,
   Collapse,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -55,6 +55,7 @@ import {
   Person as PersonIcon,
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowUp as ArrowUpIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter } from 'next/navigation';
@@ -81,6 +82,21 @@ interface ThreeWaySwapDetail {
   toPositionNumber?: string;
   toUnit?: string;
   sequence: number;
+  // ข้อมูลส่วนตัว
+  birthDate?: string | null;
+  age?: string;
+  education?: string | null;
+  seniority?: string;
+  // ข้อมูลการแต่งตั้ง
+  lastAppointment?: string | null;
+  currentRankSince?: string | null;
+  enrollmentDate?: string | null;
+  retirementDate?: string | null;
+  yearsOfService?: string;
+  // ข้อมูลการฝึกอบรม
+  trainingLocation?: string | null;
+  trainingCourse?: string;
+  notes?: string | null;
 }
 
 interface ThreeWaySwapTransaction {
@@ -112,16 +128,16 @@ interface PersonnelData {
   age?: string;
   yearsOfService?: string;
   seniority?: string;
-  birthDate?: string;
-  education?: string;
-  lastAppointment?: string;
-  currentRankSince?: string;
-  enrollmentDate?: string;
-  retirementDate?: string;
-  trainingLocation?: string;
+  birthDate?: string | null;
+  education?: string | null;
+  lastAppointment?: string | null;
+  currentRankSince?: string | null;
+  enrollmentDate?: string | null;
+  retirementDate?: string | null;
+  trainingLocation?: string | null;
   trainingCourse?: string;
   actingAs?: string;
-  notes?: string;
+  notes?: string | null;
 }
 
 // Optimized: Memoized skeleton component to prevent re-renders during loading
@@ -186,7 +202,6 @@ export default function ThreeWaySwapPage() {
 
   // Data states
   const [data, setData] = useState<ThreeWaySwapTransaction[]>([]);
-  const [filteredData, setFilteredData] = useState<ThreeWaySwapTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Year filter
@@ -211,13 +226,12 @@ export default function ThreeWaySwapPage() {
   const [personnelDetail, setPersonnelDetail] = useState<PersonnelData | null>(null);
   const [loadingPersonnel, setLoadingPersonnel] = useState(false);
   
-  // Filter states
-  const [groupNameFilter, setGroupNameFilter] = useState<string | null>(null);
-  const [groupNameOptions, setGroupNameOptions] = useState<string[]>([]);
+  // Search state - using simple text search
+  const [searchText, setSearchText] = useState<string>('');
   
   // Pagination states
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(6);
+  const [rowsPerPage, setRowsPerPage] = useState(12); // Default for card view
 
   // Expanded rows for table view
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -235,13 +249,86 @@ export default function ThreeWaySwapPage() {
     return years;
   }, []);
 
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return '-';
+    
+    // ถ้าเป็นรูปแบบวันที่ไทยอยู่แล้ว (DD/MM/YYYY) ให้ return เลย
+    if (typeof dateString === 'string' && dateString.includes('/')) {
+      const parts = dateString.split('/');
+      if (parts.length === 3) {
+        // ตรวจสอบว่าเป็นรูปแบบ DD/MM/YYYY หรือไม่
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        
+        // ถ้าปีเป็น พ.ศ. (มากกว่า 2500) ให้ return เลย
+        if (parseInt(year) > 2500) {
+          return `${day}/${month}/${year}`;
+        }
+        
+        // ถ้าปีเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
+        if (parseInt(year) > 1900 && parseInt(year) < 2100) {
+          const thaiYear = parseInt(year) + 543;
+          return `${day}/${month}/${thaiYear}`;
+        }
+      }
+      
+      // ถ้าเป็นรูปแบบอื่นที่มี / ให้ return เลย
+      return dateString;
+    }
+    
+    // ถ้าเป็น ISO date string หรือ timestamp
+    try {
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear() + 543; // แปลงเป็น พ.ศ.
+        return `${day}/${month}/${year}`;
+      }
+    } catch (error) {
+      // ถ้าแปลงไม่ได้ ให้ return ค่าเดิม
+      return dateString;
+    }
+    
+    return dateString;
+  };
+
+  // Memoized filtered data - only recalculate when dependencies change
+  const filteredData = useMemo(() => {
+    let filtered = [...data];
+
+    if (searchText.trim()) {
+      const lower = searchText.toLowerCase();
+      filtered = filtered.filter(item => {
+        // Search in group name, group number, swap date, and personnel names
+        const gn = (item.groupName || '').toLowerCase();
+        const gnum = (item.groupNumber || '').toLowerCase();
+        const date = formatDate(item.swapDate).toLowerCase();
+        const detailText = item.swapDetails?.map(d => `${d.fullName} ${d.fromUnit} ${d.toUnit}`).join(' ').toLowerCase() || '';
+        
+        return gn.includes(lower) || gnum.includes(lower) || date.includes(lower) || detailText.includes(lower);
+      });
+    }
+
+    return filtered;
+  }, [data, searchText]);
+
+  // Memoized paginated data
+  const paginatedData = useMemo(() => {
+    return filteredData.slice(
+      page * rowsPerPage,
+      page * rowsPerPage + rowsPerPage
+    );
+  }, [filteredData, page, rowsPerPage]);
+
   // Optimized: Memoized fetch function with useCallback
   // Fixed: Removed toast from dependencies to prevent infinite loop
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      // Clear data immediately when starting to load
       setData([]);
-      setFilteredData([]);
       
       const response = await fetch(`/api/three-way-transactions?year=${currentYear}`);
       
@@ -251,43 +338,39 @@ export default function ThreeWaySwapPage() {
 
       const result = await response.json();
       setData(result.data || []);
-      setFilteredData(result.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('ไม่สามารถโหลดข้อมูลได้');
-      setData([]);
-      setFilteredData([]);
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear]);
 
-  // Optimized: Memoized filter function with useCallback
-  const applyFilters = useCallback(() => {
-    let filtered = [...data];
-
-    if (groupNameFilter) {
-      filtered = filtered.filter(item => item.groupName === groupNameFilter);
-    }
-
-    setFilteredData(filtered);
-    setPage(0);
-  }, [data, groupNameFilter]);
-
-  // Optimized: Memoized updateFilterOptions with useCallback
-  const updateFilterOptions = useCallback(() => {
-    // Use Set for O(1) unique check instead of array operations
-    const groupNames = [...new Set(data.map(item => item.groupName).filter(Boolean))] as string[];
-    setGroupNameOptions(groupNames);
-  }, [data]);
+  const handleResetFilters = useCallback(() => {
+    setSearchText('');
+    setPage(0); // Reset to first page when filters are reset
+  }, []);
 
   // Optimized: Memoized event handlers with useCallback
   const handleYearChange = useCallback((event: SelectChangeEvent<number>) => {
     const newYear = event.target.value as number;
     setCurrentYear(newYear);
-    setGroupNameFilter(null);
     setPage(0);
+  }, []);
+
+  const handleViewModeChange = useCallback((_event: React.MouseEvent<HTMLElement>, newMode: 'table' | 'card' | null) => {
+    if (newMode !== null) {
+      setViewMode(newMode);
+      // Reset pagination when switching view mode
+      setPage(0);
+      // Set appropriate rowsPerPage for each view
+      if (newMode === 'table') {
+        setRowsPerPage(10);
+      } else {
+        setRowsPerPage(12);
+      }
+    }
   }, []);
 
   const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, transaction: ThreeWaySwapTransaction) => {
@@ -358,30 +441,61 @@ export default function ThreeWaySwapPage() {
   // Optimized: Memoized personnel detail handler with useCallback
   // Fixed: Removed toast from dependencies to prevent issues
   const handleViewPersonnelDetail = useCallback(async (personnelId: string) => {
-    setSelectedPersonnelId(personnelId);
-    setPersonnelModalOpen(true);
-    setLoadingPersonnel(true);
-
+    if (!personnelId) return;
     try {
-      // ใช้ API swap-list/personnel แทน police-personnel เพราะข้อมูลอยู่ใน swap_list
-      const response = await fetch(`/api/swap-list/personnel/${personnelId}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch personnel');
+      setLoadingPersonnel(true);
+      setPersonnelModalOpen(true);
+      
+      // ค้นหาข้อมูลจาก swap transaction details ที่บันทึกไว้
+      // เพื่อให้แสดงข้อมูล ณ เวลานั้น ไม่ได้รับผลกระทบจากการ import ข้อมูลใหม่
+      let personnelData: PersonnelData | null = null;
+      
+      for (const transaction of data) {
+        const detail = transaction.swapDetails?.find(d => d.personnelId === personnelId);
+        if (detail) {
+          personnelData = {
+            id: detail.personnelId || '',
+            fullName: detail.fullName,
+            rank: detail.rank,
+            nationalId: detail.nationalId,
+            posCodeId: detail.posCodeId,
+            posCodeMaster: detail.posCodeMaster,
+            position: detail.fromPosition,
+            positionNumber: detail.fromPositionNumber,
+            unit: detail.fromUnit,
+            notes: detail.notes,
+            // ข้อมูลส่วนตัวที่บันทึกไว้
+            birthDate: detail.birthDate,
+            age: detail.age,
+            education: detail.education,
+            lastAppointment: detail.lastAppointment,
+            currentRankSince: detail.currentRankSince,
+            enrollmentDate: detail.enrollmentDate,
+            retirementDate: detail.retirementDate,
+            yearsOfService: detail.yearsOfService,
+            trainingLocation: detail.trainingLocation,
+            trainingCourse: detail.trainingCourse,
+            seniority: detail.seniority,
+          };
+          break;
+        }
       }
-      const result = await response.json();
-      setPersonnelDetail(result.data);
+      
+      if (personnelData) {
+        setPersonnelDetail(personnelData);
+      } else {
+        toast.error('ไม่พบข้อมูลบุคลากร');
+        setPersonnelModalOpen(false);
+      }
     } catch (error: any) {
-      console.error('Error fetching personnel:', error);
-      toast.error(error.message || 'ไม่สามารถโหลดข้อมูลบุคลากรได้');
-      setPersonnelDetail(null);
-      // ปิด modal ถ้าไม่มีข้อมูล
+      console.error('Error loading personnel detail:', error);
+      toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
       setPersonnelModalOpen(false);
     } finally {
       setLoadingPersonnel(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [data]);
 
   // Optimized: Memoized modal handlers with useCallback
   const handleClosePersonnelModal = useCallback(() => {
@@ -391,17 +505,6 @@ export default function ThreeWaySwapPage() {
   const handleClearPersonnelData = useCallback(() => {
     setSelectedPersonnelId(null);
     setPersonnelDetail(null);
-  }, []);
-
-  // Optimized: Memoized utility functions with useCallback
-  const formatDate = useCallback((dateString: string) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('th-TH', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
   }, []);
 
   const getStatusColor = useCallback((status: string) => {
@@ -445,24 +548,15 @@ export default function ThreeWaySwapPage() {
     setPage(0);
   }, []);
 
-  // Optimized: Memoized pagination calculation with useMemo
-  const paginatedData = useMemo(() => 
-    filteredData.slice(
-      page * rowsPerPage,
-      page * rowsPerPage + rowsPerPage
-    ), [filteredData, page, rowsPerPage]);
-
   // Add effects after all functions are defined
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [currentYear]); // ✅ เปลี่ยนเป็น currentYear แทน fetchData
 
+  // Reset page when filter changes
   useEffect(() => {
-    if (!loading) {
-      applyFilters();
-      updateFilterOptions();
-    }
-  }, [loading, applyFilters, updateFilterOptions]);
+    setPage(0);
+  }, [searchText]);
 
   return (
     <Layout>
@@ -491,11 +585,7 @@ export default function ThreeWaySwapPage() {
               <ToggleButtonGroup
                 value={viewMode}
                 exclusive
-                onChange={(event, newValue) => {
-                  if (newValue !== null) {
-                    setViewMode(newValue);
-                  }
-                }}
+                onChange={handleViewModeChange}
                 size="small"
                 aria-label="view mode"
               >
@@ -515,7 +605,7 @@ export default function ThreeWaySwapPage() {
                 color="warning"
                 startIcon={<AddIcon />}
                 onClick={() => router.push('/police-personnel/three-way-swap/add')}
-                size="large"
+                size="medium"
               >
                 เพิ่มการสลับสามเส้า
               </Button>
@@ -549,26 +639,34 @@ export default function ThreeWaySwapPage() {
             </FormControl>
             
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <Autocomplete
+              <TextField
                 fullWidth
-                options={groupNameOptions}
-                value={groupNameFilter}
-                onChange={(event, newValue) => setGroupNameFilter(newValue)}
-                renderInput={(params) => (
-                  <TextField 
-                    {...params} 
-                    label="ชื่อกลุ่ม" 
-                    placeholder="ค้นหาชื่อกลุ่ม..."
-                    size="small"
-                  />
-                )}
-                noOptionsText="ไม่พบข้อมูล"
+                label="ค้นหา"
+                placeholder="ค้นหาชื่อกลุ่ม, หมายเลข, ชื่อบุคคล, หน่วยงาน..."
+                size="small"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                slotProps={{
+                  input: {
+                    endAdornment: searchText && (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => setSearchText('')}
+                          edge="end"
+                        >
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
-              {groupNameFilter && (
+              {searchText && (
                 <Button
                   variant="outlined"
                   size="medium"
-                  onClick={() => setGroupNameFilter(null)}
+                  onClick={handleResetFilters}
                   startIcon={<RefreshIcon />}
                   sx={{ whiteSpace: 'nowrap' }}
                 >
@@ -591,18 +689,20 @@ export default function ThreeWaySwapPage() {
         ) : (
           <>
             {filteredData.length === 0 ? (
-              <Paper sx={{ borderRadius: 2 }}>
-                <EmptyState
-                  icon={ThreeWayIcon}
-                  title="ไม่พบข้อมูลการสลับตำแหน่งสามเส้า"
-                  description={groupNameFilter 
-                    ? 'ลองปรับเปลี่ยนตัวกรองหรือเพิ่มข้อมูลใหม่'
-                    : `ยังไม่มีข้อมูลการสลับตำแหน่งสามเส้าในปี ${currentYear}`
-                  }
-                  actionLabel={!groupNameFilter ? 'เพิ่มการสลับสามเส้า' : undefined}
-                  onAction={!groupNameFilter ? () => router.push('/police-personnel/three-way-swap/add') : undefined}
-                />
-              </Paper>
+              <Fade in={!loading} timeout={800}>
+                <Paper sx={{ borderRadius: 2 }}>
+                  <EmptyState
+                    icon={ThreeWayIcon}
+                    title={searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูลการสลับตำแหน่งสามเส้า'}
+                    description={searchText 
+                      ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง'
+                      : `ยังไม่มีข้อมูลการสลับตำแหน่งสามเส้าในปี ${currentYear}`
+                    }
+                    actionLabel={!searchText ? 'เพิ่มการสลับสามเส้า' : undefined}
+                    onAction={!searchText ? () => router.push('/police-personnel/three-way-swap/add') : undefined}
+                  />
+                </Paper>
+              </Fade>
             ) : (
               <>
                 {viewMode === 'card' ? (

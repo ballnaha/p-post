@@ -19,6 +19,22 @@ interface ChainNode {
   rank: string; // police_personnel.rank
   seniority?: string; // police_personnel.seniority
   
+  // ข้อมูลส่วนตัว (Personal Information)
+  birthDate?: string; // police_personnel.birthDate
+  age?: string; // police_personnel.age
+  education?: string; // police_personnel.education
+  
+  // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
+  lastAppointment?: string; // police_personnel.lastAppointment
+  currentRankSince?: string; // police_personnel.currentRankSince
+  enrollmentDate?: string; // police_personnel.enrollmentDate
+  retirementDate?: string; // police_personnel.retirementDate
+  yearsOfService?: string; // police_personnel.yearsOfService
+  
+  // ข้อมูลการฝึกอบรม (Training Information)
+  trainingLocation?: string; // police_personnel.trainingLocation
+  trainingCourse?: string; // police_personnel.trainingCourse
+  
   // ข้อมูลตำแหน่งเดิม (From Position)
   fromPosCodeId: number; // police_personnel.posCodeId
   fromPosCodeName?: string; // posCodeMaster.name
@@ -58,6 +74,7 @@ interface PromotionChainBuilderProps {
   nodes: ChainNode[];
   onAddNode: (node: ChainNode) => void;
   onRemoveNode: (nodeId: string) => void;
+  excludeTransactionId?: string; // Transaction ID ที่กำลังแก้ไข (ไม่กรองบุคลากรใน transaction นี้ออก)
 }
 
 export default function PromotionChainBuilder({
@@ -65,6 +82,7 @@ export default function PromotionChainBuilder({
   nodes,
   onAddNode,
   onRemoveNode,
+  excludeTransactionId,
 }: PromotionChainBuilderProps) {
   const [showCandidateSelector, setShowCandidateSelector] = useState(false);
   const [showPersonnelModal, setShowPersonnelModal] = useState(false);
@@ -129,6 +147,20 @@ export default function PromotionChainBuilder({
       fullName: candidate.fullName,
       rank: candidate.rank,
       seniority: candidate.seniority,
+      // ข้อมูลส่วนตัว
+      birthDate: candidate.birthDate,
+      age: candidate.age,
+      education: candidate.education,
+      // ข้อมูลการแต่งตั้ง
+      lastAppointment: candidate.lastAppointment,
+      currentRankSince: candidate.currentRankSince,
+      enrollmentDate: candidate.enrollmentDate,
+      retirementDate: candidate.retirementDate,
+      yearsOfService: candidate.yearsOfService,
+      // ข้อมูลการฝึกอบรม
+      trainingLocation: candidate.trainingLocation,
+      trainingCourse: candidate.trainingCourse,
+      // ตำแหน่ง
       fromPosCodeId: candidate.posCodeId,
       fromPosCodeName: candidate.posCodeName || candidate.position,
       fromPosition: candidate.position,
@@ -544,6 +576,7 @@ export default function PromotionChainBuilder({
         targetRankLevel={currentVacantRankLevel || 0}
         onSelect={handleSelectCandidate}
         selectedPersonnelIds={nodes.map(n => n.personnelId).filter(Boolean) as string[]}
+        excludeTransactionId={excludeTransactionId}
         vacantPosition={
           nodes.length === 0
             ? vacantPosition

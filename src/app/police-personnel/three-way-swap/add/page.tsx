@@ -8,7 +8,6 @@ import {
   TextField,
   Alert,
   CircularProgress,
-  Autocomplete,
   Stack,
   Divider,
   IconButton,
@@ -24,11 +23,17 @@ import {
   Person as PersonIcon,
   Info as InfoIcon,
   ChangeHistory as ThreeWayIcon,
+  Close as CloseIcon,
+  Badge as BadgeIcon,
+  CalendarToday as CalendarIcon,
+  School as EducationIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import PersonnelDrawer from './components/PersonnelDrawer';
 
 interface PolicePersonnel {
   id: string;
@@ -62,8 +67,6 @@ export default function AddThreeWaySwapPage() {
   const router = useRouter();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [personnelOptions, setPersonnelOptions] = useState<PolicePersonnel[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [swappedPersonnelIds, setSwappedPersonnelIds] = useState<Set<string>>(new Set());
   
   // Personnel selections - 3 คน
@@ -75,6 +78,11 @@ export default function AddThreeWaySwapPage() {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedPersonnelDetail, setSelectedPersonnelDetail] = useState<PolicePersonnel | null>(null);
   
+  // Drawer state
+  const [drawerAOpen, setDrawerAOpen] = useState(false);
+  const [drawerBOpen, setDrawerBOpen] = useState(false);
+  const [drawerCOpen, setDrawerCOpen] = useState(false);
+  
   // Form data
   const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
   const [swapDate, setSwapDate] = useState<Dayjs | null>(dayjs());
@@ -82,11 +90,7 @@ export default function AddThreeWaySwapPage() {
   const [groupNumber, setGroupNumber] = useState<string>('');
 
   useEffect(() => {
-    const fetchData = async () => {
-      const swappedIds = await fetchNextGroupNumber();
-      await fetchPersonnelOptions(swappedIds);
-    };
-    fetchData();
+    fetchNextGroupNumber();
   }, []);
 
   const fetchNextGroupNumber = async (): Promise<Set<string>> => {
@@ -148,30 +152,7 @@ export default function AddThreeWaySwapPage() {
     }
   };
 
-  const fetchPersonnelOptions = async (excludeIds?: Set<string>) => {
-    try {
-      setSearchLoading(true);
-      const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/swap-list?year=${currentYear}&swapType=three-way`);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch swap list');
-      }
-
-      const json = await response.json();
-      const list: PolicePersonnel[] = Array.isArray(json?.data) ? json.data : [];
-      const idsToExclude = excludeIds || swappedPersonnelIds;
-      setPersonnelOptions(
-        list.filter((p: PolicePersonnel) => 
-          !!p.rank && !idsToExclude.has(p.id)
-        )
-      );
-    } catch (error) {
-      console.error('Error fetching swap list:', error);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
 
   // Optimized: Memoized handlers with useCallback
   const handleShowDetail = useCallback((personnel: PolicePersonnel) => {
@@ -185,6 +166,7 @@ export default function AddThreeWaySwapPage() {
 
   const handleSelectPersonnelA = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelA(newValue);
+    setDrawerAOpen(false); // ปิด drawer หลังเลือกเสร็จ
     // If B or C is selected and same as new A, clear them
     setPersonnelB(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
     setPersonnelC(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
@@ -192,6 +174,7 @@ export default function AddThreeWaySwapPage() {
 
   const handleSelectPersonnelB = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelB(newValue);
+    setDrawerBOpen(false); // ปิด drawer หลังเลือกเสร็จ
     // If A or C is selected and same as new B, clear them
     setPersonnelA(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
     setPersonnelC(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
@@ -199,39 +182,13 @@ export default function AddThreeWaySwapPage() {
 
   const handleSelectPersonnelC = useCallback((newValue: PolicePersonnel | null) => {
     setPersonnelC(newValue);
+    setDrawerCOpen(false); // ปิด drawer หลังเลือกเสร็จ
     // If A or B is selected and same as new C, clear them
     setPersonnelA(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
     setPersonnelB(prev => (prev && newValue && prev.id === newValue.id) ? null : prev);
   }, []);
 
-  // Optimized: Memoized filter options with useMemo
-  // Filter out already selected personnel
-  const optionsForA = useMemo(() => 
-    personnelOptions.filter(p => 
-      p.rank && 
-      (!personnelB || p.id !== personnelB.id) && 
-      (!personnelC || p.id !== personnelC.id)
-    ), 
-    [personnelOptions, personnelB, personnelC]
-  );
 
-  const optionsForB = useMemo(() => 
-    personnelOptions.filter(p => 
-      p.rank && 
-      (!personnelA || p.id !== personnelA.id) && 
-      (!personnelC || p.id !== personnelC.id)
-    ), 
-    [personnelOptions, personnelA, personnelC]
-  );
-
-  const optionsForC = useMemo(() => 
-    personnelOptions.filter(p => 
-      p.rank && 
-      (!personnelA || p.id !== personnelA.id) && 
-      (!personnelB || p.id !== personnelB.id)
-    ), 
-    [personnelOptions, personnelA, personnelB]
-  );
 
   const canSwap = useMemo(() => 
     Boolean(personnelA && personnelB && personnelC), 
@@ -272,13 +229,28 @@ export default function AddThreeWaySwapPage() {
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
           rank: personnelA.rank,
+          seniority: personnelA.seniority,
+          posCodeId: personnelA.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelA.birthDate,
+          age: personnelA.age,
+          education: personnelA.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelA.lastAppointment,
+          currentRankSince: personnelA.currentRankSince,
+          enrollmentDate: personnelA.enrollmentDate,
+          retirementDate: personnelA.retirementDate,
+          yearsOfService: personnelA.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelA.trainingLocation,
+          trainingCourse: personnelA.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
           toPosition: personnelB.position, // A ไปที่ตำแหน่ง B
           toPositionNumber: personnelB.positionNumber,
           toUnit: personnelB.unit,
-          posCodeId: personnelA.posCodeId,
         },
         {
           sequence: 2,
@@ -286,13 +258,28 @@ export default function AddThreeWaySwapPage() {
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
           rank: personnelB.rank,
+          seniority: personnelB.seniority,
+          posCodeId: personnelB.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelB.birthDate,
+          age: personnelB.age,
+          education: personnelB.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelB.lastAppointment,
+          currentRankSince: personnelB.currentRankSince,
+          enrollmentDate: personnelB.enrollmentDate,
+          retirementDate: personnelB.retirementDate,
+          yearsOfService: personnelB.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelB.trainingLocation,
+          trainingCourse: personnelB.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
           toPosition: personnelC.position, // B ไปที่ตำแหน่ง C
           toPositionNumber: personnelC.positionNumber,
           toUnit: personnelC.unit,
-          posCodeId: personnelB.posCodeId,
         },
         {
           sequence: 3,
@@ -300,13 +287,28 @@ export default function AddThreeWaySwapPage() {
           nationalId: personnelC.nationalId,
           fullName: personnelC.fullName,
           rank: personnelC.rank,
+          seniority: personnelC.seniority,
+          posCodeId: personnelC.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelC.birthDate,
+          age: personnelC.age,
+          education: personnelC.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelC.lastAppointment,
+          currentRankSince: personnelC.currentRankSince,
+          enrollmentDate: personnelC.enrollmentDate,
+          retirementDate: personnelC.retirementDate,
+          yearsOfService: personnelC.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelC.trainingLocation,
+          trainingCourse: personnelC.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelC.position,
           fromPositionNumber: personnelC.positionNumber,
           fromUnit: personnelC.unit,
           toPosition: personnelA.position, // C ไปที่ตำแหน่ง A
           toPositionNumber: personnelA.positionNumber,
           toUnit: personnelA.unit,
-          posCodeId: personnelC.posCodeId,
         },
       ];
 
@@ -344,61 +346,61 @@ export default function AddThreeWaySwapPage() {
   const renderPersonnelCard = (
     personnel: PolicePersonnel | null,
     label: string,
-    onSelect: (value: PolicePersonnel | null) => void,
-    options: PolicePersonnel[],
+    onOpenDrawer: () => void,
     disabled: boolean = false
   ) => (
     <Paper 
       elevation={3} 
       sx={{ 
         p: 3, 
-        bgcolor: personnel ? 'warning.50' : 'grey.50',
+        bgcolor: personnel ? 'success.50' : 'grey.50',
         border: 2,
-        borderColor: personnel ? 'warning.main' : 'grey.300',
+        borderColor: personnel ? 'success.main' : 'grey.300',
         transition: 'all 0.3s',
+        opacity: disabled ? 0.6 : 1,
       }}
     >
-      <Typography variant="h6" fontWeight={600} mb={2} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="h6" fontWeight={600} mb={1} color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <PersonIcon />
         {label}
       </Typography>
+      {personnel && (
+        <Typography variant="body1" fontWeight={600} color="success.main" sx={{ mb: 2 }}>
+          {personnel.rank} {personnel.fullName}
+        </Typography>
+      )}
       
-      <Autocomplete
-        fullWidth
-        size="small"
-        options={options}
-        value={personnel}
-        getOptionLabel={(option) => `${option.rank || ''} ${option.fullName || ''} - ${option.position || ''} (${option.unit || ''})`}
-        onChange={(event, newValue) => onSelect(newValue)}
-        disabled={disabled}
-        loading={searchLoading}
-        renderInput={(params) => (
-          <TextField 
-            {...params} 
-            label={`🔍 เลือก${label}`}
-            placeholder={disabled ? "เลือกบุคลากรก่อนหน้าก่อน" : "ค้นหา..."}
-            InputProps={{
-              ...params.InputProps,
-              endAdornment: (
-                <>
-                  {searchLoading ? <CircularProgress size={20} /> : null}
-                  {params.InputProps.endAdornment}
-                </>
-              ),
-            }}
-          />
-        )}
-        renderOption={(props, option) => (
-          <li {...props} key={option.id}>
-            <Box>
-              <Typography variant="body1">{option.rank} {option.fullName || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                ตำแหน่ง: {option.position || '-'} | หน่วย: {option.unit || '-'}
-              </Typography>
-            </Box>
-          </li>
-        )}
-      />
+      {!personnel ? (
+        <Button
+          fullWidth
+          variant="outlined"
+          size="large"
+          startIcon={<SearchIcon />}
+          onClick={onOpenDrawer}
+          disabled={disabled}
+          sx={{ 
+            py: 1.5,
+            borderStyle: 'dashed',
+            borderWidth: 2,
+          }}
+        >
+          {disabled ? 'เลือกบุคลากร A ก่อน' : `เลือก${label}`}
+        </Button>
+      ) : (
+        <Box>
+          <Button
+            fullWidth
+            variant="outlined"
+            size="small"
+            startIcon={<SearchIcon />}
+            onClick={onOpenDrawer}
+            disabled={disabled}
+            sx={{ mb: 1 }}
+          >
+            เปลี่ยน{label}
+          </Button>
+        </Box>
+      )}
 
       {personnel && (
         <Box sx={{ mt: 2 }}>
@@ -616,10 +618,19 @@ export default function AddThreeWaySwapPage() {
         {/* Main Form */}
         <form onSubmit={handleSubmit}>
           <Paper sx={{ p: 3, mb: 3 }}>
+            {/* Alert แจ้งเตือนให้เลือก A ก่อน */}
+            {!personnelA && (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" fontWeight={600}>
+                  📌 กรุณาเลือกบุคลากร A ก่อน จากนั้นระบบจะกรองเฉพาะบุคลากรที่อยู่ในหน่วยและตำแหน่งเดียวกันสำหรับ B และ C
+                </Typography>
+              </Alert>
+            )}
+            
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3 }}>
-              {renderPersonnelCard(personnelA, 'บุคลากร A', handleSelectPersonnelA, optionsForA, false)}
-              {renderPersonnelCard(personnelB, 'บุคลากร B', handleSelectPersonnelB, optionsForB, false)}
-              {renderPersonnelCard(personnelC, 'บุคลากร C', handleSelectPersonnelC, optionsForC, false)}
+              {renderPersonnelCard(personnelA, 'บุคลากร A', () => setDrawerAOpen(true), false)}
+              {renderPersonnelCard(personnelB, 'บุคลากร B', () => setDrawerBOpen(true), !personnelA)}
+              {renderPersonnelCard(personnelC, 'บุคลากร C', () => setDrawerCOpen(true), !personnelA)}
             </Box>
 
             {/* Swap Result Preview */}
@@ -647,41 +658,75 @@ export default function AddThreeWaySwapPage() {
           </Paper>
 
           {/* Notes Section */}
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" fontWeight={600} mb={3}>
-              หมายเหตุ
-            </Typography>
-            <TextField
-              label="หมายเหตุ"
-              multiline
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
-              size="small"
-              fullWidth
-            />
-          </Paper>
-
-          {/* Submit Buttons */}
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              onClick={() => router.back()}
-              disabled={loading}
-            >
-              ยกเลิก
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              color="warning"
-              startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
-              disabled={loading || !canSwap}
-            >
-              {loading ? 'กำลังบันทึก...' : 'บันทึกผลการสลับสามเส้า'}
-            </Button>
+          <Box>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" fontWeight={600} mb={3}>
+                หมายเหตุ
+              </Typography>
+              <TextField
+                label="หมายเหตุ"
+                multiline
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+                size="small"
+                fullWidth
+              />
+            </Paper>
           </Box>
+
+          {/* Actions - Sticky Footer */}
+          <Paper 
+            sx={{ 
+              p: 2.5, 
+              position: 'sticky', 
+              bottom: 0, 
+              zIndex: 10,
+              display: 'flex', 
+              gap: 2, 
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 -4px 12px rgba(0,0,0,0.08)',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Box>
+              {personnelA && personnelB && personnelC ? (
+                <>
+                  <Typography variant="body2" fontWeight={600}>
+                    {canSwap ? '✓ พร้อมบันทึก' : '⚠ ยังไม่สมบูรณ์'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    สลับสามเส้า: {personnelA.fullName} → {personnelB.fullName} → {personnelC.fullName}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  {!personnelA ? 'เลือกบุคลากร A เพื่อเริ่มต้น' : !personnelB ? 'เลือกบุคลากร B' : 'เลือกบุคลากร C'}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={() => router.back()}
+                disabled={loading}
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                color="warning"
+                size="large"
+                startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+                disabled={loading || !canSwap}
+              >
+                {loading ? 'กำลังบันทึก...' : 'บันทึกผลการสลับสามเส้า'}
+              </Button>
+            </Box>
+          </Paper>
         </form>
 
         {/* Personnel Detail Modal */}
@@ -691,6 +736,37 @@ export default function AddThreeWaySwapPage() {
           personnel={selectedPersonnelDetail}
           loading={false}
           onClearData={() => setSelectedPersonnelDetail(null)}
+        />
+
+        {/* Personnel Drawer for A */}
+        <PersonnelDrawer
+          open={drawerAOpen}
+          onClose={() => setDrawerAOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelA(personnel as any)}
+          title="เลือกบุคลากร A"
+          excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
+        />
+
+        {/* Personnel Drawer for B - กรองตามหน่วยและ posCode เดียวกับ A */}
+        <PersonnelDrawer
+          open={drawerBOpen}
+          onClose={() => setDrawerBOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelB(personnel as any)}
+          title="เลือกบุคลากร B"
+          excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
+          initialFilterUnit={personnelA?.unit}
+          initialFilterPosCode={personnelA?.posCodeId}
+        />
+
+        {/* Personnel Drawer for C - กรองตามหน่วยและ posCode เดียวกับ A */}
+        <PersonnelDrawer
+          open={drawerCOpen}
+          onClose={() => setDrawerCOpen(false)}
+          onSelect={(personnel) => handleSelectPersonnelC(personnel as any)}
+          title="เลือกบุคลากร C"
+          excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
+          initialFilterUnit={personnelA?.unit}
+          initialFilterPosCode={personnelA?.posCodeId}
         />
       </Box>
     </Layout>

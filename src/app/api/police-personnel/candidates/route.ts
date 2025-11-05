@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     const pageParam = searchParams.get('page');
     const limitParam = searchParams.get('limit');
     const yearParam = searchParams.get('year'); // Year filter for excluding already assigned
+    const excludeTransactionId = searchParams.get('excludeTransactionId') || undefined; // Transaction ID to exclude from filtering
 
     const page = pageParam ? Math.max(0, parseInt(pageParam, 10) || 0) : 0;
     const limit = limitParam ? Math.max(1, parseInt(limitParam, 10) || 20) : 20;
@@ -32,8 +33,14 @@ export async function GET(request: NextRequest) {
       const year = parseInt(yearParam, 10);
       if (!isNaN(year)) {
         // Find all swap transactions for this year (including all swap types)
+        // Exclude the transaction being edited
+        const whereClause: any = { year };
+        if (excludeTransactionId) {
+          whereClause.id = { not: excludeTransactionId };
+        }
+        
         const swapTransactions = await prisma.swapTransaction.findMany({
-          where: { year },
+          where: whereClause,
           select: { id: true },
         });
 

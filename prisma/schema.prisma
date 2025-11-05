@@ -34,9 +34,7 @@ model PosCodeMaster {
   // Relations
   personnel                    PolicePersonnel[]
   swapTransactionDetails       SwapTransactionDetail[]
-  swapLists                    SwapList[]
-  vacantPositionsCurrent       VacantPosition[]      @relation("CurrentPosition")
-  vacantPositionsRequested     VacantPosition[]      @relation("RequestedPosition")
+  vacantPositions              VacantPosition[]      @relation("CurrentPosition")
 
   @@map("pos_code_master")
 }
@@ -93,79 +91,12 @@ model PolicePersonnel {
   @@map("police_personnel")
 }
 
-// Swap List (รายการที่เลือกไว้สำหรับสลับตำแหน่ง)
-// เก็บสำเนาข้อมูลบุคลากรทั้งหมดไว้ เพราะ police_personnel มีการนำเข้าใหม่ทุกปีและข้อมูลเดิมจะถูกลบ
-// ดังนั้นต้องเก็บ snapshot ของข้อมูลในขณะที่เพิ่มเข้า swap list
-// รองรับทั้ง two-way, three-way, และ vacant-position
-model SwapList {
-  id       String @id @default(cuid())
-  year     Int // ปีที่เลือก (พ.ศ.)
-  swapType String @default("two-way") @map("swap_type") // two-way, three-way, vacant-position
-  notes    String? @db.Text // หมายเหตุเพิ่มเติมสำหรับการ swap
-
-  // ข้อมูลอ้างอิง
-  noId Int? @map("no_id") // ลำดับที่
-
-  // ข้อมูลตำแหน่ง (Position Information) - สำเนาจาก PolicePersonnel
-  posCodeId      Int?           @map("pos_code")
-  posCodeMaster  PosCodeMaster? @relation(fields: [posCodeId], references: [id])
-  position       String? // ตำแหน่ง
-  positionNumber String? @map("position_number") // เลขตำแหน่ง
-  unit           String? // หน่วย
-  actingAs       String? @map("acting_as") // ทำหน้าที่
-
-  // ข้อมูลบุคคล (Person Information)
-  seniority  String? @map("seniority") // อาวุโส
-  rank       String? // ยศ
-  fullName   String? @map("full_name") // ชื่อสกุล
-  nationalId String? @map("national_id") // เลขบัตรประชาชน
-  birthDate  String? @map("birth_date") // วันเกิด
-  age        String? // อายุ
-  education  String? // คุณวุฒิ
-
-  // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
-  lastAppointment  String? @map("last_appointment")
-  currentRankSince String? @map("current_rank_since")
-  enrollmentDate   String? @map("enrollment_date")
-  retirementDate   String? @map("retirement_date")
-  yearsOfService   String? @map("years_of_service")
-
-  // ข้อมูลการฝึกอบรม (Training Information)
-  trainingLocation String? @map("training_location")
-  trainingCourse   String? @map("training_course")
-
-  // Metadata
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy String?  @map("created_by") // ผู้เพิ่มเข้า swap list
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedBy String?  @map("updated_by")
-
-  // Index สำหรับการค้นหา
-  @@index([year])
-  @@index([swapType])
-  @@index([nationalId])
-  @@index([rank])
-  @@index([unit])
-  @@index([position])
-  @@index([fullName])
-  @@index([posCodeId])
-  @@map("swap_list")
-}
-
-// Vacant Position List (รายการรายการยื่นขอตำแหน่ง)
-// เก็บข้อมูลตำแหน่งที่ว่างไว้สำหรับการจัดการ
+// Vacant Position List (snapshot ตำแหน่งว่างของแต่ละปี)
+// เก็บข้อมูลตำแหน่งว่างเป็น snapshot ไว้สำหรับแสดงผล ไม่มี relationship กับ swap transaction
 model VacantPosition {
   id    String @id @default(cuid())
   year  Int // ปีที่เลือก (พ.ศ.)
   notes String? @db.Text // หมายเหตุเพิ่มเติม
-  displayOrder Int? @map("display_order") // ลำดับการแสดงผล (สำหรับ drag & drop)
-  isAssigned Boolean @default(false) @map("is_assigned") // สถานะว่าจับคู่ตำแหน่งแล้วหรือไม่
-
-  // ข้อมูลการเสนอชื่อเข้ารายการยื่นขอตำแหน่ง
-  nominator              String? // ผู้สนับสนุน/ผู้เสนอชื่อ
-  requestedPosition      String? @map("requested_position") // ตำแหน่งที่ขอ (text - deprecated)
-  requestedPositionId    Int?    @map("requested_position_id") // รหัสตำแหน่งที่ขอ (FK to PosCodeMaster)
-  requestedPosCode       PosCodeMaster? @relation("RequestedPosition", fields: [requestedPositionId], references: [id])
 
   // ข้อมูลอ้างอิง
   noId Int? @map("no_id") // ลำดับที่
@@ -209,7 +140,6 @@ model VacantPosition {
   @@index([unit])
   @@index([position])
   @@index([posCodeId])
-  @@index([requestedPositionId])
   @@map("vacant_position")
 }
 
@@ -256,8 +186,25 @@ model SwapTransactionDetail {
   nationalId      String? @map("national_id") // เลขบัตรประชาชน
   fullName        String  @map("full_name") // ชื่อ-นามสกุล
   rank            String? // ยศ
+  seniority       String? // อาวุโส
   posCodeId       Int?    @map("pos_code_id") // รหัสตำแหน่ง
   posCodeMaster   PosCodeMaster? @relation(fields: [posCodeId], references: [id])
+  
+  // ข้อมูลส่วนตัว (Personal Information)
+  birthDate       String? @map("birth_date") // วันเกิด
+  age             String? // อายุ
+  education       String? // คุณวุฒิ
+  
+  // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
+  lastAppointment  String? @map("last_appointment") // แต่งตั้งครั้งสุดท้าย
+  currentRankSince String? @map("current_rank_since") // ระดับนี้เมื่อ
+  enrollmentDate   String? @map("enrollment_date") // บรรจุ
+  retirementDate   String? @map("retirement_date") // เกษียณ
+  yearsOfService   String? @map("years_of_service") // จำนวนปี
+  
+  // ข้อมูลการฝึกอบรม (Training Information)
+  trainingLocation String? @map("training_location") // ตท. (ตำแหน่งการฝึกอบรม)
+  trainingCourse   String? @map("training_course") // นรต. (นายร้อยตำรวจ)
   
   // ตำแหน่งเดิม (From)
   fromPosition       String? @map("from_position") // ตำแหน่งเดิม

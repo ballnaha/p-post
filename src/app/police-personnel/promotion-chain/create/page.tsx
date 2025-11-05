@@ -19,6 +19,22 @@ interface ChainNode {
   rank: string; // police_personnel.rank
   seniority?: string; // police_personnel.seniority
   
+  // ข้อมูลส่วนตัว (Personal Information)
+  birthDate?: string; // police_personnel.birthDate
+  age?: string; // police_personnel.age
+  education?: string; // police_personnel.education
+  
+  // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
+  lastAppointment?: string; // police_personnel.lastAppointment
+  currentRankSince?: string; // police_personnel.currentRankSince
+  enrollmentDate?: string; // police_personnel.enrollmentDate
+  retirementDate?: string; // police_personnel.retirementDate
+  yearsOfService?: string; // police_personnel.yearsOfService
+  
+  // ข้อมูลการฝึกอบรม (Training Information)
+  trainingLocation?: string; // police_personnel.trainingLocation
+  trainingCourse?: string; // police_personnel.trainingCourse
+  
   // ข้อมูลตำแหน่งเดิม (From Position)
   fromPosCodeId: number; // police_personnel.posCodeId
   fromPosCodeName?: string; // posCodeMaster.name
@@ -190,7 +206,22 @@ function CreatePromotionChainContent() {
         nationalId: node.nationalId,
         fullName: node.fullName,
         rank: node.rank,
+        seniority: node.seniority,
         posCodeId: node.fromPosCodeId,
+        // ข้อมูลส่วนตัว
+        birthDate: node.birthDate,
+        age: node.age,
+        education: node.education,
+        // ข้อมูลการแต่งตั้ง
+        lastAppointment: node.lastAppointment,
+        currentRankSince: node.currentRankSince,
+        enrollmentDate: node.enrollmentDate,
+        retirementDate: node.retirementDate,
+        yearsOfService: node.yearsOfService,
+        // ข้อมูลการฝึกอบรม
+        trainingLocation: node.trainingLocation,
+        trainingCourse: node.trainingCourse,
+        // ตำแหน่ง
         fromPosition: node.fromPosition,
         fromPositionNumber: node.fromPositionNumber,
         fromUnit: node.fromUnit,

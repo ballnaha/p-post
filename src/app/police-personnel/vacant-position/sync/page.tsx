@@ -303,6 +303,7 @@ export default function SyncVacantPositionsPage() {
                   <li>เพิ่มเฉพาะตำแหน่งว่างที่<strong>ยังไม่มี</strong>ใน vacant_position</li>
                   <li>ข้ามตำแหน่งที่มีอยู่แล้ว (ไม่อัปเดตข้อมูลเดิม)</li>
                   <li>เหมาะสำหรับการเพิ่มตำแหน่งใหม่</li>
+                  <li>ถ้ามีการเพิ่มปีใหม่เข้าไปในระบบ(2569) ข้อมูลปีเก่า(2568) ยังคงอยู่ และปีใหม่จะถูกเพิ่มเข้าไป</li>
                 </ul>
 
                 <strong>2. โหมด Force Re-sync ⚠️:</strong>
@@ -311,6 +312,7 @@ export default function SyncVacantPositionsPage() {
                   <li>สร้างข้อมูลใหม่ทั้งหมดจาก police_personnel</li>
                   <li>ใช้เมื่อต้องการอัปเดตข้อมูลให้เป็นปัจจุบัน</li>
                   <li><strong style={{ color: '#d32f2f' }}>⚠️ ข้อมูลเดิมจะถูกลบถาวร ไม่สามารถกู้คืนได้!</strong></li>
+                  <li>ลบทั้งหมดของปีนั้น แล้ว sync เข้ามาใหม่</li>
                 </ul>
               </Typography>
             </Box>

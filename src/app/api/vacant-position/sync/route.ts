@@ -38,13 +38,10 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`🔄 Starting sync for year ${yearNumber}${unit ? ` (unit: ${unit})` : ''}${forceResync ? ' (Force Re-sync)' : ''}...`);
 
-        // ถ้าเลือก Force Re-sync ให้ลบข้อมูลเดิมก่อน
+        // ถ้าเลือก Force Re-sync ให้ลบข้อมูลเดิมทั้งหมดของปีนั้นก่อน
         if (forceResync) {
           const deleteWhereCondition: any = {
-            year: yearNumber,
-            nominator: null,
-            requestedPositionId: null,
-            isAssigned: false  // ✅ ลบเฉพาะตำแหน่งที่ยังไม่ได้จับคู่ เพื่อป้องกันข้อมูลเสีย
+            year: yearNumber
           };
 
           // ถ้าระบุ unit ให้ลบเฉพาะ unit นั้น
@@ -56,7 +53,7 @@ export async function POST(request: NextRequest) {
             where: deleteWhereCondition
           });
 
-          console.log(`🗑️  Deleted ${deletedCount.count} unassigned vacant positions before re-sync`);
+          console.log(`🗑️  Deleted ${deletedCount.count} vacant positions before re-sync`);
 
           sendProgress({
             type: 'progress',
@@ -139,15 +136,13 @@ export async function POST(request: NextRequest) {
               async (tx) => {
                 for (const vacantPos of batch) {
                   try {
-                    // ตรวจสอบว่ามี record อยู่แล้วหรือไม่
+                    // ตรวจสอบว่ามี record อยู่แล้วหรือไม่ (ใช้ unique key: year + positionNumber + unit)
                     const existing = await tx.vacantPosition.findFirst({
                       where: {
                         year: yearNumber,
                         positionNumber: vacantPos.positionNumber || undefined,
                         unit: vacantPos.unit || undefined,
-                        posCodeId: vacantPos.posCodeId || undefined,
-                        nominator: null,
-                        requestedPositionId: null
+                        posCodeId: vacantPos.posCodeId || undefined
                       }
                     });
 
@@ -177,8 +172,6 @@ export async function POST(request: NextRequest) {
                           yearsOfService: vacantPos.yearsOfService,
                           trainingLocation: vacantPos.trainingLocation,
                           trainingCourse: vacantPos.trainingCourse,
-                          isAssigned: false,
-                          displayOrder: 1, // ✅ ตั้งค่าเริ่มต้นเป็น 1 เพื่อไม่ให้ต้อง auto-assign ทีหลัง
                           notes: `Synced from police_personnel on ${new Date().toISOString().split('T')[0]}`
                         }
                       });
@@ -282,9 +275,7 @@ export async function GET(request: NextRequest) {
 
     // สร้าง where condition สำหรับ vacant_position
     const vacantWhereCondition: any = {
-      year: yearNumber,
-      nominator: null,
-      requestedPositionId: null
+      year: yearNumber
     };
 
     // เพิ่ม filter unit ถ้ามี
@@ -303,23 +294,8 @@ export async function GET(request: NextRequest) {
       where: vacantWhereCondition
     });
 
-    // นับจำนวนผู้ยื่นขอที่ถูกจับคู่แล้ว (requestedPositionId !== null และ isAssigned = true)
-    const assignedWhereCondition: any = {
-      year: yearNumber,
-      requestedPositionId: { not: null },
-      isAssigned: true,
-    };
-
-    if (unit && unit !== 'all') {
-      assignedWhereCondition.unit = unit;
-    }
-
-    const assignedApplicantsCount = await prisma.vacantPosition.count({
-      where: assignedWhereCondition
-    });
-
-    // เหลือ = ตำแหน่งว่างทั้งหมด - ผู้ยื่นขอที่จับคู่แล้ว
-    const availableCount = syncedCount - assignedApplicantsCount;
+    // ตอนนี้ vacant_position เป็นแค่ snapshot ไม่มีสถานะ assigned แล้ว
+    const availableCount = syncedCount;
 
     const needsSync = personnelCount > syncedCount;
 
@@ -329,7 +305,7 @@ export async function GET(request: NextRequest) {
         year: yearNumber,
         personnelVacantCount: personnelCount,
         syncedCount: syncedCount,
-        assignedCount: assignedApplicantsCount,
+        assignedCount: 0, // ไม่ใช้แล้ว - vacant_position เป็นแค่ snapshot
         availableCount: availableCount,
         needsSync,
         syncPercentage: personnelCount > 0 ? Math.round((syncedCount / personnelCount) * 100) : 0
@@ -376,9 +352,7 @@ export async function DELETE(request: NextRequest) {
 
     // สร้าง where condition
     const deleteWhereCondition: any = {
-      year: yearNumber,
-      nominator: null,
-      requestedPositionId: null
+      year: yearNumber
     };
 
     // ถ้าระบุ unit ให้ลบเฉพาะ unit นั้น

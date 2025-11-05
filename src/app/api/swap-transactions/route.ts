@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
             nationalId: true,
             fullName: true,
             rank: true,
+            seniority: true,
             posCodeId: true,
             posCodeMaster: {
               select: {
@@ -46,6 +47,20 @@ export async function GET(request: NextRequest) {
                 name: true
               }
             },
+            // ข้อมูลส่วนตัว
+            birthDate: true,
+            age: true,
+            education: true,
+            // ข้อมูลการแต่งตั้ง
+            lastAppointment: true,
+            currentRankSince: true,
+            enrollmentDate: true,
+            retirementDate: true,
+            yearsOfService: true,
+            // ข้อมูลการฝึกอบรม
+            trainingLocation: true,
+            trainingCourse: true,
+            // ตำแหน่ง
             fromPosition: true,
             fromPositionNumber: true,
             fromUnit: true,
@@ -160,7 +175,22 @@ export async function POST(request: NextRequest) {
             nationalId: detail.nationalId,
             fullName: detail.fullName,
             rank: detail.rank,
+            seniority: detail.seniority,
             posCodeId: detail.posCodeId,
+            // ข้อมูลส่วนตัว
+            birthDate: detail.birthDate,
+            age: detail.age,
+            education: detail.education,
+            // ข้อมูลการแต่งตั้ง
+            lastAppointment: detail.lastAppointment,
+            currentRankSince: detail.currentRankSince,
+            enrollmentDate: detail.enrollmentDate,
+            retirementDate: detail.retirementDate,
+            yearsOfService: detail.yearsOfService,
+            // ข้อมูลการฝึกอบรม
+            trainingLocation: detail.trainingLocation,
+            trainingCourse: detail.trainingCourse,
+            // ตำแหน่ง
             fromPosition: detail.fromPosition,
             fromPositionNumber: detail.fromPositionNumber,
             fromUnit: detail.fromUnit,

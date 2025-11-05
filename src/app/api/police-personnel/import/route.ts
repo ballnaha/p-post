@@ -154,7 +154,8 @@ export async function POST(request: NextRequest) {
       }
 
       // นำเข้าข้อมูลแบบ batch เพื่อความเร็ว
-      const batchSize = 1000; // จำนวน records ต่อ batch
+      // ลด batch size ลงเพื่อป้องกัน connection timeout บน production
+      const batchSize = 500; // ลดจาก 1000 เป็น 500 records ต่อ batch
       const totalBatches = Math.ceil(data.length / batchSize);
       
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
               positionNumber: row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']) : null,
               actingAs: row['ทำหน้าที่'] ? String(row['ทำหน้าที่']) : null,
               age: row['อายุ'] ? String(row['อายุ']) : null,
-              education: row['คุณวุฒิ'] ? String(row['คุณวุฒิ']) : null,
+              education: row['คุณวุฒิ'] ? String(row['คุณวุฒิ']).substring(0, 5000) : null, // จำกัดความยาวไม่เกิน 5000 ตัวอักษร
               nationalId: row['เลขประจำตัวประชาชน'] ? String(row['เลขประจำตัวประชาชน']) : null,
               unit: row['หน่วย'] ? String(row['หน่วย']) : null,
               trainingLocation: row['ตท.'] ? String(row['ตท.']) : null,
@@ -216,6 +217,9 @@ export async function POST(request: NextRequest) {
             });
             
             results.success += created.count;
+          }, {
+            maxWait: 30000, // เพิ่มเวลารอ transaction เป็น 30 วินาที
+            timeout: 60000, // เพิ่ม timeout เป็น 60 วินาที
           });
         }
 
@@ -230,6 +234,11 @@ export async function POST(request: NextRequest) {
           batch: batchIndex + 1,
           totalBatches: totalBatches,
         });
+
+        // เพิ่ม delay เล็กน้อยระหว่าง batch เพื่อป้องกัน connection overload
+        if (batchIndex < totalBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100)); // delay 100ms
+        }
 
       } catch (batchError: any) {
         console.error(`Error in batch ${batchIndex + 1}:`, batchError);
@@ -247,7 +256,7 @@ export async function POST(request: NextRequest) {
               positionNumber: row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']) : null,
               actingAs: row['ทำหน้าที่'] ? String(row['ทำหน้าที่']) : null,
               age: row['อายุ'] ? String(row['อายุ']) : null,
-              education: row['คุณวุฒิ'] ? String(row['คุณวุฒิ']) : null,
+              education: row['คุณวุฒิ'] ? String(row['คุณวุฒิ']).substring(0, 5000) : null, // จำกัดความยาวไม่เกิน 5000 ตัวอักษร
               nationalId: row['เลขประจำตัวประชาชน'] ? String(row['เลขประจำตัวประชาชน']) : null,
               unit: row['หน่วย'] ? String(row['หน่วย']) : null,
               trainingLocation: row['ตท.'] ? String(row['ตท.']) : null,

@@ -61,7 +61,7 @@ model PolicePersonnel {
   nationalId String? @map("national_id") // เลขบัตรประชาชน (optional)
   birthDate  String? @map("birth_date") // วันเกิด
   age        String? // อายุ
-  education  String? // คุณวุฒิ
+  education  String? @db.Text // คุณวุฒิ - เปลี่ยนเป็น TEXT เพื่อรองรับข้อมูลยาว
 
   // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
   lastAppointment  String? @map("last_appointment") // แต่งตั้งครั้งสุดท้าย
@@ -116,7 +116,7 @@ model VacantPosition {
   nationalId String? @map("national_id")
   birthDate  String? @map("birth_date")
   age        String?
-  education  String?
+  education  String? @db.Text // คุณวุฒิ - เปลี่ยนเป็น TEXT เพื่อรองรับข้อมูลยาว
 
   // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
   lastAppointment  String? @map("last_appointment")

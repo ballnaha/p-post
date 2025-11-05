@@ -389,26 +389,71 @@ export default function HomePage() {
   if (loading) {
     return (
       <Layout>
-<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
-  <Stack 
-    direction="column" // ตั้งให้จัดเรียงในแนวตั้ง
-    alignItems="center" // จัดให้อยู่ตรงกลางแนวนอน
-    spacing={2} // ระยะห่างระหว่าง CircularProgress กับ Typography
-  >
-    <CircularProgress />
-    <Typography 
-      variant="body2" 
-      color="text.secondary"
-      sx={{ 
-        fontWeight: 500,
-        letterSpacing: 0.5,
-      }}
-    >
-      กำลังโหลด...
-    </Typography>
-  </Stack>
-</Box>
-        
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '80vh',
+          position: 'relative'
+        }}>
+          <Stack 
+            direction="column"
+            alignItems="center"
+            spacing={2.5}
+            sx={{
+              animation: 'fadeIn 0.5s ease-in-out',
+              '@keyframes fadeIn': {
+                '0%': { opacity: 0, transform: 'translateY(-10px)' },
+                '100%': { opacity: 1, transform: 'translateY(0)' }
+              }
+            }}
+          >
+            <Box sx={{ position: 'relative' }}>
+              <CircularProgress 
+                size={60}
+                thickness={4}
+                sx={{
+                  color: '#1DE9B6',
+                  '& .MuiCircularProgress-circle': {
+                    strokeLinecap: 'round',
+                  }
+                }}
+              />
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  bottom: 0,
+                  right: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(29, 233, 182, 0.1)',
+                  }}
+                />
+              </Box>
+            </Box>
+            <Typography 
+              variant="body1" 
+              color="text.secondary"
+              sx={{ 
+                fontWeight: 600,
+                letterSpacing: 0.5,
+                fontSize: '1rem'
+              }}
+            >
+              กำลังโหลดข้อมูล...
+            </Typography>
+          </Stack>
+        </Box>
       </Layout>
     );
   }
@@ -416,8 +461,32 @@ export default function HomePage() {
   if (error) {
     return (
       <Layout>
-        <Box>
-          <Alert severity="error">{error}</Alert>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '60vh',
+          p: 3
+        }}>
+          <Alert 
+            severity="error"
+            sx={{ 
+              maxWidth: 600,
+              width: '100%',
+              borderRadius: 2,
+              boxShadow: '0 4px 12px rgba(244, 67, 54, 0.15)',
+              '& .MuiAlert-icon': {
+                fontSize: 28
+              }
+            }}
+          >
+            <Typography variant="subtitle1" fontWeight={600} mb={0.5}>
+              เกิดข้อผิดพลาด
+            </Typography>
+            <Typography variant="body2">
+              {error}
+            </Typography>
+          </Alert>
         </Box>
       </Layout>
     );
@@ -426,8 +495,32 @@ export default function HomePage() {
   if (!stats) {
     return (
       <Layout>
-        <Box>
-          <Alert severity="info">ไม่พบข้อมูล</Alert>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '60vh',
+          p: 3
+        }}>
+          <Alert 
+            severity="info"
+            sx={{ 
+              maxWidth: 600,
+              width: '100%',
+              borderRadius: 2,
+              boxShadow: '0 4px 12px rgba(33, 150, 243, 0.15)',
+              '& .MuiAlert-icon': {
+                fontSize: 28
+              }
+            }}
+          >
+            <Typography variant="subtitle1" fontWeight={600} mb={0.5}>
+              ไม่พบข้อมูล
+            </Typography>
+            <Typography variant="body2">
+              กรุณาตรวจสอบการตั้งค่าหรือลองใหม่อีกครั้ง
+            </Typography>
+          </Alert>
         </Box>
       </Layout>
     );
@@ -437,19 +530,86 @@ export default function HomePage() {
     <Layout>
       <Box>
         {/* Header with Year Filter */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: 4, 
+          flexWrap: 'wrap', 
+          gap: 3,
+          animation: 'slideDown 0.6s ease-out',
+          '@keyframes slideDown': {
+            '0%': { opacity: 0, transform: 'translateY(-20px)' },
+            '100%': { opacity: 1, transform: 'translateY(0)' }
+          }
+        }}>
           <Box>
-            <Typography variant="h4" fontWeight={700} mb={0.5}>
+            <Typography 
+              variant="h4" 
+              fontWeight={800} 
+              mb={0.5}
+              sx={{
+                background: 'linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
               Dashboard
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ระบบจัดการตำแหน่งตำรวจ • ปี {selectedYear}
-              {selectedUnit !== 'all' && ` • ${selectedUnit}`}
+            <Typography 
+              variant="body2" 
+              color="text.secondary"
+              sx={{ 
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                flexWrap: 'wrap'
+              }}
+            >
+              <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <BarChartIcon sx={{ fontSize: 16 }} />
+                ระบบจัดการตำแหน่งตำรวจ
+              </Box>
+              <Box component="span" sx={{ color: '#1DE9B6', fontWeight: 700 }}>
+                • ปี {selectedYear}
+              </Box>
+              {selectedUnit !== 'all' && (
+                <Box component="span" sx={{ color: '#42a5f5', fontWeight: 600 }}>
+                  • {selectedUnit}
+                </Box>
+              )}
             </Typography>
           </Box>
           
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            flexWrap: 'wrap',
+            animation: 'slideLeft 0.6s ease-out 0.2s backwards',
+            '@keyframes slideLeft': {
+              '0%': { opacity: 0, transform: 'translateX(20px)' },
+              '100%': { opacity: 1, transform: 'translateX(0)' }
+            }
+          }}>
+            <FormControl 
+              size="small" 
+              sx={{ 
+                minWidth: 150,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  bgcolor: 'white',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    boxShadow: '0 4px 12px rgba(29, 233, 182, 0.15)',
+                  },
+                  '&.Mui-focused': {
+                    boxShadow: '0 4px 16px rgba(29, 233, 182, 0.25)',
+                  }
+                }
+              }}
+            >
               <InputLabel id="year-filter-label">ปี</InputLabel>
               <Select
                 labelId="year-filter-label"
@@ -462,13 +622,27 @@ export default function HomePage() {
                   <MenuItem key={year} value={year}>
                     {year}
                   </MenuItem>
-
                 ))}
-                
               </Select>
             </FormControl>
             
-            <FormControl size="small" sx={{ minWidth: 200 }}>
+            <FormControl 
+              size="small" 
+              sx={{ 
+                minWidth: 200,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  bgcolor: 'white',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    boxShadow: '0 4px 12px rgba(66, 165, 245, 0.15)',
+                  },
+                  '&.Mui-focused': {
+                    boxShadow: '0 4px 16px rgba(66, 165, 245, 0.25)',
+                  }
+                }
+              }}
+            >
               <InputLabel id="unit-filter-label">หน่วย</InputLabel>
               <Select
                 labelId="unit-filter-label"
@@ -490,7 +664,17 @@ export default function HomePage() {
         </Box>
 
         {/* Stats Cards Row 1 */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
+        <Box sx={{ 
+          display: 'grid', 
+          gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, 1fr)' }, 
+          gap: 3, 
+          mb: 4,
+          animation: 'fadeInUp 0.8s ease-out 0.3s backwards',
+          '@keyframes fadeInUp': {
+            '0%': { opacity: 0, transform: 'translateY(30px)' },
+            '100%': { opacity: 1, transform: 'translateY(0)' }
+          }
+        }}>
           {/* Vacant Position Summary Card */}
           <Card
             sx={{
@@ -501,6 +685,11 @@ export default function HomePage() {
               color: 'common.white',
               boxShadow: '0 18px 35px rgba(29, 233, 182, 0.32)',
               overflow: 'hidden',
+              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+              '&:hover': {
+                transform: 'translateY(-8px)',
+                boxShadow: '0 24px 48px rgba(29, 233, 182, 0.4)',
+              }
             }}
           >
             <Box
@@ -621,6 +810,12 @@ export default function HomePage() {
               color: 'common.white',
               boxShadow: '0 18px 36px rgba(66, 165, 245, 0.32)',
               overflow: 'hidden',
+              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+              animation: 'fadeInUp 0.8s ease-out 0.4s backwards',
+              '&:hover': {
+                transform: 'translateY(-8px)',
+                boxShadow: '0 24px 48px rgba(66, 165, 245, 0.4)',
+              }
             }}
           >
             <Box
@@ -725,6 +920,12 @@ export default function HomePage() {
               color: 'common.white',
               boxShadow: '0 18px 36px rgba(255, 152, 0, 0.32)',
               overflow: 'hidden',
+              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+              animation: 'fadeInUp 0.8s ease-out 0.5s backwards',
+              '&:hover': {
+                transform: 'translateY(-8px)',
+                boxShadow: '0 24px 48px rgba(255, 152, 0, 0.4)',
+              }
             }}
           >
             <Box
@@ -823,66 +1024,136 @@ export default function HomePage() {
 
         {/* Bar Chart: Vacant Positions vs Applicants */}
         <Paper sx={{ 
-          borderRadius: 2, 
-          mb: 3, 
+          borderRadius: 3, 
+          mb: 4, 
           overflow: 'hidden', 
-          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
           border: '1px solid',
-          borderColor: 'divider'
+          borderColor: 'divider',
+          transition: 'all 0.3s ease',
+          animation: 'fadeInUp 0.8s ease-out 0.6s backwards',
+          '&:hover': {
+            boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+          }
         }}>
           <Box sx={{ 
-            p: 3, 
-            pb: 2.5,
-            bgcolor: 'white',
-            borderBottom: '1px solid',
-            borderColor: 'divider'
+            p: 3.5, 
+            pb: 3,
+            bgcolor: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+            borderBottom: '2px solid',
+            borderColor: 'divider',
+            position: 'relative',
+            overflow: 'hidden',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '4px',
+              background: 'linear-gradient(90deg, #1DE9B6 0%, #42a5f5 100%)',
+            }
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
               <Box>
-                <Typography variant="h6" fontWeight={700} mb={0.5} color="text.primary">
-                  เปรียบเทียบตำแหน่งว่างกับจับคู่สำเร็จ
-                </Typography>
-                <Typography variant="body2" color="text.secondary" fontSize="0.85rem">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+                  <Box
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 2,
+                      background: 'linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      boxShadow: '0 4px 12px rgba(29, 233, 182, 0.3)',
+                    }}
+                  >
+                    <BarChartIcon sx={{ fontSize: 20 }} />
+                  </Box>
+                  <Typography variant="h6" fontWeight={700} color="text.primary">
+                    เปรียบเทียบตำแหน่งว่างกับจับคู่สำเร็จ
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" fontSize="0.875rem" sx={{ ml: 5.5 }}>
                   ปี {selectedYear}{selectedUnit !== 'all' && ` • หน่วย: ${selectedUnit}`}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 3,
+                bgcolor: 'white',
+                px: 2,
+                py: 1,
+                borderRadius: 2,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box sx={{ 
-                    width: 12, 
-                    height: 12, 
-                    borderRadius: '50%', 
-                    bgcolor: 'rgba(158, 158, 158, 0.8)' 
+                    width: 14, 
+                    height: 14, 
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, rgba(158, 158, 158, 0.9), rgba(189, 189, 189, 0.7))',
+                    boxShadow: '0 2px 4px rgba(158, 158, 158, 0.3)',
                   }} />
-                  <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
+                  <Typography variant="body2" fontSize="0.85rem" fontWeight={600} color="text.primary">
                     ตำแหน่งว่าง
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box sx={{ 
-                    width: 12, 
-                    height: 12, 
-                    borderRadius: '50%', 
-                    bgcolor: '#1DE9B6' 
+                    width: 14, 
+                    height: 14, 
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #1DE9B6, #00BFA5)',
+                    boxShadow: '0 2px 4px rgba(29, 233, 182, 0.3)',
                   }} />
-                  <Typography variant="body2" fontSize="0.85rem" fontWeight={500}>
+                  <Typography variant="body2" fontSize="0.85rem" fontWeight={600} color="text.primary">
                     จับคู่สำเร็จ
                   </Typography>
                 </Box>
               </Box>
             </Box>
-            
           </Box>
-          <Box sx={{ p: 3, bgcolor: 'white', height: { xs: 350, sm: 400, md: 450 }, position: 'relative' }}>
+          <Box sx={{ 
+            p: 4, 
+            bgcolor: 'white', 
+            height: { xs: 380, sm: 420, md: 480 }, 
+            position: 'relative' 
+          }}>
             {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <CircularProgress />
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
+                <CircularProgress size={50} thickness={4} sx={{ color: '#1DE9B6' }} />
+                <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                  กำลังโหลดกราฟ...
+                </Typography>
               </Box>
             ) : chartData ? (
               <Bar data={chartData} options={chartOptions} />
             ) : (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                <Typography color="text.secondary">ไม่พบข้อมูล</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
+                <Box
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: '50%',
+                    bgcolor: 'grey.100',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mb: 1,
+                  }}
+                >
+                  <BarChartIcon sx={{ fontSize: 32, color: 'grey.400' }} />
+                </Box>
+                <Typography variant="body1" color="text.secondary" fontWeight={500}>
+                  ไม่พบข้อมูล
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  ไม่มีข้อมูลสำหรับช่วงเวลาที่เลือก
+                </Typography>
               </Box>
             )}
           </Box>
@@ -891,35 +1162,68 @@ export default function HomePage() {
         {/* Details by Position Table */}
         {stats.positionDetails && stats.positionDetails.length > 0 && (
           <Paper sx={{ 
-            borderRadius: 2, 
-            mb: 3, 
+            borderRadius: 3, 
+            mb: 4, 
             overflow: 'hidden', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
             border: '1px solid',
-            borderColor: 'divider'
+            borderColor: 'divider',
+            transition: 'all 0.3s ease',
+            animation: 'fadeInUp 0.8s ease-out 0.7s backwards',
+            '&:hover': {
+              boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+            }
           }}>
             <Box sx={{ 
-              p: 3, 
-              pb: 2.5,
-              bgcolor: 'white',
-              borderBottom: '1px solid',
-              borderColor: 'divider'
+              p: 3.5, 
+              pb: 3,
+              bgcolor: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+              borderBottom: '2px solid',
+              borderColor: 'divider',
+              position: 'relative',
+              overflow: 'hidden',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, #7C5DFA 0%, #FF9A44 100%)',
+              }
             }}>
-              <Typography variant="h6" fontWeight={700} mb={0.5} color="text.primary">
-                สถิติตำแหน่งว่างแยกตามประเภท
-              </Typography>
-              <Typography variant="body2" color="text.secondary" fontSize="0.85rem">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+                <Box
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 2,
+                    background: 'linear-gradient(135deg, #7C5DFA 0%, #9D7FFA 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    boxShadow: '0 4px 12px rgba(124, 93, 250, 0.3)',
+                  }}
+                >
+                  <PeopleAlt sx={{ fontSize: 20 }} />
+                </Box>
+                <Typography variant="h6" fontWeight={700} color="text.primary">
+                  สถิติตำแหน่งว่างแยกตามประเภท
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" fontSize="0.875rem" sx={{ ml: 5.5 }}>
                 ปี {selectedYear} 
                 {selectedUnit !== 'all' && ` • หน่วย: ${selectedUnit}`}
               </Typography>
             </Box>
-            <TableContainer sx={{ bgcolor: 'white' }}>
-              <Table>
+            <TableContainer sx={{ bgcolor: 'white', maxHeight: 600 }}>
+              <Table sx={{ '& .MuiTableCell-root': { px: 1.5 } }}>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#FAFAFA' }}>
                     <TableCell sx={{ 
                       fontWeight: 600, 
-                      py: 2, 
+                      py: 1, 
                       fontSize: '0.8rem', 
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
@@ -930,7 +1234,7 @@ export default function HomePage() {
                     </TableCell>
                     <TableCell sx={{ 
                       fontWeight: 600, 
-                      py: 2, 
+                      py: 1, 
                       fontSize: '0.8rem', 
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
@@ -941,7 +1245,7 @@ export default function HomePage() {
                     </TableCell>
                     <TableCell align="center" sx={{ 
                       fontWeight: 600, 
-                      py: 2, 
+                      py: 1, 
                       fontSize: '0.8rem', 
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
@@ -952,7 +1256,7 @@ export default function HomePage() {
                     </TableCell>
                     <TableCell align="center" sx={{ 
                       fontWeight: 600, 
-                      py: 2, 
+                      py: 1, 
                       fontSize: '0.8rem', 
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
@@ -963,7 +1267,7 @@ export default function HomePage() {
                     </TableCell>
                     <TableCell align="center" sx={{ 
                       fontWeight: 600, 
-                      py: 2, 
+                      py: 1, 
                       fontSize: '0.8rem', 
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
@@ -974,7 +1278,7 @@ export default function HomePage() {
                     </TableCell>
                     <TableCell align="center" sx={{ 
                       fontWeight: 600, 
-                      py: 2, 
+                      py: 1, 
                       fontSize: '0.8rem', 
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
@@ -985,7 +1289,7 @@ export default function HomePage() {
                     </TableCell>
                     <TableCell align="center" sx={{ 
                       fontWeight: 600, 
-                      py: 2, 
+                      py: 1, 
                       fontSize: '0.8rem', 
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
@@ -1017,7 +1321,7 @@ export default function HomePage() {
                         borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
                       }}
                     >
-                      <TableCell sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                      <TableCell sx={{ py: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         <Box sx={{ 
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -1026,20 +1330,20 @@ export default function HomePage() {
                           color: DASHBOARD_COLORS.primary,
                           fontWeight: 700,
                           fontSize: '0.8rem',
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: 2,
-                          minWidth: 50
+                          px: 1,
+                          py: 0.25,
+                          borderRadius: 1.5,
+                          minWidth: 45
                         }}>
                           {position.posCodeId}
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                      <TableCell sx={{ py: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         <Typography variant="body2" fontWeight={500} color="#424242" fontSize="0.875rem">
                           {position.posCodeName}
                         </Typography>
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                      <TableCell align="center" sx={{ py: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         {hasSlotData ? (
                           <Box sx={{ 
                             display: 'inline-flex',
@@ -1049,10 +1353,10 @@ export default function HomePage() {
                             color: DASHBOARD_COLORS.primary,
                             fontWeight: 700,
                             fontSize: '0.875rem',
-                            px: 2,
-                            py: 0.75,
-                            borderRadius: 2,
-                            minWidth: 60
+                            px: 1.25,
+                            py: 0.4,
+                            borderRadius: 1.5,
+                            minWidth: 50
                           }}>
                             {position.availableSlots}
                           </Box>
@@ -1060,12 +1364,12 @@ export default function HomePage() {
                           <Typography variant="caption" color="text.secondary">-</Typography>
                         )}
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                      <TableCell align="center" sx={{ py: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         <Typography variant="body2" fontWeight={600} color="#424242" fontSize="0.875rem">
                           {position.totalApplicants}
                         </Typography>
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                      <TableCell align="center" sx={{ py: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         <Box sx={{ 
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -1074,15 +1378,15 @@ export default function HomePage() {
                           color: DASHBOARD_COLORS.accent,
                           fontWeight: 700,
                           fontSize: '0.875rem',
-                          px: 2,
-                          py: 0.75,
-                          borderRadius: 2,
-                          minWidth: 60
+                          px: 1.25,
+                          py: 0.4,
+                          borderRadius: 1.5,
+                          minWidth: 50
                         }}>
                           {position.assignedCount}
                         </Box>
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                      <TableCell align="center" sx={{ py: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
                         <Box sx={{ 
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -1091,26 +1395,26 @@ export default function HomePage() {
                           color: DASHBOARD_COLORS.pink,
                           fontWeight: 700,
                           fontSize: '0.875rem',
-                          px: 2,
-                          py: 0.75,
-                          borderRadius: 2,
-                          minWidth: 60
+                          px: 1.25,
+                          py: 0.4,
+                          borderRadius: 1.5,
+                          minWidth: 50
                         }}>
                           {position.pendingCount}
                         </Box>
                       </TableCell>
-                      <TableCell align="center" sx={{ py: 2.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                          <Box sx={{ flex: 1, bgcolor: 'rgba(29, 233, 182, 0.12)', borderRadius: 3, height: 6, overflow: 'hidden' }}>
+                      <TableCell align="center" sx={{ py: 1.5, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                          <Box sx={{ flex: 1, bgcolor: 'rgba(29, 233, 182, 0.12)', borderRadius: 2, height: 5, overflow: 'hidden' }}>
                             <Box sx={{ 
                               height: '100%', 
                               width: `${position.assignmentRate}%`,
                               background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
-                              borderRadius: 3,
+                              borderRadius: 2,
                               transition: 'width 0.3s ease'
                             }} />
                           </Box>
-                          <Typography variant="body2" fontWeight={700} fontSize="0.875rem" sx={{ minWidth: 45, color: '#00BFA5' }}>
+                          <Typography variant="body2" fontWeight={700} fontSize="0.875rem" sx={{ minWidth: 42, color: '#00BFA5' }}>
                             {position.assignmentRate.toFixed(0)}%
                           </Typography>
                         </Box>
@@ -1126,62 +1430,126 @@ export default function HomePage() {
         )}
 
         {/* Summary Stats */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2.5, mb: 3 }}>
+        <Box sx={{ 
+          display: 'grid', 
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, 
+          gap: 3, 
+          mb: 4,
+          animation: 'fadeInUp 0.8s ease-out 0.8s backwards',
+        }}>
           {/* Top Positions with Most Applicants */}
           {stats.topRequestedPositions && stats.topRequestedPositions.length > 0 && (
             <Card sx={{ 
-              borderRadius: 2, 
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              borderRadius: 3, 
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               border: '1px solid',
               borderColor: 'divider',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+              }
             }}>
               <Box sx={{ 
-                p: 2.5, 
-                pb: 2,
-                bgcolor: 'grey.50',
-                borderBottom: '1px solid',
-                borderColor: 'divider'
+                p: 2, 
+                pb: 1.5,
+                background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+                borderBottom: '2px solid',
+                borderColor: 'divider',
+                position: 'relative',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
+                }
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <TrendingUp sx={{ fontSize: 20, color: DASHBOARD_COLORS.primary }} />
-                  <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-                    ตำแหน่งที่มีผู้สมัครมากที่สุด
-                  </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 1.5,
+                      background: 'linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      boxShadow: '0 4px 12px rgba(29, 233, 182, 0.25)',
+                    }}
+                  >
+                    <TrendingUp sx={{ fontSize: 16 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700} color="text.primary" lineHeight={1.2}>
+                      ตำแหน่งที่มีผู้สมัครมากที่สุด
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.3 }}>
+                      ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
+                    </Typography>
+                  </Box>
                 </Box>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                  ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
-                </Typography>
               </Box>
-              <CardContent sx={{ p: 2.5, bgcolor: 'white' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <CardContent sx={{ p: 2, bgcolor: 'white' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   {stats.topRequestedPositions.slice(0, 5).map((position, index) => (
-                    <Box key={position.posCodeId}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                    <Box 
+                      key={`${position.posCodeName}-${index}`}
+                      sx={{
+                        animation: `slideInLeft 0.5s ease-out ${index * 0.1}s backwards`,
+                        '@keyframes slideInLeft': {
+                          '0%': { opacity: 0, transform: 'translateX(-20px)' },
+                          '100%': { opacity: 1, transform: 'translateX(0)' }
+                        }
+                      }}
+                    >
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        p: 1,
+                        borderRadius: 1.5,
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          bgcolor: 'rgba(29, 233, 182, 0.05)',
+                          transform: 'translateX(4px)',
+                        }
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flex: 1 }}>
                           <Chip 
                             label={`#${index + 1}`} 
                             size="small"
                             sx={{ 
                               fontWeight: 700,
-                              minWidth: 35,
-                              height: 35,
-                              fontSize: '0.85rem',
-                              bgcolor: index === 0 
-                                ? 'warning.main'
+                              minWidth: 32,
+                              height: 32,
+                              fontSize: '0.9rem',
+                              background: index === 0 
+                                ? 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)'
                                 : index === 1 
-                                  ? 'grey.400'
-                                  : 'grey.300',
-                              color: index < 2 ? 'white' : 'text.primary'
+                                  ? 'linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%)'
+                                  : index === 2
+                                    ? 'linear-gradient(135deg, #CD7F32 0%, #B87333 100%)'
+                                    : 'linear-gradient(135deg, #E0E0E0 0%, #BDBDBD 100%)',
+                              color: 'white',
+                              boxShadow: index < 3 ? '0 2px 8px rgba(0,0,0,0.15)' : 'none'
                             }}
                           />
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.3 }}>
+                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.3, fontSize: '0.95rem' }}>
                               {position.posCodeName}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
                               รหัส: {position.posCodeId}
-                              {position.availableSlots !== undefined && ` • ว่าง ${position.availableSlots} ตำแหน่ง`}
+                              {position.availableSlots !== undefined && (
+                                <Box component="span" sx={{ color: '#1DE9B6', fontWeight: 600, ml: 1 }}>
+                                  • ว่าง {position.availableSlots} ตำแหน่ง
+                                </Box>
+                              )}
                             </Typography>
                           </Box>
                         </Box>
@@ -1190,14 +1558,16 @@ export default function HomePage() {
                           size="small"
                           sx={{ 
                             fontWeight: 700,
-                            bgcolor: '#E3F2FD',
+                            background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)',
                             color: '#1565C0',
                             border: '1px solid #90CAF9',
-                            fontSize: '0.75rem'
+                            fontSize: '0.8rem',
+                            height: 26,
+                            boxShadow: '0 2px 6px rgba(21, 101, 192, 0.15)'
                           }}
                         />
                       </Box>
-                      {index < 4 && <Divider sx={{ mt: 2 }} />}
+                      {index < 4 && <Divider sx={{ mt: 1.5 }} />}
                     </Box>
                   ))}
                 </Box>
@@ -1208,57 +1578,112 @@ export default function HomePage() {
           {/* Positions with Most Vacancies */}
           {stats.positionDetails && stats.positionDetails.length > 0 && (
             <Card sx={{ 
-              borderRadius: 2, 
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              borderRadius: 3, 
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               border: '1px solid',
               borderColor: 'divider',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+              }
             }}>
               <Box sx={{ 
-                p: 2.5, 
-                pb: 2,
-                bgcolor: 'grey.50',
-                borderBottom: '1px solid',
-                borderColor: 'divider'
+                p: 2, 
+                pb: 1.5,
+                background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+                borderBottom: '2px solid',
+                borderColor: 'divider',
+                position: 'relative',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #FF9A44 0%, #ff9800 100%)',
+                }
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <LocationOn sx={{ fontSize: 20, color: DASHBOARD_COLORS.accent }} />
-                  <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-                    ตำแหน่งที่รอจับคู่มากที่สุด
-                  </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 1.5,
+                      background: 'linear-gradient(135deg, #FF9A44 0%, #ff9800 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      boxShadow: '0 4px 12px rgba(255, 154, 68, 0.25)',
+                    }}
+                  >
+                    <LocationOn sx={{ fontSize: 16 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700} color="text.primary" lineHeight={1.2}>
+                      ตำแหน่งที่รอจับคู่มากที่สุด
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.3 }}>
+                      ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
+                    </Typography>
+                  </Box>
                 </Box>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                  ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
-                </Typography>
               </Box>
-              <CardContent sx={{ p: 2.5, bgcolor: 'white' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <CardContent sx={{ p: 2, bgcolor: 'white' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   {pendingPositionsSorted.map((position, index) => (
-                    <Box key={position.posCodeId}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                    <Box 
+                      key={position.posCodeId}
+                      sx={{
+                        animation: `slideInRight 0.5s ease-out ${index * 0.1}s backwards`,
+                        '@keyframes slideInRight': {
+                          '0%': { opacity: 0, transform: 'translateX(20px)' },
+                          '100%': { opacity: 1, transform: 'translateX(0)' }
+                        }
+                      }}
+                    >
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        p: 1,
+                        borderRadius: 1.5,
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          bgcolor: 'rgba(255, 154, 68, 0.05)',
+                          transform: 'translateX(-4px)',
+                        }
+                      }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flex: 1 }}>
                           <Chip 
                             label={`#${index + 1}`} 
                             size="small"
                             sx={{ 
                               fontWeight: 700,
-                              minWidth: 35,
-                              height: 35,
-                              fontSize: '0.85rem',
-                              bgcolor: index === 0 
-                                ? 'error.main'
+                              minWidth: 32,
+                              height: 32,
+                              fontSize: '0.9rem',
+                              background: index === 0 
+                                ? 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)'
                                 : index === 1 
-                                  ? 'warning.main'
-                                  : 'warning.light',
-                              color: 'white'
+                                  ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+                                  : 'linear-gradient(135deg, #ffb74d 0%, #ffa726 100%)',
+                              color: 'white',
+                              boxShadow: index < 2 ? '0 2px 8px rgba(0,0,0,0.15)' : 'none'
                             }}
                           />
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.3 }}>
+                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.3, fontSize: '0.95rem' }}>
                               {position.posCodeName}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                              รหัส: {position.posCodeId} • ผู้สมัคร {position.totalApplicants} คน
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                              รหัส: {position.posCodeId}
+                              <Box component="span" sx={{ color: '#42a5f5', fontWeight: 600, ml: 1 }}>
+                                • ผู้สมัคร {position.totalApplicants} คน
+                              </Box>
                             </Typography>
                           </Box>
                         </Box>
@@ -1267,20 +1692,45 @@ export default function HomePage() {
                           size="small"
                           sx={{ 
                             fontWeight: 700,
-                            bgcolor: '#FFF3E0',
+                            background: 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)',
                             color: '#E65100',
                             border: '1px solid #FFB74D',
-                            fontSize: '0.75rem'
+                            fontSize: '0.8rem',
+                            height: 26,
+                            boxShadow: '0 2px 6px rgba(230, 81, 0, 0.15)'
                           }}
                         />
                       </Box>
-                      {index < 4 && <Divider sx={{ mt: 2 }} />}
+                      {index < 4 && <Divider sx={{ mt: 1.5 }} />}
                     </Box>
                   ))}
                   {!hasPendingPositions && (
-                    <Box sx={{ textAlign: 'center', py: 3 }}>
-                      <CheckCircle sx={{ fontSize: 48, color: DASHBOARD_COLORS.primary, mb: 1 }} />
-                      <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                    <Box sx={{ 
+                      textAlign: 'center', 
+                      py: 4,
+                      animation: 'scaleIn 0.5s ease-out',
+                      '@keyframes scaleIn': {
+                        '0%': { opacity: 0, transform: 'scale(0.8)' },
+                        '100%': { opacity: 1, transform: 'scale(1)' }
+                      }
+                    }}>
+                      <Box
+                        sx={{
+                          width: 64,
+                          height: 64,
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          margin: '0 auto',
+                          mb: 2,
+                          boxShadow: '0 4px 20px rgba(29, 233, 182, 0.3)',
+                        }}
+                      >
+                        <CheckCircle sx={{ fontSize: 36, color: 'white' }} />
+                      </Box>
+                      <Typography variant="body2" color="text.primary" fontWeight={700} mb={0.5}>
                         ไม่มีตำแหน่งที่รอจับคู่
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -1294,9 +1744,49 @@ export default function HomePage() {
           )}
         </Box>
 
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
+        <Box sx={{ 
+          mt: 6, 
+          mb: 2,
+          textAlign: 'center',
+          animation: 'fadeIn 1s ease-out 1s backwards',
+          '@keyframes fadeIn': {
+            '0%': { opacity: 0 },
+            '100%': { opacity: 1 }
+          }
+        }}>
+          <Divider sx={{ mb: 3, maxWidth: 600, mx: 'auto' }} />
+          <Typography 
+            variant="caption" 
+            color="text.secondary"
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              gap: 1,
+              fontWeight: 500
+            }}
+          >
+            <Box 
+              component="span" 
+              sx={{ 
+                width: 6, 
+                height: 6, 
+                borderRadius: '50%', 
+                bgcolor: '#1DE9B6',
+                display: 'inline-block'
+              }} 
+            />
             {new Date().getFullYear() + 543} ระบบจัดการตำแหน่งตำรวจ
+            <Box 
+              component="span" 
+              sx={{ 
+                width: 6, 
+                height: 6, 
+                borderRadius: '50%', 
+                bgcolor: '#1DE9B6',
+                display: 'inline-block'
+              }} 
+            />
           </Typography>
         </Box>
       </Box>

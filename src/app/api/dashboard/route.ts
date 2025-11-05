@@ -278,22 +278,23 @@ export async function GET(request: NextRequest) {
     // สร้างข้อมูลกราฟสำหรับทุก PosCode
     const chartDataByPosition = await Promise.all(
       allPosCodes.map(async (posCode) => {
-        // นับตำแหน่งว่าง: pos_code_id === posCode.id AND requested_position_id === null AND is_assigned = false
+        // นับตำแหน่งว่าง: pos_code_id === posCode.id
         const vacantSlots = await prisma.vacantPosition.count({
           where: {
             ...chartBaseFilter,
-            posCodeId: posCode.id,
-            requestedPositionId: null,
-            isAssigned: false
+            posCodeId: posCode.id
           }
         });
 
-        // นับจับคู่สำเร็จ: requested_position_id === posCode.id AND is_assigned = true
-        const assignedCount = await prisma.vacantPosition.count({
+        // นับจับคู่สำเร็จ: จำนวนคนที่ย้ายมาตำแหน่งนี้ (toPosition swap)
+        // ใช้ SwapTransactionDetail ที่มี posCodeId === posCode.id
+        const assignedCount = await prisma.swapTransactionDetail.count({
           where: {
-            ...chartBaseFilter,
-            requestedPositionId: posCode.id,
-            isAssigned: true
+            posCodeId: posCode.id,
+            transaction: {
+              year: yearNumber,
+              status: 'completed'
+            }
           }
         });
 

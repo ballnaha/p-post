@@ -111,12 +111,18 @@ export default function PersonnelDrawer({
 
   useEffect(() => {
     if (open) {
-      setInitialLoading(true);
-      setFilterOptionsLoaded(false);
-      
+      // Reset all states immediately to prevent showing old data
       setPersonnel([]);
       setTotalPersonnel(0);
+      setAllUnits([]);
+      setPosCodeOptions([]);
       setSearchTerm('');
+      setSelectedPersonnel(null);
+      setExpandedPersonnelId(null);
+      
+      // Set loading states
+      setInitialLoading(true);
+      setFilterOptionsLoaded(false);
       
       // ตั้งค่า filter เริ่มต้นตาม props ที่ส่งมา
       const initialUnit = initialFilterUnit || 'all';
@@ -127,51 +133,60 @@ export default function PersonnelDrawer({
       setPage(0);
 
       (async () => {
-        // Load all data in parallel for faster performance
-        const [_, __, personnelData] = await Promise.all([
-          loadAllUnits(), 
-          loadPosCodes(),
-          // Load personnel data immediately in parallel
-          (async () => {
-            try {
-              const params = new URLSearchParams();
-              if (initialUnit && initialUnit !== 'all') params.set('unit', initialUnit);
-              if (initialPosCode && initialPosCode !== 'all') params.set('posCodeId', initialPosCode);
-              params.set('page', '0');
-              params.set('limit', rowsPerPage.toString());
-              
-              const currentYear = new Date().getFullYear() + 543;
-              params.set('year', currentYear.toString());
-              
-              if (excludeTransactionId) {
-                params.set('excludeTransactionId', excludeTransactionId);
-              }
+        try {
+          // Load all data in parallel for faster performance
+          const [_, __, personnelData] = await Promise.all([
+            loadAllUnits(), 
+            loadPosCodes(),
+            // Load personnel data immediately in parallel
+            (async () => {
+              try {
+                const params = new URLSearchParams();
+                if (initialUnit && initialUnit !== 'all') params.set('unit', initialUnit);
+                if (initialPosCode && initialPosCode !== 'all') params.set('posCodeId', initialPosCode);
+                params.set('page', '0');
+                params.set('limit', rowsPerPage.toString());
+                
+                const currentYear = new Date().getFullYear() + 543;
+                params.set('year', currentYear.toString());
+                
+                if (excludeTransactionId) {
+                  params.set('excludeTransactionId', excludeTransactionId);
+                }
 
-              const response = await fetch(`/api/police-personnel/candidates?${params.toString()}`);
-              if (!response.ok) throw new Error('Failed to fetch personnel');
-              
-              const result = await response.json();
-              let pageData: any[] = Array.isArray(result?.data) ? result.data : [];
-              
-              if (excludePersonnelId) {
-                const excludeIds = Array.isArray(excludePersonnelId) ? excludePersonnelId : [excludePersonnelId];
-                pageData = pageData.filter(p => !excludeIds.includes(p.id));
+                const response = await fetch(`/api/police-personnel/candidates?${params.toString()}`);
+                if (!response.ok) throw new Error('Failed to fetch personnel');
+                
+                const result = await response.json();
+                let pageData: any[] = Array.isArray(result?.data) ? result.data : [];
+                
+                // Apply client-side filter for excluded personnel
+                if (excludePersonnelId) {
+                  const excludeIds = Array.isArray(excludePersonnelId) ? excludePersonnelId : [excludePersonnelId];
+                  pageData = pageData.filter(p => !excludeIds.includes(p.id));
+                }
+                
+                return { data: pageData, total: result?.total || 0 };
+              } catch (error) {
+                console.error('Error loading personnel:', error);
+                return { data: [], total: 0 };
               }
-              
-              return { data: pageData, total: result?.total || 0 };
-            } catch (error) {
-              console.error('Error loading personnel:', error);
-              return { data: [], total: 0 };
-            }
-          })()
-        ]);
-        
-        // Set personnel data from parallel load
-        setPersonnel(personnelData.data as PolicePersonnel[]);
-        setTotalPersonnel(personnelData.total);
-        
-        setFilterOptionsLoaded(true);
-        setInitialLoading(false);
+            })()
+          ]);
+          
+          // Set all data at once after filtering is complete
+          setPersonnel(personnelData.data as PolicePersonnel[]);
+          setTotalPersonnel(personnelData.total);
+          setFilterOptionsLoaded(true);
+          
+        } catch (error) {
+          console.error('Error in initial load:', error);
+          setPersonnel([]);
+          setTotalPersonnel(0);
+          setFilterOptionsLoaded(true);
+        } finally {
+          setInitialLoading(false);
+        }
       })();
     } else {
       setInitialLoading(false);

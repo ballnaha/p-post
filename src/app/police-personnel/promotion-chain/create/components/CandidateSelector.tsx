@@ -108,16 +108,20 @@ export default function CandidateSelector({
 
   useEffect(() => {
     if (open) {
-      // Set initial loading FIRST to prevent other useEffects from triggering
-      setInitialLoading(true);
-      setFilterOptionsLoaded(false);
-      
-      // Reset transient states to avoid flashing stale content
+      // Reset all states immediately to prevent showing old data
       setCandidates([]);
       setTotalCandidates(0);
+      setAllUnits([]);
+      setPosCodeOptions([]);
       setSearchTerm('');
+      setSelectedCandidate(null);
+      setExpandedCandidateId(null);
       setFilterPosCode('all');
       setPage(0);
+      
+      // Set loading states FIRST to prevent other useEffects from triggering
+      setInitialLoading(true);
+      setFilterOptionsLoaded(false);
 
       // Determine initial filter unit
       const initialUnit = vacantPosition?.unit || 'all';
@@ -125,18 +129,55 @@ export default function CandidateSelector({
 
       // Load all initial data before showing content
       (async () => {
-        // Load filter options and candidates in parallel
-        await Promise.all([
-          loadAllUnits(), 
-          loadPosCodes()
-        ]);
-        
-        // After filter options are loaded, load candidates with correct filters
-        await loadCandidatesWithFilter(initialUnit, 'all', '', 0, rowsPerPage);
-        
-        // Mark as loaded
-        setFilterOptionsLoaded(true);
-        setInitialLoading(false);
+        try {
+          // Load all data in parallel for faster performance
+          const [_, __, candidatesData] = await Promise.all([
+            loadAllUnits(), 
+            loadPosCodes(),
+            // Load candidates data immediately in parallel
+            (async () => {
+              try {
+                const params = new URLSearchParams();
+                if (initialUnit && initialUnit !== 'all') params.set('unit', initialUnit);
+                params.set('posCodeId', 'all');
+                params.set('page', '0');
+                params.set('limit', rowsPerPage.toString());
+
+                const response = await fetch(`/api/police-personnel/candidates?${params.toString()}`);
+                if (!response.ok) throw new Error('Failed to fetch candidates');
+
+                const result = await response.json();
+                let pageData: any[] = Array.isArray(result?.data) ? result.data : [];
+
+                // Apply client-side filter by target rank level if set
+                if (targetRankLevel !== undefined && targetRankLevel !== null) {
+                  pageData = pageData.filter(c => {
+                    const candidateRankLevel = c.rankLevel ?? c.posCodeId ?? 999;
+                    return candidateRankLevel >= targetRankLevel;
+                  });
+                }
+
+                return { data: pageData, total: result?.total || 0 };
+              } catch (error) {
+                console.error('Error loading candidates:', error);
+                return { data: [], total: 0 };
+              }
+            })()
+          ]);
+          
+          // Set all data at once after filtering is complete
+          setCandidates(candidatesData.data as SwapListPerson[]);
+          setTotalCandidates(candidatesData.total);
+          setFilterOptionsLoaded(true);
+          
+        } catch (error) {
+          console.error('Error in initial load:', error);
+          setCandidates([]);
+          setTotalCandidates(0);
+          setFilterOptionsLoaded(true);
+        } finally {
+          setInitialLoading(false);
+        }
       })();
     } else {
       // When closing, reset states
@@ -1192,19 +1233,13 @@ export default function CandidateSelector({
             )}
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button 
-              onClick={handleClose} 
-              variant="outlined"
-              size="medium"
-            >
-              ยกเลิก
-            </Button>
+            
             <Button
               variant="contained"
               color="primary"
               onClick={handleSelect}
               disabled={!selectedCandidate || selectedPersonnelIds.includes(selectedCandidate.id)}
-              size="medium"
+              size="large"
             >
               {selectedCandidate 
                 ? (selectedPersonnelIds.includes(selectedCandidate.id) ? 'ถูกเลือกแล้ว' : 'ยืนยัน')

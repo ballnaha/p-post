@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             personnelId: true,
+            noId: true,
             fullName: true,
             rank: true,
             nationalId: true,
@@ -42,9 +43,11 @@ export async function GET(request: NextRequest) {
             fromPosition: true,
             fromPositionNumber: true,
             fromUnit: true,
+            fromActingAs: true,
             toPosition: true,
             toPositionNumber: true,
             toUnit: true,
+            toActingAs: true,
             sequence: true,
             // ข้อมูลส่วนตัว
             birthDate: true,
@@ -133,16 +136,34 @@ export async function POST(request: NextRequest) {
           create: swapDetails.map((detail: any, index: number) => ({
             sequence: index + 1, // 1, 2, 3
             personnelId: detail.personnelId,
+            noId: detail.noId,
             nationalId: detail.nationalId,
             fullName: detail.fullName,
             rank: detail.rank,
+            seniority: detail.seniority,
             posCodeId: detail.posCodeId,
+            // ข้อมูลส่วนตัว
+            birthDate: detail.birthDate,
+            age: detail.age,
+            education: detail.education,
+            // ข้อมูลการแต่งตั้ง
+            lastAppointment: detail.lastAppointment,
+            currentRankSince: detail.currentRankSince,
+            enrollmentDate: detail.enrollmentDate,
+            retirementDate: detail.retirementDate,
+            yearsOfService: detail.yearsOfService,
+            // ข้อมูลการฝึกอบรม
+            trainingLocation: detail.trainingLocation,
+            trainingCourse: detail.trainingCourse,
+            // ตำแหน่ง
             fromPosition: detail.fromPosition,
             fromPositionNumber: detail.fromPositionNumber,
             fromUnit: detail.fromUnit,
+            fromActingAs: detail.fromActingAs,
             toPosition: detail.toPosition,
             toPositionNumber: detail.toPositionNumber,
             toUnit: detail.toUnit,
+            toActingAs: detail.toActingAs,
             notes: detail.notes,
           })),
         },

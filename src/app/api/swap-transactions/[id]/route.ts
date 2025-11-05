@@ -96,6 +96,7 @@ export async function PUT(
         create: swapDetails.map((detail: any) => ({
           sequence: detail.sequence,
           personnelId: detail.personnelId,
+          noId: detail.noId,
           nationalId: detail.nationalId,
           fullName: detail.fullName,
           rank: detail.rank,
@@ -118,9 +119,11 @@ export async function PUT(
           fromPosition: detail.fromPosition,
           fromPositionNumber: detail.fromPositionNumber,
           fromUnit: detail.fromUnit,
+          fromActingAs: detail.fromActingAs,
           toPosition: detail.toPosition,
           toPositionNumber: detail.toPositionNumber,
           toUnit: detail.toUnit,
+          toActingAs: detail.toActingAs,
           notes: detail.notes
         }))
       };

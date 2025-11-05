@@ -185,6 +185,7 @@ model SwapTransactionDetail {
   
   // ข้อมูลบุคคล
   personnelId     String? @map("personnel_id") // ID อ้างอิงกับ police_personnel
+  noId            Int?    @map("no_id") // ลำดับที่จาก police_personnel
   nationalId      String? @map("national_id") // เลขบัตรประชาชน
   fullName        String  @map("full_name") // ชื่อ-นามสกุล
   rank            String? // ยศ
@@ -212,11 +213,13 @@ model SwapTransactionDetail {
   fromPosition       String? @map("from_position") // ตำแหน่งเดิม
   fromPositionNumber String? @map("from_position_number") // เลขที่ตำแหน่งเดิม
   fromUnit           String? @map("from_unit") // หน่วยเดิม
+  fromActingAs       String? @map("from_acting_as") // ทำหน้าที่ (ตำแหน่งเดิม)
   
   // ตำแหน่งใหม่ (To)
   toPosition         String? @map("to_position") // ตำแหน่งใหม่
   toPositionNumber   String? @map("to_position_number") // เลขที่ตำแหน่งใหม่
   toUnit             String? @map("to_unit") // หน่วยใหม่
+  toActingAs         String? @map("to_acting_as") // ทำหน้าที่ (ตำแหน่งใหม่)
   
   // ข้อมูลเพิ่มเติม
   notes              String? @db.Text // หมายเหตุเฉพาะคน

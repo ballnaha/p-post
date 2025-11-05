@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
       where,
       select: {
         id: true,
+        noId: true,
         posCodeId: true,
         posCodeMaster: {
           select: {
@@ -131,6 +132,7 @@ export async function GET(request: NextRequest) {
 
     const candidates = personnel.map((p) => ({
       id: p.id,
+      noId: p.noId,
       posCodeId: p.posCodeId,
       posCodeMaster: p.posCodeMaster
         ? { id: p.posCodeMaster.id, name: p.posCodeMaster.name }

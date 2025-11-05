@@ -226,6 +226,7 @@ export default function AddThreeWaySwapPage() {
         {
           sequence: 1,
           personnelId: personnelA.id,
+          noId: personnelA.noId,
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
           rank: personnelA.rank,
@@ -248,13 +249,16 @@ export default function AddThreeWaySwapPage() {
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
+          fromActingAs: personnelA.actingAs,
           toPosition: personnelB.position, // A ไปที่ตำแหน่ง B
           toPositionNumber: personnelB.positionNumber,
           toUnit: personnelB.unit,
+          toActingAs: personnelB.actingAs,
         },
         {
           sequence: 2,
           personnelId: personnelB.id,
+          noId: personnelB.noId,
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
           rank: personnelB.rank,
@@ -277,13 +281,16 @@ export default function AddThreeWaySwapPage() {
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
+          fromActingAs: personnelB.actingAs,
           toPosition: personnelC.position, // B ไปที่ตำแหน่ง C
           toPositionNumber: personnelC.positionNumber,
           toUnit: personnelC.unit,
+          toActingAs: personnelC.actingAs,
         },
         {
           sequence: 3,
           personnelId: personnelC.id,
+          noId: personnelC.noId,
           nationalId: personnelC.nationalId,
           fullName: personnelC.fullName,
           rank: personnelC.rank,
@@ -306,9 +313,11 @@ export default function AddThreeWaySwapPage() {
           fromPosition: personnelC.position,
           fromPositionNumber: personnelC.positionNumber,
           fromUnit: personnelC.unit,
+          fromActingAs: personnelC.actingAs,
           toPosition: personnelA.position, // C ไปที่ตำแหน่ง A
           toPositionNumber: personnelA.positionNumber,
           toUnit: personnelA.unit,
+          toActingAs: personnelA.actingAs,
         },
       ];
 

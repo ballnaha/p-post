@@ -67,6 +67,7 @@ import { EmptyState } from '@/app/components/EmptyState';
 interface ThreeWaySwapDetail {
   id: string;
   personnelId: string;
+  noId?: number;
   fullName: string;
   rank?: string;
   nationalId?: string;
@@ -78,9 +79,11 @@ interface ThreeWaySwapDetail {
   fromPosition?: string;
   fromPositionNumber?: string;
   fromUnit?: string;
+  fromActingAs?: string;
   toPosition?: string;
   toPositionNumber?: string;
   toUnit?: string;
+  toActingAs?: string;
   sequence: number;
   // ข้อมูลส่วนตัว
   birthDate?: string | null;
@@ -455,6 +458,7 @@ export default function ThreeWaySwapPage() {
         if (detail) {
           personnelData = {
             id: detail.personnelId || '',
+            noId: detail.noId,
             fullName: detail.fullName,
             rank: detail.rank,
             nationalId: detail.nationalId,
@@ -463,6 +467,7 @@ export default function ThreeWaySwapPage() {
             position: detail.fromPosition,
             positionNumber: detail.fromPositionNumber,
             unit: detail.fromUnit,
+            actingAs: detail.fromActingAs,
             notes: detail.notes,
             // ข้อมูลส่วนตัวที่บันทึกไว้
             birthDate: detail.birthDate,

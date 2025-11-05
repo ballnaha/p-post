@@ -257,7 +257,7 @@ export default function EditPromotionChainPage() {
               onClick={() => router.push("/police-personnel/promotion-chain")}
               sx={{ flexShrink: 0 }}
             >
-              กลับ
+              ย้อนกลับ
             </Button>
           </Box>
         </Paper>

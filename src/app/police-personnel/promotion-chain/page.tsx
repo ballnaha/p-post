@@ -80,6 +80,7 @@ interface SwapDetail {
   id: string;
   sequence?: number | null;
   personnelId?: string | null;
+  noId?: number | null;
   nationalId?: string | null;
   fullName: string;
   rank?: string | null;
@@ -88,9 +89,11 @@ interface SwapDetail {
   fromPosition?: string | null;
   fromPositionNumber?: string | null;
   fromUnit?: string | null;
+  fromActingAs?: string | null;
   toPosition?: string | null;
   toPositionNumber?: string | null;
   toUnit?: string | null;
+  toActingAs?: string | null;
   notes?: string | null;
   // ข้อมูลส่วนตัวที่บันทึกไว้ใน swap_transaction_detail
   birthDate?: string | null;
@@ -553,6 +556,7 @@ export default function PromotionChainPage() {
         if (detail) {
           personnelData = {
             id: detail.personnelId || '',
+            noId: detail.noId || undefined,
             fullName: detail.fullName,
             rank: detail.rank || undefined,
             nationalId: detail.nationalId || undefined,
@@ -561,6 +565,7 @@ export default function PromotionChainPage() {
             position: detail.fromPosition || undefined,
             positionNumber: detail.fromPositionNumber || undefined,
             unit: detail.fromUnit || undefined,
+            actingAs: detail.fromActingAs || undefined,
             notes: detail.notes || undefined,
             // ข้อมูลส่วนตัวที่บันทึกไว้
             birthDate: detail.birthDate || undefined,

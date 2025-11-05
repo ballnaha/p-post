@@ -12,6 +12,7 @@ interface ChainNode {
   id: string;
   nodeOrder: number;
   personnelId?: string; // อ้างอิง police_personnel.id
+  noId?: number; // police_personnel.noId (ลำดับที่)
   
   // ข้อมูลบุคคล (Person Information)
   nationalId: string; // police_personnel.nationalId
@@ -41,7 +42,7 @@ interface ChainNode {
   fromPosition: string; // police_personnel.position
   fromPositionNumber?: string; // police_personnel.positionNumber
   fromUnit: string; // police_personnel.unit
-  actingAs?: string; // police_personnel.actingAs - ทำหน้าที่
+  fromActingAs?: string; // police_personnel.actingAs - ทำหน้าที่
   
   // ข้อมูลตำแหน่งใหม่ (To Position)
   toPosCodeId: number;
@@ -143,6 +144,7 @@ export default function PromotionChainBuilder({
       id: `node-${Date.now()}`,
       nodeOrder: nodes.length + 1,
       personnelId: candidate.id,
+      noId: candidate.noId,
       nationalId: candidate.nationalId,
       fullName: candidate.fullName,
       rank: candidate.rank,
@@ -166,13 +168,13 @@ export default function PromotionChainBuilder({
       fromPosition: candidate.position,
       fromPositionNumber: candidate.positionNumber,
       fromUnit: candidate.unit,
-      actingAs: candidate.actingAs,
+      fromActingAs: candidate.actingAs,
       toPosCodeId: nodes.length === 0 ? vacantPosition?.posCodeId || 0 : nodes[nodes.length - 1].fromPosCodeId,
       toPosCodeName: nodes.length === 0 ? vacantPosition?.posCodeName || vacantPosition?.position : nodes[nodes.length - 1].fromPosCodeName,
       toPosition: nodes.length === 0 ? vacantPosition?.position || '' : nodes[nodes.length - 1].fromPosition,
       toPositionNumber: nodes.length === 0 ? (vacantPosition?.positionNumber || undefined) : nodes[nodes.length - 1].fromPositionNumber,
       toUnit: nodes.length === 0 ? vacantPosition?.unit || '' : nodes[nodes.length - 1].fromUnit,
-      toActingAs: nodes.length === 0 ? (vacantPosition?.actingAs || undefined) : nodes[nodes.length - 1].actingAs,
+      toActingAs: nodes.length === 0 ? (vacantPosition?.actingAs || undefined) : nodes[nodes.length - 1].fromActingAs,
       fromRankLevel: candidate.rankLevel,
       toRankLevel: nodes.length === 0 ? getRankLevelByPosCode(vacantPosition?.posCodeId || 0) : nodes[nodes.length - 1].fromRankLevel,
       isPromotionValid: true,
@@ -199,7 +201,7 @@ export default function PromotionChainBuilder({
       fullName: node.fullName,
       nationalId: node.nationalId,
       seniority: node.seniority || null,
-      actingAs: node.actingAs || null,
+      actingAs: node.fromActingAs || null,
       age: null,
       education: null,
       birthDate: null,
@@ -401,7 +403,7 @@ export default function PromotionChainBuilder({
                   const position = isNext ? nodes[nodes.length - 1].fromPosition : vacantPosition?.position;
                   const unit = isNext ? nodes[nodes.length - 1].fromUnit : vacantPosition?.unit;
                   const positionNumber = isNext ? nodes[nodes.length - 1].fromPositionNumber : vacantPosition?.positionNumber;
-                  const actingAs = isNext ? nodes[nodes.length - 1].actingAs : vacantPosition?.actingAs;
+                  const actingAs = isNext ? nodes[nodes.length - 1].fromActingAs : vacantPosition?.actingAs;
                   const areaTag = getAreaTag(unit);
 
                   return (
@@ -586,7 +588,7 @@ export default function PromotionChainBuilder({
                 posCodeName: nodes[nodes.length - 1].fromPosCodeName,
                 position: nodes[nodes.length - 1].fromPosition,
                 unit: nodes[nodes.length - 1].fromUnit,
-                actingAs: nodes[nodes.length - 1].actingAs,
+                actingAs: nodes[nodes.length - 1].fromActingAs,
               }
         }
       />

@@ -12,6 +12,7 @@ interface ChainNode {
   id: string;
   nodeOrder: number;
   personnelId?: string; // อ้างอิง police_personnel.id
+  noId?: number; // police_personnel.noId (ลำดับที่)
   
   // ข้อมูลบุคคล (Person Information)
   nationalId: string; // police_personnel.nationalId
@@ -41,6 +42,7 @@ interface ChainNode {
   fromPosition: string; // police_personnel.position
   fromPositionNumber?: string; // police_personnel.positionNumber
   fromUnit: string; // police_personnel.unit
+  fromActingAs?: string; // police_personnel.actingAs
   
   // ข้อมูลตำแหน่งใหม่ (To Position)
   toPosCodeId: number;
@@ -48,6 +50,7 @@ interface ChainNode {
   toPosition: string;
   toPositionNumber?: string;
   toUnit: string;
+  toActingAs?: string;
   
   // Metadata
   fromRankLevel: number;
@@ -203,6 +206,7 @@ function CreatePromotionChainContent() {
       const swapDetails = nodes.map((node) => ({
         sequence: node.nodeOrder,
         personnelId: node.personnelId,
+        noId: node.noId,
         nationalId: node.nationalId,
         fullName: node.fullName,
         rank: node.rank,
@@ -225,9 +229,11 @@ function CreatePromotionChainContent() {
         fromPosition: node.fromPosition,
         fromPositionNumber: node.fromPositionNumber,
         fromUnit: node.fromUnit,
+        fromActingAs: node.fromActingAs,
         toPosition: node.toPosition,
         toPositionNumber: node.toPositionNumber,
         toUnit: node.toUnit,
+        toActingAs: node.toActingAs,
         notes: null,
       }));
 
@@ -330,7 +336,7 @@ function CreatePromotionChainContent() {
               onClick={() => router.push('/police-personnel/promotion-chain')}
               sx={{ flexShrink: 0 }}
             >
-              กลับ
+              ย้อนกลับ
             </Button>
           </Box>
         </Paper>

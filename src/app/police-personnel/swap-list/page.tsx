@@ -96,6 +96,7 @@ interface PolicePersonnel {
 interface SwapDetail {
   id: string;
   personnelId: string;
+  noId?: number;
   fullName: string;
   rank?: string;
   nationalId?: string;
@@ -107,9 +108,11 @@ interface SwapDetail {
   fromPosition?: string;
   fromPositionNumber?: string;
   fromUnit?: string;
+  fromActingAs?: string;
   toPosition?: string;
   toPositionNumber?: string;
   toUnit?: string;
+  toActingAs?: string;
   notes?: string;
   // ข้อมูลส่วนตัวที่บันทึกไว้ใน swap_transaction_detail
   birthDate?: string;
@@ -323,6 +326,7 @@ export default function SwapListPage() {
         if (detail) {
           personnelData = {
             id: detail.personnelId || '',
+            noId: detail.noId,
             fullName: detail.fullName,
             rank: detail.rank,
             nationalId: detail.nationalId,
@@ -331,6 +335,7 @@ export default function SwapListPage() {
             position: detail.fromPosition,
             positionNumber: detail.fromPositionNumber,
             unit: detail.fromUnit,
+            actingAs: detail.fromActingAs,
             notes: detail.notes,
             // ข้อมูลส่วนตัวที่บันทึกไว้
             birthDate: detail.birthDate,

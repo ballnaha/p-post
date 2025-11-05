@@ -237,6 +237,7 @@ export default function AddSwapTransactionPage() {
         {
           sequence: 1, // บุคลากร A ขึ้นก่อน
           personnelId: personnelA.id,
+          noId: personnelA.noId,
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
           rank: personnelA.rank,
@@ -259,13 +260,16 @@ export default function AddSwapTransactionPage() {
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
+          fromActingAs: personnelA.actingAs,
           toPosition: personnelB.position,
           toPositionNumber: personnelB.positionNumber,
           toUnit: personnelB.unit,
+          toActingAs: personnelB.actingAs,
         },
         {
           sequence: 2, // บุคลากร B ขึ้นหลัง
           personnelId: personnelB.id,
+          noId: personnelB.noId,
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
           rank: personnelB.rank,
@@ -288,9 +292,11 @@ export default function AddSwapTransactionPage() {
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
+          fromActingAs: personnelB.actingAs,
           toPosition: personnelA.position,
           toPositionNumber: personnelA.positionNumber,
           toUnit: personnelA.unit,
+          toActingAs: personnelA.actingAs,
         },
       ];
 

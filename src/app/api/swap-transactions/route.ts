@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
             id: true,
             sequence: true,
             personnelId: true,
+            noId: true,
             nationalId: true,
             fullName: true,
             rank: true,
@@ -64,9 +65,11 @@ export async function GET(request: NextRequest) {
             fromPosition: true,
             fromPositionNumber: true,
             fromUnit: true,
+            fromActingAs: true,
             toPosition: true,
             toPositionNumber: true,
             toUnit: true,
+            toActingAs: true,
             notes: true
           },
           orderBy: [
@@ -82,49 +85,6 @@ export async function GET(request: NextRequest) {
         { swapDate: 'desc' }
       ]
     });
-
-    // สำหรับ vacant-assignment ให้ดึงข้อมูล requestedPosCode
-    if (swapType === 'vacant-assignment') {
-      const enrichedTransactions = await Promise.all(
-        transactions.map(async (transaction) => {
-          const enrichedDetails = await Promise.all(
-            transaction.swapDetails.map(async (detail) => {
-              if (detail.personnelId) {
-                // ดึงข้อมูล VacantPosition จาก personnelId
-                const vacantPosition = await prisma.vacantPosition.findUnique({
-                  where: { id: detail.personnelId },
-                  include: {
-                    requestedPosCode: {
-                      select: {
-                        id: true,
-                        name: true
-                      }
-                    }
-                  }
-                });
-                
-                return {
-                  ...detail,
-                  requestedPosCode: vacantPosition?.requestedPosCode || null,
-                  requestedPositionId: vacantPosition?.requestedPositionId || null
-                };
-              }
-              return detail;
-            })
-          );
-          
-          return {
-            ...transaction,
-            swapDetails: enrichedDetails
-          };
-        })
-      );
-      
-      return NextResponse.json({
-        success: true,
-        data: enrichedTransactions
-      });
-    }
 
     return NextResponse.json({
       success: true,
@@ -172,6 +132,7 @@ export async function POST(request: NextRequest) {
           create: swapDetails.map((detail: any, index: number) => ({
             sequence: detail.sequence !== undefined ? detail.sequence : (swapType === 'three-way' ? index + 1 : null),
             personnelId: detail.personnelId,
+            noId: detail.noId,
             nationalId: detail.nationalId,
             fullName: detail.fullName,
             rank: detail.rank,
@@ -194,9 +155,11 @@ export async function POST(request: NextRequest) {
             fromPosition: detail.fromPosition,
             fromPositionNumber: detail.fromPositionNumber,
             fromUnit: detail.fromUnit,
+            fromActingAs: detail.fromActingAs,
             toPosition: detail.toPosition,
             toPositionNumber: detail.toPositionNumber,
             toUnit: detail.toUnit,
+            toActingAs: detail.toActingAs,
             notes: detail.notes
           }))
         }

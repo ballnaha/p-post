@@ -88,6 +88,8 @@ model PolicePersonnel {
   @@index([rank])
   @@index([unit])
   @@index([position])
+  @@index([rank, posCodeId, fullName]) // Composite index for drawer query optimization
+  @@index([unit, posCodeId, fullName]) // Composite index for unit filter with posCode
   @@map("police_personnel")
 }
 

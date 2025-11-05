@@ -127,12 +127,48 @@ export default function PersonnelDrawer({
       setPage(0);
 
       (async () => {
-        await Promise.all([
+        // Load all data in parallel for faster performance
+        const [_, __, personnelData] = await Promise.all([
           loadAllUnits(), 
-          loadPosCodes()
+          loadPosCodes(),
+          // Load personnel data immediately in parallel
+          (async () => {
+            try {
+              const params = new URLSearchParams();
+              if (initialUnit && initialUnit !== 'all') params.set('unit', initialUnit);
+              if (initialPosCode && initialPosCode !== 'all') params.set('posCodeId', initialPosCode);
+              params.set('page', '0');
+              params.set('limit', rowsPerPage.toString());
+              
+              const currentYear = new Date().getFullYear() + 543;
+              params.set('year', currentYear.toString());
+              
+              if (excludeTransactionId) {
+                params.set('excludeTransactionId', excludeTransactionId);
+              }
+
+              const response = await fetch(`/api/police-personnel/candidates?${params.toString()}`);
+              if (!response.ok) throw new Error('Failed to fetch personnel');
+              
+              const result = await response.json();
+              let pageData: any[] = Array.isArray(result?.data) ? result.data : [];
+              
+              if (excludePersonnelId) {
+                const excludeIds = Array.isArray(excludePersonnelId) ? excludePersonnelId : [excludePersonnelId];
+                pageData = pageData.filter(p => !excludeIds.includes(p.id));
+              }
+              
+              return { data: pageData, total: result?.total || 0 };
+            } catch (error) {
+              console.error('Error loading personnel:', error);
+              return { data: [], total: 0 };
+            }
+          })()
         ]);
         
-        await loadPersonnelWithFilter(initialUnit, initialPosCode, '', 0, rowsPerPage);
+        // Set personnel data from parallel load
+        setPersonnel(personnelData.data as PolicePersonnel[]);
+        setTotalPersonnel(personnelData.total);
         
         setFilterOptionsLoaded(true);
         setInitialLoading(false);
@@ -1082,19 +1118,13 @@ export default function PersonnelDrawer({
             )}
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button 
-              onClick={handleClose} 
-              variant="outlined"
-              size="medium"
-            >
-              ยกเลิก
-            </Button>
+            
             <Button
               variant="contained"
               color="primary"
               onClick={handleSelect}
               disabled={!selectedPersonnel}
-              size="medium"
+              size="large"
             >
               ยืนยัน
             </Button>

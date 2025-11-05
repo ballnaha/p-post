@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { dataCache, CACHE_KEYS } from '@/utils/cache';
 
 /**
  * GET /api/police-personnel/pos-codes
  * Return POSCODEs that actually exist in police_personnel (rank not null),
  * joined with PosCodeMaster to get names.
+ * Cached for 5 minutes for better performance.
  */
 export async function GET() {
   try {
+    // Check cache first
+    const cached = dataCache.get<{ id: number; name: string }[]>(CACHE_KEYS.POS_CODES);
+    if (cached) {
+      return NextResponse.json({ success: true, total: cached.length, data: cached, cached: true });
+    }
+
     const rows = await prisma.policePersonnel.findMany({
       where: {
         rank: { not: null },
@@ -31,6 +39,9 @@ export async function GET() {
     const data = Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.id - b.id);
+
+    // Cache the result
+    dataCache.set(CACHE_KEYS.POS_CODES, data);
 
     return NextResponse.json({ success: true, total: data.length, data });
   } catch (error: any) {

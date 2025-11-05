@@ -28,38 +28,30 @@ export async function GET(request: NextRequest) {
     const limit = limitParam ? Math.max(1, parseInt(limitParam, 10) || 20) : 20;
 
     // Get personnel IDs that are already in swap transactions for the specified year
+    // Optimized: Use single query with join instead of two separate queries
     let excludedPersonnelIds: string[] = [];
     if (yearParam) {
       const year = parseInt(yearParam, 10);
       if (!isNaN(year)) {
-        // Find all swap transactions for this year (including all swap types)
-        // Exclude the transaction being edited
-        const whereClause: any = { year };
+        // Build transaction where clause
+        const transactionWhere: any = { year };
         if (excludeTransactionId) {
-          whereClause.id = { not: excludeTransactionId };
+          transactionWhere.id = { not: excludeTransactionId };
         }
         
-        const swapTransactions = await prisma.swapTransaction.findMany({
-          where: whereClause,
-          select: { id: true },
+        // Single optimized query with join
+        const swapDetails = await prisma.swapTransactionDetail.findMany({
+          where: {
+            transaction: transactionWhere,
+            personnelId: { not: null },
+          },
+          select: { personnelId: true },
+          distinct: ['personnelId'], // Get unique personnel IDs only
         });
 
-        const transactionIds = swapTransactions.map(st => st.id);
-
-        if (transactionIds.length > 0) {
-          // Get all personnel IDs from swap transaction details
-          const swapDetails = await prisma.swapTransactionDetail.findMany({
-            where: {
-              transactionId: { in: transactionIds },
-              personnelId: { not: null },
-            },
-            select: { personnelId: true },
-          });
-
-          excludedPersonnelIds = swapDetails
-            .map(sd => sd.personnelId)
-            .filter((id): id is string => id !== null);
-        }
+        excludedPersonnelIds = swapDetails
+          .map(sd => sd.personnelId)
+          .filter((id): id is string => id !== null);
       }
     }
 
@@ -97,11 +89,37 @@ export async function GET(request: NextRequest) {
     // Count total (filtered)
     const total = await prisma.policePersonnel.count({ where });
 
-    // Query data page
+    // Query data page with optimized select (only fields we need)
     const personnel = await prisma.policePersonnel.findMany({
       where,
-      include: {
-        posCodeMaster: true,
+      select: {
+        id: true,
+        posCodeId: true,
+        posCodeMaster: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        position: true,
+        positionNumber: true,
+        unit: true,
+        fullName: true,
+        rank: true,
+        nationalId: true,
+        seniority: true,
+        age: true,
+        yearsOfService: true,
+        actingAs: true,
+        trainingCourse: true,
+        birthDate: true,
+        education: true,
+        lastAppointment: true,
+        currentRankSince: true,
+        enrollmentDate: true,
+        retirementDate: true,
+        trainingLocation: true,
+        notes: true,
       },
       orderBy: [
         { posCodeId: 'asc' },

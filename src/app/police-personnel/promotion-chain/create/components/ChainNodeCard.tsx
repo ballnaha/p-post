@@ -188,18 +188,30 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
           )}
         </Box>
 
-        {/* Support Information */}
+        {/* Support Information - Minimal */}
         {node.supporterName && (
-          <Box sx={{ mb: 1.25, p: 1, bgcolor: 'primary.50', borderRadius: 1, borderLeft: '3px solid', borderColor: 'primary.main' }}>
-            <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600, display: 'block' }}>
-              👤 ผู้สนับสนุน
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-              {node.supporterName}
-            </Typography>
+          <Box sx={{ mb: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Chip 
+              label={`ผู้สนับสนุน: ${node.supporterName}`}
+              size="small"
+              icon={<span style={{ fontSize: '0.9rem' }}>⭐</span>}
+              sx={{ 
+                height: 22,
+                fontSize: '0.75rem',
+                bgcolor: 'warning.50',
+                color: 'warning.dark',
+                fontWeight: 600,
+                border: '1px solid',
+                borderColor: 'warning.200',
+                alignSelf: 'flex-start',
+                '& .MuiChip-icon': {
+                  marginLeft: '4px',
+                }
+              }}
+            />
             {node.supportReason && (
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
-                {node.supportReason}
+              <Typography variant="body2" sx={{ color: 'text.primary', pl: 0.5 }}>
+                - {node.supportReason}
               </Typography>
             )}
           </Box>

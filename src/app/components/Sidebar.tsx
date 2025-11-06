@@ -108,16 +108,16 @@ const Sidebar: React.FC = () => {
       title: 'Settings', key: 'group-settings',
       items: [
         { 
-          label: 'Import Data', 
-          href: '/police-personnel/import', 
-          icon: <ImportIcon sx={{ fontSize: 20 }} />, 
-          key: 'police-import' 
-        },
-        { 
           label: 'Personnel List', 
           href: '/police-personnel', 
           icon: <BadgeIcon sx={{ fontSize: 20 }} />, 
           key: 'police-list' 
+        },
+        { 
+          label: 'Import Data', 
+          href: '/police-personnel/import', 
+          icon: <ImportIcon sx={{ fontSize: 20 }} />, 
+          key: 'police-import' 
         },
         
         { 

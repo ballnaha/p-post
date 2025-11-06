@@ -62,6 +62,8 @@ import {
   ChangeHistory as ChangeHistoryIcon,
   MoreVert as MoreVertIcon,
   InfoOutlined as InfoOutlinedIcon,
+  PersonAdd as PersonAddIcon,
+  Star as StarIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useTheme, useMediaQuery } from '@mui/material';
@@ -148,6 +150,7 @@ export default function PolicePersonnelPage() {
   const [positionFilter, setPositionFilter] = useState<'all' | 'occupied' | 'vacant' | 'reserved'>('all');
   const [posCodeFilter, setPosCodeFilter] = useState<string>('all');
   const [unitFilter, setUnitFilter] = useState<string>('all');
+  const [supporterFilter, setSupporterFilter] = useState<'all' | 'with-supporter' | 'no-supporter'>('all');
   const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
   const [units, setUnits] = useState<string[]>([]);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -200,6 +203,13 @@ export default function PolicePersonnelPage() {
   // Menu states
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPersonnel, setMenuPersonnel] = useState<PolicePersonnel | null>(null);
+
+  // Add Supporter states
+  const [addSupporterModalOpen, setAddSupporterModalOpen] = useState(false);
+  const [selectedSupporterPersonnel, setSelectedSupporterPersonnel] = useState<PolicePersonnel | null>(null);
+  const [supporterName, setSupporterName] = useState('');
+  const [supportReason, setSupportReason] = useState('');
+  const [isAddingSupporter, setIsAddingSupporter] = useState(false);
 
   const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, personnel: PolicePersonnel) => {
     setAnchorEl(event.currentTarget);
@@ -421,7 +431,7 @@ export default function PolicePersonnelPage() {
     try {
       const searchParam = nameSearch || search || '';
       const response = await fetch(
-        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}`,
+        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}&supporter=${supporterFilter}`,
         abortSignal ? { signal: abortSignal } : {}
       );
       
@@ -459,7 +469,7 @@ export default function PolicePersonnelPage() {
       clearTimeout(timer);
       abortController.abort();
     };
-  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter]);
+  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter]);
 
   const handleReset = () => {
     setSearch('');
@@ -469,6 +479,7 @@ export default function PolicePersonnelPage() {
     setPositionFilter('all');
     setPosCodeFilter('all');
     setUnitFilter('all');
+    setSupporterFilter('all');
     setPage(0);
   };
 
@@ -487,7 +498,10 @@ export default function PolicePersonnelPage() {
     setPage(0);
   }, []);
 
-
+  const handleSupporterFilterChange = useCallback((value: 'all' | 'with-supporter' | 'no-supporter') => {
+    setSupporterFilter(value);
+    setPage(0);
+  }, []);
 
   const handleViewDetail = useCallback((personnel: PolicePersonnel) => {
     setSelectedPersonnel(personnel);
@@ -595,6 +609,55 @@ export default function PolicePersonnelPage() {
   const handleDeleteCancel = () => {
     setDeleteConfirmOpen(false);
     setSelectedPersonnel(null);
+  };
+
+  // Handler สำหรับ Add Supporter
+  const handleAddSupporter = (personnel: PolicePersonnel) => {
+    setSelectedSupporterPersonnel(personnel);
+    setSupporterName(personnel.supporterName || '');
+    setSupportReason(personnel.supportReason || '');
+    setAddSupporterModalOpen(true);
+  };
+
+  const handleAddSupporterConfirm = async () => {
+    if (!selectedSupporterPersonnel) return;
+
+    setIsAddingSupporter(true);
+    try {
+      const response = await fetch(`/api/police-personnel/${selectedSupporterPersonnel.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supporterName: supporterName || null,
+          supportReason: supportReason || null,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success('บันทึกข้อมูลผู้สนับสนุนสำเร็จ');
+        setAddSupporterModalOpen(false);
+        setSelectedSupporterPersonnel(null);
+        setSupporterName('');
+        setSupportReason('');
+        fetchData();
+      } else {
+        toast.error(result.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      }
+    } catch (error) {
+      console.error('Add supporter error:', error);
+      toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    } finally {
+      setIsAddingSupporter(false);
+    }
+  };
+
+  const handleAddSupporterCancel = () => {
+    setAddSupporterModalOpen(false);
+    setSelectedSupporterPersonnel(null);
+    setSupporterName('');
+    setSupportReason('');
   };
 
   // Handler สำหรับ Add to Swap
@@ -1228,21 +1291,21 @@ export default function PolicePersonnelPage() {
                       />
                     )}
                   </Box>
-                  {person.rank ? (
-                    <Chip
-                      label="มีผู้ดำรง"
-                      color="success"
-                      size="small"
-                      sx={{ fontWeight: 500, fontSize: '0.75rem' }}
-                    />
-                  ) : (
-                    <Chip
-                      label="ว่าง"
-                      color="default"
-                      size="small"
-                      sx={{ fontWeight: 500, fontSize: '0.75rem' }}
-                    />
-                  )}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {person.rank && person.supporterName && (
+                      <Tooltip title="มีผู้สนับสนุน" arrow>
+                        <StarIcon sx={{ fontSize: 20, color: 'warning.main' }} />
+                      </Tooltip>
+                    )}
+                    {!person.rank && (
+                      <Chip
+                        label="ว่าง"
+                        color="default"
+                        size="small"
+                        sx={{ fontWeight: 500, fontSize: '0.75rem' }}
+                      />
+                    )}
+                  </Box>
                 </Box>
 
                 {/* Line 1: ยศ ชื่อ-สกุล */}
@@ -1427,8 +1490,29 @@ export default function PolicePersonnelPage() {
                   />
                 )}
                 
-                {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
+                {/* ปุ่มฝั่งขวา: เพิ่มผู้สนับสนุน + ดูรายละเอียด + Menu */}
                 <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
+                  {person.rank && (
+                    <Tooltip title="เพิ่ม/แก้ไขผู้สนับสนุน" leaveDelay={0} disableFocusListener>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleAddSupporter(person)}
+                        sx={{
+                          border: 1,
+                          borderColor: 'success.main',
+                          borderRadius: 2,
+                          color: 'success.main',
+                          '&:hover': {
+                            bgcolor: 'success.main',
+                            color: 'white',
+                          }
+                        }}
+                      >
+                        <PersonAddIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  
                   <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
                     <IconButton
                       size="small"
@@ -1655,8 +1739,28 @@ export default function PolicePersonnelPage() {
             </FormControl>
           </Box>
 
-          {/* Search */}
-          <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
+          {/* Supporter Filter & Search - New Row */}
+          <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <FormControl size="small" sx={{ 
+              flex: { 
+                xs: '1 1 100%',              // Mobile: full width
+                sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
+                md: '0 1 200px'              // Desktop/iPad landscape: fixed width
+              }, 
+              minWidth: 150 
+            }}>
+              <InputLabel>ผู้สนับสนุน</InputLabel>
+              <Select
+                value={supporterFilter}
+                label="ผู้สนับสนุน"
+                onChange={(e) => handleSupporterFilterChange(e.target.value as 'all' | 'with-supporter' | 'no-supporter')}
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                <MenuItem value="with-supporter">มีผู้สนับสนุน</MenuItem>
+                <MenuItem value="no-supporter">ไม่มีผู้สนับสนุน</MenuItem>
+              </Select>
+            </FormControl>
+
             {/* ช่องค้นหาหลัก */}
             <TextField
               size="small"
@@ -1796,11 +1900,16 @@ export default function PolicePersonnelPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {row.rank ? (
-                          <Chip label="มีผู้ดำรง" color="success" size="small" />
-                        ) : (
-                          <Chip label="ว่าง" color="default" size="small" />
-                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {row.rank && row.supporterName && (
+                            <Tooltip title="มีผู้สนับสนุน" arrow>
+                              <StarIcon sx={{ fontSize: 18, color: 'warning.main' }} />
+                            </Tooltip>
+                          )}
+                          {!row.rank && (
+                            <Chip label="ว่าง" color="default" size="small" />
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
@@ -1832,8 +1941,29 @@ export default function PolicePersonnelPage() {
                             />
                           )}
                           
-                          {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
+                          {/* ปุ่มฝั่งขวา: เพิ่มผู้สนับสนุน + ดูรายละเอียด + Menu */}
                           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
+                            {row.rank && (
+                              <Tooltip title="เพิ่ม/แก้ไขผู้สนับสนุน" leaveDelay={0} disableFocusListener>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleAddSupporter(row)}
+                                  sx={{
+                                    border: 1,
+                                    borderColor: 'success.main',
+                                    borderRadius: 1,
+                                    color: 'success.main',
+                                    '&:hover': {
+                                      bgcolor: 'success.main',
+                                      color: 'white',
+                                    }
+                                  }}
+                                >
+                                  <PersonAddIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            
                             <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
                               <IconButton
                                 size="small"
@@ -2434,6 +2564,176 @@ export default function PolicePersonnelPage() {
               startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : null}
             >
               {isDeleting ? 'กำลังลบ...' : 'ลบ'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Add Supporter Dialog */}
+        <Dialog 
+          key={`supporter-${addSupporterModalOpen}-${isMobile}`}
+          open={addSupporterModalOpen} 
+          onClose={handleAddSupporterCancel} 
+          maxWidth="sm" 
+          fullWidth
+          fullScreen={isMobile}
+          TransitionProps={{
+            timeout: 0,
+          }}
+          sx={{
+            '& .MuiDialog-root': {
+              zIndex: '20000 !important',
+            },
+            '& .MuiDialog-container': {
+              zIndex: '20000 !important',
+            },
+            '& .MuiDialog-paper': {
+              zIndex: '20000 !important',
+              position: 'relative',
+            },
+            '& .MuiBackdrop-root': {
+              zIndex: '19999 !important',
+            },
+            zIndex: '20000 !important',
+            position: 'fixed',
+          }}
+          PaperProps={{
+            sx: {
+              width: { xs: '100%', sm: '600px' },
+              height: { xs: '100%', md: 'auto' },
+              maxHeight: { xs: '100%', md: '90vh' },
+              margin: { xs: 0, sm: '32px' },
+              borderRadius: { xs: 0, sm: 1 },
+              display: 'flex',
+              flexDirection: 'column'
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            py: 1.5,
+            px: 2,
+            flexShrink: 0
+          }}>
+            <PersonAddIcon color="success" fontSize="small" />
+            <Box component="span" sx={{ fontWeight: 600, fontSize: '1.25rem' }}>
+              เพิ่ม/แก้ไขผู้สนับสนุน
+            </Box>
+          </DialogTitle>
+          
+          <DialogContent sx={{ 
+            flex: 1,
+            overflow: 'auto',
+            p: { xs: 2, md: 3 },
+            backgroundColor: 'grey.50'
+          }}>
+            <Stack spacing={2}>
+              {/* แสดงข้อมูลบุคลากรที่เลือก */}
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: 'grey.50', 
+                borderRadius: 1,
+                border: 1,
+                borderColor: 'grey.200'
+              }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  บุคลากรที่เลือก
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                  {selectedSupporterPersonnel?.rank} {selectedSupporterPersonnel?.fullName}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  ตำแหน่ง: {selectedSupporterPersonnel?.position || '-'}
+                </Typography>
+                {selectedSupporterPersonnel?.posCodeMaster && (
+                  <Typography variant="body2" color="text.secondary">
+                    รหัสตำแหน่ง: {selectedSupporterPersonnel.posCodeMaster.id} - {selectedSupporterPersonnel.posCodeMaster.name}
+                  </Typography>
+                )}
+                <Typography variant="body2" color="text.secondary">
+                  หน่วย: {selectedSupporterPersonnel?.unit || '-'}
+                </Typography>
+                
+                {/* แสดงข้อมูลเพิ่มเติม: อายุ, จำนวนปี, นรต. */}
+                <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider', display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  {selectedSupporterPersonnel?.age && (
+                    <Typography variant="body2" color="text.secondary">
+                      อายุ: {selectedSupporterPersonnel.age}
+                    </Typography>
+                  )}
+                  {selectedSupporterPersonnel?.yearsOfService && (
+                    <Typography variant="body2" color="text.secondary">
+                      จำนวนปี: {selectedSupporterPersonnel.yearsOfService}
+                    </Typography>
+                  )}
+                  {selectedSupporterPersonnel?.trainingCourse && (
+                    <Typography variant="body2" color="text.secondary">
+                      นรต.{selectedSupporterPersonnel.trainingCourse}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+
+              {/* ชื่อผู้สนับสนุน */}
+              <TextField
+                fullWidth
+                label="ชื่อผู้สนับสนุน/ผู้เสนอชื่อ"
+                value={supporterName}
+                onChange={(e) => setSupporterName(e.target.value)}
+                placeholder="ระบุชื่อผู้สนับสนุน..."
+                size="medium"
+              />
+
+              {/* เหตุผลในการสนับสนุน */}
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                label="เหตุผลในการสนับสนุน"
+                value={supportReason}
+                onChange={(e) => setSupportReason(e.target.value)}
+                placeholder="ระบุเหตุผลในการสนับสนุน..."
+                size="medium"
+              />
+            </Stack>
+          </DialogContent>
+          
+          <DialogActions sx={{ 
+            p: 2,
+            borderTop: 1, 
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            gap: 1,
+            flexShrink: 0
+          }}>
+            <Button 
+              onClick={handleAddSupporterCancel} 
+              variant="outlined" 
+              size="medium"
+              disabled={isAddingSupporter}
+              sx={{ 
+                minWidth: 100,
+                borderRadius: 1.5
+              }}
+            >
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleAddSupporterConfirm} 
+              variant="contained" 
+              color="success"
+              size="medium"
+              disabled={isAddingSupporter}
+              startIcon={isAddingSupporter ? <CircularProgress size={20} color="inherit" /> : <PersonAddIcon />}
+              sx={{ 
+                minWidth: 120,
+                borderRadius: 1.5
+              }}
+            >
+              {isAddingSupporter ? 'กำลังบันทึก...' : 'บันทึก'}
             </Button>
           </DialogActions>
         </Dialog>

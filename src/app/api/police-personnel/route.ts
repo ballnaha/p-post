@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const rankFilter = searchParams.get('rank') || 'all';
     const swapFilter = searchParams.get('swapFilter') || 'all';
     const posCodeFilter = searchParams.get('posCode') || 'all';
+    const supporterFilter = searchParams.get('supporter') || 'all';
 
     const skip = (page - 1) * limit;
 
@@ -99,6 +100,41 @@ export async function GET(request: NextRequest) {
         } else {
           where.AND = [{ posCodeId: { equals: posCodeId } }];
         }
+      }
+    }
+    
+    // เพิ่ม supporter filter
+    if (supporterFilter === 'with-supporter') {
+      if (where.AND) {
+        where.AND.push({
+          AND: [
+            { supporterName: { not: null } },
+            { supporterName: { not: '' } }
+          ]
+        });
+      } else {
+        where.AND = [{
+          AND: [
+            { supporterName: { not: null } },
+            { supporterName: { not: '' } }
+          ]
+        }];
+      }
+    } else if (supporterFilter === 'no-supporter') {
+      if (where.AND) {
+        where.AND.push({
+          OR: [
+            { supporterName: { equals: null } },
+            { supporterName: { equals: '' } }
+          ]
+        });
+      } else {
+        where.AND = [{
+          OR: [
+            { supporterName: { equals: null } },
+            { supporterName: { equals: '' } }
+          ]
+        }];
       }
     }
     

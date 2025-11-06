@@ -11,6 +11,8 @@ import {
   Stack,
   Divider,
   IconButton,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -65,6 +67,8 @@ interface PolicePersonnel {
 
 export default function AddThreeWaySwapPage() {
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [swappedPersonnelIds, setSwappedPersonnelIds] = useState<Set<string>>(new Set());
@@ -688,39 +692,50 @@ export default function AddThreeWaySwapPage() {
           {/* Actions - Sticky Footer */}
           <Paper 
             sx={{ 
-              p: 2.5, 
+              p: { xs: 1.5, sm: 2.5 }, 
               position: 'sticky', 
               bottom: 0, 
               zIndex: 10,
               display: 'flex', 
-              gap: 2, 
+              gap: { xs: 1, sm: 2 },
+              flexDirection: { xs: 'column', sm: 'row' },
               justifyContent: 'space-between',
-              alignItems: 'center',
+              alignItems: { xs: 'stretch', sm: 'center' },
               boxShadow: '0 -4px 12px rgba(0,0,0,0.08)',
               bgcolor: 'background.paper',
             }}
           >
-            <Box>
+            <Box sx={{ mb: { xs: 1, sm: 0 } }}>
               {personnelA && personnelB && personnelC ? (
                 <>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" fontWeight={600} sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
                     {canSwap ? '✓ พร้อมบันทึก' : '⚠ ยังไม่สมบูรณ์'}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
                     สลับสามเส้า: {personnelA.fullName} → {personnelB.fullName} → {personnelC.fullName}
                   </Typography>
                 </>
               ) : (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
                   {!personnelA ? 'เลือกบุคลากร A เพื่อเริ่มต้น' : !personnelB ? 'เลือกบุคลากร B' : 'เลือกบุคลากร C'}
                 </Typography>
               )}
             </Box>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              gap: { xs: 1, sm: 2 },
+              flexDirection: { xs: 'column-reverse', sm: 'row' },
+              width: { xs: '100%', sm: 'auto' }
+            }}>
               <Button
                 variant="outlined"
                 onClick={() => router.back()}
                 disabled={loading}
+                fullWidth={isMobile}
+                sx={{ 
+                  minHeight: { xs: '44px', sm: 'auto' },
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }}
               >
                 ยกเลิก
               </Button>
@@ -728,9 +743,15 @@ export default function AddThreeWaySwapPage() {
                 type="submit"
                 variant="contained"
                 color="warning"
-                size="large"
+                size={isMobile ? 'medium' : 'large'}
                 startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
                 disabled={loading || !canSwap}
+                fullWidth={isMobile}
+                sx={{ 
+                  minHeight: { xs: '48px', sm: 'auto' },
+                  fontSize: { xs: '0.875rem', md: '1rem' },
+                  fontWeight: 600
+                }}
               >
                 {loading ? 'กำลังบันทึก...' : 'บันทึกผลการสลับสามเส้า'}
               </Button>

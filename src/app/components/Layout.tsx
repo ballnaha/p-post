@@ -15,6 +15,21 @@ interface LayoutProps {
 const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, customSidebar }) => {
   const { isMobile, isSidebarOpen, isSidebarCollapsed, closeAllMenus } = useNavigation();
   
+  // Force re-render and reset scroll when mobile state changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Reset any stuck scroll locks
+      if (!isSidebarOpen || !isMobile) {
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [isMobile, isSidebarOpen]);
+  
   // คำนวณ margin สำหรับ desktop (รวม custom sidebar)
   const getMarginLeft = () => {
     if (isMobile) return 0; // Mobile ไม่มี margin
@@ -29,6 +44,13 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
       height: '100vh', 
       overflow: 'hidden',
       position: 'relative',
+      // Mobile fixes
+      ...(isMobile && {
+        height: '100vh',
+        minHeight: '-webkit-fill-available',
+        overflow: 'hidden',
+        touchAction: 'manipulation',
+      }),
     }}>
       {/* Backdrop: Removed to avoid duplicate overlays; Drawer provides its own backdrop on mobile. */}
 
@@ -46,6 +68,13 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
         ml: getMarginLeft(),
         minWidth: 0, // ป้องกัน overflow ใน mobile
         overflow: 'hidden', // ป้องกัน horizontal scroll
+        // Mobile fixes
+        ...(isMobile && {
+          ml: 0,
+          overflow: 'hidden',
+          height: '100vh',
+          minHeight: '-webkit-fill-available',
+        }),
       }}>
         <Header />
         
@@ -59,6 +88,16 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
             pt: { xs: '56px', sm: '64px' },
             // เพิ่ม webkit scrolling สำหรับ iOS
             WebkitOverflowScrolling: 'touch',
+            // Mobile-specific fixes
+            ...(isMobile && {
+              overflow: 'auto !important',
+              overflowX: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              touchAction: 'pan-y',
+              height: 'calc(100vh - 56px)',
+              minHeight: 'calc(-webkit-fill-available - 56px)',
+              position: 'relative',
+            }),
           }}
         >
           {/* Breadcrumbs */}

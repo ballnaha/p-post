@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Box, Paper, Typography, Button, Chip, CircularProgress, alpha } from '@mui/material';
+import { Box, Paper, Typography, Button, Chip, CircularProgress, alpha, useMediaQuery, useTheme } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Check as CheckIcon, Warning as WarningIcon } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
@@ -73,6 +73,8 @@ interface VacantPosition {
 function CreatePromotionChainContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const vacantId = searchParams.get('vacantId');
   const toast = useToast();
 
@@ -357,49 +359,66 @@ function CreatePromotionChainContent() {
             {/* Actions - Sticky Footer */}
             <Paper 
               sx={{ 
-                p: 2.5, 
+                p: { xs: 1.5, sm: 2.5 }, 
                 position: 'sticky', 
                 bottom: 0, 
                 zIndex: 10,
                 display: 'flex', 
-                gap: 2, 
+                gap: { xs: 1, sm: 2 },
+                flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: { xs: 'stretch', sm: 'center' },
                 boxShadow: '0 -4px 12px rgba(0,0,0,0.08)',
                 bgcolor: 'background.paper',
               }}
             >
-              <Box>
+              <Box sx={{ mb: { xs: 1, sm: 0 } }}>
                 {nodes.length > 0 ? (
                   <>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography variant="body2" fontWeight={600} sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
                       {isChainValid ? '✓ พร้อมบันทึก' : '⚠ ยังไม่สมบูรณ์'}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
                       {nodes.length} ขั้นในโซ่
                     </Typography>
                   </>
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
                     เริ่มสร้างโซ่ด้วยการเลือกผู้สมัคร
                   </Typography>
                 )}
               </Box>
-              <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                gap: { xs: 1, sm: 2 },
+                flexDirection: { xs: 'column-reverse', sm: 'row' },
+                width: { xs: '100%', sm: 'auto' }
+              }}>
                 <Button
                   variant="outlined"
                   onClick={() => router.push('/police-personnel/promotion-chain')}
                   disabled={saving}
+                  fullWidth={isMobile}
+                  sx={{ 
+                    minHeight: { xs: '44px', sm: 'auto' },
+                    fontSize: { xs: '0.875rem', md: '1rem' }
+                  }}
                 >
                   ยกเลิก
                 </Button>
                 <Button
                   variant="contained"
                   color="primary"
-                  size="large"
+                  size={isMobile ? 'medium' : 'large'}
                   startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
                   onClick={handleSave}
                   disabled={!isChainValid || saving || nodes.length === 0}
+                  fullWidth={isMobile}
+                  sx={{ 
+                    minHeight: { xs: '48px', sm: 'auto' },
+                    fontSize: { xs: '0.875rem', md: '1rem' },
+                    fontWeight: 600
+                  }}
                 >
                   {saving ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
                 </Button>

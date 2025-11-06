@@ -110,6 +110,9 @@ body {
   background: #f5f7fa;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Fix for mobile scroll issues */
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
 }
 
 
@@ -130,6 +133,9 @@ a {
 html {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  /* Fix iOS 100vh issue */
+  height: 100%;
+  height: -webkit-fill-available;
 }
 
 /* Fix for iOS scroll issues */
@@ -138,6 +144,9 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* Additional mobile fixes */
+  height: 100%;
+  height: -webkit-fill-available;
 }
 
 a {
@@ -180,5 +189,86 @@ input[type="number"] {
 input[type="number"]:focus {
   appearance: textfield;
   -moz-appearance: textfield;
+}
+
+/* Mobile scroll fixes */
+@media (max-width: 768px) {
+  html {
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+  }
+  
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    touch-action: manipulation;
+  }
+  
+  /* Fix for iOS viewport height */
+  #__next,
+  main {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+  
+  /* Force scrolling on main content area */
+  main {
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+  }
+  
+  /* Ensure containers allow scrolling */
+  .MuiContainer-root,
+  .MuiBox-root {
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+  
+  /* Fix for modal/dialog scrolling */
+  .MuiModal-root,
+  .MuiDialog-root {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Fix for table scrolling on mobile */
+  .MuiTableContainer-root {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Additional mobile scroll fixes */
+  [data-mui-internal-clone-element] {
+    overflow: visible !important;
+  }
+}
+
+/* Fix for iOS Safari 100vh issue */
+@supports (-webkit-touch-callout: none) {
+  html {
+    height: -webkit-fill-available;
+  }
+  
+  body {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Force scroll reset after layout changes */
+.force-scroll-reset {
+  overflow: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  height: auto !important;
+  position: relative !important;
+}
+
+/* Ensure scroll works after state changes */
+body:not([style*="position: fixed"]) {
+  overflow-y: auto !important;
+  position: relative !important;
 }
 

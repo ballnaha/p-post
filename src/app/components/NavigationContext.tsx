@@ -71,6 +71,20 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
       // On mobile, always close sidebar when switching to mobile view
       setIsSidebarOpen(false);
       setIsSidebarCollapsed(false);
+      
+      // Force reset body styles when switching to mobile
+      if (!prevIsMobile) {
+        // Switching from desktop to mobile
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        
+        // Force layout recalculation
+        setTimeout(() => {
+          window.dispatchEvent(new Event('resize'));
+        }, 100);
+      }
     } else {
       // On desktop, sidebar แสดงเสมอ (isSidebarOpen = true) แต่ควบคุมการแสดงผลด้วย isSidebarCollapsed
       setIsSidebarOpen(true); // Desktop: sidebar แสดงเสมอ
@@ -81,6 +95,15 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
         setIsSidebarCollapsed(JSON.parse(savedCollapsed));
       } else {
         setIsSidebarCollapsed(true); // Default: collapsed (mini icon)
+      }
+      
+      // Force reset body styles when switching to desktop
+      if (prevIsMobile) {
+        // Switching from mobile to desktop
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
       }
     }
     // Update ref
@@ -107,14 +130,13 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
         document.body.style.top = '';
         window.scrollTo(0, parseInt(scrollY || '0') * -1);
       };
-    }
-    // ถ้าไม่ใช่เงื่อนไข lock ให้ปลด lock เสมอ
-    return () => {
+    } else {
+      // ถ้าไม่ใช่เงื่อนไข lock ให้ปลด lock เสมอ และรีเซ็ต style
       document.body.style.overflow = '';
       document.body.style.position = '';
       document.body.style.width = '';
       document.body.style.top = '';
-    };
+    }
   }, [isMobile, isSidebarOpen]);
 
   const toggleNavigation = useCallback(() => {

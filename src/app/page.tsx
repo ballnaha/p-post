@@ -133,6 +133,31 @@ export default function HomePage() {
   const [selectedUnit, setSelectedUnit] = useState<string>('all'); // filter ทั้งหน้า dashboard
   const [availableYears, setAvailableYears] = useState<number[]>([]);
 
+  // Prevent scroll when loading on mobile
+  useEffect(() => {
+    if (loading) {
+      // เช็คว่าเป็น mobile หรือไม่
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        // เก็บ scroll position ปัจจุบัน
+        const scrollY = window.scrollY;
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.top = `-${scrollY}px`;
+        
+        return () => {
+          // คืนค่า scroll position เมื่อเสร็จ loading
+          document.body.style.overflow = '';
+          document.body.style.position = '';
+          document.body.style.width = '';
+          document.body.style.top = '';
+          window.scrollTo(0, scrollY);
+        };
+      }
+    }
+  }, [loading]);
+
   // Generate available years
   useEffect(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
@@ -425,14 +450,19 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <Layout>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          minHeight: '80vh',
-          position: 'relative'
-        }}>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        width: '100vw',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bgcolor: '#f5f7fa',
+        zIndex: 9999,
+        overflow: 'hidden',
+      }}>
           <Stack 
             direction="column"
             alignItems="center"
@@ -446,16 +476,7 @@ export default function HomePage() {
             }}
           >
             <Box sx={{ position: 'relative' }}>
-              <CircularProgress 
-                size={60}
-                thickness={4}
-                sx={{
-                  color: '#1DE9B6',
-                  '& .MuiCircularProgress-circle': {
-                    strokeLinecap: 'round',
-                  }
-                }}
-              />
+              
               <Box
                 sx={{
                   position: 'absolute',
@@ -470,8 +491,8 @@ export default function HomePage() {
               >
                 <Box
                   sx={{
-                    width: 40,
-                    height: 40,
+                    width: 30,
+                    height: 30,
                     borderRadius: '50%',
                     bgcolor: 'rgba(29, 233, 182, 0.1)',
                   }}
@@ -491,7 +512,6 @@ export default function HomePage() {
             </Typography>
           </Stack>
         </Box>
-      </Layout>
     );
   }
 
@@ -502,8 +522,9 @@ export default function HomePage() {
           display: 'flex', 
           justifyContent: 'center', 
           alignItems: 'center', 
-          minHeight: '60vh',
-          p: 3
+          minHeight: 'calc(100vh - 120px)',
+          p: 3,
+          overflow: 'hidden',
         }}>
           <Alert 
             severity="error"
@@ -536,8 +557,9 @@ export default function HomePage() {
           display: 'flex', 
           justifyContent: 'center', 
           alignItems: 'center', 
-          minHeight: '60vh',
-          p: 3
+          minHeight: 'calc(100vh - 120px)',
+          p: 3,
+          overflow: 'hidden',
         }}>
           <Alert 
             severity="info"
@@ -716,7 +738,7 @@ export default function HomePage() {
           <Card
             sx={{
               position: 'relative',
-              borderRadius: 3,
+              borderRadius: 2,
               p: 0,
               background: 'linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)',
               color: 'common.white',
@@ -853,7 +875,7 @@ export default function HomePage() {
           <Card
             sx={{
               position: 'relative',
-              borderRadius: 3,
+              borderRadius: 2,
               p: 0,
               background: 'linear-gradient(135deg, #42a5f5 0%, #64b5f6 100%)',
               color: 'common.white',
@@ -965,7 +987,7 @@ export default function HomePage() {
           <Card
             sx={{
               position: 'relative',
-              borderRadius: 3,
+              borderRadius: 2,
               p: 0,
               background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
               color: 'common.white',
@@ -1077,7 +1099,7 @@ export default function HomePage() {
 
         {/* Bar Chart: Vacant Positions vs Applicants */}
         <Paper sx={{ 
-          borderRadius: 3, 
+          borderRadius: 2, 
           mb: 4, 
           overflow: 'hidden', 
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
@@ -1228,7 +1250,7 @@ export default function HomePage() {
         {/* Details by Position Table */}
         {stats.positionDetails && stats.positionDetails.length > 0 && (
           <Paper sx={{ 
-            borderRadius: 3, 
+            borderRadius: 2, 
             mb: 4, 
             overflow: 'hidden', 
             boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
@@ -1284,7 +1306,7 @@ export default function HomePage() {
               </Typography>
             </Box>
             <TableContainer sx={{ bgcolor: 'white', maxHeight: 600 }}>
-              <Table sx={{ '& .MuiTableCell-root': { px: 1.5 } }}>
+              <Table sx={{ '& .MuiTableCell-root': { px: 5 } }}>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#FAFAFA' }}>
                     <TableCell sx={{ 
@@ -1506,7 +1528,7 @@ export default function HomePage() {
           {/* Top Positions with Most Applicants */}
           {stats.topRequestedPositions && stats.topRequestedPositions.length > 0 && (
             <Card sx={{ 
-              borderRadius: 3, 
+              borderRadius: 2, 
               boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               border: '1px solid',
               borderColor: 'divider',
@@ -1644,7 +1666,7 @@ export default function HomePage() {
           {/* Positions with Most Vacancies */}
           {stats.positionDetails && stats.positionDetails.length > 0 && (
             <Card sx={{ 
-              borderRadius: 3, 
+              borderRadius: 2, 
               boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               border: '1px solid',
               borderColor: 'divider',

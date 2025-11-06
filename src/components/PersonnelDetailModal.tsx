@@ -116,7 +116,7 @@ export default function PersonnelDetailModal({
   onClearData
 }: PersonnelDetailModalProps) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleClose = () => {
     onClose();
@@ -130,6 +130,7 @@ export default function PersonnelDetailModal({
 
   return (
     <Dialog 
+      key={`${open}-${isMobile}`} // Force re-render when mobile state changes
       open={open} 
       onClose={handleClose}
       maxWidth="md"
@@ -144,10 +145,10 @@ export default function PersonnelDetailModal({
       PaperProps={{
         sx: {
           width: { xs: '100%' },
-          height: { xs: '100%', sm: 'auto' },
-          maxHeight: { xs: '100%', sm: '90vh' },
-          margin: { xs: 0, sm: '32px' },
-          borderRadius: { xs: 0, sm: 1 },
+          height: { xs: '100%', md: 'auto' },
+          maxHeight: { xs: '100%', md: '90vh' },
+          margin: { xs: 0, md: '32px' },
+          borderRadius: { xs: 0, md: 1 },
           display: 'flex',
           flexDirection: 'column'
         }
@@ -178,11 +179,24 @@ export default function PersonnelDetailModal({
       </DialogTitle>
       
       <DialogContent sx={{ 
-        p: { xs: 1.5, sm: 2 }, 
+        p: { xs: 1.5, md: 2 }, 
         mt: 2,
         flex: 1,
         overflow: 'auto',
-        minHeight: 0
+        minHeight: 0,
+        '&::-webkit-scrollbar': {
+          width: '8px',
+        },
+        '&::-webkit-scrollbar-track': {
+          background: 'transparent',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: '#ccc',
+          borderRadius: '4px',
+        },
+        '&::-webkit-scrollbar-thumb:hover': {
+          background: '#999',
+        },
       }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
@@ -358,8 +372,8 @@ export default function PersonnelDetailModal({
       </DialogContent>
       
       <DialogActions sx={{ 
-        px: { xs: 1.5, sm: 2 }, 
-        py: { xs: 2, sm: 1.5 }, 
+        px: { xs: 1.5, md: 2 }, 
+        py: { xs: 2, md: 1.5 }, 
         bgcolor: 'grey.50', 
         borderTop: 1, 
         borderColor: 'divider',
@@ -371,9 +385,9 @@ export default function PersonnelDetailModal({
           variant="contained" 
           size="medium" 
           sx={{ 
-            minWidth: { xs: '100%', sm: 100 }, 
+            minWidth: { xs: '100%', md: 100 }, 
             fontWeight: 600,
-            py: { xs: 1.5, sm: 1 }
+            py: { xs: 1.5, md: 1 }
           }}
         >
           ปิด

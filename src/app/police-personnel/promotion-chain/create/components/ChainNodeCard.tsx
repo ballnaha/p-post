@@ -15,6 +15,10 @@ interface ChainNode {
   rank: string; // police_personnel.rank
   seniority?: string; // police_personnel.seniority
   
+  // Support information
+  supporterName?: string;
+  supportReason?: string;
+  
   // ข้อมูลตำแหน่งเดิม (From Position)
   fromPosCodeId: number; // police_personnel.posCodeId
   fromPosCodeName?: string; // posCodeMaster.name
@@ -183,6 +187,23 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
             />
           )}
         </Box>
+
+        {/* Support Information */}
+        {node.supporterName && (
+          <Box sx={{ mb: 1.25, p: 1, bgcolor: 'primary.50', borderRadius: 1, borderLeft: '3px solid', borderColor: 'primary.main' }}>
+            <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600, display: 'block' }}>
+              👤 ผู้สนับสนุน
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+              {node.supporterName}
+            </Typography>
+            {node.supportReason && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
+                {node.supportReason}
+              </Typography>
+            )}
+          </Box>
+        )}
 
         {/* Position Movement - Compact Flow */}
         <Box sx={{ 

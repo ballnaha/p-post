@@ -110,6 +110,9 @@ interface SwapDetail {
   seniority?: string | null;
   trainingLocation?: string | null;
   trainingCourse?: string | null;
+  // ข้อมูลผู้สนับสนุน
+  supportName?: string | null;
+  supportReason?: string | null;
 }
 
 interface TransactionChain {
@@ -172,6 +175,8 @@ interface PolicePersonnel {
   trainingCourse?: string;
   actingAs?: string;
   notes?: string;
+  supporterName?: string;
+  supportReason?: string;
 }
 
 export default function PromotionChainPage() {
@@ -585,6 +590,9 @@ export default function PromotionChainPage() {
             seniority: detail.seniority || undefined,
             trainingLocation: detail.trainingLocation || undefined,
             trainingCourse: detail.trainingCourse || undefined,
+            // ข้อมูลผู้สนับสนุน
+            supporterName: detail.supportName || undefined,
+            supportReason: detail.supportReason || undefined,
           };
           break;
         }

@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Button, TextField, InputAdornment, Box, Typography, CircularProgress, Paper, IconButton, Divider, FormControl, Select, MenuItem, SelectChangeEvent, Chip, Collapse, Stack, Pagination, Skeleton, useMediaQuery, useTheme, Badge } from '@mui/material';
-import { Search as SearchIcon, Close as CloseIcon, FilterList as FilterListIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Person as PersonIcon, Badge as BadgeIcon, CalendarToday as CalendarIcon, School as EducationIcon } from '@mui/icons-material';
+import { Drawer, Button, TextField, InputAdornment, Box, Typography, CircularProgress, Paper, IconButton, Divider, FormControl, Select, MenuItem, SelectChangeEvent, Chip, Collapse, Stack, Pagination, Skeleton, useMediaQuery, useTheme, Badge, Tooltip } from '@mui/material';
+import { Search as SearchIcon, Close as CloseIcon, FilterList as FilterListIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Person as PersonIcon, Badge as BadgeIcon, CalendarToday as CalendarIcon, School as EducationIcon, Star as StarIcon } from '@mui/icons-material';
 // DataTablePagination removed in favor of MUI Pagination for consistency
 
 // Types - ตรงกับ PolicePersonnel schema
@@ -39,6 +39,10 @@ interface SwapListPerson {
   // ข้อมูลการฝึกอบรม
   trainingCourse?: string; // police_personnel.trainingCourse
   trainingLocation?: string | null;
+  
+  // ข้อมูลการเสนอชื่อ
+  supporterName?: string; // police_personnel.supporterName
+  supportReason?: string; // police_personnel.supportReason
   
   // Notes
   notes?: string | null;
@@ -86,6 +90,7 @@ export default function CandidateSelector({
   const [selectedCandidate, setSelectedCandidate] = useState<SwapListPerson | null>(null);
   const [filterUnit, setFilterUnit] = useState<string>('all');
   const [filterPosCode, setFilterPosCode] = useState<string>('all'); // Filter posCodeId
+  const [filterSupporter, setFilterSupporter] = useState<string>('all'); // Filter by supporter status
   const [posCodeOptions, setPosCodeOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [showFilters, setShowFilters] = useState(false);  // Drilldown state - เก็บ ID ของ candidate ที่ถูกขยาย
   const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
@@ -118,6 +123,7 @@ export default function CandidateSelector({
       setSelectedCandidate(null);
       setExpandedCandidateId(null);
       setFilterPosCode('all');
+      setFilterSupporter('all');
       setPage(0);
       
       // Set loading states FIRST to prevent other useEffects from triggering
@@ -141,6 +147,7 @@ export default function CandidateSelector({
                 const params = new URLSearchParams();
                 if (initialUnit && initialUnit !== 'all') params.set('unit', initialUnit);
                 params.set('posCodeId', 'all');
+                params.set('supporter', 'all');
                 params.set('page', '0');
                 params.set('limit', rowsPerPage.toString());
 
@@ -219,6 +226,7 @@ export default function CandidateSelector({
   const loadCandidatesWithFilter = async (
     unit: string, 
     posCode: string, 
+    supporter: string,
     search: string, 
     currentPage: number, 
     pageSize: number
@@ -230,6 +238,7 @@ export default function CandidateSelector({
       if (search) params.set('search', search);
       if (unit && unit !== 'all') params.set('unit', unit);
       if (posCode && posCode !== 'all') params.set('posCodeId', posCode);
+      if (supporter && supporter !== 'all') params.set('supporter', supporter);
       params.set('page', currentPage.toString());
       params.set('limit', pageSize.toString());
       
@@ -263,6 +272,7 @@ export default function CandidateSelector({
     await loadCandidatesWithFilter(
       filterUnit, 
       filterPosCode, 
+      filterSupporter,
       debouncedSearchTerm, 
       page, 
       rowsPerPage
@@ -352,14 +362,14 @@ export default function CandidateSelector({
     if (!initialLoading) {
       setPage(0);
     }
-  }, [debouncedSearchTerm, filterUnit, filterPosCode, initialLoading]);
+  }, [debouncedSearchTerm, filterUnit, filterPosCode, filterSupporter, initialLoading]);
 
   // Fetch when paging or filters change (but not during initial loading)
   useEffect(() => {
     if (open && !initialLoading) {
       loadCandidates();
     }
-  }, [page, rowsPerPage, debouncedSearchTerm, filterUnit, filterPosCode, open, initialLoading]);
+  }, [page, rowsPerPage, debouncedSearchTerm, filterUnit, filterPosCode, filterSupporter, open, initialLoading]);
 
   const handleSelect = () => {
     if (selectedCandidate) {
@@ -575,10 +585,11 @@ export default function CandidateSelector({
               <Badge 
                 badgeContent={
                   (filterUnit !== 'all' ? 1 : 0) + 
-                  (filterPosCode !== 'all' ? 1 : 0)
+                  (filterPosCode !== 'all' ? 1 : 0) +
+                  (filterSupporter !== 'all' ? 1 : 0)
                 } 
                 color="primary"
-                invisible={filterUnit === 'all' && filterPosCode === 'all'}
+                invisible={filterUnit === 'all' && filterPosCode === 'all' && filterSupporter === 'all'}
               >
                 <IconButton 
                   onClick={() => setShowFilters(!showFilters)}
@@ -707,6 +718,54 @@ export default function CandidateSelector({
                     ))}
                 </Select>
               </FormControl>
+
+              <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
+                <Select
+                  value={filterSupporter}
+                  onChange={(e: SelectChangeEvent) => setFilterSupporter(e.target.value)}
+                  displayEmpty
+                  renderValue={(selected) => {
+                    if (selected === 'all') {
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <FilterListIcon fontSize="small" />
+                          <Typography variant="body2">ทุกคน</Typography>
+                        </Box>
+                      );
+                    }
+                    const labels = {
+                      'with-supporter': 'มีผู้สนับสนุน',
+                      'without-supporter': 'ไม่มีผู้สนับสนุน'
+                    };
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <FilterListIcon fontSize="small" />
+                        <Typography variant="body2" noWrap>
+                          {labels[selected as keyof typeof labels] || selected}
+                        </Typography>
+                      </Box>
+                    );
+                  }}
+                  MenuProps={{
+                    disablePortal: true,
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 300,
+                      }
+                    },
+                  }}
+                >
+                  <MenuItem value="all">
+                    <Typography variant="body2">ทุกคน</Typography>
+                  </MenuItem>
+                  <MenuItem value="with-supporter">
+                    <Typography variant="body2">มีผู้สนับสนุน</Typography>
+                  </MenuItem>
+                  <MenuItem value="without-supporter">
+                    <Typography variant="body2">ไม่มีผู้สนับสนุน</Typography>
+                  </MenuItem>
+                </Select>
+              </FormControl>
             </Box>
           </Collapse>
           
@@ -826,8 +885,39 @@ export default function CandidateSelector({
 
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25, flexWrap: 'wrap' }}>
-                      <Typography variant="body1" fontWeight={700} sx={{ color: 'text.primary' }}>
+                      <Typography variant="body1" fontWeight={700} sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         {candidate.rank} {candidate.fullName}
+                        {(candidate.supporterName || candidate.supportReason) && (
+                          <Tooltip 
+                            title="มีผู้สนับสนุน"
+                            arrow
+                            placement="top"
+                            enterDelay={300}
+                            leaveDelay={100}
+                            PopperProps={{
+                              sx: {
+                                zIndex: 10002, // สูงกว่า Drawer
+                              }
+                            }}
+                          >
+                            <Box
+                              component="span"
+                              sx={{ 
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                cursor: 'help'
+                              }}
+                            >
+                              <StarIcon 
+                                sx={{ 
+                                  fontSize: 18, 
+                                  color: 'warning.main',
+                                  filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))'
+                                }} 
+                              />
+                            </Box>
+                          </Tooltip>
+                        )}
                       </Typography>
                       {candidate.age && candidate.age !== '-' && (
                         <Chip 
@@ -1068,6 +1158,38 @@ export default function CandidateSelector({
                               </Box>
                             )}
                           </Box>
+                        </Box>
+                      </Box>
+                    )}
+
+                    {/* ข้อมูลการเสนอชื่อ/ผู้สนับสนุน */}
+                    {(candidate.supporterName || candidate.supportReason) && (
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                          <PersonIcon fontSize="small" color="success" />
+                          <Typography variant="subtitle2" fontWeight={600} color="success.main">
+                            ข้อมูลการเสนอชื่อ
+                          </Typography>
+                        </Box>
+                        <Box sx={{ pl: 3.5 }}>
+                          {candidate.supporterName && (
+                            <Box sx={{ mb: 1 }}>
+                              <Typography variant="caption" color="text.secondary">ผู้สนับสนุน</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {candidate.supporterName}
+                              </Typography>
+                            </Box>
+                          )}
+                          {candidate.supportReason && (
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">เหตุผลในการสนับสนุน</Typography>
+                              <Paper sx={{ p: 1, mt: 0.5, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.200' }}>
+                                <Typography variant="body2" sx={{ lineHeight: 1.6 }}>
+                                  {candidate.supportReason}
+                                </Typography>
+                              </Paper>
+                            </Box>
+                          )}
                         </Box>
                       </Box>
                     )}

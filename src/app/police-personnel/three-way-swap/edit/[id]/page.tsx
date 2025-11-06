@@ -64,22 +64,54 @@ interface PolicePersonnel {
   trainingLocation?: string;
   trainingCourse?: string;
   actingAs?: string;
+  // Support fields
+  supporterName?: string;
+  supportReason?: string;
+  // Notes
+  notes?: string;
 }
 
 interface SwapDetail {
   id?: string;
   personnelId: string;
+  noId?: number;
   nationalId?: string;
   fullName: string;
   rank?: string;
+  seniority?: string;
+  posCodeId?: number;
+  posCodeMaster?: {
+    id: number;
+    name: string;
+  };
+  // ข้อมูลส่วนตัว
+  birthDate?: string;
+  age?: string;
+  education?: string;
+  // ข้อมูลการแต่งตั้ง
+  lastAppointment?: string;
+  currentRankSince?: string;
+  enrollmentDate?: string;
+  retirementDate?: string;
+  yearsOfService?: string;
+  // ข้อมูลการฝึกอบรม
+  trainingLocation?: string;
+  trainingCourse?: string;
+  // ตำแหน่ง
   fromPosition?: string;
   fromPositionNumber?: string;
   fromUnit?: string;
+  fromActingAs?: string;
   toPosition?: string;
   toPositionNumber?: string;
   toUnit?: string;
+  toActingAs?: string;
   notes?: string;
-  posCodeId?: number;
+  // Support fields - ใช้ชื่อตาม API (supportName, supportReason)  
+  supportName?: string;
+  supportReason?: string;
+  // Support fields - ใช้ตาม frontend convention (supporterName)
+  supporterName?: string;
 }
 
 interface SwapTransaction {
@@ -154,6 +186,10 @@ export default function EditThreeWaySwapPage() {
       const result = await response.json();
       const data = result.data;
       
+      // Debug: ดูข้อมูลที่ API ส่งมา
+      console.log('API Response:', data);
+      console.log('SwapDetails:', data.swapDetails);
+      
       setTransaction(data);
       setYear(data.year);
       setSwapDate(dayjs(data.swapDate));
@@ -170,6 +206,7 @@ export default function EditThreeWaySwapPage() {
         // ใช้ข้อมูลจาก swap_transaction_detail ที่มีข้อมูลครบถ้วนแล้ว
         const pA: PolicePersonnel = {
           id: detailA.personnelId || '',
+          noId: detailA.noId,
           fullName: detailA.fullName,
           rank: detailA.rank,
           seniority: detailA.seniority,
@@ -179,6 +216,7 @@ export default function EditThreeWaySwapPage() {
           nationalId: detailA.nationalId,
           posCodeId: detailA.posCodeId,
           posCodeMaster: detailA.posCodeMaster,
+          actingAs: detailA.fromActingAs,
           // ข้อมูลส่วนตัว
           birthDate: detailA.birthDate,
           age: detailA.age,
@@ -192,10 +230,14 @@ export default function EditThreeWaySwapPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: detailA.trainingLocation,
           trainingCourse: detailA.trainingCourse,
+          // Support fields - map จาก API field names
+          supporterName: detailA.supportName,
+          supportReason: detailA.supportReason,
         };
 
         const pB: PolicePersonnel = {
           id: detailB.personnelId || '',
+          noId: detailB.noId,
           fullName: detailB.fullName,
           rank: detailB.rank,
           seniority: detailB.seniority,
@@ -205,6 +247,7 @@ export default function EditThreeWaySwapPage() {
           nationalId: detailB.nationalId,
           posCodeId: detailB.posCodeId,
           posCodeMaster: detailB.posCodeMaster,
+          actingAs: detailB.fromActingAs,
           // ข้อมูลส่วนตัว
           birthDate: detailB.birthDate,
           age: detailB.age,
@@ -218,10 +261,14 @@ export default function EditThreeWaySwapPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: detailB.trainingLocation,
           trainingCourse: detailB.trainingCourse,
+          // Support fields - map จาก API field names
+          supporterName: detailB.supportName,
+          supportReason: detailB.supportReason,
         };
 
         const pC: PolicePersonnel = {
           id: detailC.personnelId || '',
+          noId: detailC.noId,
           fullName: detailC.fullName,
           rank: detailC.rank,
           seniority: detailC.seniority,
@@ -231,6 +278,7 @@ export default function EditThreeWaySwapPage() {
           nationalId: detailC.nationalId,
           posCodeId: detailC.posCodeId,
           posCodeMaster: detailC.posCodeMaster,
+          actingAs: detailC.fromActingAs,
           // ข้อมูลส่วนตัว
           birthDate: detailC.birthDate,
           age: detailC.age,
@@ -244,6 +292,9 @@ export default function EditThreeWaySwapPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: detailC.trainingLocation,
           trainingCourse: detailC.trainingCourse,
+          // Support fields - map จาก API field names
+          supporterName: detailC.supportName,
+          supportReason: detailC.supportReason,
         };
 
         setPersonnelA(pA);
@@ -334,44 +385,113 @@ export default function EditThreeWaySwapPage() {
         {
           sequence: 1,
           personnelId: personnelA.id,
+          noId: personnelA.noId,
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
           rank: personnelA.rank,
+          seniority: personnelA.seniority,
+          posCodeId: personnelA.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelA.birthDate,
+          age: personnelA.age,
+          education: personnelA.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelA.lastAppointment,
+          currentRankSince: personnelA.currentRankSince,
+          enrollmentDate: personnelA.enrollmentDate,
+          retirementDate: personnelA.retirementDate,
+          yearsOfService: personnelA.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelA.trainingLocation,
+          trainingCourse: personnelA.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
+          fromActingAs: personnelA.actingAs,
           toPosition: personnelB.position, // A ไปที่ตำแหน่ง B
           toPositionNumber: personnelB.positionNumber,
           toUnit: personnelB.unit,
-          posCodeId: personnelA.posCodeId,
+          toActingAs: personnelB.actingAs,
+          // Support fields
+          supportName: personnelA.supporterName,
+          supportReason: personnelA.supportReason,
+          // Notes
+          notes: personnelA.notes,
         },
         {
           sequence: 2,
           personnelId: personnelB.id,
+          noId: personnelB.noId,
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
           rank: personnelB.rank,
+          seniority: personnelB.seniority,
+          posCodeId: personnelB.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelB.birthDate,
+          age: personnelB.age,
+          education: personnelB.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelB.lastAppointment,
+          currentRankSince: personnelB.currentRankSince,
+          enrollmentDate: personnelB.enrollmentDate,
+          retirementDate: personnelB.retirementDate,
+          yearsOfService: personnelB.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelB.trainingLocation,
+          trainingCourse: personnelB.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
+          fromActingAs: personnelB.actingAs,
           toPosition: personnelC.position, // B ไปที่ตำแหน่ง C
           toPositionNumber: personnelC.positionNumber,
           toUnit: personnelC.unit,
-          posCodeId: personnelB.posCodeId,
+          toActingAs: personnelC.actingAs,
+          // Support fields
+          supportName: personnelB.supporterName,
+          supportReason: personnelB.supportReason,
+          // Notes
+          notes: personnelB.notes,
         },
         {
           sequence: 3,
           personnelId: personnelC.id,
+          noId: personnelC.noId,
           nationalId: personnelC.nationalId,
           fullName: personnelC.fullName,
           rank: personnelC.rank,
+          seniority: personnelC.seniority,
+          posCodeId: personnelC.posCodeId,
+          // ข้อมูลส่วนตัว
+          birthDate: personnelC.birthDate,
+          age: personnelC.age,
+          education: personnelC.education,
+          // ข้อมูลการแต่งตั้ง
+          lastAppointment: personnelC.lastAppointment,
+          currentRankSince: personnelC.currentRankSince,
+          enrollmentDate: personnelC.enrollmentDate,
+          retirementDate: personnelC.retirementDate,
+          yearsOfService: personnelC.yearsOfService,
+          // ข้อมูลการฝึกอบรม
+          trainingLocation: personnelC.trainingLocation,
+          trainingCourse: personnelC.trainingCourse,
+          // ตำแหน่ง
           fromPosition: personnelC.position,
           fromPositionNumber: personnelC.positionNumber,
           fromUnit: personnelC.unit,
+          fromActingAs: personnelC.actingAs,
           toPosition: personnelA.position, // C ไปที่ตำแหน่ง A
           toPositionNumber: personnelA.positionNumber,
           toUnit: personnelA.unit,
-          posCodeId: personnelC.posCodeId,
+          toActingAs: personnelA.actingAs,
+          // Support fields
+          supportName: personnelC.supporterName,
+          supportReason: personnelC.supportReason,
+          // Notes
+          notes: personnelC.notes,
         },
       ];
 
@@ -605,6 +725,22 @@ export default function EditThreeWaySwapPage() {
                 <Box>
                   <Typography variant="caption" color="text.secondary">หลักสูตร (นรต.)</Typography>
                   <Typography variant="body2">{personnel.trainingCourse}</Typography>
+                </Box>
+              )}
+              {personnel.supporterName && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">ผู้สนับสนุน</Typography>
+                  <Typography variant="body2" fontWeight={500} color="success.main">
+                    {personnel.supporterName}
+                  </Typography>
+                </Box>
+              )}
+              {personnel.supportReason && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">เหตุผล</Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem', lineHeight: 1.4 }}>
+                    {personnel.supportReason}
+                  </Typography>
                 </Box>
               )}
             </Stack>

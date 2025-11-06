@@ -63,6 +63,11 @@ interface PolicePersonnel {
   trainingLocation?: string;
   trainingCourse?: string;
   actingAs?: string;
+  // Support fields
+  supporterName?: string;
+  supportReason?: string;
+  // Notes
+  notes?: string;
 }
 
 export default function AddThreeWaySwapPage() {
@@ -249,6 +254,11 @@ export default function AddThreeWaySwapPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: personnelA.trainingLocation,
           trainingCourse: personnelA.trainingCourse,
+          // ข้อมูลการเสนอชื่อ (snapshot)
+          supportName: personnelA.supporterName,
+          supportReason: personnelA.supportReason,
+          // หมายเหตุ
+          notes: personnelA.notes,
           // ตำแหน่ง
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
@@ -281,6 +291,11 @@ export default function AddThreeWaySwapPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: personnelB.trainingLocation,
           trainingCourse: personnelB.trainingCourse,
+          // ข้อมูลการเสนอชื่อ (snapshot)
+          supportName: personnelB.supporterName,
+          supportReason: personnelB.supportReason,
+          // หมายเหตุ
+          notes: personnelB.notes,
           // ตำแหน่ง
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
@@ -313,6 +328,11 @@ export default function AddThreeWaySwapPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: personnelC.trainingLocation,
           trainingCourse: personnelC.trainingCourse,
+          // ข้อมูลการเสนอชื่อ (snapshot)
+          supportName: personnelC.supporterName,
+          supportReason: personnelC.supportReason,
+          // หมายเหตุ
+          notes: personnelC.notes,
           // ตำแหน่ง
           fromPosition: personnelC.position,
           fromPositionNumber: personnelC.positionNumber,
@@ -555,6 +575,22 @@ export default function AddThreeWaySwapPage() {
                 <Box>
                   <Typography variant="caption" color="text.secondary">หลักสูตร (นรต.)</Typography>
                   <Typography variant="body2">{personnel.trainingCourse}</Typography>
+                </Box>
+              )}
+              {personnel.supporterName && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">ผู้สนับสนุน</Typography>
+                  <Typography variant="body2" fontWeight={500} color="success.main">
+                    {personnel.supporterName}
+                  </Typography>
+                </Box>
+              )}
+              {personnel.supportReason && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">เหตุผล</Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.8rem', lineHeight: 1.4 }}>
+                    {personnel.supportReason}
+                  </Typography>
                 </Box>
               )}
             </Stack>

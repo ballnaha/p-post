@@ -64,6 +64,9 @@ export async function GET(request: NextRequest) {
             trainingLocation: true,
             trainingCourse: true,
             notes: true,
+            // ข้อมูลการเสนอชื่อ
+            supportName: true,
+            supportReason: true,
           },
           orderBy: { sequence: 'asc' },
         },

@@ -50,6 +50,8 @@ interface PersonnelData {
   trainingLocation?: string | null;
   trainingCourse?: string | null;
   notes?: string | null;
+  supporterName?: string | null; // ผู้สนับสนุน/ผู้เสนอชื่อ
+  supportReason?: string | null; // เหตุผลในการสนับสนุน
 }
 
 interface PersonnelDetailModalProps {
@@ -136,11 +138,25 @@ export default function PersonnelDetailModal({
       maxWidth="md"
       fullWidth
       fullScreen={isMobile}
+      TransitionProps={{
+        timeout: 0, // ปิด transition เพื่อป้องกัน overlay ชั่วขณะ
+      }}
       sx={{
         '& .MuiDialog-root': {
-          zIndex: 10002, // สูงกว่า Drawer (10001)
+          zIndex: '20000 !important', // เพิ่มเป็น 20000 เพื่อให้แน่ใจว่าสูงสุด
         },
-        zIndex: 10002,
+        '& .MuiDialog-container': {
+          zIndex: '20000 !important',
+        },
+        '& .MuiDialog-paper': {
+          zIndex: '20000 !important',
+          position: 'relative',
+        },
+        '& .MuiBackdrop-root': {
+          zIndex: '19999 !important', // ต่ำกว่า content นิดหน่อย
+        },
+        zIndex: '20000 !important',
+        position: 'fixed',
       }}
       PaperProps={{
         sx: {
@@ -355,6 +371,38 @@ export default function PersonnelDetailModal({
                 )}
               </Box>
             </Box>
+
+            {/* ข้อมูลการเสนอชื่อ - Full Width */}
+            {(personnel.supporterName || personnel.supportReason) && (
+              <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'primary.50', borderRadius: 1, border: 1, borderColor: 'primary.200' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, fontSize: '0.938rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <PersonIcon sx={{ fontSize: 16 }} />
+                  ข้อมูลการเสนอชื่อ
+                </Typography>
+                
+                {personnel.supporterName && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.25 }}>
+                      ผู้สนับสนุน/ผู้เสนอชื่อ:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                      {personnel.supporterName}
+                    </Typography>
+                  </Box>
+                )}
+                
+                {personnel.supportReason && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.25 }}>
+                      เหตุผลในการสนับสนุน:
+                    </Typography>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: 'text.secondary', fontSize: '0.875rem' }}>
+                      {personnel.supportReason}
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            )}
 
             {/* หมายเหตุ - Full Width */}
             {personnel.notes && (

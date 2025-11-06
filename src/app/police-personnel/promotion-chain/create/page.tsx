@@ -36,6 +36,13 @@ interface ChainNode {
   trainingLocation?: string; // police_personnel.trainingLocation
   trainingCourse?: string; // police_personnel.trainingCourse
   
+  // ข้อมูลการเสนอชื่อ (Support Information)
+  supporterName?: string; // police_personnel.supporterName
+  supportReason?: string; // police_personnel.supportReason
+  
+  // หมายเหตุ (Notes)
+  notes?: string; // หมายเหตุเฉพาะของบุคลากรคนนี้
+  
   // ข้อมูลตำแหน่งเดิม (From Position)
   fromPosCodeId: number; // police_personnel.posCodeId
   fromPosCodeName?: string; // posCodeMaster.name
@@ -227,6 +234,9 @@ function CreatePromotionChainContent() {
         // ข้อมูลการฝึกอบรม
         trainingLocation: node.trainingLocation,
         trainingCourse: node.trainingCourse,
+        // ข้อมูลการเสนอชื่อ
+        supportName: node.supporterName,
+        supportReason: node.supportReason,
         // ตำแหน่ง
         fromPosition: node.fromPosition,
         fromPositionNumber: node.fromPositionNumber,
@@ -236,7 +246,7 @@ function CreatePromotionChainContent() {
         toPositionNumber: node.toPositionNumber,
         toUnit: node.toUnit,
         toActingAs: node.toActingAs,
-        notes: null,
+        notes: node.notes || null,
       }));
 
       const payload = {

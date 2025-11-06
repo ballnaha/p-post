@@ -100,6 +100,9 @@ interface ThreeWaySwapDetail {
   trainingLocation?: string | null;
   trainingCourse?: string;
   notes?: string | null;
+  // ข้อมูลการเสนอชื่อ
+  supportName?: string;
+  supportReason?: string;
 }
 
 interface ThreeWaySwapTransaction {
@@ -141,6 +144,9 @@ interface PersonnelData {
   trainingCourse?: string;
   actingAs?: string;
   notes?: string | null;
+  // ข้อมูลการเสนอชื่อ
+  supporterName?: string;
+  supportReason?: string;
 }
 
 // Optimized: Memoized skeleton component to prevent re-renders during loading
@@ -481,6 +487,9 @@ export default function ThreeWaySwapPage() {
             trainingLocation: detail.trainingLocation,
             trainingCourse: detail.trainingCourse,
             seniority: detail.seniority,
+            // ข้อมูลการเสนอชื่อ
+            supporterName: detail.supportName,
+            supportReason: detail.supportReason,
           };
           break;
         }

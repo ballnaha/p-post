@@ -77,6 +77,10 @@ model PolicePersonnel {
   // หมายเหตุ
   notes String? @db.Text // หมายเหตุ/เงื่อนไข
 
+  // ข้อมูลการเสนอชื่อ (Nomination Information)
+  supporterName String? @map("supporter_name") // ผู้สนับสนุน/ผู้เสนอชื่อ
+  supportReason String? @map("support_reason") @db.Text // เหตุผลในการสนับสนุน
+
   // Metadata
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -88,6 +92,7 @@ model PolicePersonnel {
   @@index([rank])
   @@index([unit])
   @@index([position])
+  @@index([supporterName]) // Index for supporter search
   @@index([rank, posCodeId, fullName]) // Composite index for drawer query optimization
   @@index([unit, posCodeId, fullName]) // Composite index for unit filter with posCode
   @@map("police_personnel")
@@ -208,6 +213,10 @@ model SwapTransactionDetail {
   // ข้อมูลการฝึกอบรม (Training Information)
   trainingLocation String? @map("training_location") // ตท. (ตำแหน่งการฝึกอบรม)
   trainingCourse   String? @map("training_course") // นรต. (นายร้อยตำรวจ)
+  
+  // ข้อมูลการเสนอชื่อ (Nomination Information) - Snapshot
+  supportName      String? @map("support_name") // ผู้สนับสนุน/ผู้เสนอชื่อ (snapshot)
+  supportReason    String? @map("support_reason") @db.Text // เหตุผลในการสนับสนุน (snapshot)
   
   // ตำแหน่งเดิม (From)
   fromPosition       String? @map("from_position") // ตำแหน่งเดิม

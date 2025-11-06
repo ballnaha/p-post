@@ -91,6 +91,9 @@ interface PolicePersonnel {
   trainingCourse?: string;
   actingAs?: string;
   notes?: string;
+  // ข้อมูลการเสนอชื่อ
+  supporterName?: string;
+  supportReason?: string;
 }
 
 interface SwapDetail {
@@ -127,6 +130,9 @@ interface SwapDetail {
   trainingLocation?: string;
   trainingCourse?: string;
   actingAs?: string;
+  // ข้อมูลการเสนอชื่อ
+  supportName?: string;
+  supportReason?: string;
 }
 
 interface SwapTransaction {
@@ -349,6 +355,9 @@ export default function SwapListPage() {
             seniority: detail.seniority,
             trainingLocation: detail.trainingLocation,
             trainingCourse: detail.trainingCourse,
+            // ข้อมูลการเสนอชื่อ
+            supporterName: detail.supportName,
+            supportReason: detail.supportReason,
           };
           break;
         }

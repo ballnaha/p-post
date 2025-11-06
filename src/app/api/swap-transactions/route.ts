@@ -61,6 +61,9 @@ export async function GET(request: NextRequest) {
             // ข้อมูลการฝึกอบรม
             trainingLocation: true,
             trainingCourse: true,
+            // ข้อมูลการเสนอชื่อ
+            supportName: true,
+            supportReason: true,
             // ตำแหน่ง
             fromPosition: true,
             fromPositionNumber: true,
@@ -151,6 +154,9 @@ export async function POST(request: NextRequest) {
             // ข้อมูลการฝึกอบรม
             trainingLocation: detail.trainingLocation,
             trainingCourse: detail.trainingCourse,
+            // ข้อมูลการเสนอชื่อ
+            supportName: detail.supportName,
+            supportReason: detail.supportReason,
             // ตำแหน่ง
             fromPosition: detail.fromPosition,
             fromPositionNumber: detail.fromPositionNumber,

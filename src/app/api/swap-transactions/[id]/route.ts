@@ -96,7 +96,7 @@ export async function PUT(
         create: swapDetails.map((detail: any) => ({
           sequence: detail.sequence,
           personnelId: detail.personnelId,
-          noId: detail.noId,
+          noId: detail.noId ? parseInt(detail.noId.toString()) : null,
           nationalId: detail.nationalId,
           fullName: detail.fullName,
           rank: detail.rank,
@@ -115,6 +115,9 @@ export async function PUT(
           // ข้อมูลการฝึกอบรม
           trainingLocation: detail.trainingLocation,
           trainingCourse: detail.trainingCourse,
+          // ข้อมูลการเสนอชื่อ
+          supportName: detail.supportName,
+          supportReason: detail.supportReason,
           // ตำแหน่ง
           fromPosition: detail.fromPosition,
           fromPositionNumber: detail.fromPositionNumber,

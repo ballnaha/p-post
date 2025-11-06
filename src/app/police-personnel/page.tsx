@@ -98,6 +98,8 @@ interface PolicePersonnel {
   trainingLocation?: string;
   trainingCourse?: string;
   notes?: string;
+  supporterName?: string; // ผู้สนับสนุน/ผู้เสนอชื่อ
+  supportReason?: string; // เหตุผลในการสนับสนุน
   createdAt: string;
   updatedAt?: string;
   createdBy?: string;
@@ -518,6 +520,8 @@ export default function PolicePersonnelPage() {
       trainingLocation: personnel.trainingLocation || '',
       trainingCourse: personnel.trainingCourse || '',
       notes: personnel.notes || '',
+      supporterName: personnel.supporterName || '', // ผู้สนับสนุน
+      supportReason: personnel.supportReason || '', // เหตุผลในการสนับสนุน
     });
     setEditModalOpen(true);
   };
@@ -1370,6 +1374,28 @@ export default function PolicePersonnelPage() {
                     )}
                   </Box>
                 )}
+
+                {/* ผู้สนับสนุน และ เหตุผล */}
+                {(person.supporterName || person.supportReason) && (
+                  <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+                    {person.supporterName && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: person.supportReason ? 0.5 : 0 }}>
+                        <PersonIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                        <Typography variant="body2" color="text.secondary">
+                          ผู้สนับสนุน: {person.supporterName}
+                        </Typography>
+                      </Box>
+                    )}
+                    {person.supportReason && (
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                        <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main', mt: 0.1 }} />
+                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          เหตุผล: {person.supportReason}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                )}
               </CardContent>
 
               <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1690,6 +1716,7 @@ export default function PolicePersonnelPage() {
                   <TableCell>ชื่อ-สกุล</TableCell>
                   <TableCell>หน่วย</TableCell>
                   <TableCell>อายุ</TableCell>
+                  <TableCell>ผู้สนับสนุน</TableCell>
                   <TableCell>สถานะ</TableCell>
                   <TableCell align="center">จัดการ</TableCell>
                 </TableRow>
@@ -1697,7 +1724,7 @@ export default function PolicePersonnelPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
+                    <TableCell colSpan={10} align="center" sx={{ py: 8 }}>
                       <CircularProgress />
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                         กำลังโหลดข้อมูล...
@@ -1706,7 +1733,7 @@ export default function PolicePersonnelPage() {
                   </TableRow>
                 ) : data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} sx={{ p: 0, border: 'none' }}>
+                    <TableCell colSpan={10} sx={{ p: 0, border: 'none' }}>
                       <EmptyState
                         icon={PersonIcon}
                         title="ไม่พบข้อมูลบุคลากร"
@@ -1739,6 +1766,35 @@ export default function PolicePersonnelPage() {
                       </TableCell>
                       <TableCell>{row.unit || '-'}</TableCell>
                       <TableCell>{row.age || '-'}</TableCell>
+                      <TableCell>
+                        {row.supporterName ? (
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                              {row.supporterName}
+                            </Typography>
+                            {row.supportReason && (
+                              <Typography 
+                                variant="caption" 
+                                color="text.secondary" 
+                                sx={{ 
+                                  display: 'block',
+                                  maxWidth: 120,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title={row.supportReason}
+                              >
+                                {row.supportReason}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.disabled">
+                            -
+                          </Typography>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {row.rank ? (
                           <Chip label="มีผู้ดำรง" color="success" size="small" />
@@ -1865,42 +1921,64 @@ export default function PolicePersonnelPage() {
 
         {/* Edit Dialog */}
         <Dialog 
+          key={`edit-${editModalOpen}-${isMobile}`} // Force re-render when mobile state changes
           open={editModalOpen} 
           onClose={handleEditClose} 
           maxWidth="md" 
           fullWidth
           fullScreen={isMobile}
+          TransitionProps={{
+            timeout: 0, // ปิด transition เพื่อป้องกัน overlay ชั่วขณะ
+          }}
+          sx={{
+            '& .MuiDialog-root': {
+              zIndex: '20000 !important', // เหมือนกับ PersonnelDetailModal
+            },
+            '& .MuiDialog-container': {
+              zIndex: '20000 !important',
+            },
+            '& .MuiDialog-paper': {
+              zIndex: '20000 !important',
+              position: 'relative',
+            },
+            '& .MuiBackdrop-root': {
+              zIndex: '19999 !important', // ต่ำกว่า content นิดหน่อย
+            },
+            zIndex: '20000 !important',
+            position: 'fixed',
+          }}
           PaperProps={{
             sx: {
+              width: { xs: '100%' },
+              height: { xs: '100%', md: 'auto' },
+              maxHeight: { xs: '100%', md: '90vh' },
+              margin: { xs: 0, md: '32px' },
+              borderRadius: { xs: 0, md: 1 },
               display: 'flex',
-              flexDirection: 'column',
-              height: { xs: '100%', sm: 'auto' },
-              maxHeight: { xs: '100%', sm: '90vh' },
-              margin: { xs: 0, sm: '32px' },
-              borderRadius: { xs: 0, sm: 2 },
-              
+              flexDirection: 'column'
             }
           }}
         >
           <DialogTitle sx={{ 
-            pb: 1, 
             borderBottom: 1, 
             borderColor: 'divider',
-            flexShrink: 0 ,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            py: 1.5,
+            px: 2,
+            flexShrink: 0
           }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PersonIcon color="action" />
-              <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>
-                แก้ไขข้อมูลบุคลากร
-              </Typography>
+            <PersonIcon fontSize="small" />
+            <Box component="span" sx={{ fontWeight: 600, fontSize: '1.25rem' }}>
+              แก้ไขข้อมูลบุคลากร
             </Box>
           </DialogTitle>
           
           <DialogContent sx={{ 
             flex: 1,
             overflow: 'auto',
-            p: { xs: 2, sm: 3 },
-            pt: { xs: 3, sm: 4 },
+            p: { xs: 2, md: 3 },
             backgroundColor: 'grey.50',
             '& .MuiTextField-root': {
               '& .MuiInputLabel-root': {
@@ -2194,6 +2272,62 @@ export default function PolicePersonnelPage() {
                 </Stack>
               </Paper>
 
+              {/* ข้อมูลการเสนอชื่อ */}
+              <Paper sx={{                 
+                p: { xs: 2, sm: 3 },
+                borderRadius: 2, 
+                border: '1px solid', 
+                borderColor: 'grey.200',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+                  <BadgeIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                  <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ fontSize: '0.938rem' }}>
+                    ข้อมูลการเสนอชื่อ
+                  </Typography>
+                </Box>
+                <Stack spacing={2.5}>
+                  <TextField
+                    fullWidth
+                    label="ผู้สนับสนุน/ผู้เสนอชื่อ"
+                    value={editFormData.supporterName || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, supporterName: e.target.value })}
+                    variant="outlined"
+                    size="small"
+                    placeholder="ระบุชื่อผู้สนับสนุน/ผู้เสนอชื่อ"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PersonIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                        </InputAdornment>
+                      )
+                    }}
+                  />
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={3}
+                    label="เหตุผลในการสนับสนุน"
+                    value={editFormData.supportReason || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, supportReason: e.target.value })}
+                    variant="outlined"
+                    size="small"
+                    placeholder="เช่น เหตุผล, ข้อมูลเพิ่มเติม..."
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'primary.main'
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: 2
+                        }
+                      }
+                    }}
+                  />
+                </Stack>
+              </Paper>
+
               {/* หมายเหตุ */}
               <Paper sx={{ 
                 p: { xs: 2, sm: 3 }, 
@@ -2235,24 +2369,22 @@ export default function PolicePersonnelPage() {
           </DialogContent>
           
           <DialogActions sx={{ 
-            px: { xs: 2, sm: 3 }, 
-            py: { xs: 2, sm: 2.5 }, 
-            bgcolor: 'white', 
+            p: 2,
             borderTop: 1, 
             borderColor: 'divider',
-            flexDirection: { xs: 'column', sm: 'row' },
-            gap: { xs: 1, sm: 0 },
-            flexShrink: 0,
-            '& .MuiButton-root': {
-              minWidth: { xs: '100%', sm: 120 }
-            }
+            bgcolor: 'background.paper',
+            gap: 1,
+            flexShrink: 0
           }}>
             <Button 
               onClick={handleEditClose} 
               variant="outlined" 
               size="medium"
               disabled={isSaving}
-              sx={{ order: { xs: 2, sm: 1 } }}
+              sx={{ 
+                minWidth: 100,
+                borderRadius: 1.5
+              }}
             >
               ยกเลิก
             </Button>
@@ -2262,7 +2394,10 @@ export default function PolicePersonnelPage() {
               size="medium"
               disabled={isSaving}
               startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <EditIcon />}
-              sx={{ order: { xs: 1, sm: 2 } }}
+              sx={{ 
+                minWidth: 120,
+                borderRadius: 1.5
+              }}
             >
               {isSaving ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
             </Button>

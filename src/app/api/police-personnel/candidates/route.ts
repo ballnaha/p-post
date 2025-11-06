@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || undefined;
     const unit = searchParams.get('unit') || undefined; // exact match
     const posCodeIdParam = searchParams.get('posCodeId') || undefined;
+    const supporter = searchParams.get('supporter') || undefined; // supporter filter
     const pageParam = searchParams.get('page');
     const limitParam = searchParams.get('limit');
     const yearParam = searchParams.get('year'); // Year filter for excluding already assigned
@@ -76,14 +77,32 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Filter by supporter status
+    if (supporter && supporter !== 'all') {
+      if (supporter === 'with-supporter') {
+        where.supporterName = { not: null };
+      } else if (supporter === 'without-supporter') {
+        where.AND = where.AND || [];
+        where.AND.push({
+          OR: [
+            { supporterName: null },
+            { supporterName: '' }
+          ]
+        });
+      }
+    }
+
     if (search && search.trim()) {
-      where.OR = [
-        { fullName: { contains: search } },
-        { position: { contains: search } },
-        { unit: { contains: search } },
-        { actingAs: { contains: search } },
-        { trainingCourse: { contains: search } },
-      ];
+      where.AND = where.AND || [];
+      where.AND.push({
+        OR: [
+          { fullName: { contains: search } },
+          { position: { contains: search } },
+          { unit: { contains: search } },
+          { actingAs: { contains: search } },
+          { trainingCourse: { contains: search } },
+        ]
+      });
     }
 
     // Count total (filtered)
@@ -121,6 +140,8 @@ export async function GET(request: NextRequest) {
         retirementDate: true,
         trainingLocation: true,
         notes: true,
+        supporterName: true, // เพิ่มฟิลด์ผู้สนับสนุน
+        supportReason: true, // เพิ่มฟิลด์เหตุผล
       },
       orderBy: [
         { posCodeId: 'asc' },
@@ -128,9 +149,9 @@ export async function GET(request: NextRequest) {
       ],
       skip: page * limit,
       take: limit,
-    });
+    }) as any; // Temporary any type until Prisma client updates
 
-    const candidates = personnel.map((p) => ({
+    const candidates = personnel.map((p: any) => ({
       id: p.id,
       noId: p.noId,
       posCodeId: p.posCodeId,
@@ -158,6 +179,8 @@ export async function GET(request: NextRequest) {
       retirementDate: p.retirementDate || null,
       trainingLocation: p.trainingLocation || null,
       notes: p.notes || null,
+      supporterName: p.supporterName || null, // ผู้สนับสนุน
+      supportReason: p.supportReason || null, // เหตุผลในการสนับสนุน
     }));
 
     return NextResponse.json({

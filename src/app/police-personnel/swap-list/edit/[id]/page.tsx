@@ -64,11 +64,17 @@ interface PolicePersonnel {
   trainingLocation?: string;
   trainingCourse?: string;
   actingAs?: string;
+  // Support fields
+  supporterName?: string;
+  supportReason?: string;
+  // Notes
+  notes?: string;
 }
 
 interface SwapDetail {
   id?: string;
   personnelId: string;
+  noId?: string;
   nationalId?: string;
   fullName: string;
   rank?: string;
@@ -95,10 +101,17 @@ interface SwapDetail {
   fromPosition?: string;
   fromPositionNumber?: string;
   fromUnit?: string;
+  fromActingAs?: string;
   toPosition?: string;
   toPositionNumber?: string;
   toUnit?: string;
+  toActingAs?: string;
   notes?: string;
+  // Support fields - ใช้ชื่อตาม API (supportName, supportReason)
+  supportName?: string;
+  supportReason?: string;
+  // Support fields - ใช้ตาม frontend convention (supporterName)
+  supporterName?: string;
 }
 
 interface SwapTransaction {
@@ -182,12 +195,14 @@ export default function EditSwapTransactionPage() {
           // ใช้ข้อมูลจาก swap_transaction_detail ที่มีข้อมูลครบถ้วนแล้ว
           const pA: PolicePersonnel = {
             id: detailA.personnelId || '',
+            noId: detailA.noId,
             fullName: detailA.fullName,
             rank: detailA.rank,
             seniority: detailA.seniority,
             position: detailA.fromPosition,
             positionNumber: detailA.fromPositionNumber,
             unit: detailA.fromUnit,
+            actingAs: detailA.fromActingAs,
             nationalId: detailA.nationalId,
             posCodeId: detailA.posCodeId,
             posCodeMaster: detailA.posCodeMaster,
@@ -204,16 +219,21 @@ export default function EditSwapTransactionPage() {
             // ข้อมูลการฝึกอบรม
             trainingLocation: detailA.trainingLocation,
             trainingCourse: detailA.trainingCourse,
+            // Support fields - map จาก API field names
+            supporterName: detailA.supportName,
+            supportReason: detailA.supportReason,
           };
 
           const pB: PolicePersonnel = {
             id: detailB.personnelId || '',
+            noId: detailB.noId,
             fullName: detailB.fullName,
             rank: detailB.rank,
             seniority: detailB.seniority,
             position: detailB.fromPosition,
             positionNumber: detailB.fromPositionNumber,
             unit: detailB.fromUnit,
+            actingAs: detailB.fromActingAs,
             nationalId: detailB.nationalId,
             posCodeId: detailB.posCodeId,
             posCodeMaster: detailB.posCodeMaster,
@@ -230,6 +250,9 @@ export default function EditSwapTransactionPage() {
             // ข้อมูลการฝึกอบรม
             trainingLocation: detailB.trainingLocation,
             trainingCourse: detailB.trainingCourse,
+            // Support fields - map จาก API field names
+            supporterName: detailB.supportName,
+            supportReason: detailB.supportReason,
           };
 
           setPersonnelA(pA);
@@ -317,6 +340,7 @@ export default function EditSwapTransactionPage() {
         {
           sequence: 1, // บุคลากร A ขึ้นก่อน
           personnelId: personnelA.id,
+          noId: personnelA.noId,
           nationalId: personnelA.nationalId,
           fullName: personnelA.fullName,
           rank: personnelA.rank,
@@ -335,17 +359,25 @@ export default function EditSwapTransactionPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: personnelA.trainingLocation,
           trainingCourse: personnelA.trainingCourse,
+          // ข้อมูลการเสนอชื่อ
+          supportName: personnelA.supporterName,
+          supportReason: personnelA.supportReason,
+          // หมายเหตุ
+          notes: personnelA.notes,
           // ตำแหน่ง
           fromPosition: personnelA.position,
           fromPositionNumber: personnelA.positionNumber,
           fromUnit: personnelA.unit,
+          fromActingAs: personnelA.actingAs,
           toPosition: personnelB.position,
           toPositionNumber: personnelB.positionNumber,
           toUnit: personnelB.unit,
+          toActingAs: personnelB.actingAs,
         },
         {
           sequence: 2, // บุคลากร B ขึ้นหลัง
           personnelId: personnelB.id,
+          noId: personnelB.noId,
           nationalId: personnelB.nationalId,
           fullName: personnelB.fullName,
           rank: personnelB.rank,
@@ -364,13 +396,20 @@ export default function EditSwapTransactionPage() {
           // ข้อมูลการฝึกอบรม
           trainingLocation: personnelB.trainingLocation,
           trainingCourse: personnelB.trainingCourse,
+          // ข้อมูลการเสนอชื่อ
+          supportName: personnelB.supporterName,
+          supportReason: personnelB.supportReason,
+          // หมายเหตุ
+          notes: personnelB.notes,
           // ตำแหน่ง
           fromPosition: personnelB.position,
           fromPositionNumber: personnelB.positionNumber,
           fromUnit: personnelB.unit,
+          fromActingAs: personnelB.actingAs,
           toPosition: personnelA.position,
           toPositionNumber: personnelA.positionNumber,
           toUnit: personnelA.unit,
+          toActingAs: personnelA.actingAs,
         },
       ];
 
@@ -733,6 +772,22 @@ export default function EditSwapTransactionPage() {
                             <Typography variant="body2">{personnelA.trainingCourse}</Typography>
                           </Box>
                         )}
+                        {personnelA.supporterName && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">ผู้สนับสนุน</Typography>
+                            <Typography variant="body2" fontWeight={500} color="success.main">
+                              {personnelA.supporterName}
+                            </Typography>
+                          </Box>
+                        )}
+                        {personnelA.supportReason && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">เหตุผล</Typography>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem', lineHeight: 1.4 }}>
+                              {personnelA.supportReason}
+                            </Typography>
+                          </Box>
+                        )}
                       </Stack>
                     </Box>
                   </Box>
@@ -949,6 +1004,22 @@ export default function EditSwapTransactionPage() {
                           <Box>
                             <Typography variant="caption" color="text.secondary">หลักสูตร (นรต.)</Typography>
                             <Typography variant="body2">{personnelB.trainingCourse}</Typography>
+                          </Box>
+                        )}
+                        {personnelB.supporterName && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">ผู้สนับสนุน</Typography>
+                            <Typography variant="body2" fontWeight={500} color="success.main">
+                              {personnelB.supporterName}
+                            </Typography>
+                          </Box>
+                        )}
+                        {personnelB.supportReason && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">เหตุผล</Typography>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem', lineHeight: 1.4 }}>
+                              {personnelB.supportReason}
+                            </Typography>
                           </Box>
                         )}
                       </Stack>

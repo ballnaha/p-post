@@ -36,6 +36,13 @@ interface ChainNode {
   trainingLocation?: string; // police_personnel.trainingLocation
   trainingCourse?: string; // police_personnel.trainingCourse
   
+  // ข้อมูลการเสนอชื่อ (Support Information)
+  supporterName?: string; // police_personnel.supporterName
+  supportReason?: string; // police_personnel.supportReason
+  
+  // หมายเหตุ (Notes)
+  notes?: string; // police_personnel.notes - หมายเหตุเฉพาะของบุคลากรคนนี้
+  
   // ข้อมูลตำแหน่งเดิม (From Position)
   fromPosCodeId: number; // police_personnel.posCodeId
   fromPosCodeName?: string; // posCodeMaster.name
@@ -162,6 +169,11 @@ export default function PromotionChainBuilder({
       // ข้อมูลการฝึกอบรม
       trainingLocation: candidate.trainingLocation,
       trainingCourse: candidate.trainingCourse,
+      // ข้อมูลการเสนอชื่อ
+      supporterName: candidate.supporterName,
+      supportReason: candidate.supportReason,
+      // หมายเหตุ
+      notes: candidate.notes,
       // ตำแหน่ง
       fromPosCodeId: candidate.posCodeId,
       fromPosCodeName: candidate.posCodeName || candidate.position,
@@ -212,7 +224,7 @@ export default function PromotionChainBuilder({
       yearsOfService: null,
       trainingLocation: null,
       trainingCourse: null,
-      notes: null,
+      notes: node.notes || null,
     };
     setSelectedPersonnel(prefill);
     setShowPersonnelModal(true);
@@ -247,6 +259,8 @@ export default function PromotionChainBuilder({
         trainingLocation: p.trainingLocation ?? null,
         trainingCourse: p.trainingCourse ?? null,
         notes: p.notes ?? null,
+        supporterName: p.supporterName ?? null,
+        supportReason: p.supportReason ?? null,
       };
       setSelectedPersonnel(full);
     } catch (e: any) {

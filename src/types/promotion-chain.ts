@@ -108,6 +108,10 @@ export interface SwapListPerson {
   // Training Info
   trainingLocation?: string;
   trainingCourse?: string;
+  
+  // Nomination Info
+  supporterName?: string; // ผู้สนับสนุน/ผู้เสนอชื่อ
+  supportReason?: string; // เหตุผลในการสนับสนุน
 }
 
 export interface PromotionChainSummary {

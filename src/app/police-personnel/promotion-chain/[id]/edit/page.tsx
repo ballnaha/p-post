@@ -21,10 +21,29 @@ interface ChainNode {
   id: string;
   nodeOrder: number;
   personnelId?: string;
+  noId?: number;
   nationalId: string;
   fullName: string;
   rank: string;
   seniority?: string;
+  // Personal information
+  birthDate?: string;
+  age?: string;
+  education?: string;
+  // Appointment information
+  lastAppointment?: string;
+  currentRankSince?: string;
+  enrollmentDate?: string;
+  retirementDate?: string;
+  yearsOfService?: string;
+  // Training information
+  trainingLocation?: string;
+  trainingCourse?: string;
+  // Support information
+  supporterName?: string;
+  supportReason?: string;
+  // Notes
+  notes?: string;
   fromPosCodeId: number;
   fromPosCodeName?: string;
   fromPosition: string;
@@ -56,18 +75,39 @@ interface SwapDetailApi {
   id: string;
   sequence?: number | null;
   personnelId?: string | null;
+  noId?: string | null;
   nationalId?: string | null;
   fullName: string;
   rank?: string | null;
+  seniority?: string | null;
   posCodeId?: number | null;
   posCodeMaster?: { id: number; name: string } | null;
+  // Personal information
+  birthDate?: string | null;
+  age?: string | null;
+  education?: string | null;
+  // Appointment information
+  lastAppointment?: string | null;
+  currentRankSince?: string | null;
+  enrollmentDate?: string | null;
+  retirementDate?: string | null;
+  yearsOfService?: string | null;
+  // Training information
+  trainingLocation?: string | null;
+  trainingCourse?: string | null;
+  // Position information
   fromPosition?: string | null;
   fromPositionNumber?: string | null;
   fromUnit?: string | null;
+  fromActingAs?: string | null;
   toPosition?: string | null;
   toPositionNumber?: string | null;
   toUnit?: string | null;
+  toActingAs?: string | null;
   notes?: string | null;
+  // Support information
+  supportName?: string | null;
+  supportReason?: string | null;
 }
 
 interface TransactionApi {
@@ -119,21 +159,41 @@ export default function EditPromotionChainPage() {
             id: `node-${d.id}`,
             nodeOrder: d.sequence ?? index + 1,
             personnelId: d.personnelId ?? undefined,
+            noId: d.noId ? parseInt(d.noId) : undefined,
             nationalId: d.nationalId ?? "",
             fullName: d.fullName,
             rank: d.rank ?? "",
+            seniority: d.seniority ?? undefined,
+            // Personal information
+            birthDate: d.birthDate ?? undefined,
+            age: d.age ?? undefined,
+            education: d.education ?? undefined,
+            // Appointment information
+            lastAppointment: d.lastAppointment ?? undefined,
+            currentRankSince: d.currentRankSince ?? undefined,
+            enrollmentDate: d.enrollmentDate ?? undefined,
+            retirementDate: d.retirementDate ?? undefined,
+            yearsOfService: d.yearsOfService ?? undefined,
+            // Training information
+            trainingLocation: d.trainingLocation ?? undefined,
+            trainingCourse: d.trainingCourse ?? undefined,
+            // Support information
+            supporterName: d.supportName ?? undefined,
+            supportReason: d.supportReason ?? undefined,
+            // Notes
+            notes: d.notes ?? undefined,
             fromPosCodeId: d.posCodeId ?? 0,
             fromPosCodeName: d.posCodeMaster?.name ?? undefined,
             fromPosition: d.fromPosition ?? "",
             fromPositionNumber: d.fromPositionNumber ?? undefined,
             fromUnit: d.fromUnit ?? "",
-            actingAs: undefined, // not stored in API
+            actingAs: d.fromActingAs ?? undefined,
             toPosCodeId: 0,
             toPosCodeName: d.toPosition ?? undefined,
             toPosition: d.toPosition ?? "",
             toPositionNumber: d.toPositionNumber ?? undefined,
             toUnit: d.toUnit ?? "",
-            toActingAs: undefined, // not stored in API
+            toActingAs: d.toActingAs ?? undefined,
             fromRankLevel: fromRank,
             toRankLevel: prevFromRank,
             isPromotionValid: true,
@@ -175,17 +235,38 @@ export default function EditPromotionChainPage() {
       const swapDetails = nodes.map((node) => ({
         sequence: node.nodeOrder,
         personnelId: node.personnelId,
+        noId: node.noId,
         nationalId: node.nationalId,
         fullName: node.fullName,
         rank: node.rank,
+        seniority: node.seniority,
         posCodeId: node.fromPosCodeId,
+        // Personal information
+        birthDate: node.birthDate,
+        age: node.age,
+        education: node.education,
+        // Appointment information
+        lastAppointment: node.lastAppointment,
+        currentRankSince: node.currentRankSince,
+        enrollmentDate: node.enrollmentDate,
+        retirementDate: node.retirementDate,
+        yearsOfService: node.yearsOfService,
+        // Training information
+        trainingLocation: node.trainingLocation,
+        trainingCourse: node.trainingCourse,
+        // Support information
+        supportName: node.supporterName,
+        supportReason: node.supportReason,
+        // Position information
         fromPosition: node.fromPosition,
         fromPositionNumber: node.fromPositionNumber,
         fromUnit: node.fromUnit,
+        fromActingAs: node.actingAs,
         toPosition: node.toPosition,
         toPositionNumber: node.toPositionNumber,
         toUnit: node.toUnit,
-        notes: null,
+        toActingAs: node.toActingAs,
+        notes: node.notes || null,
       }));
 
       const payload = {

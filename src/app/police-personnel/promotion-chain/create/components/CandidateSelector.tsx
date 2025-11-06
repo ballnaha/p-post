@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Button, TextField, InputAdornment, Box, Typography, CircularProgress, Paper, IconButton, Divider, FormControl, Select, MenuItem, SelectChangeEvent, Chip, Collapse, Stack, Pagination, Skeleton } from '@mui/material';
+import { Drawer, Button, TextField, InputAdornment, Box, Typography, CircularProgress, Paper, IconButton, Divider, FormControl, Select, MenuItem, SelectChangeEvent, Chip, Collapse, Stack, Pagination, Skeleton, useMediaQuery, useTheme, Badge } from '@mui/material';
 import { Search as SearchIcon, Close as CloseIcon, FilterList as FilterListIcon, ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, Person as PersonIcon, Badge as BadgeIcon, CalendarToday as CalendarIcon, School as EducationIcon } from '@mui/icons-material';
 // DataTablePagination removed in favor of MUI Pagination for consistency
 
@@ -75,6 +75,8 @@ export default function CandidateSelector({
   selectedPersonnelIds = [],
   excludeTransactionId,
 }: CandidateSelectorProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<SwapListPerson[]>([]);
   const [totalCandidates, setTotalCandidates] = useState(0);
@@ -85,8 +87,7 @@ export default function CandidateSelector({
   const [filterUnit, setFilterUnit] = useState<string>('all');
   const [filterPosCode, setFilterPosCode] = useState<string>('all'); // Filter posCodeId
   const [posCodeOptions, setPosCodeOptions] = useState<Array<{ id: number; name: string }>>([]);
-  
-  // Drilldown state - เก็บ ID ของ candidate ที่ถูกขยาย
+  const [showFilters, setShowFilters] = useState(false);  // Drilldown state - เก็บ ID ของ candidate ที่ถูกขยาย
   const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
   
   // Pagination states
@@ -419,7 +420,7 @@ export default function CandidateSelector({
       onClose={handleClose}
       ModalProps={{
         sx: {
-          zIndex: 1400, // สูงกว่า AppBar (1200)
+          zIndex: 10001, // สูงกว่า AppBar และ components อื่นๆ
         }
       }}
       PaperProps={{
@@ -435,7 +436,7 @@ export default function CandidateSelector({
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header */}
         <Box sx={{ 
-          p: 1, 
+          p: { xs: 1.5, md: 1 }, 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center', 
@@ -446,28 +447,28 @@ export default function CandidateSelector({
           top: 0, 
           zIndex: 2,
         }}>
-          <Box sx={{ lineHeight: 1, pl: 1.5 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+          <Box sx={{ lineHeight: 1, pl: { xs: 0, md: 1.5 } }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25, fontSize: { xs: '1rem', md: '1.1rem' } }}>
               เลือกผู้สมัคร
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
               เลือกบุคลากรที่ต้องการเลื่อนขึ้นมาแทนตำแหน่งว่าง
             </Typography>
           </Box>
           <IconButton onClick={handleClose} size="small">
-            <CloseIcon sx={{ fontSize: 20 }} />
+            <CloseIcon sx={{ fontSize: { xs: 22, md: 20 } }} />
           </IconButton>
         </Box>
 
         {/* Content */}
-        <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+        <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 1.5 } }}>
         {(initialLoading || !filterOptionsLoaded) ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '400px' }}>
-            <CircularProgress size={48} />
-            <Typography variant="body1" color="text.secondary" sx={{ mt: 3, fontWeight: 500 }}>
+            <CircularProgress size={isMobile ? 40 : 48} />
+            <Typography variant="body1" color="text.secondary" sx={{ mt: 3, fontWeight: 500, fontSize: { xs: '0.9rem', md: '1rem' } }}>
               กำลังโหลดและกรองข้อมูลผู้สมัคร...
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
               {!filterOptionsLoaded ? 'กำลังโหลด...' : 'กรุณารอสักครู่'}
             </Typography>
           </Box>
@@ -544,7 +545,8 @@ export default function CandidateSelector({
 
         {/* Search and Filter Bar */}
         <Box sx={{ mb: 1.5 }}>
-          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+          {/* Search and Filter Toggle */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 1 }}>
             <TextField
               fullWidth
               placeholder="ค้นหา ชื่อ, ตำแหน่ง, หน่วย..."
@@ -568,55 +570,78 @@ export default function CandidateSelector({
               }}
             />
             
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <Select
-                value={filterUnit}
-                onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
-                displayEmpty
-                renderValue={(selected) => {
-                  if (selected === 'all') {
+            {/* Mobile: Toggle Filter Button */}
+            {isMobile && (
+              <Badge 
+                badgeContent={
+                  (filterUnit !== 'all' ? 1 : 0) + 
+                  (filterPosCode !== 'all' ? 1 : 0)
+                } 
+                color="primary"
+                invisible={filterUnit === 'all' && filterPosCode === 'all'}
+              >
+                <IconButton 
+                  onClick={() => setShowFilters(!showFilters)}
+                  color={showFilters ? 'primary' : 'default'}
+                  sx={{ 
+                    border: 1, 
+                    borderColor: showFilters ? 'primary.main' : 'divider',
+                    borderRadius: 1,
+                  }}
+                >
+                  <FilterListIcon />
+                </IconButton>
+              </Badge>
+            )}
+          </Box>
+
+          {/* Filter Controls */}
+          <Collapse in={!isMobile || showFilters}>
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 1, 
+              flexDirection: isMobile ? 'column' : 'row',
+              mb: isMobile ? 1 : 0 
+            }}>
+              <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
+                <Select
+                  value={filterUnit}
+                  onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
+                  displayEmpty
+                  renderValue={(selected) => {
+                    if (selected === 'all') {
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <FilterListIcon fontSize="small" />
+                          <Typography variant="body2">ทุกหน่วย</Typography>
+                        </Box>
+                      );
+                    }
                     return (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <FilterListIcon fontSize="small" />
-                        <Typography variant="body2">ทุกหน่วย</Typography>
+                        <Typography variant="body2" noWrap>{selected}</Typography>
                       </Box>
                     );
-                  }
-                  return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <FilterListIcon fontSize="small" />
-                      <Typography variant="body2" noWrap>{selected}</Typography>
-                    </Box>
-                  );
-                }}
-                MenuProps={{
-                  sx: { zIndex: 9999 },
-                  PaperProps: {
-                    sx: {
-                      zIndex: 9999,
-                      maxHeight: 300,
-                    }
-                  },
-                  disablePortal: false,
-                  anchorOrigin: {
-                    vertical: 'bottom',
-                    horizontal: 'left',
-                  },
-                  transformOrigin: {
-                    vertical: 'top',
-                    horizontal: 'left',
-                  },
-                }}
-              >
-                <MenuItem value="all">
-                  <Typography variant="body2">ทุกหน่วย</Typography>
-                </MenuItem>
-                {vacantPosition && (
-                  <MenuItem value={vacantPosition.unit}>
-                    <Typography variant="body2" fontWeight={600} color="primary.main">
-                      {vacantPosition.unit} (หน่วยเดียวกัน)
-                    </Typography>
+                  }}
+                  MenuProps={{
+                    disablePortal: true,
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 300,
+                      }
+                    },
+                  }}
+                >
+                  <MenuItem value="all">
+                    <Typography variant="body2">ทุกหน่วย</Typography>
                   </MenuItem>
+                  {vacantPosition && (
+                    <MenuItem value={vacantPosition.unit}>
+                      <Typography variant="body2" fontWeight={600} color="primary.main">
+                        {vacantPosition.unit} (หน่วยเดียวกัน)
+                      </Typography>
+                    </MenuItem>
                 )}
                 <Divider />
                 {uniqueUnits
@@ -629,68 +654,61 @@ export default function CandidateSelector({
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <Select
-                value={filterPosCode}
-                onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
-                displayEmpty
-                renderValue={(selected) => {
-                  if (selected === 'all') {
+              <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
+                <Select
+                  value={filterPosCode}
+                  onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
+                  displayEmpty
+                  renderValue={(selected) => {
+                    if (selected === 'all') {
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <FilterListIcon fontSize="small" />
+                          <Typography variant="body2">ทุกระดับ</Typography>
+                        </Box>
+                      );
+                    }
+                    const posCode = uniquePosCodes.find(pc => pc.id.toString() === selected);
                     return (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <FilterListIcon fontSize="small" />
-                        <Typography variant="body2">ทุกระดับ</Typography>
+                        <Typography variant="body2" noWrap>
+                          {posCode ? `${posCode.id} - ${posCode.name}` : selected}
+                        </Typography>
                       </Box>
                     );
-                  }
-                  const posCode = uniquePosCodes.find(pc => pc.id.toString() === selected);
-                  return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <FilterListIcon fontSize="small" />
-                      <Typography variant="body2" noWrap>{posCode?.name || selected}</Typography>
-                    </Box>
-                  );
-                }}
-                MenuProps={{
-                  sx: { zIndex: 9999 },
-                  PaperProps: {
-                    sx: {
-                      zIndex: 9999,
-                      maxHeight: 300,
-                    }
-                  },
-                  disablePortal: false,
-                  anchorOrigin: {
-                    vertical: 'bottom',
-                    horizontal: 'left',
-                  },
-                  transformOrigin: {
-                    vertical: 'top',
-                    horizontal: 'left',
-                  },
-                }}
-              >
-                <MenuItem value="all">
-                  <Typography variant="body2">ทุกระดับ</Typography>
-                </MenuItem>
-                {vacantPosition?.posCodeId && (
-                  <MenuItem value={vacantPosition.posCodeId.toString()}>
-                    <Typography variant="body2" fontWeight={600} color="primary.main">
-                      {vacantPosition.posCodeId}-{vacantPosition.posCodeName} (ระดับเดียวกัน)
-                    </Typography>
+                  }}
+                  MenuProps={{
+                    disablePortal: true,
+                    PaperProps: {
+                      sx: {
+                        maxHeight: 300,
+                      }
+                    },
+                  }}
+                >
+                  <MenuItem value="all">
+                    <Typography variant="body2">ทุกระดับ</Typography>
                   </MenuItem>
-                )}
-                <Divider />
-                {uniquePosCodes
-                  .filter(pc => pc.id !== vacantPosition?.posCodeId)
-                  .map((posCode) => (
-                    <MenuItem key={posCode.id} value={posCode.id.toString()}>
-                      <Typography variant="body2">{posCode.id}-{posCode.name}</Typography>
+                  {vacantPosition?.posCodeId && (
+                    <MenuItem value={vacantPosition.posCodeId.toString()}>
+                      <Typography variant="body2" fontWeight={600} color="primary.main">
+                        {vacantPosition.posCodeId} - {vacantPosition.posCodeName} (ระดับเดียวกัน)
+                      </Typography>
                     </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
-          </Box>
+                  )}
+                  <Divider />
+                  {uniquePosCodes
+                    .filter(pc => pc.id !== vacantPosition?.posCodeId)
+                    .map((posCode) => (
+                      <MenuItem key={posCode.id} value={posCode.id.toString()}>
+                        <Typography variant="body2">{posCode.id} - {posCode.name}</Typography>
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Box>
+          </Collapse>
           
           {loading ? (
             <Skeleton variant="rounded" height={28} sx={{ borderRadius: 0.75 }} />
@@ -1125,16 +1143,16 @@ export default function CandidateSelector({
                     page={page + 1}
                     onChange={(_event, p) => handleChangePage(p - 1)}
                     disabled={loading}
-                    size="medium"
-                    showFirstButton
-                    showLastButton
-                    siblingCount={1}
+                    size={isMobile ? 'small' : 'medium'}
+                    showFirstButton={!isMobile}
+                    showLastButton={!isMobile}
+                    siblingCount={isMobile ? 0 : 1}
                     boundaryCount={1}
                     sx={{
                       '& .MuiPaginationItem-root': {
-                        fontSize: '0.875rem',
-                        minWidth: '32px',
-                        height: '32px',
+                        fontSize: { xs: '0.75rem', md: '0.875rem' },
+                        minWidth: { xs: '28px', md: '32px' },
+                        height: { xs: '28px', md: '32px' },
                       },
                     }}
                   />
@@ -1206,28 +1224,29 @@ export default function CandidateSelector({
 
         {/* Footer Actions */}
         <Box sx={{ 
-          p: 2, 
+          p: { xs: 1.5, sm: 2 }, 
           borderTop: 1, 
           borderColor: 'divider', 
           bgcolor: 'background.paper', 
           display: 'flex', 
-          gap: 1.5, 
+          gap: { xs: 1, sm: 1.5 },
+          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between', 
-          alignItems: 'center',
+          alignItems: { xs: 'stretch', sm: 'center' },
           boxShadow: '0 -2px 8px rgba(0,0,0,0.05)',
         }}>
           <Box sx={{ flex: 1 }}>
             {selectedCandidate ? (
               <Box>
-                <Typography variant="body2" fontWeight={600} color="success.main" sx={{ fontSize: '0.875rem' }}>
+                <Typography variant="body2" fontWeight={600} color="success.main" sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
                   ✓ เลือก: {selectedCandidate.rank} {selectedCandidate.fullName}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.8rem' } }}>
                    • {selectedCandidate.unit} • {selectedCandidate.position}
                 </Typography>
               </Box>
             ) : (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.8rem' } }}>
                 กรุณาเลือกผู้สมัคร 1 คน
               </Typography>
             )}
@@ -1239,7 +1258,9 @@ export default function CandidateSelector({
               color="primary"
               onClick={handleSelect}
               disabled={!selectedCandidate || selectedPersonnelIds.includes(selectedCandidate.id)}
-              size="large"
+              size={isMobile ? 'medium' : 'large'}
+              fullWidth={isMobile}
+              sx={{ minWidth: { xs: '100%', sm: 120 } }}
             >
               {selectedCandidate 
                 ? (selectedPersonnelIds.includes(selectedCandidate.id) ? 'ถูกเลือกแล้ว' : 'ยืนยัน')

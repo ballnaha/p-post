@@ -50,6 +50,9 @@ import {
   Pagination,
   Skeleton,
   Autocomplete,
+  useMediaQuery,
+  useTheme,
+  Badge,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -174,10 +177,13 @@ interface PolicePersonnel {
 export default function PromotionChainPage() {
   const router = useRouter();
   const toast = useToast();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [loading, setLoading] = useState(false);
   const [chains, setChains] = useState<TransactionChain[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
+  const [showFilters, setShowFilters] = useState(false);
   // Compact drawer header height (px) for sticky calculations
   const drawerHeaderHeight = 56;
   const [vacantPositions, setVacantPositions] = useState<VacantPosition[]>([]);
@@ -1050,10 +1056,11 @@ export default function PromotionChainPage() {
           setFilterPosCode('all');
           setFilterUnit('all');
           setDrawerPage(0);
+          setShowFilters(false);
         }}
         ModalProps={{
           sx: {
-            zIndex: 1400, // สูงกว่า AppBar (1200)
+            zIndex: 10001, // สูงกว่า AppBar และ components อื่นๆ
           }
         }}
         PaperProps={{
@@ -1069,7 +1076,7 @@ export default function PromotionChainPage() {
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* Header */}
           <Box sx={{ 
-            p: 1, 
+            p: { xs: 1.5, md: 1 }, 
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center',
@@ -1080,12 +1087,12 @@ export default function PromotionChainPage() {
             top: 0,
             zIndex: 2,
           }}>
-            <Box sx={{ lineHeight: 1 , pl:1.5 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+            <Box sx={{ lineHeight: 1, pl: { xs: 0, md: 1.5 } }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25, fontSize: { xs: '1rem', md: '1.1rem' } }}>
                 จับคู่ตำแหน่งว่าง
               </Typography>
               {!loadingVacant && (
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1, fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
                   {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') ? 'กรองแล้ว: ' : 'ทั้งหมด: '}
                   {totalVacantPositions} ตำแหน่ง
                 </Typography>
@@ -1095,8 +1102,9 @@ export default function PromotionChainPage() {
               setShowCreateDialog(false);
               setSearchText('');
               setSearchInput('');
+              setShowFilters(false);
             }} size="small">
-              <CloseIcon sx={{ fontSize: 20 }} />
+              <CloseIcon sx={{ fontSize: { xs: 22, md: 20 } }} />
             </IconButton>
           </Box>
 
@@ -1113,8 +1121,12 @@ export default function PromotionChainPage() {
               boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
             }}>
               <Stack spacing={1}>
-                {/* Search and Filter in one row */}
-                <Stack direction="row" spacing={1}>
+                {/* Search and Filter Toggle */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  gap: 1,
+                  alignItems: 'flex-start'
+                }}>
                   <TextField
                     size="small"
                     placeholder="ค้นหา ตำแหน่ง, หน่วย..."
@@ -1130,143 +1142,157 @@ export default function PromotionChainPage() {
                     sx={{ flex: 1 }}
                   />
                   
-                  {/* Filter Unit */}
-                  <FormControl size="small" sx={{ minWidth: 150 }}>
-                    <Select
-                      value={filterUnit}
-                      onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
-                      displayEmpty
-                      renderValue={(selected) => {
-                        if (selected === 'all') {
-                          return (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <FilterListIcon fontSize="small" />
-                              <Typography variant="body2">ทุกหน่วย</Typography>
-                            </Box>
-                          );
-                        }
-                        return (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <FilterListIcon fontSize="small" />
-                            <Typography 
-                              variant="body2"
-                              sx={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {selected}
-                            </Typography>
-                          </Box>
-                        );
-                      }}
-                      MenuProps={{
-                        sx: { zIndex: 9999 },
-                        PaperProps: {
-                          sx: {
-                            zIndex: 9999,
-                            maxHeight: 300,
-                          }
-                        },
-                        disablePortal: false,
-                        anchorOrigin: {
-                          vertical: 'bottom',
-                          horizontal: 'left',
-                        },
-                        transformOrigin: {
-                          vertical: 'top',
-                          horizontal: 'left',
-                        },
-                      }}
-                      sx={{
-                        '& .MuiSelect-select': {
-                          py: 1,
-                        }
-                      }}
+                  {/* Mobile: Toggle Filter Button */}
+                  {isMobile && (
+                    <Badge 
+                      badgeContent={
+                        (filterUnit !== 'all' ? 1 : 0) + 
+                        (filterPosCode !== 'all' ? 1 : 0)
+                      } 
+                      color="primary"
+                      invisible={filterUnit === 'all' && filterPosCode === 'all'}
                     >
-                      <MenuItem value="all">
-                        <Typography variant="body2">ทุกหน่วย</Typography>
-                      </MenuItem>
-                      {unitOptions.map((unit) => (
-                        <MenuItem key={unit} value={unit}>
-                          <Typography variant="body2" noWrap>
-                            {unit}
-                          </Typography>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                      <IconButton 
+                        onClick={() => setShowFilters(!showFilters)}
+                        color={showFilters ? 'primary' : 'default'}
+                        sx={{ 
+                          border: 1, 
+                          borderColor: showFilters ? 'primary.main' : 'divider',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <FilterListIcon />
+                      </IconButton>
+                    </Badge>
+                  )}
+                </Box>
 
-                  {/* Filter PosCode */}
-                  <FormControl size="small" sx={{ minWidth: 150 }}>
-                    <Select
-                      value={filterPosCode}
-                      onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
-                      displayEmpty
-                      renderValue={(selected) => {
-                        if (selected === 'all') {
+                {/* Filter Controls */}
+                <Collapse in={!isMobile || showFilters}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 1, 
+                    flexDirection: isMobile ? 'column' : 'row',
+                    mb: isMobile ? 1 : 0 
+                  }}>
+                    {/* Filter Unit */}
+                    <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 150 }}>
+                      <Select
+                        value={filterUnit}
+                        onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
+                        displayEmpty
+                        renderValue={(selected) => {
+                          if (selected === 'all') {
+                            return (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <FilterListIcon fontSize="small" />
+                                <Typography variant="body2">ทุกหน่วย</Typography>
+                              </Box>
+                            );
+                          }
                           return (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <FilterListIcon fontSize="small" />
-                              <Typography variant="body2">ทั้งหมด</Typography>
+                              <Typography 
+                                variant="body2"
+                                sx={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {selected}
+                              </Typography>
                             </Box>
                           );
-                        }
-                        const posCode = posCodeOptions.find(p => p.id.toString() === selected);
-                        return (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <FilterListIcon fontSize="small" />
-                            <Typography 
-                              variant="body2"
-                              sx={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {posCode?.name || selected}
-                            </Typography>
-                          </Box>
-                        );
-                      }}
-                      MenuProps={{
-                        sx: { zIndex: 9999 },
-                        PaperProps: {
-                          sx: {
-                            zIndex: 9999,
-                            maxHeight: 300,
+                        }}
+                        MenuProps={{
+                          disablePortal: true,
+                          PaperProps: {
+                            sx: {
+                              maxHeight: 300,
+                            }
+                          },
+                        }}
+                        sx={{
+                          '& .MuiSelect-select': {
+                            py: 1,
                           }
-                        },
-                        disablePortal: false,
-                        anchorOrigin: {
-                          vertical: 'bottom',
-                          horizontal: 'left',
-                        },
-                        transformOrigin: {
-                          vertical: 'top',
-                          horizontal: 'left',
-                        },
-                      }}
-                      sx={{
-                        '& .MuiSelect-select': {
-                          py: 1,
-                        }
-                      }}
-                    >
-                      <MenuItem value="all">
-                        <Typography variant="body2">ทุกระดับ</Typography>
-                      </MenuItem>
-                      {posCodeOptions.map((posCode) => (
-                        <MenuItem key={posCode.id} value={posCode.id.toString()}>
-                          <Typography variant="body2" fontWeight={600} noWrap>
-                            {posCode.name}
-                          </Typography>
+                        }}
+                      >
+                        <MenuItem value="all">
+                          <Typography variant="body2">ทุกหน่วย</Typography>
                         </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Stack>
+                        {unitOptions.map((unit) => (
+                          <MenuItem key={unit} value={unit}>
+                            <Typography variant="body2" noWrap>
+                              {unit}
+                            </Typography>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    {/* Filter PosCode */}
+                    <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 150 }}>
+                      <Select
+                        value={filterPosCode}
+                        onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
+                        displayEmpty
+                        renderValue={(selected) => {
+                          if (selected === 'all') {
+                            return (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <FilterListIcon fontSize="small" />
+                                <Typography variant="body2">ทั้งหมด</Typography>
+                              </Box>
+                            );
+                          }
+                          const posCode = posCodeOptions.find(p => p.id.toString() === selected);
+                          return (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <FilterListIcon fontSize="small" />
+                              <Typography 
+                                variant="body2"
+                                sx={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {posCode ? `${posCode.id} - ${posCode.name}` : selected}
+                              </Typography>
+                            </Box>
+                          );
+                        }}
+                        MenuProps={{
+                          disablePortal: true,
+                          PaperProps: {
+                            sx: {
+                              maxHeight: 300,
+                            }
+                          },
+                        }}
+                        sx={{
+                          '& .MuiSelect-select': {
+                            py: 1,
+                          }
+                        }}
+                      >
+                        <MenuItem value="all">
+                          <Typography variant="body2">ทุกระดับ</Typography>
+                        </MenuItem>
+                        {posCodeOptions.map((posCode) => (
+                          <MenuItem key={posCode.id} value={posCode.id.toString()}>
+                            <Typography variant="body2" fontWeight={600} noWrap>
+                              {posCode.id} - {posCode.name}
+                            </Typography>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+                </Collapse>
                 
                 {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') && (
                   <Box sx={{ 
@@ -1303,16 +1329,16 @@ export default function PromotionChainPage() {
           )}
 
           {/* Content */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+          <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 1.5 } }}>
             {loadingVacant ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-                <CircularProgress size={48} />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                <CircularProgress size={isMobile ? 40 : 48} />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
                   กำลังโหลดข้อมูลตำแหน่งว่าง...
                 </Typography>
               </Box>
             ) : vacantPositions.length === 0 ? (
-              <Alert severity="warning" sx={{ fontSize: '0.875rem' }}>
+              <Alert severity="warning" sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
                 {(searchText || filterPosCode !== 'all') 
                   ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา'
                   : <>ไม่มีตำแหน่งว่างที่พร้อมใช้งานในปี {selectedYear}</>
@@ -1433,11 +1459,11 @@ export default function PromotionChainPage() {
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 1,
-              px: 2,
+              px: { xs: 1, sm: 2 },
             }}>
               {/* Rows per page selector */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
                   แสดง
                 </Typography>
                 <FormControl size="small" variant="standard" sx={{ minWidth: 60 }}>
@@ -1447,19 +1473,13 @@ export default function PromotionChainPage() {
                       setDrawerRowsPerPage(Number(e.target.value));
                       setDrawerPage(0);
                     }}
-                    sx={{ fontSize: '0.875rem' }}
+                    sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
                     MenuProps={{
-                      sx: { zIndex: 9999 },
+                      disablePortal: true,
                       PaperProps: {
-                        sx: { zIndex: 9999 }
-                      },
-                      anchorOrigin: {
-                        vertical: 'top',
-                        horizontal: 'left',
-                      },
-                      transformOrigin: {
-                        vertical: 'bottom',
-                        horizontal: 'left',
+                        sx: {
+                          maxHeight: 300,
+                        }
                       },
                     }}
                   >
@@ -1469,30 +1489,30 @@ export default function PromotionChainPage() {
                     <MenuItem value={50}>50</MenuItem>
                   </Select>
                 </FormControl>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
                   รายการ
                 </Typography>
               </Box>
 
               {/* MUI Pagination */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
+                <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
                   หน้า {drawerPage + 1} จาก {Math.ceil(totalVacantPositions / drawerRowsPerPage) || 1}
                 </Typography>
                 <Pagination
                   count={Math.ceil(totalVacantPositions / drawerRowsPerPage) || 1}
                   page={drawerPage + 1}
                   onChange={(_event, page) => setDrawerPage(page - 1)}
-                  size="medium"
-                  showFirstButton
-                  showLastButton
-                  siblingCount={1}
+                  size={isMobile ? 'small' : 'medium'}
+                  showFirstButton={!isMobile}
+                  showLastButton={!isMobile}
+                  siblingCount={isMobile ? 0 : 1}
                   boundaryCount={1}
                   sx={{
                     '& .MuiPaginationItem-root': {
-                      fontSize: '0.875rem',
-                      minWidth: '32px',
-                      height: '32px',
+                      fontSize: { xs: '0.75rem', md: '0.875rem' },
+                      minWidth: { xs: '28px', md: '32px' },
+                      height: { xs: '28px', md: '32px' },
                     },
                   }}
                 />

@@ -19,7 +19,10 @@ import {
   Collapse, 
   Stack, 
   Pagination, 
-  Skeleton 
+  Skeleton,
+  useMediaQuery,
+  useTheme,
+  Badge
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -98,6 +101,10 @@ export default function PersonnelDrawer({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [initialLoading, setInitialLoading] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [filterOptionsLoaded, setFilterOptionsLoaded] = useState(false);
 
   // Debounce search term
@@ -416,7 +423,7 @@ export default function PersonnelDrawer({
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header */}
         <Box sx={{ 
-          p: 1, 
+          p: { xs: 1.5, md: 1 }, 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center', 
@@ -427,21 +434,21 @@ export default function PersonnelDrawer({
           top: 0, 
           zIndex: 2,
         }}>
-          <Box sx={{ lineHeight: 1, pl: 1.5 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+          <Box sx={{ lineHeight: 1, pl: { xs: 0, md: 1.5 } }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25, fontSize: { xs: '1rem', md: '1.1rem' } }}>
               {title}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
               เลือกบุคลากรจากฐานข้อมูล
             </Typography>
           </Box>
           <IconButton onClick={handleClose} size="small">
-            <CloseIcon sx={{ fontSize: 20 }} />
+            <CloseIcon sx={{ fontSize: { xs: 22, md: 20 } }} />
           </IconButton>
         </Box>
 
         {/* Content */}
-        <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+        <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 1.5 } }}>
           {(initialLoading || !filterOptionsLoaded) ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '400px' }}>
               <CircularProgress size={48} />
@@ -490,6 +497,7 @@ export default function PersonnelDrawer({
 
               {/* Search and Filter Bar */}
               <Box sx={{ mb: 1.5 }}>
+                {/* Search Bar with Filter Toggle Button */}
                 <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
                   <TextField
                     fullWidth
@@ -514,10 +522,42 @@ export default function PersonnelDrawer({
                     }}
                   />
                   
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <Select
-                      value={filterUnit}
-                      onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
+                  {/* Filter Toggle Button for Mobile */}
+                  {isMobile && (
+                    <Badge 
+                      badgeContent={
+                        (filterUnit !== 'all' ? 1 : 0) + (filterPosCode !== 'all' ? 1 : 0)
+                      } 
+                      color="primary"
+                      invisible={filterUnit === 'all' && filterPosCode === 'all'}
+                    >
+                      <IconButton 
+                        onClick={() => setShowFilters(!showFilters)}
+                        color={showFilters ? 'primary' : 'default'}
+                        sx={{ 
+                          border: 1, 
+                          borderColor: showFilters ? 'primary.main' : 'divider',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <FilterListIcon />
+                      </IconButton>
+                    </Badge>
+                  )}
+                </Box>
+
+                {/* Filter Controls */}
+                <Collapse in={!isMobile || showFilters}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: 1, 
+                    flexDirection: isMobile ? 'column' : 'row',
+                    mb: isMobile ? 1 : 0 
+                  }}>
+                    <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
+                      <Select
+                        value={filterUnit}
+                        onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
                       displayEmpty
                       renderValue={(selected) => {
                         if (selected === 'all') {
@@ -536,14 +576,7 @@ export default function PersonnelDrawer({
                         );
                       }}
                       MenuProps={{
-                        sx: { zIndex: 9999 },
-                        PaperProps: {
-                          sx: {
-                            zIndex: 9999,
-                            maxHeight: 300,
-                          }
-                        },
-                        disablePortal: false,
+                        disablePortal: true,
                         anchorOrigin: {
                           vertical: 'bottom',
                           horizontal: 'left',
@@ -551,6 +584,11 @@ export default function PersonnelDrawer({
                         transformOrigin: {
                           vertical: 'top',
                           horizontal: 'left',
+                        },
+                        PaperProps: {
+                          sx: {
+                            maxHeight: 300,
+                          }
                         },
                       }}
                     >
@@ -565,7 +603,7 @@ export default function PersonnelDrawer({
                     </Select>
                   </FormControl>
 
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
                     <Select
                       value={filterPosCode}
                       onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
@@ -583,19 +621,14 @@ export default function PersonnelDrawer({
                         return (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <FilterListIcon fontSize="small" />
-                            <Typography variant="body2" noWrap>{posCode?.name || selected}</Typography>
+                            <Typography variant="body2" noWrap>
+                              {posCode ? `${posCode.id} - ${posCode.name}` : selected}
+                            </Typography>
                           </Box>
                         );
                       }}
                       MenuProps={{
-                        sx: { zIndex: 9999 },
-                        PaperProps: {
-                          sx: {
-                            zIndex: 9999,
-                            maxHeight: 300,
-                          }
-                        },
-                        disablePortal: false,
+                        disablePortal: true,
                         anchorOrigin: {
                           vertical: 'bottom',
                           horizontal: 'left',
@@ -604,6 +637,11 @@ export default function PersonnelDrawer({
                           vertical: 'top',
                           horizontal: 'left',
                         },
+                        PaperProps: {
+                          sx: {
+                            maxHeight: 300,
+                          }
+                        },
                       }}
                     >
                       <MenuItem value="all">
@@ -611,12 +649,13 @@ export default function PersonnelDrawer({
                       </MenuItem>
                       {uniquePosCodes.map((posCode) => (
                         <MenuItem key={posCode.id} value={posCode.id.toString()}>
-                          <Typography variant="body2">{posCode.name}</Typography>
+                          <Typography variant="body2">{posCode.id} - {posCode.name}</Typography>
                         </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
-                </Box>
+                  </Box>
+                </Collapse>
                 
                 {loading ? (
                   <Skeleton variant="rounded" height={28} sx={{ borderRadius: 0.75 }} />
@@ -689,7 +728,7 @@ export default function PersonnelDrawer({
                       key={person.id}
                       elevation={selectedPersonnel?.id === person.id ? 3 : 0}
                       sx={{ 
-                        p: 1.25,
+                        p: { xs: 1, md: 1.25 },
                         mb: 0.75,
                         cursor: 'pointer',
                         border: '2px solid',
@@ -705,7 +744,7 @@ export default function PersonnelDrawer({
                         '&:hover': {
                           borderColor: 'primary.main',
                           boxShadow: '0 4px 12px rgba(102, 126, 234, 0.2)',
-                          transform: 'translateY(-2px)',
+                          transform: isMobile ? 'none' : 'translateY(-2px)',
                         },
                         '&::before': selectedPersonnel?.id === person.id ? {
                           content: '""',
@@ -726,10 +765,10 @@ export default function PersonnelDrawer({
                       onDoubleClick={() => handleDoubleClick(person)}
                     >
                       {/* Main Content */}
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: { xs: 0.5, md: 1 } }}>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25, flexWrap: 'wrap' }}>
-                            <Typography variant="body1" fontWeight={700} sx={{ color: 'text.primary' }}>
+                            <Typography variant="body1" fontWeight={700} sx={{ color: 'text.primary', fontSize: { xs: '0.9rem', md: '1rem' } }}>
                               {person.rank} {person.fullName}
                             </Typography>
                             {person.age && person.age !== '-' && (
@@ -737,8 +776,8 @@ export default function PersonnelDrawer({
                                 label={`${person.age}`}
                                 size="small"
                                 sx={{ 
-                                  height: 20,
-                                  fontSize: '0.7rem',
+                                  height: { xs: 18, md: 20 },
+                                  fontSize: { xs: '0.65rem', md: '0.7rem' },
                                   bgcolor: 'grey.100',
                                   fontWeight: 600,
                                 }}
@@ -751,14 +790,14 @@ export default function PersonnelDrawer({
                               label={person.posCodeId ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}` : (person.posCodeMaster?.name || '-')}
                               size="small"
                               sx={{ 
-                                height: 22,
-                                fontSize: '0.75rem',
+                                height: { xs: 20, md: 22 },
+                                fontSize: { xs: '0.7rem', md: '0.75rem' },
                                 bgcolor: 'primary.50',
                                 color: 'primary.main',
                                 fontWeight: 600,
                               }}
                             />
-                            <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem', alignSelf: 'center' }}>
+                            <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: { xs: '0.8rem', md: '0.875rem' }, alignSelf: 'center' }}>
                               {person.position}
                             </Typography>
                             {person.positionNumber && (
@@ -766,15 +805,15 @@ export default function PersonnelDrawer({
                                 label={person.positionNumber}
                                 size="small"
                                 variant="outlined"
-                                sx={{ height: 22, fontSize: '0.75rem' }}
+                                sx={{ height: { xs: 20, md: 22 }, fontSize: { xs: '0.7rem', md: '0.75rem' } }}
                               />
                             )}
                             <Chip 
                               label={person.unit}
                               size="small"
                               sx={{ 
-                                height: 22,
-                                fontSize: '0.75rem',
+                                height: { xs: 20, md: 22 },
+                                fontSize: { xs: '0.7rem', md: '0.75rem' },
                                 bgcolor: 'grey.100',
                                 color: 'text.secondary',
                               }}
@@ -784,17 +823,17 @@ export default function PersonnelDrawer({
                           {(person.actingAs || person.yearsOfService || person.trainingCourse) && (
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.25 }}>
                               {person.actingAs && person.actingAs !== '-' && (
-                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: { xs: '0.75rem', md: '0.8rem' } }}>
                                   💼 {person.actingAs}
                                 </Typography>
                               )}
                               {person.yearsOfService && person.yearsOfService !== '-' && (
-                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: { xs: '0.75rem', md: '0.8rem' } }}>
                                   📅 {person.yearsOfService}
                                 </Typography>
                               )}
                               {person.trainingCourse && person.trainingCourse !== '-' && (
-                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: { xs: '0.75rem', md: '0.8rem' } }}>
                                   🎓 นรต. {person.trainingCourse}
                                 </Typography>
                               )}
@@ -991,18 +1030,17 @@ export default function PersonnelDrawer({
                       borderTop: 1,
                       borderColor: 'divider',
                     }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1 } }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
                           แสดง
                         </Typography>
                         <FormControl size="small" variant="standard" sx={{ minWidth: 60 }} disabled={loading}>
                           <Select
                             value={rowsPerPage}
                             onChange={(e) => handleChangeRowsPerPage(Number(e.target.value))}
-                            sx={{ fontSize: '0.875rem' }}
+                            sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}
                             MenuProps={{
-                              sx: { zIndex: 9999 },
-                              PaperProps: { sx: { zIndex: 9999 } },
+                              disablePortal: true,
                               anchorOrigin: {
                                 vertical: 'top',
                                 horizontal: 'left',
@@ -1019,15 +1057,15 @@ export default function PersonnelDrawer({
                             <MenuItem value={50}>50</MenuItem>
                           </Select>
                         </FormControl>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
                           รายการ
                         </Typography>
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 2 } }}>
                         {loading ? (
-                          <Skeleton variant="rounded" width={140} height={24} />
+                          <Skeleton variant="rounded" width={isMobile ? 100 : 140} height={24} />
                         ) : (
-                          <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                          <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' }, display: { xs: 'none', sm: 'block' } }}>
                             หน้า {page + 1} จาก {Math.ceil(totalPersonnel / rowsPerPage) || 1}
                           </Typography>
                         )}
@@ -1036,16 +1074,16 @@ export default function PersonnelDrawer({
                           page={page + 1}
                           onChange={(_event, p) => handleChangePage(p - 1)}
                           disabled={loading}
-                          size="medium"
-                          showFirstButton
-                          showLastButton
-                          siblingCount={1}
+                          size={isMobile ? 'small' : 'medium'}
+                          siblingCount={isMobile ? 0 : 1}
                           boundaryCount={1}
+                          showFirstButton={!isMobile}
+                          showLastButton={!isMobile}
                           sx={{
                             '& .MuiPaginationItem-root': {
-                              fontSize: '0.875rem',
-                              minWidth: '32px',
-                              height: '32px',
+                              fontSize: { xs: '0.8rem', md: '0.875rem' },
+                              minWidth: { xs: '28px', md: '32px' },
+                              height: { xs: '28px', md: '32px' },
                             },
                           }}
                         />
@@ -1106,40 +1144,46 @@ export default function PersonnelDrawer({
 
         {/* Footer Actions */}
         <Box sx={{ 
-          p: 2, 
+          p: { xs: 1.5, md: 2 }, 
           borderTop: 1, 
           borderColor: 'divider', 
           bgcolor: 'background.paper', 
           display: 'flex', 
-          gap: 1.5, 
+          gap: { xs: 1, md: 1.5 }, 
           justifyContent: 'space-between', 
           alignItems: 'center',
           boxShadow: '0 -2px 8px rgba(0,0,0,0.05)',
+          flexDirection: { xs: 'column', sm: 'row' },
         }}>
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ flex: 1, width: { xs: '100%', sm: 'auto' } }}>
             {selectedPersonnel ? (
               <Box>
-                <Typography variant="body2" fontWeight={600} color="success.main" sx={{ fontSize: '0.875rem' }}>
+                <Typography variant="body2" fontWeight={600} color="success.main" sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
                   ✓ เลือก: {selectedPersonnel.rank} {selectedPersonnel.fullName}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.8rem' } }}>
                   {selectedPersonnel.unit} • {selectedPersonnel.position}
                 </Typography>
               </Box>
             ) : (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
                 กรุณาเลือกบุคลากร 1 คน
               </Typography>
             )}
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
             
             <Button
               variant="contained"
               color="primary"
               onClick={handleSelect}
               disabled={!selectedPersonnel}
-              size="large"
+              size={isMobile ? 'medium' : 'large'}
+              fullWidth={isMobile}
+              sx={{ 
+                minHeight: { xs: 44, md: 42 },
+                fontSize: { xs: '0.9rem', md: '0.95rem' }
+              }}
             >
               ยืนยัน
             </Button>

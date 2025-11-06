@@ -676,7 +676,7 @@ export default function CandidateSelector({
                 {vacantPosition?.posCodeId && (
                   <MenuItem value={vacantPosition.posCodeId.toString()}>
                     <Typography variant="body2" fontWeight={600} color="primary.main">
-                      {vacantPosition.posCodeName} (ระดับเดียวกัน)
+                      {vacantPosition.posCodeId}-{vacantPosition.posCodeName} (ระดับเดียวกัน)
                     </Typography>
                   </MenuItem>
                 )}
@@ -685,7 +685,7 @@ export default function CandidateSelector({
                   .filter(pc => pc.id !== vacantPosition?.posCodeId)
                   .map((posCode) => (
                     <MenuItem key={posCode.id} value={posCode.id.toString()}>
-                      <Typography variant="body2">{posCode.name}</Typography>
+                      <Typography variant="body2">{posCode.id}-{posCode.name}</Typography>
                     </MenuItem>
                   ))}
               </Select>

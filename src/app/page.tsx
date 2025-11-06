@@ -100,6 +100,7 @@ interface DashboardStats {
   assignedPositions: number;
   pendingPositions: number;
   totalApplicants: number;
+  matchedVacantPositions?: number; // จำนวนตำแหน่งว่างที่จับคู่ไปแล้ว
   totalSwapTransactions: number;
   totalSwapList: number; // จำนวนสลับตำแหน่งทั้งหมด
   totalThreeWaySwap: number; // จำนวนสามเส้าทั้งหมด
@@ -226,7 +227,7 @@ export default function HomePage() {
       labels: chartDataRaw.map(p => p.posCodeName),
       datasets: [
         {
-          label: 'จับคู่สำเร็จ',
+          label: 'จับคู่ตำแหน่งว่างแล้ว',
           data: chartDataRaw.map(p => p.totalApplicants),
           backgroundColor: (context: any) => {
             const ctx = context.chart.ctx;
@@ -256,7 +257,7 @@ export default function HomePage() {
           },
         },
         {
-          label: 'ตำแหน่งว่าง',
+          label: 'ตำแหน่งว่าง (รอจับคู่)',
           data: chartDataRaw.map(p => p.vacantSlots || null), // แปลง 0 เป็น null เพื่อไม่แสดงแท่ง
           backgroundColor: (context: any) => {
             const ctx = context.chart.ctx;
@@ -292,26 +293,49 @@ export default function HomePage() {
         display: false,
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
-        padding: 16,
-        cornerRadius: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.92)',
+        padding: 18,
+        cornerRadius: 10,
         titleFont: {
           family: "'Noto Sans Thai', sans-serif",
-          size: 14,
+          size: 15,
           weight: 'bold',
         },
         bodyFont: {
           family: "'Noto Sans Thai', sans-serif",
           size: 13,
+          weight: '500',
         },
+        bodySpacing: 8,
+        displayColors: true,
+        boxWidth: 12,
+        boxHeight: 12,
+        boxPadding: 6,
         callbacks: {
+          title: function(tooltipItems: any) {
+            return 'ตำแหน่ง: ' + tooltipItems[0].label;
+          },
           label: function(context: any) {
             let label = context.dataset.label || '';
+            const value = context.parsed.y;
             if (label) {
               label += ': ';
             }
-            label += context.parsed.y.toLocaleString() + ' คน';
+            label += value.toLocaleString() + ' คน';
             return label;
+          },
+          afterBody: function(tooltipItems: any) {
+            if (!chartDataRaw) return [];
+            const dataIndex = tooltipItems[0].dataIndex;
+            const assigned = chartDataRaw[dataIndex]?.totalApplicants || 0;
+            const vacant = chartDataRaw[dataIndex]?.vacantSlots || 0;
+            const total = assigned + vacant;
+            const percentage = total > 0 ? ((assigned / total) * 100).toFixed(1) : '0.0';
+            return [
+              '',
+              `รวมทั้งหมด: ${total.toLocaleString()} ตำแหน่ง`,
+              `อัตราจับคู่: ${percentage}%`
+            ];
           }
         }
       },
@@ -319,10 +343,16 @@ export default function HomePage() {
         display: function(context: any) {
           return context.dataset.data[context.dataIndex] > 0;
         },
-        color: '#ffffff',
+        color: function(context: any) {
+          // ถ้าเป็น dataset ตำแหน่งว่าง ใช้สีเข้ม
+          if (context.dataset.label === 'ตำแหน่งว่าง (รอจับคู่)') {
+            return '#424242';
+          }
+          return '#ffffff';
+        },
         font: {
           family: "'Noto Sans Thai', sans-serif",
-          size: 11,
+          size: 12,
           weight: 'bold' as const,
         },
         formatter: function(value: number) {
@@ -333,6 +363,13 @@ export default function HomePage() {
         },
         anchor: 'center' as const,
         align: 'center' as const,
+        textStrokeColor: function(context: any) {
+          if (context.dataset.label === 'ตำแหน่งว่าง (รอจับคู่)') {
+            return 'rgba(255, 255, 255, 0.3)';
+          }
+          return 'rgba(0, 0, 0, 0.3)';
+        },
+        textStrokeWidth: 2,
       },
     },
     scales: {
@@ -764,36 +801,48 @@ export default function HomePage() {
                 >
                   {stats.assignmentRate.toFixed(1)}%
                 </Typography>
+                <Typography variant="caption" sx={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.72)', fontWeight: 500 }}>
+                  อัตราการจับคู่ตำแหน่งว่างสำเร็จ
+                </Typography>
               </Box>
 
               <Divider sx={{ my: 2.5, borderColor: 'rgba(255,255,255,0.22)' }} />
 
               {/* Sub Stats Grid */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
-                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
-                  <Typography variant="h6" fontWeight={700} fontSize="1.12rem" sx={{ mb: 0.25, color: 'common.white' }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1.2 }}>
+                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
+                  <Typography variant="h6" fontWeight={700} fontSize="1.05rem" sx={{ mb: 0.25, color: 'common.white' }}>
                     {stats.assignedPositions.toLocaleString()}
                   </Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
-                    จับคู่สำเร็จ
+                  <Typography variant="caption" sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    มีคนดำรง
                   </Typography>
                 </Box>
 
-                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
-                  <Typography variant="h6" fontWeight={700} fontSize="1.12rem" sx={{ mb: 0.25, color: 'common.white' }}>
-                    {stats.pendingPositions.toLocaleString()}
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
-                    รอดำเนินการ
-                  </Typography>
-                </Box>
-
-                <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
-                  <Typography variant="h6" fontWeight={700} fontSize="1.12rem" sx={{ mb: 0.25, color: 'common.white' }}>
+                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
+                  <Typography variant="h6" fontWeight={700} fontSize="1.05rem" sx={{ mb: 0.25, color: 'common.white' }}>
                     {stats.totalApplicants.toLocaleString()}
                   </Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
-                    ผู้สมัคร
+                  <Typography variant="caption" sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    ตำแหน่งว่าง
+                  </Typography>
+                </Box>
+
+                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
+                  <Typography variant="h6" fontWeight={700} fontSize="1.05rem" sx={{ mb: 0.25, color: 'common.white' }}>
+                    {(stats.matchedVacantPositions || 0).toLocaleString()}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    จับคู่แล้ว
+                  </Typography>
+                </Box>
+
+                <Box sx={{ textAlign: 'center', p: 1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
+                  <Typography variant="h6" fontWeight={700} fontSize="1.05rem" sx={{ mb: 0.25, color: 'common.white' }}>
+                    {stats.pendingPositions.toLocaleString()}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: '0.78rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    รอจับคู่
                   </Typography>
                 </Box>
               </Box>
@@ -890,6 +939,9 @@ export default function HomePage() {
                 >
                   {stats.totalSwapList.toLocaleString()} คน
                 </Typography>
+                <Typography variant="caption" sx={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.72)', fontWeight: 500 }}>
+                  จำนวนคนที่สลับตำแหน่งทั้งหมด (Two-way)
+                </Typography>
               </Box>
 
               <Divider sx={{ my: 2.5, borderColor: 'rgba(255,255,255,0.22)' }} />
@@ -897,15 +949,14 @@ export default function HomePage() {
               {/* Additional Info */}
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 1.5 }}>
                 <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, mb: 0.25 }}>
-                    <Typography variant="body1" sx={{ fontSize: '1.1rem', fontWeight: 600, color: 'common.white' }}>
-                      {((stats.completedSwapCount / stats.totalSwapList) * 100 || 0).toFixed(1)}%
-                    </Typography>
-                  </Box>
-                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
-                    สลับสำเร็จ
+                  <Typography variant="h6" fontWeight={700} fontSize="1.05rem" sx={{ mb: 0.25, color: 'common.white' }}>
+                    {stats.completedSwapCount.toLocaleString()} คน
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: '0.82rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    สลับสำเร็จแล้ว
                   </Typography>
                 </Box>
+                
               </Box>
             </CardContent>
           </Card>
@@ -1000,6 +1051,9 @@ export default function HomePage() {
                 >
                   {stats.totalThreeWaySwap.toLocaleString()} คน
                 </Typography>
+                <Typography variant="caption" sx={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.72)', fontWeight: 500 }}>
+                  จำนวนคนที่สลับตำแหน่งทั้งหมด (Three-way)
+                </Typography>
               </Box>
 
               <Divider sx={{ my: 2.5, borderColor: 'rgba(255,255,255,0.22)' }} />
@@ -1007,15 +1061,14 @@ export default function HomePage() {
               {/* Additional Info */}
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 1.5 }}>
                 <Box sx={{ textAlign: 'center', p: 1.1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.16)' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 0.5, mb: 0.25 }}>
-                    <Typography variant="body1" sx={{ fontSize: '1.1rem', fontWeight: 600, color: 'common.white' }}>
-                      {((stats.completedThreeWaySwapCount / stats.totalThreeWaySwap) * 100 || 0).toFixed(1)}%
-                    </Typography>
-                  </Box>
-                  <Typography variant="caption" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
-                    สลับสำเร็จ
+                  <Typography variant="h6" fontWeight={700} fontSize="1.05rem" sx={{ mb: 0.25, color: 'common.white' }}>
+                    {stats.completedThreeWaySwapCount.toLocaleString()} คน
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: '0.82rem', fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    สลับสำเร็จแล้ว
                   </Typography>
                 </Box>
+                
               </Box>
             </CardContent>
           </Card>
@@ -1077,7 +1130,7 @@ export default function HomePage() {
                   </Typography>
                 </Box>
                 <Typography variant="body2" color="text.secondary" fontSize="0.875rem" sx={{ ml: 5.5 }}>
-                  ปี {selectedYear}{selectedUnit !== 'all' && ` • หน่วย: ${selectedUnit}`}
+                  แยกตามรหัสตำแหน่ง (POS Code) • ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                 </Typography>
               </Box>
               <Box sx={{ 
@@ -1085,34 +1138,47 @@ export default function HomePage() {
                 alignItems: 'center', 
                 gap: 3,
                 bgcolor: 'white',
-                px: 2,
-                py: 1,
+                px: 2.5,
+                py: 1.5,
                 borderRadius: 2,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                border: '1px solid',
+                borderColor: 'divider',
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Box sx={{ 
-                    width: 14, 
-                    height: 14, 
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, rgba(158, 158, 158, 0.9), rgba(189, 189, 189, 0.7))',
-                    boxShadow: '0 2px 4px rgba(158, 158, 158, 0.3)',
-                  }} />
-                  <Typography variant="body2" fontSize="0.85rem" fontWeight={600} color="text.primary">
-                    ตำแหน่งว่าง
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ 
-                    width: 14, 
-                    height: 14, 
-                    borderRadius: '50%',
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: 1,
                     background: 'linear-gradient(135deg, #1DE9B6, #00BFA5)',
-                    boxShadow: '0 2px 4px rgba(29, 233, 182, 0.3)',
+                    boxShadow: '0 2px 6px rgba(29, 233, 182, 0.35)',
                   }} />
-                  <Typography variant="body2" fontSize="0.85rem" fontWeight={600} color="text.primary">
-                    จับคู่สำเร็จ
-                  </Typography>
+                  <Box>
+                    <Typography variant="body2" fontSize="0.85rem" fontWeight={700} color="text.primary">
+                      จับคู่ตำแหน่งว่างแล้ว
+                    </Typography>
+                    <Typography variant="caption" fontSize="0.72rem" color="text.secondary">
+                      ผ่าน Promotion Chain
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: 1,
+                    background: 'linear-gradient(135deg, rgba(158, 158, 158, 0.9), rgba(189, 189, 189, 0.7))',
+                    boxShadow: '0 2px 6px rgba(158, 158, 158, 0.25)',
+                  }} />
+                  <Box>
+                    <Typography variant="body2" fontSize="0.85rem" fontWeight={700} color="text.primary">
+                      ตำแหน่งว่าง (รอจับคู่)
+                    </Typography>
+                    <Typography variant="caption" fontSize="0.72rem" color="text.secondary">
+                      ยังไม่ได้จับคู่
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>

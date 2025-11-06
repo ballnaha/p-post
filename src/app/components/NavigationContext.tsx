@@ -28,12 +28,22 @@ interface NavigationProviderProps {
 
 export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'), {
+    noSsr: true, // ป้องกัน SSR mismatch
+  });
+  
+  console.log('NavigationProvider render - isMobile:', isMobile, 'window.innerWidth:', typeof window !== 'undefined' ? window.innerWidth : 'N/A');
   
   // State สำหรับ sidebar
   // Desktop: isSidebarOpen ควรเป็น true เสมอ, ใช้ isSidebarCollapsed ควบคุมแทน
   // Mobile: isSidebarOpen ควบคุมการเปิด/ปิด drawer
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default เป็น true (Desktop แสดงเสมอ)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    // เริ่มต้นด้วย false ถ้าเป็น mobile, true ถ้าเป็น desktop
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 900; // 900px = md breakpoint
+    }
+    return true; // SSR default to desktop
+  });
   
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -77,24 +87,28 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
     prevIsMobileRef.current = isMobile;
   }, [isMobile]);
 
-  // จัดการ body scroll lock - ปรับให้ไม่ lock ถ้ากำลัง transition เป็น mobile
+  // จัดการ body scroll lock - ใช้เฉพาะเมื่อ sidebar เปิดใน mobile
   useLayoutEffect(() => {
-    const prevIsMobile = prevIsMobileRef.current;
-    const transitioningToMobile = !prevIsMobile && isMobile;
-    // ไม่ lock ถ้ากำลัง transition เป็น mobile (ต้องรอให้ state update ก่อน)
-    if (isMobile && isSidebarOpen && !transitioningToMobile) {
+    // Lock body scroll เฉพาะเมื่อ sidebar เปิดใน mobile
+    if (isMobile && isSidebarOpen) {
+      // เก็บค่า scroll position ปัจจุบัน
+      const scrollY = window.scrollY;
       document.body.style.overflow = 'hidden';
       document.body.style.position = 'fixed';
       document.body.style.width = '100%';
-      document.body.style.top = '0';
-    } else {
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
-      document.body.style.top = '';
+      document.body.style.top = `-${scrollY}px`;
+      
+      // Cleanup: คืนค่า scroll position
+      return () => {
+        const scrollY = document.body.style.top;
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      };
     }
-
-    // Cleanup
+    // ถ้าไม่ใช่เงื่อนไข lock ให้ปลด lock เสมอ
     return () => {
       document.body.style.overflow = '';
       document.body.style.position = '';
@@ -104,8 +118,12 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
   }, [isMobile, isSidebarOpen]);
 
   const toggleNavigation = useCallback(() => {
+    console.log('toggleNavigation called, isMobile:', isMobile);
     if (isMobile) {
-      setIsSidebarOpen((prev: boolean) => !prev);
+      setIsSidebarOpen((prev: boolean) => {
+        console.log('Setting isSidebarOpen from', prev, 'to', !prev);
+        return !prev;
+      });
     } else {
       setIsSidebarCollapsed((prev: boolean) => !prev);
       setIsSidebarOpen(true);

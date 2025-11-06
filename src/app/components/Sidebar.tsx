@@ -1,5 +1,5 @@
 'use client';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -44,12 +44,20 @@ const Sidebar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
 
+  console.log('Sidebar render - isMobile:', isMobile, 'isSidebarOpen:', isSidebarOpen, 'isTransitioningToMobile:', isTransitioningToMobile);
+
+  // ใช้ useRef เพื่อเก็บ pathname ก่อนหน้า
+  const prevPathnameRef = useRef(pathname);
+
   // ปิด sidebar อัตโนมัติเมื่อเปลี่ยนหน้าใน mobile
   useEffect(() => {
-    if (isMobile && isSidebarOpen) {
+    // ถ้า pathname เปลี่ยน และเป็น mobile และ sidebar เปิดอยู่
+    if (prevPathnameRef.current !== pathname && isMobile && isSidebarOpen) {
+      console.log('Pathname changed from', prevPathnameRef.current, 'to', pathname, '- closing sidebar');
       closeAllMenus();
     }
-  }, [pathname, isMobile, isSidebarOpen, closeAllMenus]); // เพิ่ม dependencies ให้ครบ
+    prevPathnameRef.current = pathname;
+  }, [pathname, isMobile, isSidebarOpen, closeAllMenus]);
 
   type MenuItem = {
     label: string;
@@ -307,12 +315,21 @@ const Sidebar: React.FC = () => {
       <Drawer
         variant="temporary"
         anchor="left"
-        open={isSidebarOpen && !isTransitioningToMobile}
+        open={isSidebarOpen}
         onClose={closeAllMenus}
         // Don't keep modal mounted and don't let Modal manage body scroll
-        ModalProps={{ keepMounted: false, disableScrollLock: true }}
+        ModalProps={{ 
+          keepMounted: true, // เปลี่ยนเป็น true เพื่อให้ render ไว้ก่อน
+          disableScrollLock: true,
+          slotProps: {
+            backdrop: {
+              onClick: closeAllMenus, // เพิ่มการปิดเมื่อคลิก backdrop
+            }
+          }
+        }}
         hideBackdrop={false}
         sx={{
+          zIndex: (theme) => theme.zIndex.drawer, // ใช้ drawer zIndex มาตรฐาน (1200)
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: drawerWidth,
@@ -321,8 +338,10 @@ const Sidebar: React.FC = () => {
             borderRight: '1px solid #374151',
             display: 'flex',
             flexDirection: 'column',
-            pt: { xs: '56px', sm: '64px' },
-            overflow: 'hidden', // ป้องกัน overflow ที่ paper
+            pt: { xs: '56px', sm: '64px' }, // เว้นที่สำหรับ Header
+            overflow: 'hidden',
+            // เพิ่ม touch support สำหรับ mobile
+            WebkitOverflowScrolling: 'touch',
           },
         }}
       >

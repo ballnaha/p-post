@@ -19,39 +19,68 @@ export async function GET(request: NextRequest) {
     const yearNumber = parseInt(year);
     console.log('Parsed yearNumber:', yearNumber);
 
-    // สร้าง where clause สำหรับ VacantPosition filter
-    const vacantPositionBaseWhere: any = {
-      year: yearNumber
-    };
+    // === คำนวณจับคู่ตำแหน่งกับบุคลากร (จาก PolicePersonnel) ===
+    // สร้าง where clause สำหรับ PolicePersonnel filter
+    const personnelBaseWhere: any = {};
     if (unit && unit !== 'all') {
-      vacantPositionBaseWhere.unit = unit;
+      personnelBaseWhere.unit = unit;
     }
 
-    // นับจำนวนผู้สมัครตำแหน่งว่างทั้งหมด
-    const totalApplicants = await prisma.vacantPosition.count({
-      where: vacantPositionBaseWhere
+    // นับตำแหน่งทั้งหมดในระบบ (จาก PolicePersonnel)
+    const totalPositionsInSystem = await prisma.policePersonnel.count({
+      where: personnelBaseWhere
     });
 
-    // นับจำนวนตำแหน่งที่จับคู่สำเร็จแล้ว (จาก swap_transaction_detail ที่มี toPosition ตรงกับตำแหน่งว่าง)
-    // และกรองตาม unit ถ้ามี
-    const assignedDetailWhereClause: any = {
+    // นับตำแหน่งที่มีคนดำรงตำแหน่ง (NOT vacant)
+    const assignedPositions = await prisma.policePersonnel.count({
+      where: {
+        ...personnelBaseWhere,
+        AND: [
+          { fullName: { not: null } },
+          { fullName: { not: 'ว่าง' } },
+          { fullName: { not: 'ว่าง (กันตำแหน่ง)' } },
+          { rank: { not: null } }
+        ]
+      }
+    });
+
+    // นับตำแหน่งว่าง (fullName = null || 'ว่าง' || 'ว่าง (กันตำแหน่ง)' || rank = null)
+    const totalVacantPositions = await prisma.policePersonnel.count({
+      where: {
+        ...personnelBaseWhere,
+        OR: [
+          { fullName: null },
+          { fullName: 'ว่าง' },
+          { fullName: 'ว่าง (กันตำแหน่ง)' },
+          { rank: null }
+        ]
+      }
+    });
+
+    // จำนวนผู้สมัคร = จำนวนตำแหน่งว่างทั้งหมด
+    const totalApplicants = totalVacantPositions;
+
+    // นับจำนวนตำแหน่งว่างที่จับคู่ไปแล้ว (จาก SwapTransactionDetail ที่ swapType = 'promotion-chain')
+    const promotionChainWhereClause: any = {
       transaction: {
-        year: yearNumber
-      },
-      toPosition: { not: null }
+        year: yearNumber,
+        swapType: 'promotion-chain'
+      }
     };
     if (unit && unit !== 'all') {
-      assignedDetailWhereClause.toUnit = unit;
+      promotionChainWhereClause.OR = [
+        { fromUnit: unit },
+        { toUnit: unit }
+      ];
     }
-    const assignedPositions = await prisma.swapTransactionDetail.count({
-      where: assignedDetailWhereClause
+
+    // จำนวนตำแหน่งว่างที่จับคู่ไปแล้ว
+    const matchedVacantPositions = await prisma.swapTransactionDetail.count({
+      where: promotionChainWhereClause
     });
 
-    // จำนวนตำแหน่งว่างที่จับคู่แล้ว = assignedPositions
-    const totalVacantPositions = assignedPositions;
-
-    // จำนวนตำแหน่งที่รอดำเนินการ = ผู้สมัครทั้งหมด - ที่จับคู่แล้ว
-    const pendingPositions = totalApplicants - assignedPositions;
+    // จำนวนตำแหน่งว่างที่รอจับคู่ = ตำแหน่งว่างทั้งหมด - จับคู่ไปแล้ว
+    const pendingPositions = Math.max(0, totalVacantPositions - matchedVacantPositions);
 
     // สร้าง where clause สำหรับ SwapList filter
     const swapListWhereClause: any = {
@@ -143,9 +172,9 @@ export async function GET(request: NextRequest) {
     });
     const totalPositionTypes = uniquePositions.length;
 
-    // คำนวณอัตราความสำเร็จ (จับคู่สำเร็จ × 100 / ผู้สมัคร)
+    // คำนวณอัตราความสำเร็จ (จับคู่แล้ว × 100 / ตำแหน่งว่าง)
     const assignmentRate = totalApplicants > 0 
-      ? (assignedPositions * 100 / totalApplicants)
+      ? (matchedVacantPositions * 100 / totalApplicants)
       : 0;
 
     // ตำแหน่งที่ได้รับความนิยมสูงสุด (Top 5) - จาก toPosition ใน swap_transaction_detail
@@ -183,18 +212,16 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // สถิติแยกตามตำแหน่ง (Position Details) - ใช้ vacant_position สำหรับจำนวนตำแหน่งว่าง
-    // และ swap_transaction_detail สำหรับจำนวนที่จับคู่แล้ว
-    const applicantWhereClause: any = {
-      year: yearNumber
-    };
+    // สถิติแยกตามตำแหน่ง (Position Details) - ใช้ PolicePersonnel
+    const personnelGroupWhere: any = {};
     if (unit && unit !== 'all') {
-      applicantWhereClause.unit = unit;
+      personnelGroupWhere.unit = unit;
     }
 
-    const allPositionsData = await prisma.vacantPosition.groupBy({
+    // Group by posCodeId จาก PolicePersonnel
+    const allPositionsData = await prisma.policePersonnel.groupBy({
       by: ['posCodeId'],
-      where: applicantWhereClause,
+      where: personnelGroupWhere,
       _count: {
         id: true
       }
@@ -206,40 +233,59 @@ export async function GET(request: NextRequest) {
           where: { id: item.posCodeId! }
         });
 
-        // นับจำนวนตำแหน่งว่างทั้งหมด
-        const vacantFilter: any = {
+        // นับตำแหน่งทั้งหมดของ posCode นี้
+        const totalPositionsFilter: any = {
+          posCodeId: item.posCodeId
+        };
+        if (unit && unit !== 'all') {
+          totalPositionsFilter.unit = unit;
+        }
+
+        const totalPositions = await prisma.policePersonnel.count({
+          where: totalPositionsFilter
+        });
+
+        // นับจำนวนที่มีคนดำรงตำแหน่ง (NOT vacant)
+        const assignedCount = await prisma.policePersonnel.count({
+          where: {
+            ...totalPositionsFilter,
+            AND: [
+              { fullName: { not: null } },
+              { fullName: { not: 'ว่าง' } },
+              { fullName: { not: 'ว่าง (กันตำแหน่ง)' } },
+              { rank: { not: null } }
+            ]
+          }
+        });
+
+        // นับจำนวนตำแหน่งว่าง (fullName = null || 'ว่าง' || 'ว่าง (กันตำแหน่ง)' || rank = null)
+        const pendingCount = await prisma.policePersonnel.count({
+          where: {
+            ...totalPositionsFilter,
+            OR: [
+              { fullName: null },
+              { fullName: 'ว่าง' },
+              { fullName: 'ว่าง (กันตำแหน่ง)' },
+              { rank: null }
+            ]
+          }
+        });
+
+        // นับผู้สมัครจาก VacantPosition
+        const applicantFilter: any = {
           year: yearNumber,
           posCodeId: item.posCodeId
         };
         if (unit && unit !== 'all') {
-          vacantFilter.unit = unit;
+          applicantFilter.unit = unit;
         }
 
-        const totalVacantSlots = item._count.id;
-
-        // นับจำนวนที่จับคู่แล้ว (จาก swap_transaction_detail ที่ toPosition ตรงกับตำแหน่งนี้)
-        const assignedFilter: any = {
-          transaction: {
-            year: yearNumber
-          },
-          toPosition: posCode?.name
-        };
-        if (unit && unit !== 'all') {
-          assignedFilter.toUnit = unit;
-        }
-
-        const assignedCount = await prisma.swapTransactionDetail.count({
-          where: assignedFilter
+        const totalApplicants = await prisma.vacantPosition.count({
+          where: applicantFilter
         });
 
-        // นับจำนวนผู้สมัคร (ในที่นี้คือ totalVacantSlots เพราะ vacant_position แต่ละแถวคือ 1 ตำแหน่ง)
-        const totalApplicants = totalVacantSlots;
-
-        // คงเหลือ = ตำแหน่งว่างทั้งหมด - จับคู่แล้ว
-        const pendingCount = Math.max(0, totalVacantSlots - assignedCount);
-
-        const assignmentRate = totalApplicants > 0 
-          ? (assignedCount / totalApplicants) * 100 
+        const assignmentRate = totalPositions > 0 
+          ? (assignedCount / totalPositions) * 100 
           : 0;
 
         return {
@@ -249,28 +295,26 @@ export async function GET(request: NextRequest) {
           assignedCount,
           pendingCount,
           assignmentRate,
-          availableSlots: totalVacantSlots
+          availableSlots: pendingCount // ตำแหน่งว่างที่มี
         };
       })
     );
 
     // คำนวณสรุปตำแหน่งว่างทั้งหมด
     const vacantSlotsSummary = {
-      totalVacantSlots: totalVacantPositions, // จำนวนคนที่ยื่นขอทั้งหมด
-      filledSlots: assignedPositions, // จำนวนที่จับคู่แล้ว
-      remainingSlots: pendingPositions // จำนวนที่รอจับคู่
+      totalVacantSlots: totalPositionsInSystem, // ตำแหน่งทั้งหมดในระบบ
+      filledSlots: assignedPositions, // จำนวนที่มีคนดำรงตำแหน่ง
+      remainingSlots: totalVacantPositions // ตำแหน่งว่าง (fullName = null)
     };
 
-    // ข้อมูลกราฟ: เปรียบเทียบตำแหน่งว่างกับจับคู่สำเร็จ
+    // ข้อมูลกราฟ: เปรียบเทียบตำแหน่งว่างกับจับคู่สำเร็จ (จาก PolicePersonnel)
     // ดึงทุก PosCode จาก PosCodeMaster
     const allPosCodes = await prisma.posCodeMaster.findMany({
       orderBy: { id: 'asc' }
     });
 
     // สร้าง where clause สำหรับ filter unit
-    const chartBaseFilter: any = {
-      year: yearNumber
-    };
+    const chartBaseFilter: any = {};
     if (unit && unit !== 'all') {
       chartBaseFilter.unit = unit;
     }
@@ -278,31 +322,47 @@ export async function GET(request: NextRequest) {
     // สร้างข้อมูลกราฟสำหรับทุก PosCode
     const chartDataByPosition = await Promise.all(
       allPosCodes.map(async (posCode) => {
-        // นับตำแหน่งว่าง: pos_code_id === posCode.id
-        const vacantSlots = await prisma.vacantPosition.count({
+        // นับตำแหน่งว่างทั้งหมดของ posCode นี้
+        const totalVacantPositions = await prisma.policePersonnel.count({
           where: {
             ...chartBaseFilter,
-            posCodeId: posCode.id
+            posCodeId: posCode.id,
+            OR: [
+              { fullName: null },
+              { fullName: 'ว่าง' },
+              { fullName: 'ว่าง (กันตำแหน่ง)' },
+              { rank: null }
+            ]
           }
         });
 
-        // นับจับคู่สำเร็จ: จำนวนคนที่ย้ายมาตำแหน่งนี้ (toPosition swap)
-        // ใช้ SwapTransactionDetail ที่มี posCodeId === posCode.id
-        const assignedCount = await prisma.swapTransactionDetail.count({
-          where: {
-            posCodeId: posCode.id,
-            transaction: {
-              year: yearNumber,
-              status: 'completed'
-            }
-          }
+        // นับจำนวนตำแหน่งว่างที่จับคู่ไปแล้ว (จาก promotion-chain)
+        const promotionChainFilter: any = {
+          transaction: {
+            year: yearNumber,
+            swapType: 'promotion-chain'
+          },
+          posCodeId: posCode.id
+        };
+        if (unit && unit !== 'all') {
+          promotionChainFilter.OR = [
+            { fromUnit: unit },
+            { toUnit: unit }
+          ];
+        }
+
+        const matchedVacant = await prisma.swapTransactionDetail.count({
+          where: promotionChainFilter
         });
+
+        // ตำแหน่งว่างที่เหลือ = ตำแหน่งว่างทั้งหมด - จับคู่ไปแล้ว
+        const remainingVacant = Math.max(0, totalVacantPositions - matchedVacant);
 
         return {
           posCodeId: posCode.id,
           posCodeName: posCode.name,
-          vacantSlots, // ตำแหน่งว่าง
-          totalApplicants: assignedCount // จับคู่สำเร็จ
+          vacantSlots: remainingVacant, // ตำแหน่งว่างที่เหลือ (รอจับคู่)
+          totalApplicants: matchedVacant // จับคู่ตำแหน่งว่างไปแล้ว
         };
       })
     );
@@ -312,7 +372,16 @@ export async function GET(request: NextRequest) {
       (a, b) => a.posCodeId - b.posCodeId
     );
 
-    // ดึงรายการหน่วยทั้งหมดสำหรับ filter จาก vacant_position และ swap_transaction_detail
+    // ดึงรายการหน่วยทั้งหมดสำหรับ filter จาก PolicePersonnel
+    const unitsFromPersonnel = await prisma.policePersonnel.findMany({
+      where: {
+        unit: { not: null }
+      },
+      select: { unit: true },
+      distinct: ['unit']
+    });
+
+    // รวมหน่วยจาก VacantPosition ด้วย
     const unitsFromVacant = await prisma.vacantPosition.findMany({
       where: {
         year: yearNumber,
@@ -322,31 +391,13 @@ export async function GET(request: NextRequest) {
       distinct: ['unit']
     });
 
-    // ดึงหน่วยจาก swap_transaction_detail (fromUnit และ toUnit)
-    const swapDetails = await prisma.swapTransactionDetail.findMany({
-      where: {
-        transaction: {
-          year: yearNumber
-        },
-        OR: [
-          { fromUnit: { not: null } },
-          { toUnit: { not: null } }
-        ]
-      },
-      select: { 
-        fromUnit: true,
-        toUnit: true
-      }
-    });
-
-    // รวมหน่วยจากทั้งสองแหล่ง
+    // รวมหน่วยทั้งหมด
     const allUnitsSet = new Set<string>();
-    unitsFromVacant.forEach(u => {
+    unitsFromPersonnel.forEach(u => {
       if (u.unit) allUnitsSet.add(u.unit);
     });
-    swapDetails.forEach(s => {
-      if (s.fromUnit) allUnitsSet.add(s.fromUnit);
-      if (s.toUnit) allUnitsSet.add(s.toUnit);
+    unitsFromVacant.forEach(u => {
+      if (u.unit) allUnitsSet.add(u.unit);
     });
 
     const availableUnits = Array.from(allUnitsSet).sort();
@@ -356,6 +407,7 @@ export async function GET(request: NextRequest) {
       assignedPositions,
       pendingPositions,
       totalApplicants,
+      matchedVacantPositions, // จำนวนตำแหน่งว่างที่จับคู่ไปแล้ว
       totalSwapTransactions,
       totalSwapList, // เพิ่มจำนวนสลับตำแหน่งทั้งหมด
       totalThreeWaySwap, // เพิ่มจำนวนสามเส้าทั้งหมด

@@ -111,15 +111,29 @@ const Header: React.FC = () => {
         color: (theme) => theme.palette.text.primary,
         boxShadow: '0 2px 6px rgba(17,24,39,0.04)',
         borderBottom: '1px solid #e5e7eb',
-        zIndex: (theme) => theme.zIndex.drawer + 1,
-        backdropFilter: 'blur(6px)'
+        zIndex: 10000,
+        backdropFilter: 'blur(6px)',
+        pointerEvents: 'auto',
       }}
     >
       <Toolbar sx={{ justifyContent: 'space-between' }}>
         {/* Left: Menu button + App title */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton onClick={toggleNavigation} size="large" aria-label="Toggle menu" color="inherit">
+            <IconButton 
+              onClick={() => {
+                console.log('Hamburger button clicked!');
+                toggleNavigation();
+              }} 
+              size="large" 
+              aria-label="Toggle menu" 
+              color="inherit"
+              sx={{
+                pointerEvents: 'auto',
+                zIndex: 10000,
+                position: 'relative',
+              }}
+            >
               <MenuIcon />
             </IconButton>
           </Box>

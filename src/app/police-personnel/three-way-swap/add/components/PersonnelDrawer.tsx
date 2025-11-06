@@ -400,7 +400,7 @@ export default function PersonnelDrawer({
       onClose={handleClose}
       ModalProps={{
         sx: {
-          zIndex: 1400,
+          zIndex: 10001,
         }
       }}
       PaperProps={{
@@ -748,7 +748,7 @@ export default function PersonnelDrawer({
                           
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.25 }}>
                             <Chip 
-                              label={person.posCodeMaster?.name || '-'}
+                              label={person.posCodeId ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}` : (person.posCodeMaster?.name || '-')}
                               size="small"
                               sx={{ 
                                 height: 22,

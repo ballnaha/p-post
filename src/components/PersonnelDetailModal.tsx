@@ -135,6 +135,12 @@ export default function PersonnelDetailModal({
       maxWidth="md"
       fullWidth
       fullScreen={isMobile}
+      sx={{
+        '& .MuiDialog-root': {
+          zIndex: 10002, // สูงกว่า Drawer (10001)
+        },
+        zIndex: 10002,
+      }}
       PaperProps={{
         sx: {
           width: { xs: '100%' },

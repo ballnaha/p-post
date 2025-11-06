@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { Card, CardContent, Box, Typography, IconButton, Divider, Stack, Tooltip, Chip, Button } from '@mui/material';
+import { Card, CardContent, Box, Typography, IconButton, Divider, Stack, Tooltip, Chip, Button, useMediaQuery, useTheme } from '@mui/material';
 import { Delete as DeleteIcon, InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 
 // Types - ตรงกับ PolicePersonnel schema
@@ -45,6 +45,8 @@ interface ChainNodeCardProps {
 }
 
 export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail }: ChainNodeCardProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isPromotion = node.toRankLevel < node.fromRankLevel;
 
   return (
@@ -79,7 +81,7 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
     >
       <CardContent sx={{ p: 1.5, pt: 1.25 }}>
         {/* Header with step number and actions */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, gap: 1 }}>
           <Box sx={{ 
             display: 'inline-flex',
             alignItems: 'center',
@@ -94,27 +96,45 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
               ? '0 2px 8px rgba(16, 185, 129, 0.3)'
               : '0 2px 8px rgba(239, 68, 68, 0.3)',
           }}>
-            <Typography variant="body2" fontWeight={700} sx={{ color: 'white', fontSize: '0.875rem' }}>
+            <Typography variant="body2" fontWeight={700} sx={{ color: 'white', fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
               ขั้นที่ {node.nodeOrder}
             </Typography>
           </Box>
-          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 0.75,
+            flexDirection: { xs: 'column', sm: 'row' },
+            minWidth: 0
+          }}>
             {onShowDetail && (
               <Tooltip title="รายละเอียดบุคลากร">
                 <Button
                   onClick={onShowDetail}
-                  size="small"
+                  size={isMobile ? 'small' : 'small'}
                   variant="contained"
                   color="primary"
-                  startIcon={<InfoOutlinedIcon fontSize="small" />}
+                  startIcon={!isMobile ? <InfoOutlinedIcon fontSize="small" /> : undefined}
                   sx={{
                     fontWeight: 700,
                     textTransform: 'none',
+                    fontSize: { xs: '0.75rem', md: '0.875rem' },
+                    minWidth: { xs: '60px', md: 'auto' },
+                    px: { xs: 1, md: 1.5 },
+                    py: { xs: 0.5, md: 0.75 },
                     boxShadow: '0 2px 8px rgba(102,126,234,0.35)',
                     '&:hover': { boxShadow: '0 3px 10px rgba(102,126,234,0.45)' },
+                    '&:active': { 
+                      transform: 'scale(0.98)',
+                      transition: 'transform 0.1s'
+                    }
                   }}
                 >
-                  ดูข้อมูล
+                  {isMobile ? (
+                    <InfoOutlinedIcon fontSize="small" />
+                  ) : (
+                    'ดูข้อมูล'
+                  )}
                 </Button>
               </Tooltip>
             )}
@@ -125,9 +145,16 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
                   size="small"
                   sx={{
                     bgcolor: 'error.50',
+                    minWidth: { xs: '32px', md: '40px' },
+                    width: { xs: '32px', md: '40px' },
+                    height: { xs: '32px', md: '40px' },
                     '&:hover': {
                       bgcolor: 'error.main',
                       color: 'white',
+                    },
+                    '&:active': { 
+                      transform: 'scale(0.98)',
+                      transition: 'transform 0.1s'
                     }
                   }}
                 >

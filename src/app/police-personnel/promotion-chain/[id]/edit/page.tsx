@@ -50,6 +50,7 @@ interface ChainNode {
   fromPositionNumber?: string;
   fromUnit: string;
   actingAs?: string;
+  fromActingAs?: string;
   toPosCodeId: number;
   toPosCodeName?: string;
   toPosition: string;
@@ -190,6 +191,7 @@ export default function EditPromotionChainPage() {
             fromPositionNumber: d.fromPositionNumber ?? undefined,
             fromUnit: d.fromUnit ?? "",
             actingAs: d.fromActingAs ?? undefined,
+            fromActingAs: d.fromActingAs ?? undefined,
             toPosCodeId: d.toPosCodeId ?? 0,
             toPosCodeName: d.toPosCodeMaster?.name ?? undefined,
             toPosition: d.toPosition ?? "",
@@ -264,7 +266,7 @@ export default function EditPromotionChainPage() {
         fromPosition: node.fromPosition,
         fromPositionNumber: node.fromPositionNumber,
         fromUnit: node.fromUnit,
-        fromActingAs: node.actingAs,
+        fromActingAs: node.fromActingAs || node.actingAs,
         toPosition: node.toPosition,
         toPositionNumber: node.toPositionNumber,
         toUnit: node.toUnit,

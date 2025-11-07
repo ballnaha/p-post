@@ -82,6 +82,8 @@ interface SwapDetailApi {
   seniority?: string | null;
   posCodeId?: number | null;
   posCodeMaster?: { id: number; name: string } | null;
+  toPosCodeId?: number | null;
+  toPosCodeMaster?: { id: number; name: string } | null;
   // Personal information
   birthDate?: string | null;
   age?: string | null;
@@ -188,8 +190,8 @@ export default function EditPromotionChainPage() {
             fromPositionNumber: d.fromPositionNumber ?? undefined,
             fromUnit: d.fromUnit ?? "",
             actingAs: d.fromActingAs ?? undefined,
-            toPosCodeId: 0,
-            toPosCodeName: d.toPosition ?? undefined,
+            toPosCodeId: d.toPosCodeId ?? 0,
+            toPosCodeName: d.toPosCodeMaster?.name ?? undefined,
             toPosition: d.toPosition ?? "",
             toPositionNumber: d.toPositionNumber ?? undefined,
             toUnit: d.toUnit ?? "",
@@ -241,6 +243,7 @@ export default function EditPromotionChainPage() {
         rank: node.rank,
         seniority: node.seniority,
         posCodeId: node.fromPosCodeId,
+        toPosCodeId: node.toPosCodeId || null,
         // Personal information
         birthDate: node.birthDate,
         age: node.age,

@@ -33,8 +33,9 @@ model PosCodeMaster {
 
   // Relations
   personnel                    PolicePersonnel[]
-  swapTransactionDetails       SwapTransactionDetail[]
-  vacantPositions              VacantPosition[]      @relation("CurrentPosition")
+  swapTransactionDetailsFrom   SwapTransactionDetail[] @relation("FromPosition")
+  swapTransactionDetailsTo     SwapTransactionDetail[] @relation("ToPosition")
+  vacantPositions              VacantPosition[]        @relation("CurrentPosition")
 
   @@map("pos_code_master")
 }
@@ -195,8 +196,10 @@ model SwapTransactionDetail {
   fullName        String  @map("full_name") // ชื่อ-นามสกุล
   rank            String? // ยศ
   seniority       String? // อาวุโส
-  posCodeId       Int?    @map("pos_code_id") // รหัสตำแหน่ง
-  posCodeMaster   PosCodeMaster? @relation(fields: [posCodeId], references: [id])
+  posCodeId       Int?    @map("pos_code_id") // รหัสตำแหน่งเดิม (From Position)
+  posCodeMaster   PosCodeMaster? @relation("FromPosition", fields: [posCodeId], references: [id])
+  toPosCodeId     Int?    @map("to_pos_code_id") // รหัสตำแหน่งใหม่ (To Position)
+  toPosCodeMaster PosCodeMaster? @relation("ToPosition", fields: [toPosCodeId], references: [id])
   
   // ข้อมูลส่วนตัว (Personal Information)
   birthDate       String? @map("birth_date") // วันเกิด

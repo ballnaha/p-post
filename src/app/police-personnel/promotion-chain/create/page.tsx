@@ -221,6 +221,7 @@ function CreatePromotionChainContent() {
         rank: node.rank,
         seniority: node.seniority,
         posCodeId: node.fromPosCodeId,
+        toPosCodeId: node.toPosCodeId || null,
         // ข้อมูลส่วนตัว
         birthDate: node.birthDate,
         age: node.age,

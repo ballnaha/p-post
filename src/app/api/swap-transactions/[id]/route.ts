@@ -22,6 +22,12 @@ export async function GET(
                 id: true,
                 name: true
               }
+            },
+            toPosCodeMaster: {
+              select: {
+                id: true,
+                name: true
+              }
             }
           },
           orderBy: { fullName: 'asc' }
@@ -102,6 +108,7 @@ export async function PUT(
           rank: detail.rank,
           seniority: detail.seniority,
           posCodeId: detail.posCodeId,
+          toPosCodeId: detail.toPosCodeId || null,
           // ข้อมูลส่วนตัว
           birthDate: detail.birthDate,
           age: detail.age,

@@ -89,6 +89,8 @@ interface SwapDetail {
   rank?: string | null;
   posCodeId?: number | null;
   posCodeMaster?: { id: number; name: string } | null;
+  toPosCodeId?: number | null;
+  toPosCodeMaster?: { id: number; name: string } | null;
   fromPosition?: string | null;
   fromPositionNumber?: string | null;
   fromUnit?: string | null;
@@ -873,7 +875,17 @@ export default function PromotionChainPage() {
                                           </TableCell>
                                           <TableCell>{d.fromUnit || '-'}</TableCell>
                                           <TableCell sx={{ bgcolor: 'success.50' }}>
-                                            <strong>{d.toPosition || '-'}</strong>{d.toPositionNumber ? ` (${d.toPositionNumber})` : ''}
+                                            {d.toPosCodeMaster ? (
+                                              <>
+                                                <Chip label={`${d.toPosCodeMaster.id} - ${d.toPosCodeMaster.name}`} size="small" color="success" variant="outlined" sx={{ fontSize: '0.75rem', mb: 0.5 }} />
+                                                <br />
+                                                <strong>{d.toPosition || '-'}</strong>{d.toPositionNumber ? ` (${d.toPositionNumber})` : ''}
+                                              </>
+                                            ) : (
+                                              <>
+                                                <strong>{d.toPosition || '-'}</strong>{d.toPositionNumber ? ` (${d.toPositionNumber})` : ''}
+                                              </>
+                                            )}
                                           </TableCell>
                                           <TableCell sx={{ bgcolor: 'success.50' }}>
                                             <strong>{d.toUnit || '-'}</strong>
@@ -1020,11 +1032,22 @@ export default function PromotionChainPage() {
                                 {detail.fromPositionNumber && ` (${detail.fromPositionNumber})`}
                                 {detail.fromUnit && ` • ${detail.fromUnit}`}
                               </Typography>
-                              <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 600, fontSize: '0.875rem' }}>
-                                <strong>→ ไป:</strong> {detail.toPosition || '-'}
-                                {detail.toPositionNumber && ` (${detail.toPositionNumber})`}
-                                {detail.toUnit && ` • ${detail.toUnit}`}
-                              </Typography>
+                              <Box>
+                                {detail.toPosCodeMaster && (
+                                  <Chip 
+                                    label={`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`} 
+                                    size="small" 
+                                    color="success" 
+                                    variant="outlined" 
+                                    sx={{ fontSize: '0.7rem', mb: 0.5 }} 
+                                  />
+                                )}
+                                <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 600, fontSize: '0.875rem' }}>
+                                  <strong>→ ไป:</strong> {detail.toPosition || '-'}
+                                  {detail.toPositionNumber && ` (${detail.toPositionNumber})`}
+                                  {detail.toUnit && ` • ${detail.toUnit}`}
+                                </Typography>
+                              </Box>
                             </Box>
                           </Box>
                         ))}

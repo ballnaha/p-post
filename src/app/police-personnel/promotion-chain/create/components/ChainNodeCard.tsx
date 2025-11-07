@@ -25,7 +25,8 @@ interface ChainNode {
   fromPosition: string; // police_personnel.position
   fromPositionNumber?: string; // police_personnel.positionNumber
   fromUnit: string; // police_personnel.unit
-  actingAs?: string; // police_personnel.actingAs - ทำหน้าที่
+  actingAs?: string; // police_personnel.actingAs - ทำหน้าที่ (alias for fromActingAs)
+  fromActingAs?: string; // ทำหน้าที่ของตำแหน่งเดิม (explicit name)
   toActingAs?: string; // ทำหน้าที่ของตำแหน่งปลายทาง
   
   // ข้อมูลตำแหน่งใหม่ (To Position)
@@ -239,16 +240,16 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
               {node.fromPosition}
             </Typography>
             {node.fromPosCodeName && (
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', display: 'block' }}>
                 {node.fromPosCodeName}
               </Typography>
             )}
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.9rem' }}>
               หน่วย: {node.fromUnit}
             </Typography>
-            {node.actingAs && node.actingAs !== '-' && (
+            {((node.fromActingAs || node.actingAs) && (node.fromActingAs || node.actingAs)?.trim() !== '' && (node.fromActingAs || node.actingAs) !== '-') && (
               <Typography variant="body2" sx={{ display: 'block', color: 'primary.main', mt: 0.25 }}>
-                💼 ทำหน้าที่: {node.actingAs}
+                💼 ทำหน้าที่: {node.fromActingAs || node.actingAs}
               </Typography>
             )}
           </Box>
@@ -293,18 +294,18 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
               {node.toPosition}
             </Typography>
             {node.toPosCodeName && (
-              <Typography variant="caption" sx={{ color: 'success.dark', display: 'block' }}>
+              <Typography variant="body2" sx={{ color: 'success.dark', display: 'block' }}>
                 {node.toPosCodeName}
               </Typography>
             )}
             <Typography variant="caption" sx={{ color: 'success.dark', display: 'block', fontSize: '0.9rem' }}>
               หน่วย: {node.toUnit}
             </Typography>
-              {node.toActingAs && node.toActingAs !== '-' && (
-                <Typography variant="body2" sx={{ color: 'success.dark', display: 'block' }}>
-                  💼 ทำหน้าที่: {node.toActingAs}
-                </Typography>
-              )}
+            {node.toActingAs && node.toActingAs.trim() !== '' && node.toActingAs !== '-' && (
+              <Typography variant="body2" sx={{ color: 'success.dark', display: 'block', mt: 0.25 }}>
+                💼 ทำหน้าที่: {node.toActingAs}
+              </Typography>
+            )}
           </Box>
         </Box>
 

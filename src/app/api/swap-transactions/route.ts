@@ -141,6 +141,7 @@ export async function POST(request: NextRequest) {
             rank: detail.rank,
             seniority: detail.seniority,
             posCodeId: detail.posCodeId,
+            toPosCodeId: detail.toPosCodeId || null,
             // ข้อมูลส่วนตัว
             birthDate: detail.birthDate,
             age: detail.age,

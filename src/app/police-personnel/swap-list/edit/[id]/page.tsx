@@ -189,8 +189,10 @@ export default function EditSwapTransactionPage() {
 
         // Set personnel from transaction details - ใช้ข้อมูลจาก swap_transaction_detail โดยตรง
         if (data.swapDetails && data.swapDetails.length >= 2) {
-          const detailA = data.swapDetails[0];
-          const detailB = data.swapDetails[1];
+          // เรียงตาม sequence เพื่อให้แน่ใจว่า A (sequence 1) และ B (sequence 2) ถูกต้อง
+          const sortedDetails = [...data.swapDetails].sort((a, b) => a.sequence - b.sequence);
+          const detailA = sortedDetails[0];
+          const detailB = sortedDetails[1];
 
           // ใช้ข้อมูลจาก swap_transaction_detail ที่มีข้อมูลครบถ้วนแล้ว
           const pA: PolicePersonnel = {

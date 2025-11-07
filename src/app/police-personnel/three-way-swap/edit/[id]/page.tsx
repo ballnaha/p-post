@@ -199,9 +199,11 @@ export default function EditThreeWaySwapPage() {
 
       // Set personnel from transaction details - ใช้ข้อมูลจาก swap_transaction_detail โดยตรง
       if (data.swapDetails && data.swapDetails.length >= 3) {
-        const detailA = data.swapDetails[0];
-        const detailB = data.swapDetails[1];
-        const detailC = data.swapDetails[2];
+        // เรียงตาม sequence เพื่อให้แน่ใจว่า A (sequence 1), B (sequence 2), และ C (sequence 3) ถูกต้อง
+        const sortedDetails = [...data.swapDetails].sort((a, b) => a.sequence - b.sequence);
+        const detailA = sortedDetails[0];
+        const detailB = sortedDetails[1];
+        const detailC = sortedDetails[2];
 
         // ใช้ข้อมูลจาก swap_transaction_detail ที่มีข้อมูลครบถ้วนแล้ว
         const pA: PolicePersonnel = {

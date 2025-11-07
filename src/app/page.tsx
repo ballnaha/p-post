@@ -2354,8 +2354,8 @@ export default function HomePage() {
               }
             }}>
               <Box sx={{ 
-                p: 2, 
-                pb: 1.5,
+                p: 1.5, 
+                pb: 1,
                 background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
                 borderBottom: '2px solid',
                 borderColor: 'divider',
@@ -2370,7 +2370,7 @@ export default function HomePage() {
                   background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
                 }
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box
                     sx={{
                       width: 28,
@@ -2390,14 +2390,14 @@ export default function HomePage() {
                     <Typography variant="subtitle1" fontWeight={700} color="text.primary" lineHeight={1.2}>
                       ตำแหน่งที่มีผู้สมัครมากที่สุด
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
                       ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                     </Typography>
                   </Box>
                 </Box>
               </Box>
-              <CardContent sx={{ p: 2, bgcolor: 'white' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <CardContent sx={{ p: 1.5, bgcolor: 'white' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {stats.topRequestedPositions.slice(0, 5).map((position, index) => (
                     <Box 
                       key={`${position.posCodeName}-${index}`}
@@ -2413,7 +2413,7 @@ export default function HomePage() {
                         display: 'flex', 
                         justifyContent: 'space-between', 
                         alignItems: 'center',
-                        p: 1,
+                        p: 0.75,
                         borderRadius: 1.5,
                         transition: 'all 0.3s ease',
                         '&:hover': {
@@ -2421,7 +2421,7 @@ export default function HomePage() {
                           transform: 'translateX(4px)',
                         }
                       }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flex: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                           <Chip 
                             label={`#${index + 1}`} 
                             size="small"
@@ -2442,7 +2442,7 @@ export default function HomePage() {
                             }}
                           />
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.3, fontSize: '0.95rem' }}>
+                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.2, fontSize: '0.95rem' }}>
                               {position.posCodeName}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
@@ -2469,7 +2469,7 @@ export default function HomePage() {
                           }}
                         />
                       </Box>
-                      {index < 4 && <Divider sx={{ mt: 1.5 }} />}
+                      {index < 4 && <Divider sx={{ mt: 1 }} />}
                     </Box>
                   ))}
                 </Box>
@@ -2492,8 +2492,8 @@ export default function HomePage() {
               }
             }}>
               <Box sx={{ 
-                p: 2, 
-                pb: 1.5,
+                p: 1.5, 
+                pb: 1,
                 background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
                 borderBottom: '2px solid',
                 borderColor: 'divider',
@@ -2508,7 +2508,7 @@ export default function HomePage() {
                   background: 'linear-gradient(90deg, #FF9A44 0%, #ff9800 100%)',
                 }
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box
                     sx={{
                       width: 28,
@@ -2528,14 +2528,14 @@ export default function HomePage() {
                     <Typography variant="subtitle1" fontWeight={700} color="text.primary" lineHeight={1.2}>
                       ตำแหน่งที่รอจับคู่มากที่สุด
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2 }}>
                       ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                     </Typography>
                   </Box>
                 </Box>
               </Box>
-              <CardContent sx={{ p: 2, bgcolor: 'white' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <CardContent sx={{ p: 1.5, bgcolor: 'white' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {pendingPositionsSorted.map((position, index) => (
                     <Box 
                       key={position.posCodeId}
@@ -2551,7 +2551,7 @@ export default function HomePage() {
                         display: 'flex', 
                         justifyContent: 'space-between', 
                         alignItems: 'center',
-                        p: 1,
+                        p: 0.75,
                         borderRadius: 1.5,
                         transition: 'all 0.3s ease',
                         '&:hover': {
@@ -2559,7 +2559,7 @@ export default function HomePage() {
                           transform: 'translateX(-4px)',
                         }
                       }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flex: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                           <Chip 
                             label={`#${index + 1}`} 
                             size="small"
@@ -2578,7 +2578,7 @@ export default function HomePage() {
                             }}
                           />
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.3, fontSize: '0.95rem' }}>
+                            <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ mb: 0.2, fontSize: '0.95rem' }}>
                               {position.posCodeName}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
@@ -2603,7 +2603,7 @@ export default function HomePage() {
                           }}
                         />
                       </Box>
-                      {index < 4 && <Divider sx={{ mt: 1.5 }} />}
+                      {index < 4 && <Divider sx={{ mt: 1 }} />}
                     </Box>
                   ))}
                   {!hasPendingPositions && (

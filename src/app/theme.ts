@@ -9,9 +9,14 @@ const theme = createTheme({
       dark: '#4F46E5',
     },
     secondary: {
-      main: '#10B981',
-      light: '#34D399',
-      dark: '#059669',
+      main: '#00BFA5',
+      light: '#1DE9B6',
+      dark: '#00897B',
+    },
+    success: {
+      main: '#00BFA5',
+      light: '#1DE9B6',
+      dark: '#00897B',
     },
     background: {
       default: '#f5f7fa', // light gray canvas

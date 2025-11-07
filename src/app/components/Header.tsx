@@ -193,9 +193,32 @@ const Header: React.FC = () => {
             onClose={handleMenuClose}
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            sx={{
+              zIndex: 10001,
+            }}
+            slotProps={{
+              paper: {
+                sx: {
+                  mt: 1,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                  borderRadius: 2,
+                }
+              }
+            }}
           >
             
-            <MenuItem onClick={handleLogout}>
+            <MenuItem 
+              onClick={handleLogout}
+              sx={{
+                '&:hover': {
+                  bgcolor: '#FFE5E5',
+                  color: '#DC2626',
+                  '& .MuiListItemIcon-root': {
+                    color: '#DC2626',
+                  }
+                }
+              }}
+            >
               <ListItemIcon>
                 <Logout fontSize="small" />
               </ListItemIcon>

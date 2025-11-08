@@ -26,6 +26,8 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -35,8 +37,12 @@ import {
   Info as InfoIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  Update as UpdateIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
+
+type ImportMode = 'full' | 'supporter';
 
 export default function ImportPolicePersonnelPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -44,6 +50,7 @@ export default function ImportPolicePersonnelPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
+  const [importMode, setImportMode] = useState<ImportMode>('full');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,7 +86,12 @@ export default function ImportPolicePersonnelPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/police-personnel/import', {
+      // เลือก API endpoint ตาม import mode
+      const apiEndpoint = importMode === 'supporter' 
+        ? '/api/police-personnel/import-supporter'
+        : '/api/police-personnel/import';
+
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         body: formData,
       });
@@ -146,13 +158,22 @@ export default function ImportPolicePersonnelPage() {
   };
 
   const downloadTemplate = async () => {
+    // เลือก template endpoint ตาม import mode
+    const templateEndpoint = importMode === 'supporter'
+      ? '/api/police-personnel/template-supporter'
+      : '/api/police-personnel/template';
+    
+    const fileName = importMode === 'supporter'
+      ? 'police_personnel_supporter_template.xlsx'
+      : 'police_personnel_template.xlsx';
+    
     try {
-      const response = await fetch('/api/police-personnel/template');
+      const response = await fetch(templateEndpoint);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'police_personnel_template.xlsx';
+      link.download = fileName;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -169,9 +190,52 @@ export default function ImportPolicePersonnelPage() {
           <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
             นำเข้าข้อมูล Police Personnel
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             นำเข้าข้อมูลบุคลากรตำรวจจากไฟล์ Excel
           </Typography>
+
+          {/* Import Mode Selection */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+              เลือกประเภทการ Import:
+            </Typography>
+            <ToggleButtonGroup
+              value={importMode}
+              exclusive
+              onChange={(e, newMode) => {
+                if (newMode !== null) {
+                  setImportMode(newMode);
+                  setFile(null);
+                  setResult(null);
+                  setError('');
+                }
+              }}
+              aria-label="import mode"
+              color="primary"
+            >
+              <ToggleButton value="full" aria-label="full import">
+                <RefreshIcon sx={{ mr: 1 }} />
+                Import แบบเต็ม (ลบข้อมูลเดิมทั้งหมด)
+              </ToggleButton>
+              <ToggleButton value="supporter" aria-label="supporter update">
+                <UpdateIcon sx={{ mr: 1 }} />
+                อัปเดตผู้สนับสนุนเท่านั้น (ไม่ลบข้อมูลเดิม)
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          {/* Mode Description */}
+          <Alert severity={importMode === 'full' ? 'warning' : 'info'} sx={{ mb: 0 }}>
+            {importMode === 'full' ? (
+              <Typography variant="body2">
+                <strong>⚠️ Import แบบเต็ม:</strong> ระบบจะลบข้อมูลบุคลากรทั้งหมดในระบบ แล้วนำเข้าข้อมูลใหม่จากไฟล์ Excel
+              </Typography>
+            ) : (
+              <Typography variant="body2">
+                <strong>✨ อัปเดตผู้สนับสนุน:</strong> ระบบจะอัปเดตเฉพาะฟิลด์ "ชื่อผู้สนับสนุน" และ "เหตุผล" โดยไม่กระทบข้อมูลอื่น
+              </Typography>
+            )}
+          </Alert>
         </Paper>
 
         {/* Instructions - Accordion */}
@@ -225,29 +289,58 @@ export default function ImportPolicePersonnelPage() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="body2" color="text.secondary" paragraph fontWeight={600}>
-              📊 รูปแบบคอลัมน์ใน Excel (เรียงตามลำดับที่กำหนด):
+              📊 รูปแบบคอลัมน์ใน Excel:
             </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-              {[
-                'อาวุโส', 'ยศ', 'ชื่อ สกุล','ID', 'POSCODE', 'ตำแหน่ง', 
-                'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ', 
-                'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ', 
-                'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข'
-              ].map((column, index) => (
-                <Chip 
-                  key={column} 
-                  label={`${index + 1}. ${column}`} 
-                  size="small" 
-                  variant="outlined"
-                  sx={{ fontSize: '0.75rem' }}
-                />
-              ))}
+
+            {/* Full Import Columns */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ mb: 1 }}>
+                Import แบบเต็ม (21 คอลัมน์):
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                {[
+                  'อาวุโส', 'ยศ', 'ชื่อ สกุล','ID', 'POSCODE', 'ตำแหน่ง', 
+                  'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ', 
+                  'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ', 
+                  'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข', 'ชื่อผู้สนับสนุน', 'เหตุผล'
+                ].map((column, index) => (
+                  <Chip 
+                    key={column} 
+                    label={`${index + 1}. ${column}`} 
+                    size="small" 
+                    variant="outlined"
+                    sx={{ fontSize: '0.75rem' }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            {/* Supporter Update Columns */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight={600} color="secondary.main" sx={{ mb: 1 }}>
+                อัปเดตผู้สนับสนุน (4 คอลัมน์):
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {[
+                  'ชื่อ สกุล', 'เลขประจำตัวประชาชน', 'ชื่อผู้สนับสนุน', 'เหตุผล'
+                ].map((column, index) => (
+                  <Chip 
+                    key={column} 
+                    label={`${index + 1}. ${column}`} 
+                    size="small" 
+                    variant="outlined"
+                    color="secondary"
+                    sx={{ fontSize: '0.75rem' }}
+                  />
+                ))}
+              </Box>
             </Box>
 
             <Alert severity="warning" sx={{ mb: 2 }}>
               <strong>⚠️ ข้อควรระวัง:</strong>
               <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                <li>กรุณาเรียงคอลัมน์ในไฟล์ Excel ตามลำดับที่แสดงข้างต้น (1-21)</li>
+                <li><strong>Import แบบเต็ม:</strong> จะลบข้อมูลเดิมทั้งหมดในระบบ (23 คอลัมน์)</li>
+                <li><strong>อัปเดตผู้สนับสนุน:</strong> จะอัปเดตเฉพาะฟิลด์ผู้สนับสนุนและเหตุผล โดยอ้างอิงจากชื่อ-นามสกุลและเลขบัตรประชาชน (4 คอลัมน์)</li>
                 <li>ห้ามลบหรือเปลี่ยนชื่อหัวคอลัมน์ เพราะจะทำให้การ import ผิดพลาด</li>
                 <li>ตรวจสอบรูปแบบข้อมูลให้ถูกต้องก่อนอัปโหลด</li>
               </ul>
@@ -365,26 +458,30 @@ export default function ImportPolicePersonnelPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
               <SuccessIcon color="success" sx={{ fontSize: 40 }} />
               <Box>
-                <Typography variant="h6">นำเข้าข้อมูลเสร็จสิ้น</Typography>
+                <Typography variant="h6">
+                  {importMode === 'supporter' ? 'อัปเดตข้อมูลเสร็จสิ้น' : 'นำเข้าข้อมูลเสร็จสิ้น'}
+                </Typography>
                 <Typography variant="body2" color="text.secondary">
                   สำเร็จ: {result.success} แถว | ล้มเหลว: {result.failed} แถว
+                  {result.notFound !== undefined && ` | ไม่พบในระบบ: ${result.notFound} แถว`}
+                  {result.deleted !== undefined && ` | ลบข้อมูลเก่า: ${result.deleted} แถว`}
                 </Typography>
               </Box>
             </Box>
 
             {/* Summary */}
-            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-              <Card sx={{ flex: 1, bgcolor: 'success.50' }}>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+              <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'success.50' }}>
                 <CardContent>
                   <Typography variant="h4" color="success.main" sx={{ fontWeight: 700 }}>
                     {result.success}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    นำเข้าสำเร็จ
+                    {importMode === 'supporter' ? 'อัปเดตสำเร็จ' : 'นำเข้าสำเร็จ'}
                   </Typography>
                 </CardContent>
               </Card>
-              <Card sx={{ flex: 1, bgcolor: 'error.50' }}>
+              <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'error.50' }}>
                 <CardContent>
                   <Typography variant="h4" color="error.main" sx={{ fontWeight: 700 }}>
                     {result.failed}
@@ -394,6 +491,30 @@ export default function ImportPolicePersonnelPage() {
                   </Typography>
                 </CardContent>
               </Card>
+              {result.notFound !== undefined && result.notFound > 0 && (
+                <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'warning.50' }}>
+                  <CardContent>
+                    <Typography variant="h4" color="warning.main" sx={{ fontWeight: 700 }}>
+                      {result.notFound}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      ไม่พบในระบบ
+                    </Typography>
+                  </CardContent>
+                </Card>
+              )}
+              {result.deleted !== undefined && result.deleted > 0 && (
+                <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'info.50' }}>
+                  <CardContent>
+                    <Typography variant="h4" color="info.main" sx={{ fontWeight: 700 }}>
+                      {result.deleted}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      ลบข้อมูลเก่า
+                    </Typography>
+                  </CardContent>
+                </Card>
+              )}
             </Box>
 
             {/* Errors List */}
@@ -427,7 +548,39 @@ export default function ImportPolicePersonnelPage() {
               </>
             )}
 
-            {/* Success List Preview */}
+            {/* Success List Preview - For Supporter Update */}
+            {result.updated && result.updated.length > 0 && result.updated.length <= 20 && (
+              <>
+                <Divider sx={{ my: 3 }} />
+                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                  ข้อมูลที่อัปเดตสำเร็จ (แสดง {result.updated.length} รายการ):
+                </Typography>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ชื่อ-นามสกุล</TableCell>
+                        <TableCell>เลขบัตรประชาชน</TableCell>
+                        <TableCell>ผู้สนับสนุน</TableCell>
+                        <TableCell>เหตุผล</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {result.updated.map((person: any, index: number) => (
+                        <TableRow key={index}>
+                          <TableCell>{person.fullName}</TableCell>
+                          <TableCell>{person.nationalId}</TableCell>
+                          <TableCell>{person.supporterName || '-'}</TableCell>
+                          <TableCell>{person.supportReason || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+
+            {/* Success List Preview - For Full Import */}
             {result.created && result.created.length > 0 && result.created.length <= 10 && (
               <>
                 <Divider sx={{ my: 3 }} />

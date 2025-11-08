@@ -110,6 +110,19 @@ export async function POST(request: NextRequest) {
         return;
       }
 
+      // ตรวจสอบจำนวนคอลัมน์ในไฟล์ (Import แบบเต็มต้องมีอย่างน้อย 10 คอลัมน์)
+      const firstRow: any = data[0];
+      const columnCount = Object.keys(firstRow).length;
+      
+      if (columnCount < 10) {
+        sendProgress({ 
+          type: 'error', 
+          error: `ไฟล์นี้มีเพียง ${columnCount} คอลัมน์ ซึ่งไม่ใช่ไฟล์ Template สำหรับ Import แบบเต็ม (ต้องมีอย่างน้อย 21 คอลัมน์)\n\nหากต้องการอัปเดตเฉพาะผู้สนับสนุน กรุณาเลือก "อัปเดตผู้สนับสนุนเท่านั้น" แทน` 
+        });
+        close();
+        return;
+      }
+
       // ตรวจสอบว่ามี pos_code_master ในระบบหรือไม่
       const posCodeCount = await prisma.posCodeMaster.count();
       if (posCodeCount === 0) {
@@ -183,6 +196,8 @@ export async function POST(request: NextRequest) {
               trainingLocation: row['ตท.'] ? String(row['ตท.']) : null,
               trainingCourse: row['นรต.'] ? String(row['นรต.']) : null,
               notes: row['หมายเหตุ/เงื่อนไข'] ? String(row['หมายเหตุ/เงื่อนไข']) : null,
+              supporterName: row['ชื่อผู้สนับสนุน'] ? String(row['ชื่อผู้สนับสนุน']) : null,
+              supportReason: row['เหตุผล'] ? String(row['เหตุผล']).substring(0, 5000) : null,
               birthDate: convertExcelDateToThai(row['วันเกิด']),
               lastAppointment: convertExcelDateToThai(row['แต่งตั้งครั้งสุดท้าย']),
               currentRankSince: convertExcelDateToThai(row['ระดับนี้เมื่อ']),
@@ -262,6 +277,8 @@ export async function POST(request: NextRequest) {
               trainingLocation: row['ตท.'] ? String(row['ตท.']) : null,
               trainingCourse: row['นรต.'] ? String(row['นรต.']) : null,
               notes: row['หมายเหตุ/เงื่อนไข'] ? String(row['หมายเหตุ/เงื่อนไข']) : null,
+              supporterName: row['ชื่อผู้สนับสนุน'] ? String(row['ชื่อผู้สนับสนุน']) : null,
+              supportReason: row['เหตุผล'] ? String(row['เหตุผล']).substring(0, 5000) : null,
               birthDate: convertExcelDateToThai(row['วันเกิด']),
               lastAppointment: convertExcelDateToThai(row['แต่งตั้งครั้งสุดท้าย']),
               currentRankSince: convertExcelDateToThai(row['ระดับนี้เมื่อ']),

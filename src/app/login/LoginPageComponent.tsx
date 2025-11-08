@@ -240,7 +240,7 @@ function LoginPage() {
                 letterSpacing: '-0.02em'
               }}
             >
-              <img src="/images/logo_3.png" alt="P POST Logo" style={{ height: 75 }} />
+              <img src="/images/logo_4.png" alt="P POST Logo" style={{ height: 65 }} />
             </Typography>
             <Typography 
               variant="body1" 

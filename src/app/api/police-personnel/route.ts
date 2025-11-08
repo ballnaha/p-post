@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const swapFilter = searchParams.get('swapFilter') || 'all';
     const posCodeFilter = searchParams.get('posCode') || 'all';
     const supporterFilter = searchParams.get('supporter') || 'all';
+    const transactionTypeFilter = searchParams.get('transactionType') || 'all';
 
     const skip = (page - 1) * limit;
 
@@ -155,8 +156,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ถ้ามี swap filter ต้อง query ทั้งหมดก่อน แล้วค่อย paginate
-    const shouldQueryAll = swapFilter !== 'all';
+    // ถ้ามี swap filter หรือ transaction type filter ต้อง query ทั้งหมดก่อน แล้วค่อย paginate
+    const shouldQueryAll = swapFilter !== 'all' || transactionTypeFilter !== 'all';
     
     // ดึงข้อมูล
     let personnelQuery = prisma.policePersonnel.findMany({
@@ -176,14 +177,61 @@ export async function GET(request: NextRequest) {
       prisma.policePersonnel.count({ where }),
     ]);
 
-    // Filter based on swap lists (server-side after fetching)
+    // Filter based on swap lists and transaction types (server-side after fetching)
     let filteredPersonnel = personnel;
     
-    if (swapFilter !== 'all') {
+    if (swapFilter !== 'all' || transactionTypeFilter !== 'all') {
       const currentYear = new Date().getFullYear() + 543;
       const nationalIds = personnel.map(p => p.nationalId).filter(Boolean) as string[];
 
-      if (swapFilter === 'in-swap') {
+      // Handle transaction type filter
+      if (transactionTypeFilter !== 'all') {
+        if (transactionTypeFilter === 'two-way') {
+          const swapList = await prisma.swapTransactionDetail.findMany({
+            where: {
+              transaction: {
+                year: currentYear,
+                swapType: 'two-way'
+              },
+              nationalId: { in: nationalIds }
+            },
+            select: { nationalId: true },
+            distinct: ['nationalId']
+          });
+          const swapNationalIds = new Set(swapList.map(s => s.nationalId).filter(Boolean));
+          filteredPersonnel = personnel.filter(p => p.nationalId && swapNationalIds.has(p.nationalId));
+        } else if (transactionTypeFilter === 'three-way') {
+          const threeWayList = await prisma.swapTransactionDetail.findMany({
+            where: {
+              transaction: {
+                year: currentYear,
+                swapType: 'three-way'
+              },
+              nationalId: { in: nationalIds }
+            },
+            select: { nationalId: true },
+            distinct: ['nationalId']
+          });
+          const threeWayNationalIds = new Set(threeWayList.map(s => s.nationalId).filter(Boolean));
+          filteredPersonnel = personnel.filter(p => p.nationalId && threeWayNationalIds.has(p.nationalId));
+        } else if (transactionTypeFilter === 'promotion-chain') {
+          const promotionList = await prisma.swapTransactionDetail.findMany({
+            where: {
+              transaction: {
+                year: currentYear,
+                swapType: 'promotion-chain'
+              },
+              nationalId: { in: nationalIds }
+            },
+            select: { nationalId: true },
+            distinct: ['nationalId']
+          });
+          const promotionNationalIds = new Set(promotionList.map((s: { nationalId: string | null }) => s.nationalId).filter(Boolean));
+          filteredPersonnel = personnel.filter(p => p.nationalId && promotionNationalIds.has(p.nationalId));
+        }
+      }
+      // Handle legacy swapFilter (for backwards compatibility)
+      else if (swapFilter === 'in-swap') {
         // ใช้ swap_transaction_detail แทน swap_list
         const swapList = await prisma.swapTransactionDetail.findMany({
           where: {

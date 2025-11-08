@@ -146,7 +146,7 @@ const Header: React.FC = () => {
               userSelect: 'none'
             }}
           >
-            <img src="/images/logo_3.png" alt="P POST Logo" style={{ height: 50, verticalAlign: 'middle' }} />
+            <img src="/images/logo_4.png" alt="P POST Logo" style={{ height: 40, verticalAlign: 'middle' }} />
           </Typography>
         </Box>
         

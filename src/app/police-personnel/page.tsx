@@ -126,12 +126,14 @@ export default function PolicePersonnelPage() {
     timestamp: number;
     swapList: Set<string>;
     threeWayList: Set<string>;
+    promotionChainList: Set<string>;
     vacantList: Set<string>;
   }>({
     year: null,
     timestamp: 0,
     swapList: new Set(),
     threeWayList: new Set(),
+    promotionChainList: new Set(),
     vacantList: new Set()
   });
   
@@ -151,6 +153,7 @@ export default function PolicePersonnelPage() {
   const [posCodeFilter, setPosCodeFilter] = useState<string>('all');
   const [unitFilter, setUnitFilter] = useState<string>('all');
   const [supporterFilter, setSupporterFilter] = useState<'all' | 'with-supporter' | 'no-supporter'>('all');
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState<'all' | 'two-way' | 'three-way' | 'promotion-chain'>('all');
   const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
   const [units, setUnits] = useState<string[]>([]);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -181,6 +184,9 @@ export default function PolicePersonnelPage() {
   const [threeWayNotes, setThreeWayNotes] = useState('');
   const [isAddingToThreeWay, setIsAddingToThreeWay] = useState(false);
   const [threeWayListData, setThreeWayListData] = useState<Set<string>>(new Set());
+
+  // Promotion Chain states
+  const [promotionChainData, setPromotionChainData] = useState<Set<string>>(new Set());
 
   // Vacant Position states
   const [vacantListData, setVacantListData] = useState<Set<string>>(new Set());
@@ -250,14 +256,16 @@ export default function PolicePersonnelPage() {
           cacheAge < CACHE_DURATION) {
         setSwapListData(listDataCache.swapList);
         setThreeWayListData(listDataCache.threeWayList);
+        setPromotionChainData(listDataCache.promotionChainList);
         setVacantListData(listDataCache.vacantList);
         return;
       }
       
-      // เรียก API พร้อมกัน 3 ตัวเพื่อลดเวลารอ
-      const [swapResponse, threeWayResponse, vacantResponse] = await Promise.all([
+      // เรียก API พร้อมกัน 4 ตัวเพื่อลดเวลารอ
+      const [swapResponse, threeWayResponse, promotionChainResponse, vacantResponse] = await Promise.all([
         fetch(`/api/swap-list?year=${currentYear}&swapType=two-way`),
         fetch(`/api/swap-list?year=${currentYear}&swapType=three-way`),
+        fetch(`/api/swap-list?year=${currentYear}&swapType=promotion-chain`),
         fetch(`/api/vacant-position?year=${currentYear}`)
       ]);
 
@@ -273,6 +281,12 @@ export default function PolicePersonnelPage() {
         ? new Set<string>(threeWayResult.data.map((item: any) => item.nationalId).filter((id: string) => id))
         : new Set<string>();
 
+      // Process promotion chain list
+      const promotionChainResult = await promotionChainResponse.json();
+      const promotionChainNationalIds = (promotionChainResult.success && Array.isArray(promotionChainResult.data))
+        ? new Set<string>(promotionChainResult.data.map((item: any) => item.nationalId).filter((id: string) => id))
+        : new Set<string>();
+
       // Process vacant list
       const vacantResult = await vacantResponse.json();
       const vacantNationalIds = Array.isArray(vacantResult)
@@ -282,6 +296,7 @@ export default function PolicePersonnelPage() {
       // อัพเดท state และ cache
       setSwapListData(swapNationalIds);
       setThreeWayListData(threeWayNationalIds);
+      setPromotionChainData(promotionChainNationalIds);
       setVacantListData(vacantNationalIds);
       
       // บันทึก cache
@@ -290,6 +305,7 @@ export default function PolicePersonnelPage() {
         timestamp: now,
         swapList: swapNationalIds,
         threeWayList: threeWayNationalIds,
+        promotionChainList: promotionChainNationalIds,
         vacantList: vacantNationalIds
       });
       
@@ -431,7 +447,7 @@ export default function PolicePersonnelPage() {
     try {
       const searchParam = nameSearch || search || '';
       const response = await fetch(
-        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}&supporter=${supporterFilter}`,
+        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}&supporter=${supporterFilter}&transactionType=${transactionTypeFilter}`,
         abortSignal ? { signal: abortSignal } : {}
       );
       
@@ -469,7 +485,7 @@ export default function PolicePersonnelPage() {
       clearTimeout(timer);
       abortController.abort();
     };
-  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter]);
+  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter, transactionTypeFilter]);
 
   const handleReset = () => {
     setSearch('');
@@ -480,6 +496,7 @@ export default function PolicePersonnelPage() {
     setPosCodeFilter('all');
     setUnitFilter('all');
     setSupporterFilter('all');
+    setTransactionTypeFilter('all');
     setPage(0);
   };
 
@@ -500,6 +517,11 @@ export default function PolicePersonnelPage() {
 
   const handleSupporterFilterChange = useCallback((value: 'all' | 'with-supporter' | 'no-supporter') => {
     setSupporterFilter(value);
+    setPage(0);
+  }, []);
+
+  const handleTransactionTypeFilterChange = useCallback((value: 'all' | 'two-way' | 'three-way' | 'promotion-chain') => {
+    setTransactionTypeFilter(value);
     setPage(0);
   }, []);
 
@@ -1176,6 +1198,7 @@ export default function PolicePersonnelPage() {
     const statusMap = new Map<string, {
       isInSwap: boolean;
       isInThreeWay: boolean;
+      isInPromotionChain: boolean;
       isInVacant: boolean;
     }>();
 
@@ -1184,18 +1207,19 @@ export default function PolicePersonnelPage() {
         statusMap.set(person.nationalId, {
           isInSwap: swapListData.has(person.nationalId),
           isInThreeWay: threeWayListData.has(person.nationalId),
+          isInPromotionChain: promotionChainData.has(person.nationalId),
           isInVacant: vacantListData.has(person.nationalId),
         });
       }
     });
 
     return statusMap;
-  }, [data, swapListData, threeWayListData, vacantListData]);
+  }, [data, swapListData, threeWayListData, promotionChainData, vacantListData]);
 
   // Helper function สำหรับเช็ค status
   const getPersonnelStatus = useCallback((nationalId: string | undefined) => {
-    if (!nationalId) return { isInSwap: false, isInThreeWay: false, isInVacant: false };
-    return personnelStatus.get(nationalId) || { isInSwap: false, isInThreeWay: false, isInVacant: false };
+    if (!nationalId) return { isInSwap: false, isInThreeWay: false, isInPromotionChain: false, isInVacant: false };
+    return personnelStatus.get(nationalId) || { isInSwap: false, isInThreeWay: false, isInPromotionChain: false, isInVacant: false };
   }, [personnelStatus]);
 
   const handleViewModeChange = (
@@ -1480,10 +1504,10 @@ export default function PolicePersonnelPage() {
                     sx={{ fontSize: '0.7rem', height: 20 }}
                   />
                 )}
-                {/* Chip แสดงสถานะ Vacant Position */}
-                {person.rank && person.nationalId && vacantListData.has(person.nationalId) && (
+                {/* Chip แสดงสถานะ Promotion Chain */}
+                {person.rank && person.nationalId && promotionChainData.has(person.nationalId) && (
                   <Chip 
-                    label="ยื่นขอตำแหน่ง" 
+                    label="เลื่อนตำแหน่ง" 
                     size="small" 
                     color="success"
                     sx={{ fontSize: '0.7rem', height: 20 }}
@@ -1758,6 +1782,27 @@ export default function PolicePersonnelPage() {
                 <MenuItem value="all">ทั้งหมด</MenuItem>
                 <MenuItem value="with-supporter">มีผู้สนับสนุน</MenuItem>
                 <MenuItem value="no-supporter">ไม่มีผู้สนับสนุน</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ 
+              flex: { 
+                xs: '1 1 100%',              // Mobile: full width
+                sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
+                md: '0 1 200px'              // Desktop/iPad landscape: fixed width
+              }, 
+              minWidth: 150 
+            }}>
+              <InputLabel>ประเภทรายการ</InputLabel>
+              <Select
+                value={transactionTypeFilter}
+                label="ประเภทรายการ"
+                onChange={(e) => handleTransactionTypeFilterChange(e.target.value as 'all' | 'two-way' | 'three-way' | 'promotion-chain')}
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                <MenuItem value="two-way">สลับตำแหน่ง</MenuItem>
+                <MenuItem value="three-way">อยู่ในสามเส้า</MenuItem>
+                <MenuItem value="promotion-chain">เลื่อนตำแหน่ง</MenuItem>
               </Select>
             </FormControl>
 

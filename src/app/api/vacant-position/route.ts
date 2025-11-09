@@ -16,10 +16,6 @@ export async function GET(request: NextRequest) {
         id: true,
         year: true,
         notes: true,
-        displayOrder: true,
-        nominator: true,
-        requestedPositionId: true,
-        isAssigned: true,
         nationalId: true,
         noId: true,
         position: true,
@@ -46,76 +42,14 @@ export async function GET(request: NextRequest) {
             name: true,
           }
         },
-        requestedPosCode: {
-          select: {
-            id: true,
-            name: true,
-          }
-        },
       },
       orderBy: [
-        { requestedPositionId: 'asc' },
-        { displayOrder: 'asc' },
+        { year: 'desc' },
+        { noId: 'asc' },
       ],
     });
 
-    // Optimize: Only fetch assignments if there are nationalIds
-    const nationalIds = vacantPositions
-      .map(v => v.nationalId)
-      .filter((id): id is string => !!id);
-
-    const assignmentMap = new Map();
-    
-    if (nationalIds.length > 0) {
-      // Optimize: Get only the latest assignment per nationalId using DISTINCT ON equivalent
-      const assignments = await prisma.swapTransactionDetail.findMany({
-        where: {
-          nationalId: {
-            in: nationalIds
-          }
-        },
-        select: {
-          nationalId: true,
-          toPosition: true,
-          toUnit: true,
-          createdAt: true,
-          transaction: {
-            select: {
-              year: true,
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        // Limit to first result per nationalId (processed in JS below)
-      });
-
-      // Process assignments - keep only the latest per nationalId
-      assignments.forEach(assignment => {
-        if (assignment.nationalId && !assignmentMap.has(assignment.nationalId)) {
-          assignmentMap.set(assignment.nationalId, {
-            assignedPosition: assignment.toPosition || '',
-            assignedUnit: assignment.toUnit || '',
-            assignedDate: assignment.createdAt.toISOString(),
-            assignedYear: assignment.transaction.year,
-          });
-        }
-      });
-    }
-
-    // Optimize: Use simpler object spread instead of mapping
-    const formattedData = vacantPositions.map(item => {
-      const assignmentInfo = item.nationalId ? assignmentMap.get(item.nationalId) : null;
-      
-      return {
-        ...item,
-        isAssigned: item.isAssigned || !!assignmentInfo,
-        assignmentInfo: assignmentInfo || null,
-      };
-    });
-
-    return NextResponse.json(formattedData);
+    return NextResponse.json(vacantPositions);
   } catch (error) {
     console.error('Error fetching vacant position list:', error);
     return NextResponse.json(
@@ -129,30 +63,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    // กรอง fields ที่ไม่ต้องการออก (id, posCodeMaster, timestamps, originalPersonnelId, requestedPositionId)
+    // กรอง fields ที่ไม่ต้องการออก (id, posCodeMaster, timestamps)
     const { 
       year, 
       notes, 
-      nominator, 
-      requestedPositionId, 
       id, 
       posCodeMaster, 
-      requestedPosCode,
       createdAt, 
       updatedAt, 
       createdBy, 
       updatedBy, 
-      originalPersonnelId, 
       ...personnelData 
     } = body;
-
-    // ตรวจสอบว่ามีตำแหน่งที่ขอหรือไม่
-    if (!requestedPositionId) {
-      return NextResponse.json(
-        { error: 'กรุณาเลือกตำแหน่งที่ขอ' },
-        { status: 400 }
-      );
-    }
 
     // เช็คว่ามีข้อมูลซ้ำหรือไม่ (ใช้เลขบัตรประชาชน)
     if (personnelData.nationalId) {
@@ -171,35 +93,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // หา displayOrder ถัดไปสำหรับตำแหน่งที่ขอ
-    const maxDisplayOrder = await prisma.vacantPosition.findFirst({
-      where: {
-        requestedPositionId: requestedPositionId,
-        year: year,
-      },
-      orderBy: {
-        displayOrder: 'desc'
-      },
-      select: {
-        displayOrder: true
-      }
-    });
-
-    const nextDisplayOrder = (maxDisplayOrder?.displayOrder || 0) + 1;
-
     // สร้างข้อมูลใหม่
     const newEntry = await prisma.vacantPosition.create({
       data: {
         year,
         notes,
-        nominator,
-        requestedPositionId,
-        displayOrder: nextDisplayOrder,
         ...personnelData,
       },
       include: {
         posCodeMaster: true,
-        requestedPosCode: true,
       },
     });
 
@@ -229,7 +131,7 @@ export async function DELETE(request: NextRequest) {
 
     const year = parseInt(yearParam);
 
-    // ค้นหาข้อมูลที่จะลบก่อน เพื่อเอา requestedPositionId
+    // ค้นหาข้อมูลที่จะลบก่อน
     const itemToDelete = await prisma.vacantPosition.findFirst({
       where: {
         nationalId: nationalId,
@@ -237,9 +139,6 @@ export async function DELETE(request: NextRequest) {
       },
       select: {
         id: true,
-        requestedPositionId: true,
-        displayOrder: true,
-        isAssigned: true,
         fullName: true,
       },
     });
@@ -248,17 +147,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(
         { error: 'Record not found' },
         { status: 404 }
-      );
-    }
-
-    // ตรวจสอบว่าจับคู่แล้วหรือไม่ (Option 3: เพิ่มการเตือน)
-    if (itemToDelete.isAssigned) {
-      return NextResponse.json(
-        { 
-          error: 'ไม่สามารถลบได้ เนื่องจากได้จับคู่ตำแหน่งแล้ว',
-          message: 'กรุณายกเลิกการจับคู่ก่อน จากหน้า "จัดการจับคู่ตำแหน่ง"'
-        },
-        { status: 400 }
       );
     }
 
@@ -306,30 +194,8 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    // จัดลำดับ displayOrder ใหม่สำหรับตำแหน่งเดียวกัน (Optimized with batch update)
-    if (itemToDelete.requestedPositionId) {
-      const remainingItems = await prisma.vacantPosition.findMany({
-        where: {
-          requestedPositionId: itemToDelete.requestedPositionId,
-          year: year,
-        },
-        orderBy: { displayOrder: 'asc' },
-        select: { id: true },
-      });
-
-      // Optimize: Use transaction for batch updates
-      const updatePromises = remainingItems.map((item, index) =>
-        prisma.vacantPosition.update({
-          where: { id: item.id },
-          data: { displayOrder: index + 1 },
-        })
-      );
-
-      await Promise.all(updatePromises);
-    }
-
     return NextResponse.json({ 
-      message: 'Removed from vacant position list and reordered successfully' 
+      message: 'Removed from vacant position list successfully' 
     });
   } catch (error) {
     console.error('Error removing from vacant position list:', error);

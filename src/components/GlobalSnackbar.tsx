@@ -112,6 +112,7 @@ export const GlobalSnackbar: React.FC = () => {
         mt: { xs: 2, sm: 8 }, // Reduced margin on mobile
         mx: { xs: 2, sm: 0 }, // Add horizontal margin on mobile
         width: { xs: 'calc(100% - 32px)', sm: 'auto' }, // Full width minus margins on mobile
+        zIndex: 10100, // Higher than header (10000)
         '& .MuiSnackbar-root': {
           position: 'relative'
         }

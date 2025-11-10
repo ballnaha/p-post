@@ -232,6 +232,130 @@ export default function EditPromotionChainPage() {
 
   const isChainValid = useMemo(() => nodes.length > 0 && nodes.every(n => n.isPromotionValid), [nodes]);
 
+  // Handle remove node - สามารถลบ node ใดก็ได้
+  const handleRemoveNode = (nodeId: string) => {
+    const nodeIndex = nodes.findIndex(n => n.id === nodeId);
+    if (nodeIndex === -1) return;
+
+    const removedNode = nodes[nodeIndex];
+
+    // ลบโหนด
+    const newNodes = nodes.filter(n => n.id !== nodeId);
+
+    // ถ้าไม่มีโหนดเหลือ ให้ clear ทั้งหมด
+    if (newNodes.length === 0) {
+      setNodes([]);
+      toast.success('ลบตำแหน่งสำเร็จ');
+      return;
+    }
+
+    // ปรับ nodeOrder และตำแหน่งที่เกี่ยวข้อง
+    const reorderedNodes = newNodes.map((node, index) => {
+      // กรณีที่ 1: โหนดก่อนหน้าโหนดที่ถูกลบ - ไม่เปลี่ยนแปลง (เว้นแต่ nodeOrder)
+      if (index < nodeIndex) {
+        return {
+          ...node,
+          nodeOrder: index + 1,
+        };
+      }
+      
+      // กรณีที่ 2: โหนดหลังจากโหนดที่ถูกลบ - ต้องอัปเดตตำแหน่ง to
+      if (index === 0) {
+        // โหนดแรกใหม่ (หลังจากลบโหนดแรกเดิม) 
+        // ต้องอัปเดต toPosition ให้เป็นตำแหน่งว่างต้นทาง (vacantPosition)
+        if (nodeIndex === 0 && vacantPosition) {
+          // ถ้าลบโหนดแรก node ที่ 2 จะกลายเป็น node แรก และได้รับตำแหน่งว่างต้นทาง
+          return {
+            ...node,
+            nodeOrder: 1,
+            toPosCodeId: vacantPosition.posCodeId || removedNode.toPosCodeId,
+            toPosCodeName: vacantPosition.posCodeName || removedNode.toPosCodeName,
+            toPosition: vacantPosition.position || removedNode.toPosition,
+            toPositionNumber: vacantPosition.positionNumber || removedNode.toPositionNumber,
+            toUnit: vacantPosition.unit || removedNode.toUnit,
+            toActingAs: vacantPosition.actingAs || removedNode.toActingAs,
+            toRankLevel: removedNode.toRankLevel,
+          };
+        }
+        return {
+          ...node,
+          nodeOrder: 1,
+        };
+      } else {
+        // โหนดที่เหลือ - อัปเดต toPosition ให้เชื่อมกับ fromPosition ของโหนดก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        return {
+          ...node,
+          nodeOrder: index + 1,
+          toPosCodeId: prevNode.fromPosCodeId,
+          toPosCodeName: prevNode.fromPosCodeName,
+          toPosition: prevNode.fromPosition,
+          toPositionNumber: prevNode.fromPositionNumber,
+          toUnit: prevNode.fromUnit,
+          toActingAs: prevNode.fromActingAs,
+          toRankLevel: prevNode.fromRankLevel,
+        };
+      }
+    });
+
+    setNodes(reorderedNodes);
+    
+    // แสดงข้อความที่มีรายละเอียดมากขึ้น
+    if (nodeIndex < nodes.length - 1) {
+      const nextNode = nodes[nodeIndex + 1];
+      toast.success(
+        `ลบตำแหน่งสำเร็จ - ${nextNode.fullName} จะได้รับตำแหน่งใหม่: ${removedNode.toPosition}`
+      );
+    } else {
+      toast.success('ลบตำแหน่งสำเร็จ');
+    }
+  };
+
+  // Handle insert node before a specific node
+  const handleInsertNode = (newNode: ChainNode, beforeNodeId: string) => {
+    const targetIndex = nodes.findIndex(n => n.id === beforeNodeId);
+    if (targetIndex === -1) {
+      toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
+      return;
+    }
+
+    // แทรกโหนดใหม่ก่อนตำแหน่งที่เลือก
+    const newNodes = [...nodes];
+    newNodes.splice(targetIndex, 0, newNode);
+
+    // ปรับ nodeOrder และตำแหน่งที่เกี่ยวข้อง
+    const reorderedNodes = newNodes.map((node, index) => {
+      if (index < targetIndex) {
+        // โหนดก่อนหน้า - ไม่เปลี่ยนแปลง
+        return node;
+      } else if (index === targetIndex) {
+        // โหนดใหม่ที่แทรก
+        // ตำแหน่ง to ของโหนดใหม่จะเป็นตำแหน่ง to ของโหนดที่มันแทรกเข้าไป
+        return {
+          ...node,
+          nodeOrder: index + 1,
+        };
+      } else {
+        // โหนดถัดไป - ปรับ nodeOrder และปรับตำแหน่ง to ให้เชื่อมกับโหนดก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        return {
+          ...node,
+          nodeOrder: index + 1,
+          toPosCodeId: prevNode.fromPosCodeId,
+          toPosCodeName: prevNode.fromPosCodeName,
+          toPosition: prevNode.fromPosition,
+          toPositionNumber: prevNode.fromPositionNumber,
+          toUnit: prevNode.fromUnit,
+          toActingAs: prevNode.fromActingAs,
+          toRankLevel: prevNode.fromRankLevel,
+        };
+      }
+    });
+
+    setNodes(reorderedNodes);
+    toast.success('แทรกตำแหน่งใหม่สำเร็จ');
+  };
+
   const handleSave = async () => {
     if (!transaction) return;
     setSaving(true);
@@ -359,7 +483,8 @@ export default function EditPromotionChainPage() {
                 vacantPosition={vacantPosition}
                 nodes={nodes}
                 onAddNode={(n) => setNodes([...nodes, n])}
-                onRemoveNode={(id) => setNodes(nodes.filter((x) => x.id !== id))}
+                onRemoveNode={handleRemoveNode}
+                onInsertNode={handleInsertNode}
                 excludeTransactionId={id}
               />
             </Box>

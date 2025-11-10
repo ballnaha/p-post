@@ -68,6 +68,7 @@ interface CandidateSelectorProps {
   vacantPosition: VacantPosition | null;
   selectedPersonnelIds?: string[]; // รายชื่อผู้ที่ถูกเลือกแล้วใน chain เพื่อแสดงตัวบ่งชี้
   excludeTransactionId?: string; // Transaction ID ที่กำลังแก้ไข (ไม่กรองบุคลากรใน transaction นี้ออก)
+  isInsertMode?: boolean; // กำลังอยู่ในโหมดแทรกหรือไม่
 }
 
 export default function CandidateSelector({
@@ -78,6 +79,7 @@ export default function CandidateSelector({
   vacantPosition,
   selectedPersonnelIds = [],
   excludeTransactionId,
+  isInsertMode = false,
 }: CandidateSelectorProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -459,10 +461,13 @@ export default function CandidateSelector({
         }}>
           <Box sx={{ lineHeight: 1, pl: { xs: 0, md: 1.5 } }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25, fontSize: { xs: '1rem', md: '1.1rem' } }}>
-              เลือกผู้สมัคร
+              {isInsertMode ? '🔄 แทรกผู้สมัคร' : 'เลือกผู้สมัคร'}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
-              เลือกบุคลากรที่ต้องการเลื่อนขึ้นมาแทนตำแหน่งว่าง
+              {isInsertMode 
+                ? 'เลือกบุคลากรที่ต้องการแทรกเข้าไปในลูกโซ่' 
+                : 'เลือกบุคลากรที่ต้องการเลื่อนขึ้นมาแทนตำแหน่งว่าง'
+              }
             </Typography>
           </Box>
           <IconButton onClick={handleClose} size="small">

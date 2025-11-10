@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -71,6 +71,7 @@ import {
   ViewList as ViewListIcon,
   ViewModule as ViewModuleIcon,
   CheckCircle as CheckCircleIcon,
+  DragIndicator as DragIndicatorIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import Layout from '@/app/components/Layout';
@@ -243,6 +244,10 @@ export default function PromotionChainPage() {
   const [personnelDetailModalOpen, setPersonnelDetailModalOpen] = useState(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState<PolicePersonnel | null>(null);
   const [loadingPersonnel, setLoadingPersonnel] = useState(false);
+  // Drag and drop state
+  const [draggedRow, setDraggedRow] = useState<{ transactionId: string; detailId: string; index: number } | null>(null);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null); // transaction ที่กำลังแก้ไข
+  const [savingOrder, setSavingOrder] = useState(false);
 
   // Load chains first, then vacant positions (to filter used ones)
   useEffect(() => {
@@ -554,6 +559,162 @@ export default function PromotionChainPage() {
   const handlePageChange = useCallback((newPage: number) => setPage(newPage), []);
   const handleRowsPerPageChange = useCallback((newR: number) => { setRowsPerPage(newR); setPage(0); }, []);
 
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, transactionId: string, detailId: string, index: number) => {
+    setDraggedRow({ transactionId, detailId, index });
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, transactionId: string, targetIndex: number) => {
+    e.preventDefault();
+    
+    if (!draggedRow || draggedRow.transactionId !== transactionId) return;
+
+    const sourceIndex = draggedRow.index;
+    if (sourceIndex === targetIndex) {
+      setDraggedRow(null);
+      return;
+    }
+
+    // อัปเดต chains state
+    setChains(prevChains => {
+      const newChains = prevChains.map(chain => {
+        if (chain.id !== transactionId) return chain;
+
+        // เก็บข้อมูลตำแหน่งว่างต้นทางจาก node แรกเดิม
+        const originalFirstDetail = chain.swapDetails[0];
+        const vacantPositionData = {
+          toPosCodeId: originalFirstDetail.toPosCodeId,
+          toPosCodeMaster: originalFirstDetail.toPosCodeMaster,
+          toPosition: originalFirstDetail.toPosition,
+          toPositionNumber: originalFirstDetail.toPositionNumber,
+          toUnit: originalFirstDetail.toUnit,
+          toActingAs: originalFirstDetail.toActingAs,
+        };
+
+        const newDetails = [...chain.swapDetails];
+        const [removed] = newDetails.splice(sourceIndex, 1);
+        newDetails.splice(targetIndex, 0, removed);
+
+        // อัปเดต sequence และตำแหน่ง to
+        const updatedDetails = newDetails.map((detail, index) => {
+          if (index === 0) {
+            // โหนดแรก - อัปเดต toPosition ให้เป็นตำแหน่งว่างต้นทาง
+            return {
+              ...detail,
+              sequence: index + 1,
+              toPosCodeId: vacantPositionData.toPosCodeId,
+              toPosCodeMaster: vacantPositionData.toPosCodeMaster,
+              toPosition: vacantPositionData.toPosition,
+              toPositionNumber: vacantPositionData.toPositionNumber,
+              toUnit: vacantPositionData.toUnit,
+              toActingAs: vacantPositionData.toActingAs,
+            };
+          } else {
+            // โหนดถัดไป - อัปเดต toPosition ให้เชื่อมกับ fromPosition ของโหนดก่อนหน้า
+            const prevDetail = newDetails[index - 1];
+            return {
+              ...detail,
+              sequence: index + 1,
+              toPosCodeId: prevDetail.posCodeId,
+              toPosCodeMaster: prevDetail.posCodeMaster,
+              toPosition: prevDetail.fromPosition,
+              toPositionNumber: prevDetail.fromPositionNumber,
+              toUnit: prevDetail.fromUnit,
+              toActingAs: prevDetail.fromActingAs,
+            };
+          }
+        });
+
+        return { ...chain, swapDetails: updatedDetails };
+      });
+
+      return newChains;
+    });
+
+    setDraggedRow(null);
+    setEditingTransactionId(transactionId); // เปิดโหมดแก้ไข
+    toast.info('ลำดับถูกเปลี่ยนแล้ว กรุณากดปุ่มบันทึก');
+  }, [draggedRow, toast]);
+
+  // บันทึกการเรียงลำดับใหม่
+  const handleSaveOrder = useCallback(async (transactionId: string) => {
+    const chain = chains.find(c => c.id === transactionId);
+    if (!chain) return;
+
+    setSavingOrder(true);
+    try {
+      const swapDetails = chain.swapDetails.map(detail => ({
+        sequence: detail.sequence,
+        personnelId: detail.personnelId,
+        noId: detail.noId,
+        nationalId: detail.nationalId,
+        fullName: detail.fullName,
+        rank: detail.rank,
+        seniority: detail.seniority,
+        posCodeId: detail.posCodeId,
+        toPosCodeId: detail.toPosCodeId,
+        birthDate: detail.birthDate,
+        age: detail.age,
+        education: detail.education,
+        lastAppointment: detail.lastAppointment,
+        currentRankSince: detail.currentRankSince,
+        enrollmentDate: detail.enrollmentDate,
+        retirementDate: detail.retirementDate,
+        yearsOfService: detail.yearsOfService,
+        trainingLocation: detail.trainingLocation,
+        trainingCourse: detail.trainingCourse,
+        supportName: detail.supportName,
+        supportReason: detail.supportReason,
+        fromPosition: detail.fromPosition,
+        fromPositionNumber: detail.fromPositionNumber,
+        fromUnit: detail.fromUnit,
+        fromActingAs: detail.fromActingAs,
+        toPosition: detail.toPosition,
+        toPositionNumber: detail.toPositionNumber,
+        toUnit: detail.toUnit,
+        toActingAs: detail.toActingAs,
+        notes: detail.notes,
+      }));
+
+      const payload = {
+        year: chain.year,
+        swapDate: chain.swapDate,
+        swapType: chain.swapType,
+        groupName: chain.groupName,
+        groupNumber: chain.groupNumber,
+        status: chain.status,
+        notes: chain.notes,
+        swapDetails,
+      };
+
+      const res = await fetch(`/api/swap-transactions/${transactionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.error || 'บันทึกไม่สำเร็จ');
+      }
+
+      toast.success('บันทึกลำดับใหม่สำเร็จ');
+      setEditingTransactionId(null);
+      await loadChains(); // โหลดข้อมูลใหม่
+    } catch (error: any) {
+      console.error('Save order failed:', error);
+      toast.error(error?.message || 'เกิดข้อผิดพลาดในการบันทึก');
+    } finally {
+      setSavingOrder(false);
+    }
+  }, [chains, toast]);
+
   const handleViewPersonnelDetail = useCallback(async (personnelId?: string | null) => {
     if (!personnelId) return;
     try {
@@ -842,14 +1003,30 @@ export default function PromotionChainPage() {
                           <TableCell colSpan={5} sx={{ p: 0 }}>
                             <Collapse in={expandedRows.has(row.id)} timeout="auto" unmountOnExit>
                               <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
-                                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <CheckCircleIcon color="success" />
-                                  รายละเอียดขั้นตอน ({row.swapDetails.length})
-                                </Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <CheckCircleIcon color="success" />
+                                    รายละเอียดขั้นตอน ({row.swapDetails.length})
+                                  </Typography>
+                                  {editingTransactionId === row.id && (
+                                    <Button
+                                      variant="contained"
+                                      color="primary"
+                                      size="small"
+                                      disabled={savingOrder}
+                                      startIcon={savingOrder ? <CircularProgress size={16} /> : <CheckIcon />}
+                                      onClick={() => handleSaveOrder(row.id)}
+                                      sx={{ fontWeight: 600 }}
+                                    >
+                                      {savingOrder ? 'กำลังบันทึก...' : 'บันทึกลำดับใหม่'}
+                                    </Button>
+                                  )}
+                                </Box>
                                 <TableContainer>
                                   <Table size="small">
                                     <TableHead>
                                       <TableRow sx={{ bgcolor: 'white' }}>
+                                        <TableCell sx={{ width: 40 }} />
                                         <TableCell>ลำดับ</TableCell>
                                         <TableCell>ยศ/ชื่อ-สกุล</TableCell>
                                         <TableCell>POSCODE</TableCell>
@@ -861,8 +1038,25 @@ export default function PromotionChainPage() {
                                       </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                      {sortedDetails(row.swapDetails).map((d) => (
-                                        <TableRow key={d.id} sx={{ bgcolor: 'white' }}>
+                                      {sortedDetails(row.swapDetails).map((d, index) => (
+                                        <TableRow 
+                                          key={d.id} 
+                                          draggable
+                                          onDragStart={(e) => handleDragStart(e, row.id, d.id, index)}
+                                          onDragOver={handleDragOver}
+                                          onDrop={(e) => handleDrop(e, row.id, index)}
+                                          sx={{ 
+                                            bgcolor: 'white',
+                                            cursor: 'move',
+                                            '&:hover': {
+                                              bgcolor: 'action.hover',
+                                            },
+                                            opacity: draggedRow?.detailId === d.id ? 0.5 : 1,
+                                          }}
+                                        >
+                                          <TableCell>
+                                            <DragIndicatorIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                                          </TableCell>
                                           <TableCell>{d.sequence ?? '-'}</TableCell>
                                           <TableCell><strong>{d.rank ? `${d.rank} ` : ''}{d.fullName}</strong></TableCell>
                                           <TableCell>

@@ -1,7 +1,7 @@
 'use client';
-import React from 'react';
-import { Card, CardContent, Box, Typography, IconButton, Divider, Stack, Tooltip, Chip, Button, useMediaQuery, useTheme } from '@mui/material';
-import { Delete as DeleteIcon, InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
+import React, { useState } from 'react';
+import { Card, CardContent, Box, Typography, IconButton, Divider, Stack, Tooltip, Chip, Button, useMediaQuery, useTheme, Dialog, DialogTitle, DialogContent, DialogActions, Paper } from '@mui/material';
+import { Delete as DeleteIcon, InfoOutlined as InfoOutlinedIcon, Add as AddIcon, Warning as WarningIcon } from '@mui/icons-material';
 
 // Types - ตรงกับ PolicePersonnel schema
 interface ChainNode {
@@ -47,12 +47,15 @@ interface ChainNodeCardProps {
   onRemove: () => void;
   isLastNode: boolean;
   onShowDetail?: () => void; // เปิด modal รายละเอียดบุคลากร
+  onInsertBefore?: () => void; // แทรกตำแหน่งใหม่ก่อนตำแหน่งนี้
+  nextNode?: ChainNode; // โหนดถัดไป เพื่อแสดงข้อมูลผลกระทบจากการลบ
 }
 
-export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail }: ChainNodeCardProps) {
+export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail, onInsertBefore, nextNode }: ChainNodeCardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isPromotion = node.toRankLevel < node.fromRankLevel;
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
   return (
     <Card
@@ -85,6 +88,36 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
       }}
     >
       <CardContent sx={{ p: 1.5, pt: 1.25 }}>
+        {/* Insert Button - แสดงที่ด้านบนของการ์ดถ้ามีฟังก์ชัน onInsertBefore */}
+        {onInsertBefore && (
+          <Box sx={{ mb: 1, display: 'flex', justifyContent: 'center' }}>
+            <Button
+              onClick={onInsertBefore}
+              size="small"
+              variant="outlined"
+              startIcon={<AddIcon fontSize="small" />}
+              sx={{
+                fontWeight: 600,
+                textTransform: 'none',
+                fontSize: '0.75rem',
+                borderColor: 'primary.main',
+                color: 'primary.main',
+                bgcolor: 'primary.50',
+                borderStyle: 'dashed',
+                borderWidth: 2,
+                '&:hover': {
+                  bgcolor: 'primary.100',
+                  borderColor: 'primary.dark',
+                  borderStyle: 'dashed',
+                  borderWidth: 2,
+                },
+              }}
+            >
+              แทรกตำแหน่งก่อนหน้านี้
+            </Button>
+          </Box>
+        )}
+        
         {/* Header with step number and actions */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, gap: 1 }}>
           <Box sx={{ 
@@ -143,30 +176,28 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
                 </Button>
               </Tooltip>
             )}
-            {isLastNode && (
-              <Tooltip title="ลบขั้นนี้">
-                <IconButton 
-                  onClick={onRemove} 
-                  size="small"
-                  sx={{
-                    bgcolor: 'error.50',
-                    minWidth: { xs: '32px', md: '40px' },
-                    width: { xs: '32px', md: '40px' },
-                    height: { xs: '32px', md: '40px' },
-                    '&:hover': {
-                      bgcolor: 'error.main',
-                      color: 'white',
-                    },
-                    '&:active': { 
-                      transform: 'scale(0.98)',
-                      transition: 'transform 0.1s'
-                    }
-                  }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
+            <Tooltip title="ลบขั้นนี้">
+              <IconButton 
+                onClick={() => setConfirmDialogOpen(true)} 
+                size="small"
+                sx={{
+                  bgcolor: 'error.50',
+                  minWidth: { xs: '32px', md: '40px' },
+                  width: { xs: '32px', md: '40px' },
+                  height: { xs: '32px', md: '40px' },
+                  '&:hover': {
+                    bgcolor: 'error.main',
+                    color: 'white',
+                  },
+                  '&:active': { 
+                    transform: 'scale(0.98)',
+                    transition: 'transform 0.1s'
+                  }
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
         </Box>
 
@@ -342,6 +373,184 @@ export default function ChainNodeCard({ node, onRemove, isLastNode, onShowDetail
           </Box>
         )}
       </CardContent>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={() => setConfirmDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          pb: 1, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1.5,
+          borderBottom: '2px solid',
+          borderColor: 'error.main',
+        }}>
+          <Box sx={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            bgcolor: 'error.main',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '1.5rem',
+          }}>
+            <WarningIcon />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight={700}>
+              ยืนยันการลบตำแหน่ง
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+            </Typography>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ pt: 3, pb: 2 }}>
+          {/* แสดงข้อมูลตำแหน่งที่จะถูกลบ */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+              🗑️ ตำแหน่งที่จะถูกลบ:
+            </Typography>
+            <Paper 
+              elevation={0} 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'error.50', 
+                border: '2px solid', 
+                borderColor: 'error.main',
+                borderRadius: 2,
+              }}
+            >
+              <Typography variant="body1" fontWeight={700} sx={{ mb: 0.5, color: 'error.dark' }}>
+                ขั้นที่ {node.nodeOrder}: {node.rank} {node.fullName}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                จาก: {node.fromPosition} ({node.fromUnit})
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                ไป: {node.toPosition} ({node.toUnit})
+              </Typography>
+            </Paper>
+          </Box>
+
+          {/* แสดงผลกระทบต่อตำแหน่งถัดไป ถ้ามี */}
+          {nextNode && (
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+                🔄 ผลกระทบต่อตำแหน่งถัดไป:
+              </Typography>
+              <Paper 
+                elevation={0} 
+                sx={{ 
+                  p: 2, 
+                  bgcolor: 'warning.50', 
+                  border: '2px solid', 
+                  borderColor: 'warning.main',
+                  borderRadius: 2,
+                }}
+              >
+                <Typography variant="body1" fontWeight={700} sx={{ mb: 0.5, color: 'warning.dark' }}>
+                  {nextNode.rank} {nextNode.fullName}
+                </Typography>
+                <Box sx={{ mt: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                    ตำแหน่งใหม่ที่จะได้รับ:
+                  </Typography>
+                  <Box sx={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '1fr auto 1fr', 
+                    gap: 1, 
+                    alignItems: 'center',
+                    p: 1.5,
+                    bgcolor: 'white',
+                    borderRadius: 1,
+                  }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        เดิม:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={600} sx={{ color: 'error.main' }}>
+                        {nextNode.toPosition}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {nextNode.toUnit}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ 
+                      fontSize: '1.5rem',
+                      color: 'success.main',
+                      fontWeight: 700,
+                    }}>
+                      →
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        ใหม่:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={600} sx={{ color: 'success.main' }}>
+                        {node.toPosition}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {node.toUnit}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Paper>
+            </Box>
+          )}
+
+          {!nextNode && (
+            <Box sx={{ 
+              p: 2, 
+              bgcolor: 'info.50', 
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'info.main',
+            }}>
+              <Typography variant="body2" color="info.dark" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box component="span">ℹ️</Box>
+                นี่คือตำแหน่งสุดท้ายในลูกโซ่ การลบจะไม่ส่งผลกระทบต่อตำแหน่งอื่น
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, pt: 1, gap: 1 }}>
+          <Button
+            onClick={() => setConfirmDialogOpen(false)}
+            variant="outlined"
+            sx={{ minWidth: 100 }}
+          >
+            ยกเลิก
+          </Button>
+          <Button
+            onClick={() => {
+              setConfirmDialogOpen(false);
+              onRemove();
+            }}
+            variant="contained"
+            color="error"
+            startIcon={<DeleteIcon />}
+            sx={{ minWidth: 100 }}
+          >
+            ยืนยันลบ
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }

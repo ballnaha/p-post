@@ -5,7 +5,7 @@ import { Box, Paper, Typography, Button, Chip, CircularProgress, alpha, useMedia
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Check as CheckIcon, Warning as WarningIcon } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
-import PromotionChainBuilder from './components/PromotionChainBuilder';
+import PromotionChainTable from './components/PromotionChainTable';
 
 // Types - ตรงกับ PolicePersonnel schema
 interface ChainNode {
@@ -200,7 +200,161 @@ function CreatePromotionChainContent() {
   };
 
   const handleRemoveNode = (nodeId: string) => {
-    setNodes(nodes.filter((n) => n.id !== nodeId));
+    const nodeIndex = nodes.findIndex(n => n.id === nodeId);
+    if (nodeIndex === -1) return;
+
+    const removedNode = nodes[nodeIndex];
+
+    // ลบโหนด
+    const newNodes = nodes.filter(n => n.id !== nodeId);
+
+    // ถ้าไม่มีโหนดเหลือ ให้ clear ทั้งหมด
+    if (newNodes.length === 0) {
+      setNodes([]);
+      toast.success('ลบตำแหน่งสำเร็จ');
+      return;
+    }
+
+    // ปรับ nodeOrder และตำแหน่งที่เกี่ยวข้อง
+    const reorderedNodes = newNodes.map((node, index) => {
+      // กรณีที่ 1: โหนดก่อนหน้าโหนดที่ถูกลบ - ไม่เปลี่ยนแปลง (เว้นแต่ nodeOrder)
+      if (index < nodeIndex) {
+        return {
+          ...node,
+          nodeOrder: index + 1,
+        };
+      }
+      
+      // กรณีที่ 2: โหนดหลังจากโหนดที่ถูกลบ - ต้องอัปเดตตำแหน่ง to
+      if (index === 0) {
+        // โหนดแรกใหม่ (หลังจากลบโหนดแรกเดิม) 
+        // ต้องอัปเดต toPosition ให้เป็นตำแหน่งว่างต้นทาง (vacantPosition)
+        if (nodeIndex === 0 && vacantPosition) {
+          // ถ้าลบโหนดแรก node ที่ 2 จะกลายเป็น node แรก และได้รับตำแหน่งว่างต้นทาง
+          return {
+            ...node,
+            nodeOrder: 1,
+            toPosCodeId: vacantPosition.posCodeId || removedNode.toPosCodeId,
+            toPosCodeName: vacantPosition.posCodeName || removedNode.toPosCodeName,
+            toPosition: vacantPosition.position || removedNode.toPosition,
+            toPositionNumber: vacantPosition.positionNumber || removedNode.toPositionNumber,
+            toUnit: vacantPosition.unit || removedNode.toUnit,
+            toActingAs: vacantPosition.actingAs || removedNode.toActingAs,
+            toRankLevel: removedNode.toRankLevel,
+          };
+        }
+        return {
+          ...node,
+          nodeOrder: 1,
+        };
+      } else {
+        // โหนดที่เหลือ - อัปเดต toPosition ให้เชื่อมกับ fromPosition ของโหนดก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        return {
+          ...node,
+          nodeOrder: index + 1,
+          toPosCodeId: prevNode.fromPosCodeId,
+          toPosCodeName: prevNode.fromPosCodeName,
+          toPosition: prevNode.fromPosition,
+          toPositionNumber: prevNode.fromPositionNumber,
+          toUnit: prevNode.fromUnit,
+          toActingAs: prevNode.fromActingAs,
+          toRankLevel: prevNode.fromRankLevel,
+        };
+      }
+    });
+
+    setNodes(reorderedNodes);
+    
+    // แสดงข้อความที่มีรายละเอียดมากขึ้น
+    if (nodeIndex < nodes.length - 1) {
+      const nextNode = nodes[nodeIndex + 1];
+      toast.success(
+        `ลบตำแหน่งสำเร็จ - ${nextNode.fullName} จะได้รับตำแหน่งใหม่: ${removedNode.toPosition}`
+      );
+    } else {
+      toast.success('ลบตำแหน่งสำเร็จ');
+    }
+  };
+
+  const handleInsertNode = (newNode: ChainNode, beforeNodeId: string) => {
+    const insertIndex = nodes.findIndex(n => n.id === beforeNodeId);
+    if (insertIndex === -1) {
+      toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
+      return;
+    }
+
+    // แทรกโหนดใหม่และ reorder
+    const newNodes = [...nodes];
+    newNodes.splice(insertIndex, 0, newNode);
+
+    // อัปเดต nodeOrder และ toPosition
+    const reorderedNodes = newNodes.map((node, index) => {
+      if (index === 0) {
+        // โหนดแรกต้องอ้างอิงไปที่ vacantPosition
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
+          toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
+          toPosition: vacantPosition?.position || node.toPosition,
+          toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
+          toUnit: vacantPosition?.unit || node.toUnit,
+          toActingAs: vacantPosition?.actingAs || node.toActingAs,
+        };
+      } else {
+        // โหนดอื่นๆ อ้างอิงไปที่ fromPosition ของโหนดก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        return {
+          ...node,
+          nodeOrder: index + 1,
+          toPosCodeId: prevNode.fromPosCodeId,
+          toPosCodeName: prevNode.fromPosCodeName,
+          toPosition: prevNode.fromPosition,
+          toPositionNumber: prevNode.fromPositionNumber,
+          toUnit: prevNode.fromUnit,
+          toActingAs: prevNode.fromActingAs,
+          toRankLevel: prevNode.fromRankLevel,
+        };
+      }
+    });
+
+    setNodes(reorderedNodes);
+    toast.success(`แทรก ${newNode.fullName} ก่อน ${nodes[insertIndex].fullName} สำเร็จ`);
+  };
+
+  const handleReorder = (reorderedNodes: ChainNode[]) => {
+    // อัปเดตตำแหน่งหลังจาก drag-drop
+    const updatedNodes = reorderedNodes.map((node, index) => {
+      if (index === 0) {
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
+          toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
+          toPosition: vacantPosition?.position || node.toPosition,
+          toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
+          toUnit: vacantPosition?.unit || node.toUnit,
+          toActingAs: vacantPosition?.actingAs || node.toActingAs,
+        };
+      } else {
+        const prevNode = reorderedNodes[index - 1];
+        return {
+          ...node,
+          nodeOrder: index + 1,
+          toPosCodeId: prevNode.fromPosCodeId,
+          toPosCodeName: prevNode.fromPosCodeName,
+          toPosition: prevNode.fromPosition,
+          toPositionNumber: prevNode.fromPositionNumber,
+          toUnit: prevNode.fromUnit,
+          toActingAs: prevNode.fromActingAs,
+          toRankLevel: prevNode.fromRankLevel,
+        };
+      }
+    });
+
+    setNodes(updatedNodes);
+    toast.success('จัดเรียงใหม่สำเร็จ');
   };
 
   const handleSave = async () => {
@@ -357,13 +511,15 @@ function CreatePromotionChainContent() {
         {!loading && (
           <>
 
-            {/* Chain Builder */}
+            {/* Chain Table */}
             <Box sx={{ pb: 12 }}> {/* Add bottom padding to prevent sticky footer overlap */}
-              <PromotionChainBuilder
+              <PromotionChainTable
                 vacantPosition={vacantPosition}
                 nodes={nodes}
                 onAddNode={handleAddNode}
                 onRemoveNode={handleRemoveNode}
+                onInsertNode={handleInsertNode}
+                onReorder={handleReorder}
               />
             </Box>
 

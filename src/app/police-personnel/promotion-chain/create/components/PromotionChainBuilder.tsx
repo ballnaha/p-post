@@ -82,6 +82,7 @@ interface PromotionChainBuilderProps {
   nodes: ChainNode[];
   onAddNode: (node: ChainNode) => void;
   onRemoveNode: (nodeId: string) => void;
+  onInsertNode?: (node: ChainNode, beforeNodeId: string) => void; // แทรกโหนดก่อนโหนดที่ระบุ
   excludeTransactionId?: string; // Transaction ID ที่กำลังแก้ไข (ไม่กรองบุคลากรใน transaction นี้ออก)
 }
 
@@ -90,12 +91,14 @@ export default function PromotionChainBuilder({
   nodes,
   onAddNode,
   onRemoveNode,
+  onInsertNode,
   excludeTransactionId,
 }: PromotionChainBuilderProps) {
   const [showCandidateSelector, setShowCandidateSelector] = useState(false);
   const [showPersonnelModal, setShowPersonnelModal] = useState(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState<any | null>(null);
   const [personnelModalLoading, setPersonnelModalLoading] = useState(false);
+  const [insertBeforeNodeId, setInsertBeforeNodeId] = useState<string | null>(null); // เก็บว่ากำลังจะแทรกก่อนโหนดไหน
   const toast = useToast();
 
   // ดึงตัวอักษรย่อพื้นที่จากหน่วย เช่น บก.น.2 -> น
@@ -147,6 +150,68 @@ export default function PromotionChainBuilder({
       toast.warning('ไม่สามารถเลือกบุคคลเดิมซ้ำได้');
       return;
     }
+
+    // ถ้ากำลังแทรก (insertBeforeNodeId มีค่า)
+    if (insertBeforeNodeId && onInsertNode) {
+      const targetNodeIndex = nodes.findIndex(n => n.id === insertBeforeNodeId);
+      if (targetNodeIndex === -1) {
+        toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
+        return;
+      }
+
+      const targetNode = nodes[targetNodeIndex];
+      const newNode: ChainNode = {
+        id: `node-${Date.now()}`,
+        nodeOrder: targetNode.nodeOrder, // จะถูกปรับใหม่ใน parent
+        personnelId: candidate.id,
+        noId: candidate.noId,
+        nationalId: candidate.nationalId,
+        fullName: candidate.fullName,
+        rank: candidate.rank,
+        seniority: candidate.seniority,
+        // ข้อมูลส่วนตัว
+        birthDate: candidate.birthDate,
+        age: candidate.age,
+        education: candidate.education,
+        // ข้อมูลการแต่งตั้ง
+        lastAppointment: candidate.lastAppointment,
+        currentRankSince: candidate.currentRankSince,
+        enrollmentDate: candidate.enrollmentDate,
+        retirementDate: candidate.retirementDate,
+        yearsOfService: candidate.yearsOfService,
+        // ข้อมูลการฝึกอบรม
+        trainingLocation: candidate.trainingLocation,
+        trainingCourse: candidate.trainingCourse,
+        // ข้อมูลการเสนอชื่อ
+        supporterName: candidate.supporterName,
+        supportReason: candidate.supportReason,
+        // หมายเหตุ
+        notes: candidate.notes,
+        // ตำแหน่ง - คนใหม่จะไปแทนตำแหน่งของคนที่กำลังจะถูกแทรกก่อน
+        fromPosCodeId: candidate.posCodeId,
+        fromPosCodeName: candidate.posCodeName || candidate.position,
+        fromPosition: candidate.position,
+        fromPositionNumber: candidate.positionNumber,
+        fromUnit: candidate.unit,
+        fromActingAs: candidate.actingAs,
+        toPosCodeId: targetNode.toPosCodeId,
+        toPosCodeName: targetNode.toPosCodeName,
+        toPosition: targetNode.toPosition,
+        toPositionNumber: targetNode.toPositionNumber,
+        toUnit: targetNode.toUnit,
+        toActingAs: targetNode.toActingAs,
+        fromRankLevel: candidate.rankLevel,
+        toRankLevel: targetNode.toRankLevel,
+        isPromotionValid: true,
+      };
+
+      onInsertNode(newNode, insertBeforeNodeId);
+      setInsertBeforeNodeId(null);
+      setShowCandidateSelector(false);
+      return;
+    }
+
+    // การเพิ่มแบบปกติ (ต่อท้าย)
     const newNode: ChainNode = {
       id: `node-${Date.now()}`,
       nodeOrder: nodes.length + 1,
@@ -196,6 +261,13 @@ export default function PromotionChainBuilder({
     setShowCandidateSelector(false);
   };
 
+
+  // Handle insert before a specific node
+  const handleInsertBefore = (nodeId: string) => {
+    if (!onInsertNode) return; // ต้องมีฟังก์ชัน onInsertNode ก่อน
+    setInsertBeforeNodeId(nodeId);
+    setShowCandidateSelector(true);
+  };
 
   // Open personnel detail modal for a node's person
   const handleShowPersonnelDetail = async (node: ChainNode) => {
@@ -326,8 +398,10 @@ export default function PromotionChainBuilder({
               <ChainNodeCard
                 node={node}
                 onRemove={() => onRemoveNode(node.id)}
-                isLastNode={index === nodes.length - 1}
+                isLastNode={false}
                 onShowDetail={() => handleShowPersonnelDetail(node)}
+                onInsertBefore={onInsertNode ? () => handleInsertBefore(node.id) : undefined}
+                nextNode={index < nodes.length - 1 ? nodes[index + 1] : undefined}
               />
 
               {/* Arrow between nodes */}
@@ -588,22 +662,38 @@ export default function PromotionChainBuilder({
       {/* Candidate Selector Dialog */}
       <CandidateSelector
         open={showCandidateSelector}
-        onClose={() => setShowCandidateSelector(false)}
+        onClose={() => {
+          setShowCandidateSelector(false);
+          setInsertBeforeNodeId(null);
+        }}
         targetRankLevel={currentVacantRankLevel || 0}
         onSelect={handleSelectCandidate}
         selectedPersonnelIds={nodes.map(n => n.personnelId).filter(Boolean) as string[]}
         excludeTransactionId={excludeTransactionId}
+        isInsertMode={insertBeforeNodeId !== null}
         vacantPosition={
-          nodes.length === 0
-            ? vacantPosition
-            : {
-                id: nodes[nodes.length - 1].id,
-                posCodeId: nodes[nodes.length - 1].fromPosCodeId,
-                posCodeName: nodes[nodes.length - 1].fromPosCodeName,
-                position: nodes[nodes.length - 1].fromPosition,
-                unit: nodes[nodes.length - 1].fromUnit,
-                actingAs: nodes[nodes.length - 1].fromActingAs,
-              }
+          insertBeforeNodeId !== null
+            ? (() => {
+                const targetNode = nodes.find(n => n.id === insertBeforeNodeId);
+                return targetNode ? {
+                  id: targetNode.id,
+                  posCodeId: targetNode.toPosCodeId,
+                  posCodeName: targetNode.toPosCodeName,
+                  position: targetNode.toPosition,
+                  unit: targetNode.toUnit,
+                  actingAs: targetNode.toActingAs,
+                } : null;
+              })()
+            : nodes.length === 0
+              ? vacantPosition
+              : {
+                  id: nodes[nodes.length - 1].id,
+                  posCodeId: nodes[nodes.length - 1].fromPosCodeId,
+                  posCodeName: nodes[nodes.length - 1].fromPosCodeName,
+                  position: nodes[nodes.length - 1].fromPosition,
+                  unit: nodes[nodes.length - 1].fromUnit,
+                  actingAs: nodes[nodes.length - 1].fromActingAs,
+                }
         }
       />
 

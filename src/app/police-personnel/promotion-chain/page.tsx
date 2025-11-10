@@ -190,7 +190,7 @@ export default function PromotionChainPage() {
   const [loading, setLoading] = useState(false);
   const [chains, setChains] = useState<TransactionChain[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   const [showFilters, setShowFilters] = useState(false);
   // Compact drawer header height (px) for sticky calculations
   const drawerHeaderHeight = 56;
@@ -246,6 +246,7 @@ export default function PromotionChainPage() {
   const [loadingPersonnel, setLoadingPersonnel] = useState(false);
   // Drag and drop state
   const [draggedRow, setDraggedRow] = useState<{ transactionId: string; detailId: string; index: number } | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<{ transactionId: string; index: number } | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null); // transaction ที่กำลังแก้ไข
   const [savingOrder, setSavingOrder] = useState(false);
 
@@ -565,9 +566,30 @@ export default function PromotionChainPage() {
     e.dataTransfer.effectAllowed = 'move';
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent, transactionId: string, targetIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
+    
+    // ป้องกันการ setState บ่อยเกินไป
+    if (dragOverIndex?.transactionId !== transactionId || dragOverIndex?.index !== targetIndex) {
+      setDragOverIndex({ transactionId, index: targetIndex });
+    }
+  }, [dragOverIndex]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setDragOverIndex(null);
+    }
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedRow(null);
+    setDragOverIndex(null);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent, transactionId: string, targetIndex: number) => {
@@ -576,8 +598,12 @@ export default function PromotionChainPage() {
     if (!draggedRow || draggedRow.transactionId !== transactionId) return;
 
     const sourceIndex = draggedRow.index;
+    
+    // รีเซ็ต drag state ก่อน
+    setDraggedRow(null);
+    setDragOverIndex(null);
+    
     if (sourceIndex === targetIndex) {
-      setDraggedRow(null);
       return;
     }
 
@@ -637,7 +663,6 @@ export default function PromotionChainPage() {
       return newChains;
     });
 
-    setDraggedRow(null);
     setEditingTransactionId(transactionId); // เปิดโหมดแก้ไข
     toast.info('ลำดับถูกเปลี่ยนแล้ว กรุณากดปุ่มบันทึก');
   }, [draggedRow, toast]);
@@ -1038,20 +1063,31 @@ export default function PromotionChainPage() {
                                       </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                      {sortedDetails(row.swapDetails).map((d, index) => (
+                                      {sortedDetails(row.swapDetails).map((d, index) => {
+                                        const isDragging = draggedRow?.detailId === d.id;
+                                        const isDropTarget = dragOverIndex?.transactionId === row.id && dragOverIndex?.index === index && !isDragging;
+                                        
+                                        return (
                                         <TableRow 
                                           key={d.id} 
                                           draggable
-                                          onDragStart={(e) => handleDragStart(e, row.id, d.id, index)}
-                                          onDragOver={handleDragOver}
-                                          onDrop={(e) => handleDrop(e, row.id, index)}
+                                          onDragStart={(e: React.DragEvent) => handleDragStart(e, row.id, d.id, index)}
+                                          onDragOver={(e: React.DragEvent) => handleDragOver(e, row.id, index)}
+                                          onDragLeave={handleDragLeave}
+                                          onDrop={(e: React.DragEvent) => handleDrop(e, row.id, index)}
+                                          onDragEnd={handleDragEnd}
                                           sx={{ 
-                                            bgcolor: 'white',
-                                            cursor: 'move',
+                                            cursor: isDragging ? 'grabbing' : 'grab',
+                                            opacity: isDragging ? 0.4 : 1,
+                                            bgcolor: isDropTarget ? 'primary.50' : 'white',
+                                            position: 'relative',
+                                            userSelect: 'none',
+                                            pointerEvents: 'auto',
+                                            outline: isDropTarget ? '2px dashed #667eea' : 'none',
+                                            outlineOffset: '-2px',
                                             '&:hover': {
-                                              bgcolor: 'action.hover',
+                                              bgcolor: isDragging ? 'transparent' : (isDropTarget ? 'primary.100' : 'action.hover'),
                                             },
-                                            opacity: draggedRow?.detailId === d.id ? 0.5 : 1,
                                           }}
                                         >
                                           <TableCell>
@@ -1092,7 +1128,8 @@ export default function PromotionChainPage() {
                                             </Tooltip>
                                           </TableCell>
                                         </TableRow>
-                                      ))}
+                                        );
+                                      })}
                                     </TableBody>
                                   </Table>
                                 </TableContainer>

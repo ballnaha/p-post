@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from "@mui/icons-material";
 import Layout from "@/app/components/Layout";
-import PromotionChainBuilder from "@/app/police-personnel/promotion-chain/create/components/PromotionChainBuilder";
+import PromotionChainTable from "@/app/police-personnel/promotion-chain/create/components/PromotionChainTable";
 import { useToast } from "@/hooks/useToast";
 
 // Minimal types aligned with builder
@@ -210,8 +210,8 @@ export default function EditPromotionChainPage() {
         const first = mappedNodes[0];
         setVacantPosition(first ? {
           id: "from-transaction",
-          posCodeId: 0,
-          posCodeName: undefined,
+          posCodeId: first.toPosCodeId || 0,
+          posCodeName: first.toPosCodeName || undefined,
           position: first.toPosition || "-",
           unit: first.toUnit || "-",
           positionNumber: first.toPositionNumber,
@@ -479,13 +479,45 @@ export default function EditPromotionChainPage() {
         {!loading && (
           <>
             <Box sx={{ pb: 12 }}>
-              <PromotionChainBuilder
+              <PromotionChainTable
                 vacantPosition={vacantPosition}
                 nodes={nodes}
-                onAddNode={(n) => setNodes([...nodes, n])}
+                onAddNode={(n: ChainNode) => setNodes([...nodes, n])}
                 onRemoveNode={handleRemoveNode}
                 onInsertNode={handleInsertNode}
-                excludeTransactionId={id}
+                onReorder={(reorderedNodes: ChainNode[]) => {
+                  // อัปเดต nodeOrder และตำแหน่ง to ของแต่ละ node
+                  const updatedNodes = reorderedNodes.map((node, index) => {
+                    if (index === 0) {
+                      // โหนดแรก - ตำแหน่ง to ต้องเป็นตำแหน่งว่างต้นทาง
+                      return {
+                        ...node,
+                        nodeOrder: index + 1,
+                        toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
+                        toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
+                        toPosition: vacantPosition?.position || node.toPosition,
+                        toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
+                        toUnit: vacantPosition?.unit || node.toUnit,
+                        toActingAs: vacantPosition?.actingAs || node.toActingAs,
+                      };
+                    } else {
+                      // โหนดถัดไป - ตำแหน่ง to ต้องเป็นตำแหน่ง from ของโหนดก่อนหน้า
+                      const prevNode = reorderedNodes[index - 1];
+                      return {
+                        ...node,
+                        nodeOrder: index + 1,
+                        toPosCodeId: prevNode.fromPosCodeId,
+                        toPosCodeName: prevNode.fromPosCodeName,
+                        toPosition: prevNode.fromPosition,
+                        toPositionNumber: prevNode.fromPositionNumber,
+                        toUnit: prevNode.fromUnit,
+                        toActingAs: prevNode.fromActingAs || prevNode.actingAs,
+                        toRankLevel: prevNode.fromRankLevel,
+                      };
+                    }
+                  });
+                  setNodes(updatedNodes);
+                }}
               />
             </Box>
 

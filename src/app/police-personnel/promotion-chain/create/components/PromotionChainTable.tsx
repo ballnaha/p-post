@@ -305,12 +305,24 @@ export default function PromotionChainTable({
 
   const handleDragOver = (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverIndex(targetIndex);
+    
+    // ป้องกันการ setState บ่อยเกินไป ถ้าเป็น index เดิมก็ไม่ต้อง update
+    if (dragOverIndex !== targetIndex) {
+      setDragOverIndex(targetIndex);
+    }
   };
 
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
+  const handleDragLeave = (e: React.DragEvent) => {
+    // เช็คว่า mouse ออกจาก row จริงๆ หรือเปล่า (ไม่ใช่แค่เข้า child element)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setDragOverIndex(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
@@ -319,25 +331,28 @@ export default function PromotionChainTable({
     if (!draggedRow || !onReorder) return;
     
     const sourceIndex = draggedRow.index;
+    
+    // รีเซ็ต drag state ก่อน
+    setDraggedRow(null);
+    setDragOverIndex(null);
+    
     if (sourceIndex === targetIndex) {
-      setDraggedRow(null);
-      setDragOverIndex(null);
       return;
     }
 
+    // สร้าง array ใหม่
     const newNodes = [...nodes];
     const [removed] = newNodes.splice(sourceIndex, 1);
     newNodes.splice(targetIndex, 0, removed);
 
-    // อัปเดต nodeOrder และตำแหน่ง
+    // อัปเดต nodeOrder
     const updatedNodes = newNodes.map((node, index) => ({
       ...node,
       nodeOrder: index + 1,
     }));
 
+    // อัปเดตทันทีหลัง clear drag state
     onReorder(updatedNodes);
-    setDraggedRow(null);
-    setDragOverIndex(null);
   };
 
   const handleDragEnd = () => {
@@ -367,24 +382,24 @@ export default function PromotionChainTable({
 
         {/* Table */}
         <TableContainer>
-          <Table>
+          <Table sx={{ tableLayout: 'fixed' }} size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: 'grey.100' }}>
-                <TableCell sx={{ width: 40 }} />
-                <TableCell sx={{ fontWeight: 700 }}>ลำดับ</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>ยศ/ชื่อ-สกุล</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>จากตำแหน่ง</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>จากหน่วย</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: 'success.main' }}>→ ไปตำแหน่ง</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: 'success.main' }}>→ ไปหน่วย</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 150 }} align="center">จัดการ</TableCell>
+                <TableCell sx={{ width: '40px', fontWeight: 700, py: 1 }} />
+                <TableCell sx={{ width: '60px', fontWeight: 700, py: 1, fontSize: '0.875rem' }}>ลำดับ</TableCell>
+                <TableCell sx={{ width: '180px', fontWeight: 700, py: 1, fontSize: '0.875rem' }}>ยศ/ชื่อ-สกุล</TableCell>
+                <TableCell sx={{ width: '180px', fontWeight: 700, py: 1, fontSize: '0.875rem' }}>จากตำแหน่ง</TableCell>
+                <TableCell sx={{ width: '120px', fontWeight: 700, py: 1, fontSize: '0.875rem' }}>จากหน่วย</TableCell>
+                <TableCell sx={{ width: '180px', fontWeight: 700, py: 1, fontSize: '0.875rem', color: 'success.main' }}>→ ไปตำแหน่ง</TableCell>
+                <TableCell sx={{ width: '120px', fontWeight: 700, py: 1, fontSize: '0.875rem', color: 'success.main' }}>→ ไปหน่วย</TableCell>
+                <TableCell sx={{ width: '120px', fontWeight: 700, py: 1, fontSize: '0.875rem' }} align="center">จัดการ</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {nodes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                    <Typography variant="body2" color="text.secondary">
+                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
                       ยังไม่มีข้อมูล กรุณาเพิ่มบุคลากร
                     </Typography>
                   </TableCell>
@@ -392,8 +407,7 @@ export default function PromotionChainTable({
               ) : (
                 nodes.map((node, index) => {
                   const isDragging = draggedRow?.nodeId === node.id;
-                  const isDropTarget = dragOverIndex === index;
-                  const isDraggedOver = dragOverIndex !== null && !isDragging;
+                  const isDropTarget = dragOverIndex === index && !isDragging;
                   
                   return (
                   <TableRow
@@ -405,98 +419,88 @@ export default function PromotionChainTable({
                     onDrop={(e: React.DragEvent) => handleDrop(e, index)}
                     onDragEnd={handleDragEnd}
                     sx={{
-                      cursor: 'move',
+                      cursor: isDragging ? 'grabbing' : 'grab',
                       opacity: isDragging ? 0.4 : 1,
                       bgcolor: isDropTarget ? 'primary.50' : 'transparent',
-                      borderTop: isDropTarget ? 3 : 0,
-                      borderTopColor: 'primary.main',
-                      transition: 'all 0.2s ease',
                       position: 'relative',
+                      userSelect: 'none',
+                      pointerEvents: 'auto',
+                      outline: isDropTarget ? '2px dashed #667eea' : 'none',
+                      outlineOffset: '-2px',
                       '&:hover': { 
-                        bgcolor: isDraggedOver ? 'primary.50' : 'action.hover',
+                        bgcolor: isDragging ? 'transparent' : (isDropTarget ? 'primary.100' : 'action.hover'),
                       },
-                      '&::before': isDropTarget ? {
-                        content: '""',
-                        position: 'absolute',
-                        top: -2,
-                        left: 0,
-                        right: 0,
-                        height: 4,
-                        bgcolor: 'primary.main',
-                        zIndex: 10,
-                        borderRadius: 1,
-                      } : {},
                     }}
                   >
-                    <TableCell>
-                      <DragIndicatorIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    <TableCell sx={{ py: 1 }}>
+                      <DragIndicatorIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
                     </TableCell>
-                    <TableCell>
-                      <Chip label={node.nodeOrder} color="primary" size="small" sx={{ fontWeight: 700 }} />
+                    <TableCell sx={{ py: 1 }}>
+                      <Chip label={node.nodeOrder} color="primary" size="small" sx={{ fontWeight: 700, height: 22, fontSize: '0.75rem' }} />
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={600}>
+                    <TableCell sx={{ py: 1 }}>
+                      <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', lineHeight: 1.3 }}>
                         {node.rank} {node.fullName}
                       </Typography>
                       {node.seniority && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           อาวุโส {node.seniority}
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ py: 1 }}>
                       <Box>
                         {node.fromPosCodeName && (
-                          <Chip label={node.fromPosCodeName} size="small" sx={{ fontSize: '0.7rem', mb: 0.5 }} />
+                          <Chip label={node.fromPosCodeName} size="small" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                         )}
-                        <Typography variant="body2" fontWeight={600}>
+                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                           {node.fromPosition}
                         </Typography>
                         {node.fromPositionNumber && (
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                             ({node.fromPositionNumber})
                           </Typography>
                         )}
                       </Box>
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{node.fromUnit}</Typography>
+                    <TableCell sx={{ py: 1 }}>
+                      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{node.fromUnit}</Typography>
                     </TableCell>
-                    <TableCell sx={{ bgcolor: 'success.50' }}>
+                    <TableCell sx={{ bgcolor: 'success.50', py: 1 }}>
                       <Box>
                         {node.toPosCodeName && (
-                          <Chip label={node.toPosCodeName} size="small" color="success" sx={{ fontSize: '0.7rem', mb: 0.5 }} />
+                          <Chip label={node.toPosCodeName} size="small" color="success" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                         )}
-                        <Typography variant="body2" fontWeight={600}>
+                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                           {node.toPosition}
                         </Typography>
                         {node.toPositionNumber && (
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                             ({node.toPositionNumber})
                           </Typography>
                         )}
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ bgcolor: 'success.50' }}>
-                      <Typography variant="body2" fontWeight={600}>{node.toUnit}</Typography>
+                    <TableCell sx={{ bgcolor: 'success.50', py: 1 }}>
+                      <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
                     </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                    <TableCell align="center" sx={{ py: 1 }}>
+                      <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
                         {onInsertNode && (
                           <Tooltip title="แทรกก่อนหน้า">
-                            <IconButton size="small" onClick={() => handleInsertBefore(node.id)} color="primary">
-                              <AddIcon fontSize="small" />
+                            <IconButton size="small" onClick={() => handleInsertBefore(node.id)} color="primary" sx={{ p: 0.5 }}>
+                              <AddIcon sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
                         <Tooltip title="ดูข้อมูล">
-                          <IconButton size="small" onClick={() => handleShowPersonnelDetail(node)} color="info">
-                            <InfoOutlinedIcon fontSize="small" />
+                          <IconButton size="small" onClick={() => handleShowPersonnelDetail(node)} color="info" sx={{ p: 0.5 }}>
+                            <InfoOutlinedIcon sx={{ fontSize: 18 }} />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="ลบ">
-                          <IconButton size="small" onClick={() => onRemoveNode(node.id)} color="error">
-                            <DeleteIcon fontSize="small" />
+                          <IconButton size="small" onClick={() => onRemoveNode(node.id)} color="error" sx={{ p: 0.5 }}>
+                            <DeleteIcon sx={{ fontSize: 18 }} />
                           </IconButton>
                         </Tooltip>
                       </Box>
@@ -511,13 +515,14 @@ export default function PromotionChainTable({
 
         {/* Add Button */}
         {canAddMore && (
-          <Box sx={{ p: 2, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
+          <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => setShowCandidateSelector(true)}
               fullWidth
-              sx={{ fontWeight: 700 }}
+              size="medium"
+              sx={{ fontWeight: 700, py: 0.75 }}
             >
               {nodes.length === 0 ? 'เพิ่มบุคลากรคนแรก' : 'เพิ่มบุคลากรคนถัดไป'}
             </Button>

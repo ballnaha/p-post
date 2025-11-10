@@ -14,12 +14,19 @@ import {
   IconButton,
   Chip,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   InfoOutlined as InfoOutlinedIcon,
   DragIndicator as DragIndicatorIcon,
+  CheckBox as CheckBoxIcon,
+  CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
 } from '@mui/icons-material';
 import CandidateSelector from './CandidateSelector';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
@@ -99,6 +106,9 @@ export default function PromotionChainTable({
   const [insertBeforeNodeId, setInsertBeforeNodeId] = useState<string | null>(null);
   const [draggedRow, setDraggedRow] = useState<{ nodeId: string; index: number } | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [nodeToDelete, setNodeToDelete] = useState<string | null>(null);
   const toast = useToast();
 
   const getRankLevelByPosCode = (posCodeId: number): number => {
@@ -297,6 +307,51 @@ export default function PromotionChainTable({
     setShowCandidateSelector(true);
   };
 
+  // Handle row selection - คลิกไปเรื่อยๆ กลายเป็น multiple
+  const handleRowClick = (nodeId: string, event: React.MouseEvent) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(nodeId)) {
+      // ถ้าเลือกอยู่แล้ว ให้ยกเลิกการเลือก
+      newSelected.delete(nodeId);
+    } else {
+      // ถ้ายังไม่เลือก ให้เพิ่มเข้าไป (multiple selection)
+      newSelected.add(nodeId);
+    }
+    setSelectedRows(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedRows.size === nodes.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(nodes.map(n => n.id)));
+    }
+  };
+
+  // Handle delete with confirmation
+  const handleDeleteClick = (nodeId: string) => {
+    setNodeToDelete(nodeId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (nodeToDelete) {
+      onRemoveNode(nodeToDelete);
+      setSelectedRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(nodeToDelete);
+        return newSet;
+      });
+    }
+    setDeleteConfirmOpen(false);
+    setNodeToDelete(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false);
+    setNodeToDelete(null);
+  };
+
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, nodeId: string, index: number) => {
     setDraggedRow({ nodeId, index });
@@ -385,6 +440,15 @@ export default function PromotionChainTable({
           <Table sx={{ tableLayout: 'fixed' }} size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: 'grey.100' }}>
+                <TableCell sx={{ width: '40px', fontWeight: 700, py: 1 }} padding="checkbox">
+                  <IconButton size="small" onClick={handleSelectAll} sx={{ p: 0.5 }}>
+                    {selectedRows.size === nodes.length && nodes.length > 0 ? (
+                      <CheckBoxIcon sx={{ fontSize: 20, color: 'primary.main' }} />
+                    ) : (
+                      <CheckBoxOutlineBlankIcon sx={{ fontSize: 20 }} />
+                    )}
+                  </IconButton>
+                </TableCell>
                 <TableCell sx={{ width: '40px', fontWeight: 700, py: 1 }} />
                 <TableCell sx={{ width: '60px', fontWeight: 700, py: 1, fontSize: '0.875rem' }}>ลำดับ</TableCell>
                 <TableCell sx={{ width: '180px', fontWeight: 700, py: 1, fontSize: '0.875rem' }}>ยศ/ชื่อ-สกุล</TableCell>
@@ -398,7 +462,7 @@ export default function PromotionChainTable({
             <TableBody>
               {nodes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
                       ยังไม่มีข้อมูล กรุณาเพิ่มบุคลากร
                     </Typography>
@@ -408,30 +472,42 @@ export default function PromotionChainTable({
                 nodes.map((node, index) => {
                   const isDragging = draggedRow?.nodeId === node.id;
                   const isDropTarget = dragOverIndex === index && !isDragging;
+                  const isSelected = selectedRows.has(node.id);
                   
                   return (
                   <TableRow
                     key={node.id}
                     draggable
+                    onClick={(e) => handleRowClick(node.id, e)}
                     onDragStart={(e: React.DragEvent) => handleDragStart(e, node.id, index)}
                     onDragOver={(e: React.DragEvent) => handleDragOver(e, index)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e: React.DragEvent) => handleDrop(e, index)}
                     onDragEnd={handleDragEnd}
+                    selected={isSelected}
                     sx={{
                       cursor: isDragging ? 'grabbing' : 'grab',
                       opacity: isDragging ? 0.4 : 1,
-                      bgcolor: isDropTarget ? 'primary.50' : 'transparent',
+                      bgcolor: isSelected ? 'primary.100' : (isDropTarget ? 'primary.50' : 'transparent'),
                       position: 'relative',
                       userSelect: 'none',
                       pointerEvents: 'auto',
                       outline: isDropTarget ? '2px dashed #667eea' : 'none',
                       outlineOffset: '-2px',
                       '&:hover': { 
-                        bgcolor: isDragging ? 'transparent' : (isDropTarget ? 'primary.100' : 'action.hover'),
+                        bgcolor: isDragging ? 'transparent' : (isSelected ? 'primary.200' : (isDropTarget ? 'primary.100' : 'action.hover')),
                       },
                     }}
                   >
+                    <TableCell sx={{ py: 1 }} padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                      <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleRowClick(node.id, e); }} sx={{ p: 0.5 }}>
+                        {isSelected ? (
+                          <CheckBoxIcon sx={{ fontSize: 20, color: 'primary.main' }} />
+                        ) : (
+                          <CheckBoxOutlineBlankIcon sx={{ fontSize: 20 }} />
+                        )}
+                      </IconButton>
+                    </TableCell>
                     <TableCell sx={{ py: 1 }}>
                       <DragIndicatorIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
                     </TableCell>
@@ -484,22 +560,22 @@ export default function PromotionChainTable({
                     <TableCell sx={{ bgcolor: 'success.50', py: 1 }}>
                       <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
                     </TableCell>
-                    <TableCell align="center" sx={{ py: 1 }}>
+                    <TableCell align="center" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
                       <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
                         {onInsertNode && (
                           <Tooltip title="แทรกก่อนหน้า">
-                            <IconButton size="small" onClick={() => handleInsertBefore(node.id)} color="primary" sx={{ p: 0.5 }}>
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleInsertBefore(node.id); }} color="primary" sx={{ p: 0.5 }}>
                               <AddIcon sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
                         <Tooltip title="ดูข้อมูล">
-                          <IconButton size="small" onClick={() => handleShowPersonnelDetail(node)} color="info" sx={{ p: 0.5 }}>
+                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleShowPersonnelDetail(node); }} color="info" sx={{ p: 0.5 }}>
                             <InfoOutlinedIcon sx={{ fontSize: 18 }} />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="ลบ">
-                          <IconButton size="small" onClick={() => onRemoveNode(node.id)} color="error" sx={{ p: 0.5 }}>
+                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDeleteClick(node.id); }} color="error" sx={{ p: 0.5 }}>
                             <DeleteIcon sx={{ fontSize: 18 }} />
                           </IconButton>
                         </Tooltip>
@@ -576,6 +652,44 @@ export default function PromotionChainTable({
         onClearData={() => setSelectedPersonnel(null)}
         title="รายละเอียดบุคลากร"
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={handleDeleteCancel}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: 'error.main' }}>
+          ⚠️ ยืนยันการลบ
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText component="div">
+            คุณแน่ใจหรือไม่ว่าต้องการลบบุคลากรคนนี้ออกจากลูกโซ่?
+            {nodeToDelete && (() => {
+              const node = nodes.find(n => n.id === nodeToDelete);
+              return node ? (
+                <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.50', borderRadius: 1, border: '1px solid', borderColor: 'error.main' }}>
+                  <Typography variant="body2" component="div" fontWeight={600} sx={{ color: 'error.dark' }}>
+                    {node.rank} {node.fullName}
+                  </Typography>
+                  <Typography variant="caption" component="div" color="text.secondary">
+                    ลำดับที่ {node.nodeOrder}
+                  </Typography>
+                </Box>
+              ) : null;
+            })()}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={handleDeleteCancel} variant="outlined">
+            ยกเลิก
+          </Button>
+          <Button onClick={handleDeleteConfirm} variant="contained" color="error" autoFocus>
+            ลบ
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

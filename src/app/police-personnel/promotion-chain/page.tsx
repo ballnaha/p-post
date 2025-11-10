@@ -190,7 +190,7 @@ export default function PromotionChainPage() {
   const [loading, setLoading] = useState(false);
   const [chains, setChains] = useState<TransactionChain[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('card');
   const [showFilters, setShowFilters] = useState(false);
   // Compact drawer header height (px) for sticky calculations
   const drawerHeaderHeight = 56;

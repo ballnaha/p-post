@@ -143,7 +143,23 @@ export async function PUT(
       where: { id },
       data: updateData,
       include: {
-        swapDetails: true
+        swapDetails: {
+          include: {
+            posCodeMaster: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            toPosCodeMaster: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
+          orderBy: { sequence: 'asc' }
+        }
       }
     });
 

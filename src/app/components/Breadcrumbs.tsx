@@ -25,6 +25,7 @@ import {
   SwapHoriz as SwapHorizIcon,
   EventAvailable as VacantIcon,
   History as HistoryIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 
 interface BreadcrumbItem {
@@ -98,6 +99,15 @@ const Breadcrumbs: React.FC = () => {
             label: 'จัดคนเข้าตำแหน่งว่าง',
             href: isLast ? undefined : '/police-personnel/promotion-chain',
             icon: <VacantIcon sx={{ fontSize: 16 }} />,
+            isActive: isLast,
+          });
+          break;
+
+        case 'promotion':
+          breadcrumbs.push({
+            label: 'เลื่อนตำแหน่ง',
+            href: isLast ? undefined : '/police-personnel/promotion',
+            icon: <TrendingUpIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,
           });
           break;

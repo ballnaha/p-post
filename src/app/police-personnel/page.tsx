@@ -1507,7 +1507,7 @@ export default function PolicePersonnelPage() {
                 {/* Chip แสดงสถานะ Promotion Chain */}
                 {person.rank && person.nationalId && promotionChainData.has(person.nationalId) && (
                   <Chip 
-                    label="เลื่อนตำแหน่ง" 
+                    label="แทนตำแหน่ง" 
                     size="small" 
                     color="success"
                     sx={{ fontSize: '0.7rem', height: 20 }}
@@ -1802,7 +1802,7 @@ export default function PolicePersonnelPage() {
                 <MenuItem value="all">ทั้งหมด</MenuItem>
                 <MenuItem value="two-way">สลับตำแหน่ง</MenuItem>
                 <MenuItem value="three-way">อยู่ในสามเส้า</MenuItem>
-                <MenuItem value="promotion-chain">เลื่อนตำแหน่ง</MenuItem>
+                <MenuItem value="promotion-chain">แทนตำแหน่ง</MenuItem>
               </Select>
             </FormControl>
 
@@ -1973,6 +1973,15 @@ export default function PolicePersonnelPage() {
                               label="อยู่ในสามเส้า" 
                               size="small" 
                               color="warning"
+                              sx={{ fontSize: '0.7rem', height: 20 }}
+                            />
+                          )}
+                          {/* Chip แสดงสถานะ Promotion Chain */}
+                          {row.rank && row.nationalId && promotionChainData.has(row.nationalId) && (
+                            <Chip 
+                              label="แทนตำแหน่ง" 
+                              size="small" 
+                              color="success"
                               sx={{ fontSize: '0.7rem', height: 20 }}
                             />
                           )}

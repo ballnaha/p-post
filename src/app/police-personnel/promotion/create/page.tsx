@@ -1,57 +1,49 @@
 'use client';
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, alpha, useMediaQuery, useTheme } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Check as CheckIcon, Warning as WarningIcon } from '@mui/icons-material';
+import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, useMediaQuery, useTheme } from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
-import PromotionChainTable from './components/PromotionChainTable';
+import PromotionTable from './components/PromotionTable';
 
-// Types - ตรงกับ PolicePersonnel schema
+// Types
 interface ChainNode {
   id: string;
   nodeOrder: number;
-  personnelId?: string; // อ้างอิง police_personnel.id
-  noId?: number; // police_personnel.noId (ลำดับที่)
+  personnelId?: string;
+  noId?: number;
   
-  // ข้อมูลบุคคล (Person Information)
-  nationalId: string; // police_personnel.nationalId
-  fullName: string; // police_personnel.fullName
-  rank: string; // police_personnel.rank
-  seniority?: string; // police_personnel.seniority
+  nationalId: string;
+  fullName: string;
+  rank: string;
+  seniority?: string;
   
-  // ข้อมูลส่วนตัว (Personal Information)
-  birthDate?: string; // police_personnel.birthDate
-  age?: string; // police_personnel.age
-  education?: string; // police_personnel.education
+  birthDate?: string;
+  age?: string;
+  education?: string;
   
-  // ข้อมูลการแต่งตั้ง/ดำรงตำแหน่ง (Appointment Information)
-  lastAppointment?: string; // police_personnel.lastAppointment
-  currentRankSince?: string; // police_personnel.currentRankSince
-  enrollmentDate?: string; // police_personnel.enrollmentDate
-  retirementDate?: string; // police_personnel.retirementDate
-  yearsOfService?: string; // police_personnel.yearsOfService
+  lastAppointment?: string;
+  currentRankSince?: string;
+  enrollmentDate?: string;
+  retirementDate?: string;
+  yearsOfService?: string;
   
-  // ข้อมูลการฝึกอบรม (Training Information)
-  trainingLocation?: string; // police_personnel.trainingLocation
-  trainingCourse?: string; // police_personnel.trainingCourse
+  trainingLocation?: string;
+  trainingCourse?: string;
   
-  // ข้อมูลการเสนอชื่อ (Support Information)
-  supporterName?: string; // police_personnel.supporterName
-  supportReason?: string; // police_personnel.supportReason
+  supporterName?: string;
+  supportReason?: string;
   
-  // หมายเหตุ (Notes)
-  notes?: string; // หมายเหตุเฉพาะของบุคลากรคนนี้
+  notes?: string;
   
-  // ข้อมูลตำแหน่งเดิม (From Position)
-  fromPosCodeId: number; // police_personnel.posCodeId
-  fromPosCodeName?: string; // posCodeMaster.name
-  fromPosition: string; // police_personnel.position
-  fromPositionNumber?: string; // police_personnel.positionNumber
-  fromUnit: string; // police_personnel.unit
-  fromActingAs?: string; // police_personnel.actingAs
+  fromPosCodeId: number;
+  fromPosCodeName?: string;
+  fromPosition: string;
+  fromPositionNumber?: string;
+  fromUnit: string;
+  fromActingAs?: string;
   
-  // ข้อมูลตำแหน่งใหม่ (To Position)
   toPosCodeId: number;
   toPosCodeName?: string;
   toPosition: string;
@@ -59,63 +51,77 @@ interface ChainNode {
   toUnit: string;
   toActingAs?: string;
   
-  // Metadata
   fromRankLevel: number;
   toRankLevel: number;
   isPromotionValid: boolean;
 }
 
-interface VacantPosition {
+interface StartingPersonnel {
   id: string;
-  posCodeId: number; // police_personnel.posCodeId
-  posCodeName?: string; // posCodeMaster.name
-  position: string; // police_personnel.position
-  unit: string; // police_personnel.unit
+  noId?: number;
+  posCodeId: number;
+  posCodeName?: string;
+  position: string;
+  unit: string;
   requestedPositionId?: number;
   requestedPosition?: string;
-  positionNumber?: string; // police_personnel.positionNumber
-  actingAs?: string; // police_personnel.actingAs - ทำหน้าที่
+  positionNumber?: string;
+  actingAs?: string;
+  fullName: string;
+  rank: string;
+  nationalId: string;
+  seniority?: string;
+  birthDate?: string;
+  age?: string;
+  education?: string;
+  lastAppointment?: string;
+  currentRankSince?: string;
+  enrollmentDate?: string;
+  retirementDate?: string;
+  yearsOfService?: string;
+  trainingLocation?: string;
+  trainingCourse?: string;
+  supporterName?: string;
+  supportReason?: string;
 }
 
-function CreatePromotionChainContent() {
+function CreatePromotionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const vacantId = searchParams.get('vacantId');
+  const personnelId = searchParams.get('personnelId');
   const toast = useToast();
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [groupNumber, setGroupNumber] = useState<string>('');
   const [groupNotes, setGroupNotes] = useState<string>(''); // หมายเหตุของกลุ่ม
-  const [vacantPosition, setVacantPosition] = useState<VacantPosition | null>(null);
+  const [startingPersonnel, setStartingPersonnel] = useState<StartingPersonnel | null>(null);
   const [nodes, setNodes] = useState<ChainNode[]>([]);
   const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
-    if (vacantId) {
-      loadVacantPosition(vacantId);
+    if (personnelId) {
+      loadStartingPersonnel(personnelId);
     } else {
-      // ถ้าไม่มี vacantId ให้ redirect กลับไปหน้าหลัก
-      toast.error('กรุณาเลือกตำแหน่งว่างก่อนสร้างรายการ');
-      router.push('/police-personnel/promotion-chain');
+      toast.error('กรุณาเลือกบุคลากรก่อนสร้างรายการ');
+      router.push('/police-personnel/promotion');
     }
-  }, [vacantId]);
+  }, [personnelId]);
 
-  // Generate next group number like 2568/PC-001 based on existing promotion-chain records
   useEffect(() => {
     const fetchNextGroupNumber = async () => {
       try {
         const currentYear = new Date().getFullYear() + 543;
-        const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=promotion-chain`);
-        if (!response.ok) throw new Error('Failed to fetch promotion-chain transactions');
+        const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=promotion`);
+        if (!response.ok) throw new Error('Failed to fetch promotion transactions');
         const result = await response.json();
         const transactions: any[] = Array.isArray(result?.data) ? result.data : [];
         let maxNumber = 0;
         for (const t of transactions) {
           if (t.groupNumber) {
-            const match = String(t.groupNumber).match(/\/PC-(\d+)$/);
+            const match = String(t.groupNumber).match(/\/PM-(\d+)$/);
             if (match) {
               const num = parseInt(match[1], 10);
               if (num > maxNumber) maxNumber = num;
@@ -123,72 +129,84 @@ function CreatePromotionChainContent() {
           }
         }
         const next = String(maxNumber + 1).padStart(3, '0');
-        setGroupNumber(`${currentYear}/PC-${next}`);
+        setGroupNumber(`${currentYear}/PM-${next}`);
       } catch (e) {
         const currentYear = new Date().getFullYear() + 543;
-        setGroupNumber(`${currentYear}/PC-001`);
+        setGroupNumber(`${currentYear}/PM-001`);
       }
     };
     fetchNextGroupNumber();
   }, []);
 
-  const loadVacantPosition = async (id: string) => {
+  const loadStartingPersonnel = async (id: string) => {
     setLoading(true);
     try {
       const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/vacant-position/actual?year=${currentYear}`);
+      const response = await fetch(`/api/police-personnel/promotion-eligible?year=${currentYear}`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch vacant positions');
+        throw new Error('Failed to fetch personnel');
       }
 
       const result = await response.json();
-      const allPositions = result.data || [];
+      const allPersonnel = result.data || [];
       
-      console.log('Looking for vacant position:', { id, totalPositions: allPositions.length });
+      console.log('Looking for personnel:', { id, totalPersonnel: allPersonnel.length });
       
-      // Find the specific vacant position by ID
-      const data = allPositions.find((pos: any) => pos.id === id);
+      const data = allPersonnel.find((p: any) => p.id === id);
       
       if (!data) {
-        console.error('Vacant position not found. Available IDs:', allPositions.map((p: any) => p.id).slice(0, 5));
-        toast.error('ไม่พบข้อมูลตำแหน่งว่างที่เลือก กรุณาเลือกใหม่');
-        // Redirect back to main page
+        console.error('Personnel not found. Available IDs:', allPersonnel.map((p: any) => p.id).slice(0, 5));
+        toast.error('ไม่พบข้อมูลบุคลากรที่เลือก กรุณาเลือกใหม่');
         setTimeout(() => {
-          router.push('/police-personnel/promotion-chain');
+          router.push('/police-personnel/promotion');
         }, 2000);
         return;
       }
       
-      // Debug: ตรวจสอบข้อมูล posCodeMaster
       console.log('Raw data from API:', {
         id: data.id,
         posCodeId: data.posCodeId,
-        posCodeName: data.posCodeName, // API ส่ง posCodeName มาโดยตรง
+        posCodeName: data.posCodeName,
         position: data.position,
       });
       
-      // Map API response to VacantPosition format
-      const vacantPos: VacantPosition = {
+      const personnel: StartingPersonnel = {
         id: data.id,
+        noId: data.noId,
         posCodeId: data.posCodeId,
-        posCodeName: data.posCodeName, // API ส่ง posCodeName มาโดยตรง (แทน posCodeMaster?.name)
-        position: data.position || '-', // ชื่อตำแหน่งจาก police_personnel
+        posCodeName: data.posCodeName,
+        position: data.position || '-',
         unit: data.unit || '-',
         requestedPositionId: data.requestedPositionId,
         requestedPosition: data.requestedPosition,
         positionNumber: data.positionNumber,
         actingAs: data.actingAs,
+        fullName: data.fullName || '-',
+        rank: data.rank || '-',
+        nationalId: data.nationalId || '',
+        seniority: data.seniority,
+        birthDate: data.birthDate,
+        age: data.age,
+        education: data.education,
+        lastAppointment: data.lastAppointment,
+        currentRankSince: data.currentRankSince,
+        enrollmentDate: data.enrollmentDate,
+        retirementDate: data.retirementDate,
+        yearsOfService: data.yearsOfService,
+        trainingLocation: data.trainingLocation,
+        trainingCourse: data.trainingCourse,
+        supporterName: data.supporterName,
+        supportReason: data.supportReason,
       };
       
-      console.log('Mapped vacant position:', vacantPos);
-      setVacantPosition(vacantPos);
+      console.log('Mapped starting personnel:', personnel);
+      setStartingPersonnel(personnel);
     } catch (error) {
-      console.error('Error loading vacant position:', error);
-      toast.error('ไม่สามารถโหลดข้อมูลตำแหน่งว่างได้');
-      // Redirect back to main page on error
+      console.error('Error loading personnel:', error);
+      toast.error('ไม่สามารถโหลดข้อมูลบุคลากรได้');
       setTimeout(() => {
-        router.push('/police-personnel/promotion-chain');
+        router.push('/police-personnel/promotion');
       }, 2000);
     } finally {
       setLoading(false);
@@ -205,20 +223,15 @@ function CreatePromotionChainContent() {
     if (nodeIndex === -1) return;
 
     const removedNode = nodes[nodeIndex];
-
-    // ลบโหนด
     const newNodes = nodes.filter(n => n.id !== nodeId);
 
-    // ถ้าไม่มีโหนดเหลือ ให้ clear ทั้งหมด
     if (newNodes.length === 0) {
       setNodes([]);
       toast.success('ลบตำแหน่งสำเร็จ');
       return;
     }
 
-    // ปรับ nodeOrder และตำแหน่งที่เกี่ยวข้อง
     const reorderedNodes = newNodes.map((node, index) => {
-      // กรณีที่ 1: โหนดก่อนหน้าโหนดที่ถูกลบ - ไม่เปลี่ยนแปลง (เว้นแต่ nodeOrder)
       if (index < nodeIndex) {
         return {
           ...node,
@@ -226,21 +239,17 @@ function CreatePromotionChainContent() {
         };
       }
       
-      // กรณีที่ 2: โหนดหลังจากโหนดที่ถูกลบ - ต้องอัปเดตตำแหน่ง to
       if (index === 0) {
-        // โหนดแรกใหม่ (หลังจากลบโหนดแรกเดิม) 
-        // ต้องอัปเดต toPosition ให้เป็นตำแหน่งว่างต้นทาง (vacantPosition)
-        if (nodeIndex === 0 && vacantPosition) {
-          // ถ้าลบโหนดแรก node ที่ 2 จะกลายเป็น node แรก และได้รับตำแหน่งว่างต้นทาง
+        if (nodeIndex === 0 && startingPersonnel) {
           return {
             ...node,
             nodeOrder: 1,
-            toPosCodeId: vacantPosition.posCodeId || removedNode.toPosCodeId,
-            toPosCodeName: vacantPosition.posCodeName || removedNode.toPosCodeName,
-            toPosition: vacantPosition.position || removedNode.toPosition,
-            toPositionNumber: vacantPosition.positionNumber || removedNode.toPositionNumber,
-            toUnit: vacantPosition.unit || removedNode.toUnit,
-            toActingAs: vacantPosition.actingAs || removedNode.toActingAs,
+            toPosCodeId: startingPersonnel.posCodeId || removedNode.toPosCodeId,
+            toPosCodeName: startingPersonnel.posCodeName || removedNode.toPosCodeName,
+            toPosition: startingPersonnel.position || removedNode.toPosition,
+            toPositionNumber: startingPersonnel.positionNumber || removedNode.toPositionNumber,
+            toUnit: startingPersonnel.unit || removedNode.toUnit,
+            toActingAs: startingPersonnel.actingAs || removedNode.toActingAs,
             toRankLevel: removedNode.toRankLevel,
           };
         }
@@ -249,7 +258,6 @@ function CreatePromotionChainContent() {
           nodeOrder: 1,
         };
       } else {
-        // โหนดที่เหลือ - อัปเดต toPosition ให้เชื่อมกับ fromPosition ของโหนดก่อนหน้า
         const prevNode = newNodes[index - 1];
         return {
           ...node,
@@ -267,7 +275,6 @@ function CreatePromotionChainContent() {
 
     setNodes(reorderedNodes);
     
-    // แสดงข้อความที่มีรายละเอียดมากขึ้น
     if (nodeIndex < nodes.length - 1) {
       const nextNode = nodes[nodeIndex + 1];
       toast.success(
@@ -285,26 +292,22 @@ function CreatePromotionChainContent() {
       return;
     }
 
-    // แทรกโหนดใหม่และ reorder
     const newNodes = [...nodes];
     newNodes.splice(insertIndex, 0, newNode);
 
-    // อัปเดต nodeOrder และ toPosition
     const reorderedNodes = newNodes.map((node, index) => {
       if (index === 0) {
-        // โหนดแรกต้องอ้างอิงไปที่ vacantPosition
         return {
           ...node,
           nodeOrder: 1,
-          toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
-          toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
-          toPosition: vacantPosition?.position || node.toPosition,
-          toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
-          toUnit: vacantPosition?.unit || node.toUnit,
-          toActingAs: vacantPosition?.actingAs || node.toActingAs,
+          toPosCodeId: startingPersonnel?.posCodeId || node.toPosCodeId,
+          toPosCodeName: startingPersonnel?.posCodeName || node.toPosCodeName,
+          toPosition: startingPersonnel?.position || node.toPosition,
+          toPositionNumber: startingPersonnel?.positionNumber || node.toPositionNumber,
+          toUnit: startingPersonnel?.unit || node.toUnit,
+          toActingAs: startingPersonnel?.actingAs || node.toActingAs,
         };
       } else {
-        // โหนดอื่นๆ อ้างอิงไปที่ fromPosition ของโหนดก่อนหน้า
         const prevNode = newNodes[index - 1];
         return {
           ...node,
@@ -325,18 +328,17 @@ function CreatePromotionChainContent() {
   };
 
   const handleReorder = (reorderedNodes: ChainNode[]) => {
-    // อัปเดตตำแหน่งหลังจาก drag-drop
     const updatedNodes = reorderedNodes.map((node, index) => {
       if (index === 0) {
         return {
           ...node,
           nodeOrder: 1,
-          toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
-          toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
-          toPosition: vacantPosition?.position || node.toPosition,
-          toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
-          toUnit: vacantPosition?.unit || node.toUnit,
-          toActingAs: vacantPosition?.actingAs || node.toActingAs,
+          toPosCodeId: startingPersonnel?.posCodeId || node.toPosCodeId,
+          toPosCodeName: startingPersonnel?.posCodeName || node.toPosCodeName,
+          toPosition: startingPersonnel?.position || node.toPosition,
+          toPositionNumber: startingPersonnel?.positionNumber || node.toPositionNumber,
+          toUnit: startingPersonnel?.unit || node.toUnit,
+          toActingAs: startingPersonnel?.actingAs || node.toActingAs,
         };
       } else {
         const prevNode = reorderedNodes[index - 1];
@@ -361,12 +363,17 @@ function CreatePromotionChainContent() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (!vacantPosition || nodes.length === 0) {
-        toast.error('ข้อมูลไม่ครบถ้วน');
+      if (!startingPersonnel) {
+        toast.error('กรุณาเลือกบุคลากรเริ่มต้น');
         return;
       }
 
-      const year = new Date().getFullYear() + 543; // พ.ศ.
+      if (nodes.length === 0) {
+        toast.error('กรุณาเพิ่มบุคลากรอย่างน้อย 1 คน');
+        return;
+      }
+
+      const year = new Date().getFullYear() + 543;
       const swapDetails = nodes.map((node) => ({
         sequence: node.nodeOrder,
         personnelId: node.personnelId,
@@ -377,23 +384,18 @@ function CreatePromotionChainContent() {
         seniority: node.seniority,
         posCodeId: node.fromPosCodeId,
         toPosCodeId: node.toPosCodeId || null,
-        // ข้อมูลส่วนตัว
         birthDate: node.birthDate,
         age: node.age,
         education: node.education,
-        // ข้อมูลการแต่งตั้ง
         lastAppointment: node.lastAppointment,
         currentRankSince: node.currentRankSince,
         enrollmentDate: node.enrollmentDate,
         retirementDate: node.retirementDate,
         yearsOfService: node.yearsOfService,
-        // ข้อมูลการฝึกอบรม
         trainingLocation: node.trainingLocation,
         trainingCourse: node.trainingCourse,
-        // ข้อมูลการเสนอชื่อ
         supportName: node.supporterName,
         supportReason: node.supportReason,
-        // ตำแหน่ง
         fromPosition: node.fromPosition,
         fromPositionNumber: node.fromPositionNumber,
         fromUnit: node.fromUnit,
@@ -408,8 +410,8 @@ function CreatePromotionChainContent() {
       const payload = {
         year,
         swapDate: new Date().toISOString(),
-        swapType: 'promotion-chain',
-        groupName: `เลื่อนตำแหน่ง ${vacantPosition.posCodeName || ''} • ${vacantPosition.position || ''}${vacantPosition.positionNumber ? ` (${vacantPosition.positionNumber})` : ''}`,
+        swapType: 'promotion',
+        groupName: `เลื่อนตำแหน่ง ${startingPersonnel.fullName} • ${startingPersonnel.position}`,
         groupNumber: groupNumber || null,
         status: 'completed',
         notes: groupNotes.trim() || null,
@@ -428,7 +430,7 @@ function CreatePromotionChainContent() {
       }
 
       toast.success('บันทึกรายการสำเร็จ');
-      router.push('/police-personnel/promotion-chain');
+      router.push('/police-personnel/promotion');
     } catch (error: any) {
       console.error('Error saving chain:', error);
       toast.error(error?.message || 'เกิดข้อผิดพลาดในการบันทึก');
@@ -457,41 +459,40 @@ function CreatePromotionChainContent() {
           }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                จัดคนเข้าตำแหน่งว่าง
+                สร้างรายการเลื่อนตำแหน่ง
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                เลือกบุคลากรทีละขั้นเพื่อจัดเข้าตำแหน่งว่างแบบทอดต่อ
+                เลือกบุคลากรทีละขั้นเพื่อจัดเลื่อนตำแหน่งแบบทอดต่อ
               </Typography>
 
-              {/* Vacant Position Info - Compact */}
+              {/* Starting Personnel Info */}
               {loading ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
                   <CircularProgress size={20} />
                   <Typography variant="body2" color="text.secondary">กำลังโหลด...</Typography>
                 </Box>
-              ) : vacantPosition && (
+              ) : startingPersonnel && (
                 <Box sx={{ 
                   p: 1.5,
-                  bgcolor: 'primary.50',
+                  bgcolor: 'success.50',
                   borderRadius: 1,
                   borderLeft: '3px solid',
-                  borderColor: 'primary.main',
+                  borderColor: 'success.main',
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
-                      🎯 ตำแหน่งว่างต้นทาง
+                    <Typography variant="caption" color="success.main" sx={{ fontWeight: 600 }}>
+                      🎖️ บุคลากรที่จะเลื่อนตำแหน่ง
                     </Typography>
-                    <Chip label={`${nodes.length} ขั้น`} size="small" color="primary" sx={{ height: 30, fontSize: '0.85rem' }} />
+                    <Chip label={`${nodes.length} ขั้น`} size="small" color="success" sx={{ height: 30, fontSize: '0.85rem' }} />
                   </Box>
                   <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                    {vacantPosition.posCodeName} • {vacantPosition.position} 
+                    {startingPersonnel.rank} {startingPersonnel.fullName}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.85rem' }}>
-                     • {vacantPosition.unit} • เลขตำแหน่ง {vacantPosition.positionNumber || '-'} • ทำหน้าที่: {vacantPosition.actingAs || '-'}
+                    {startingPersonnel.posCodeName} • {startingPersonnel.position} • {startingPersonnel.unit}
                   </Typography>
-                  {/* Group Number Display (ตามแบบหน้า สลับตำแหน่ง) */}
                   <Box sx={{ mt: 1.25, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Chip label="เลขกลุ่ม" size="small" color="primary" sx={{ height: 22 }} />
+                    <Chip label="เลขกลุ่ม" size="small" color="success" sx={{ height: 22 }} />
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>{groupNumber || '-'}</Typography>
                   </Box>
                 </Box>
@@ -501,7 +502,7 @@ function CreatePromotionChainContent() {
             <Button
               variant="outlined"
               startIcon={<ArrowBackIcon />}
-              onClick={() => router.push('/police-personnel/promotion-chain')}
+              onClick={() => router.push('/police-personnel/promotion')}
               sx={{ flexShrink: 0 }}
             >
               ย้อนกลับ
@@ -509,7 +510,7 @@ function CreatePromotionChainContent() {
           </Box>
 
           {/* หมายเหตุกลุ่ม */}
-          {!loading && vacantPosition && (
+          {!loading && startingPersonnel && (
             <Box sx={{ mt: 2 }}>
               <TextField
                 fullWidth
@@ -528,11 +529,10 @@ function CreatePromotionChainContent() {
 
         {!loading && (
           <>
-
             {/* Chain Table */}
-            <Box sx={{ pb: 12 }}> {/* Add bottom padding to prevent sticky footer overlap */}
-              <PromotionChainTable
-                vacantPosition={vacantPosition}
+            <Box sx={{ pb: 12 }}>
+              <PromotionTable
+                startingPersonnel={startingPersonnel}
                 nodes={nodes}
                 onAddNode={handleAddNode}
                 onRemoveNode={handleRemoveNode}
@@ -581,7 +581,7 @@ function CreatePromotionChainContent() {
               }}>
                 <Button
                   variant="outlined"
-                  onClick={() => router.push('/police-personnel/promotion-chain')}
+                  onClick={() => router.push('/police-personnel/promotion')}
                   disabled={saving}
                   fullWidth={isMobile}
                   sx={{ 
@@ -616,7 +616,7 @@ function CreatePromotionChainContent() {
   );
 }
 
-export default function CreatePromotionChainPage() {
+export default function CreatePromotionPage() {
   return (
     <Suspense fallback={
       <Layout>
@@ -625,7 +625,7 @@ export default function CreatePromotionChainPage() {
         </Box>
       </Layout>
     }>
-      <CreatePromotionChainContent />
+      <CreatePromotionContent />
     </Suspense>
   );
 }

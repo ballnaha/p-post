@@ -4,9 +4,16 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
 
 /**
- * GET /api/police-personnel/candidates
- * ดึงข้อมูลผู้สมัครสำหรับ Promotion Chain
- * เงื่อนไข: ต้องมี rank ไม่เป็น null (มีคนครองตำแหน่ง)
+ * GET /api/police-personnel/promotion-eligible
+ * ดึงข้อมูลบุคลากรที่สามารถเลื่อนตำแหน่งได้
+ * 
+ * Query Parameters:
+ * - includeAll=true: ดึงข้อมูลทั้งหมดจาก police_personnel (รวมทั้งที่ไม่มียศ)
+ * - includeAll=false หรือไม่ส่ง: กรองเฉพาะบุคลากรที่มียศ (rank not null)
+ * 
+ * เงื่อนไขอื่นๆ: 
+ * - ไม่อยู่ใน two-way, three-way, promotion-chain ของปีที่เลือก
+ * - รองรับ filter: search, unit, posCodeId, supporter
  */
 export async function GET(request: NextRequest) {
   try {
@@ -17,19 +24,19 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || undefined;
-    const unit = searchParams.get('unit') || undefined; // exact match
+    const unit = searchParams.get('unit') || undefined;
     const posCodeIdParam = searchParams.get('posCodeId') || undefined;
-    const supporter = searchParams.get('supporter') || undefined; // supporter filter
+    const supporter = searchParams.get('supporter') || undefined;
     const pageParam = searchParams.get('page');
     const limitParam = searchParams.get('limit');
-    const yearParam = searchParams.get('year'); // Year filter for excluding already assigned
-    const excludeTransactionId = searchParams.get('excludeTransactionId') || undefined; // Transaction ID to exclude from filtering
+    const yearParam = searchParams.get('year');
+    const excludeTransactionId = searchParams.get('excludeTransactionId') || undefined;
+    const includeAll = searchParams.get('includeAll') === 'true'; // เพิ่มตัวเลือกดึงข้อมูลทั้งหมด
 
     const page = pageParam ? Math.max(0, parseInt(pageParam, 10) || 0) : 0;
     const limit = limitParam ? Math.max(1, parseInt(limitParam, 10) || 20) : 20;
 
-    // Get personnel IDs that are already in swap transactions for the specified year
-    // Optimized: Use single query with join instead of two separate queries
+    // Get personnel IDs that are already in ANY swap transactions for the specified year
     let excludedPersonnelIds: string[] = [];
     if (yearParam) {
       const year = parseInt(yearParam, 10);
@@ -40,14 +47,14 @@ export async function GET(request: NextRequest) {
           transactionWhere.id = { not: excludeTransactionId };
         }
         
-        // Single optimized query with join
+        // Query all swap transactions for this year (two-way, three-way, promotion-chain)
         const swapDetails = await prisma.swapTransactionDetail.findMany({
           where: {
             transaction: transactionWhere,
             personnelId: { not: null },
           },
           select: { personnelId: true },
-          distinct: ['personnelId'], // Get unique personnel IDs only
+          distinct: ['personnelId'],
         });
 
         excludedPersonnelIds = swapDetails
@@ -58,18 +65,20 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: any = {
-      rank: { not: null },
-      // กรองตำแหน่งว่างออก - ตรวจสอบว่า rank ไม่เป็น empty string
-      AND: [
-        {
-          NOT: {
-            rank: ''
-          }
-        }
-      ]
+      AND: []
     };
 
-    // Exclude personnel already in swap transactions for the year
+    // ถ้าไม่ได้เลือก includeAll จะกรองเฉพาะคนที่มียศ (rank ไม่เป็น null)
+    if (!includeAll) {
+      where.rank = { not: null };
+      where.AND.push({
+        NOT: {
+          rank: ''
+        }
+      });
+    }
+
+    // Exclude personnel already in ANY swap transactions for the year
     if (excludedPersonnelIds.length > 0) {
       where.id = { notIn: excludedPersonnelIds };
     }
@@ -111,10 +120,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // ลบ AND ถ้าเป็น array ว่าง
+    if (where.AND && where.AND.length === 0) {
+      delete where.AND;
+    }
+
     // Count total (filtered)
     const total = await prisma.policePersonnel.count({ where });
 
-    // Query data page with optimized select (only fields we need)
+    // Query data with pagination
     const personnel = await prisma.policePersonnel.findMany({
       where,
       select: {
@@ -146,8 +160,8 @@ export async function GET(request: NextRequest) {
         retirementDate: true,
         trainingLocation: true,
         notes: true,
-        supporterName: true, // เพิ่มฟิลด์ผู้สนับสนุน
-        supportReason: true, // เพิ่มฟิลด์เหตุผล
+        supporterName: true,
+        supportReason: true,
       },
       orderBy: [
         { posCodeId: 'asc' },
@@ -155,9 +169,9 @@ export async function GET(request: NextRequest) {
       ],
       skip: page * limit,
       take: limit,
-    }) as any; // Temporary any type until Prisma client updates
+    }) as any;
 
-    const candidates = personnel.map((p: any) => ({
+    const eligible = personnel.map((p: any) => ({
       id: p.id,
       noId: p.noId,
       posCodeId: p.posCodeId,
@@ -185,13 +199,13 @@ export async function GET(request: NextRequest) {
       retirementDate: p.retirementDate || null,
       trainingLocation: p.trainingLocation || null,
       notes: p.notes || null,
-      supporterName: p.supporterName || null, // ผู้สนับสนุน
-      supportReason: p.supportReason || null, // เหตุผลในการสนับสนุน
+      supporterName: p.supporterName || null,
+      supportReason: p.supportReason || null,
     }));
 
     return NextResponse.json({
       success: true,
-      data: candidates,
+      data: eligible,
       total,
       pagination: {
         page,
@@ -200,9 +214,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('Error fetching candidates:', error);
+    console.error('Error fetching promotion eligible personnel:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch candidates', details: error.message },
+      { error: 'Failed to fetch promotion eligible personnel', details: error.message },
       { status: 500 }
     );
   }

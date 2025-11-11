@@ -78,6 +78,7 @@ import Layout from '@/app/components/Layout';
 import DataTablePagination from '@/components/DataTablePagination';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import { useDragDropHighlight } from '@/hooks/useDragDropHighlight';
 
 // Types based on swap-transactions API
 interface SwapDetail {
@@ -244,9 +245,8 @@ export default function PromotionChainPage() {
   const [personnelDetailModalOpen, setPersonnelDetailModalOpen] = useState(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState<PolicePersonnel | null>(null);
   const [loadingPersonnel, setLoadingPersonnel] = useState(false);
-  // Drag and drop state
-  const [draggedRow, setDraggedRow] = useState<{ transactionId: string; detailId: string; index: number } | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<{ transactionId: string; index: number } | null>(null);
+  // Drag and drop with highlight hook
+  const dragDropHighlight = useDragDropHighlight(2000);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null); // transaction ที่กำลังแก้ไข
   const [savingOrder, setSavingOrder] = useState(false);
 
@@ -560,112 +560,69 @@ export default function PromotionChainPage() {
   const handlePageChange = useCallback((newPage: number) => setPage(newPage), []);
   const handleRowsPerPageChange = useCallback((newR: number) => { setRowsPerPage(newR); setPage(0); }, []);
 
-  // Drag and drop handlers
-  const handleDragStart = useCallback((e: React.DragEvent, transactionId: string, detailId: string, index: number) => {
-    setDraggedRow({ transactionId, detailId, index });
-    e.dataTransfer.effectAllowed = 'move';
-  }, []);
+  // Drag and drop handler - ใช้ร่วมกับ hook
+  const createReorderHandler = useCallback((transactionId: string) => {
+    return (sourceIndex: number, targetIndex: number, detailId: string) => {
+      // อัปเดต chains state
+      setChains(prevChains => {
+        const newChains = prevChains.map(chain => {
+          if (chain.id !== transactionId) return chain;
 
-  const handleDragOver = useCallback((e: React.DragEvent, transactionId: string, targetIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    
-    // ป้องกันการ setState บ่อยเกินไป
-    if (dragOverIndex?.transactionId !== transactionId || dragOverIndex?.index !== targetIndex) {
-      setDragOverIndex({ transactionId, index: targetIndex });
-    }
-  }, [dragOverIndex]);
+          // เก็บข้อมูลตำแหน่งว่างต้นทางจาก node แรกเดิม
+          const originalFirstDetail = chain.swapDetails[0];
+          const vacantPositionData = {
+            toPosCodeId: originalFirstDetail.toPosCodeId,
+            toPosCodeMaster: originalFirstDetail.toPosCodeMaster,
+            toPosition: originalFirstDetail.toPosition,
+            toPositionNumber: originalFirstDetail.toPositionNumber,
+            toUnit: originalFirstDetail.toUnit,
+            toActingAs: originalFirstDetail.toActingAs,
+          };
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = e.clientX;
-    const y = e.clientY;
-    
-    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
-      setDragOverIndex(null);
-    }
-  }, []);
+          const newDetails = [...chain.swapDetails];
+          const [removed] = newDetails.splice(sourceIndex, 1);
+          newDetails.splice(targetIndex, 0, removed);
 
-  const handleDragEnd = useCallback(() => {
-    setDraggedRow(null);
-    setDragOverIndex(null);
-  }, []);
+          // อัปเดต sequence และตำแหน่ง to
+          const updatedDetails = newDetails.map((detail, index) => {
+            if (index === 0) {
+              // โหนดแรก - อัปเดต toPosition ให้เป็นตำแหน่งว่างต้นทาง
+              return {
+                ...detail,
+                sequence: index + 1,
+                toPosCodeId: vacantPositionData.toPosCodeId,
+                toPosCodeMaster: vacantPositionData.toPosCodeMaster,
+                toPosition: vacantPositionData.toPosition,
+                toPositionNumber: vacantPositionData.toPositionNumber,
+                toUnit: vacantPositionData.toUnit,
+                toActingAs: vacantPositionData.toActingAs,
+              };
+            } else {
+              // โหนดถัดไป - อัปเดต toPosition ให้เชื่อมกับ fromPosition ของโหนดก่อนหน้า
+              const prevDetail = newDetails[index - 1];
+              return {
+                ...detail,
+                sequence: index + 1,
+                toPosCodeId: prevDetail.posCodeId,
+                toPosCodeMaster: prevDetail.posCodeMaster,
+                toPosition: prevDetail.fromPosition,
+                toPositionNumber: prevDetail.fromPositionNumber,
+                toUnit: prevDetail.fromUnit,
+                toActingAs: prevDetail.fromActingAs,
+              };
+            }
+          });
 
-  const handleDrop = useCallback((e: React.DragEvent, transactionId: string, targetIndex: number) => {
-    e.preventDefault();
-    
-    if (!draggedRow || draggedRow.transactionId !== transactionId) return;
-
-    const sourceIndex = draggedRow.index;
-    
-    // รีเซ็ต drag state ก่อน
-    setDraggedRow(null);
-    setDragOverIndex(null);
-    
-    if (sourceIndex === targetIndex) {
-      return;
-    }
-
-    // อัปเดต chains state
-    setChains(prevChains => {
-      const newChains = prevChains.map(chain => {
-        if (chain.id !== transactionId) return chain;
-
-        // เก็บข้อมูลตำแหน่งว่างต้นทางจาก node แรกเดิม
-        const originalFirstDetail = chain.swapDetails[0];
-        const vacantPositionData = {
-          toPosCodeId: originalFirstDetail.toPosCodeId,
-          toPosCodeMaster: originalFirstDetail.toPosCodeMaster,
-          toPosition: originalFirstDetail.toPosition,
-          toPositionNumber: originalFirstDetail.toPositionNumber,
-          toUnit: originalFirstDetail.toUnit,
-          toActingAs: originalFirstDetail.toActingAs,
-        };
-
-        const newDetails = [...chain.swapDetails];
-        const [removed] = newDetails.splice(sourceIndex, 1);
-        newDetails.splice(targetIndex, 0, removed);
-
-        // อัปเดต sequence และตำแหน่ง to
-        const updatedDetails = newDetails.map((detail, index) => {
-          if (index === 0) {
-            // โหนดแรก - อัปเดต toPosition ให้เป็นตำแหน่งว่างต้นทาง
-            return {
-              ...detail,
-              sequence: index + 1,
-              toPosCodeId: vacantPositionData.toPosCodeId,
-              toPosCodeMaster: vacantPositionData.toPosCodeMaster,
-              toPosition: vacantPositionData.toPosition,
-              toPositionNumber: vacantPositionData.toPositionNumber,
-              toUnit: vacantPositionData.toUnit,
-              toActingAs: vacantPositionData.toActingAs,
-            };
-          } else {
-            // โหนดถัดไป - อัปเดต toPosition ให้เชื่อมกับ fromPosition ของโหนดก่อนหน้า
-            const prevDetail = newDetails[index - 1];
-            return {
-              ...detail,
-              sequence: index + 1,
-              toPosCodeId: prevDetail.posCodeId,
-              toPosCodeMaster: prevDetail.posCodeMaster,
-              toPosition: prevDetail.fromPosition,
-              toPositionNumber: prevDetail.fromPositionNumber,
-              toUnit: prevDetail.fromUnit,
-              toActingAs: prevDetail.fromActingAs,
-            };
-          }
+          return { ...chain, swapDetails: updatedDetails };
         });
 
-        return { ...chain, swapDetails: updatedDetails };
+        return newChains;
       });
 
-      return newChains;
-    });
-
-    setEditingTransactionId(transactionId); // เปิดโหมดแก้ไข
-    toast.info('ลำดับถูกเปลี่ยนแล้ว กรุณากดปุ่มบันทึก');
-  }, [draggedRow, toast]);
+      setEditingTransactionId(transactionId); // เปิดโหมดแก้ไข
+      toast.info('ลำดับถูกเปลี่ยนแล้ว กรุณากดปุ่มบันทึก');
+    };
+  }, [toast]);
 
   // บันทึกการเรียงลำดับใหม่
   const handleSaveOrder = useCallback(async (transactionId: string) => {
@@ -1064,31 +1021,16 @@ export default function PromotionChainPage() {
                                     </TableHead>
                                     <TableBody>
                                       {sortedDetails(row.swapDetails).map((d, index) => {
-                                        const isDragging = draggedRow?.detailId === d.id;
-                                        const isDropTarget = dragOverIndex?.transactionId === row.id && dragOverIndex?.index === index && !isDragging;
-                                        
                                         return (
                                         <TableRow 
                                           key={d.id} 
                                           draggable
-                                          onDragStart={(e: React.DragEvent) => handleDragStart(e, row.id, d.id, index)}
-                                          onDragOver={(e: React.DragEvent) => handleDragOver(e, row.id, index)}
-                                          onDragLeave={handleDragLeave}
-                                          onDrop={(e: React.DragEvent) => handleDrop(e, row.id, index)}
-                                          onDragEnd={handleDragEnd}
-                                          sx={{ 
-                                            cursor: isDragging ? 'grabbing' : 'grab',
-                                            opacity: isDragging ? 0.4 : 1,
-                                            bgcolor: isDropTarget ? 'primary.50' : 'white',
-                                            position: 'relative',
-                                            userSelect: 'none',
-                                            pointerEvents: 'auto',
-                                            outline: isDropTarget ? '2px dashed #667eea' : 'none',
-                                            outlineOffset: '-2px',
-                                            '&:hover': {
-                                              bgcolor: isDragging ? 'transparent' : (isDropTarget ? 'primary.100' : 'action.hover'),
-                                            },
-                                          }}
+                                          onDragStart={(e: React.DragEvent) => dragDropHighlight.handleDragStart(e, row.id, d.id, index)}
+                                          onDragOver={(e: React.DragEvent) => dragDropHighlight.handleDragOver(e, row.id, index)}
+                                          onDragLeave={dragDropHighlight.handleDragLeave}
+                                          onDrop={(e: React.DragEvent) => dragDropHighlight.handleDrop(e, row.id, index, createReorderHandler(row.id))}
+                                          onDragEnd={dragDropHighlight.handleDragEnd}
+                                          sx={dragDropHighlight.getDragDropStyles(d.id, row.id, index, theme)}
                                         >
                                           <TableCell>
                                             <DragIndicatorIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
@@ -1353,12 +1295,16 @@ export default function PromotionChainPage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25, fontSize: { xs: '1rem', md: '1.1rem' } }}>
                 จับคู่ตำแหน่งว่าง
               </Typography>
-              {!loadingVacant && (
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1, fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
-                  {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') ? 'กรองแล้ว: ' : 'ทั้งหมด: '}
-                  {totalVacantPositions} ตำแหน่ง
-                </Typography>
-              )}
+              <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1, fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
+                {loadingVacant ? (
+                  <>กำลังโหลด...</>
+                ) : (
+                  <>
+                    {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') ? 'กรองแล้ว: ' : 'ทั้งหมด: '}
+                    {totalVacantPositions} ตำแหน่ง
+                  </>
+                )}
+              </Typography>
             </Box>
             <IconButton onClick={() => {
               setShowCreateDialog(false);
@@ -1370,12 +1316,11 @@ export default function PromotionChainPage() {
             </IconButton>
           </Box>
 
-          {/* Search and Filter */}
-          {!loadingVacant && (
-            <Box sx={{ 
-              p: 1, 
-              borderBottom: 1,
-              borderColor: 'divider',
+          {/* Search and Filter - แสดงตลอดเวลา */}
+          <Box sx={{ 
+            p: 1, 
+            borderBottom: 1,
+            borderColor: 'divider',
               bgcolor: 'background.paper',
               position: 'sticky',
               top: drawerHeaderHeight, // ความสูงของ header ที่ย่อขนาด
@@ -1588,18 +1533,33 @@ export default function PromotionChainPage() {
                 )}
               </Stack>
             </Box>
-          )}
 
-          {/* Content */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 1.5 } }}>
-            {loadingVacant ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+          {/* Content - แยก Box สำหรับแสดง loading overlay */}
+          <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 1.5 }, position: 'relative' }}>
+            {/* Loading Overlay - จะทับทับเนื้อหาแทนการแทนที่ */}
+            {loadingVacant && (
+              <Box sx={{ 
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                bgcolor: 'rgba(255, 255, 255, 0.8)',
+                zIndex: 1,
+              }}>
                 <CircularProgress size={isMobile ? 40 : 48} />
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
-                  กำลังโหลดข้อมูลตำแหน่งว่าง...
+                  กำลังโหลดข้อมูล...
                 </Typography>
               </Box>
-            ) : vacantPositions.length === 0 ? (
+            )}
+            
+            {/* Content - จะคงอยู่แม้กำลังโหลด */}
+            {vacantPositions.length === 0 && !loadingVacant ? (
               <Alert severity="warning" sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
                 {(searchText || filterPosCode !== 'all') 
                   ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา'
@@ -1607,7 +1567,7 @@ export default function PromotionChainPage() {
                 }
               </Alert>
             ) : (
-              <List disablePadding>
+              <List disablePadding sx={{ opacity: loadingVacant ? 0.5 : 1, transition: 'opacity 0.2s' }}>
                 {vacantPositions.map((vp) => (
                     <ListItem
                       key={vp.id}

@@ -113,10 +113,10 @@ export async function POST(request: NextRequest) {
 
     // Validate
     const effectiveSwapType = swapType || 'two-way';
-    const minDetails = effectiveSwapType === 'promotion-chain' ? 1 : 2;
+    const minDetails = (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion') ? 1 : 2;
     if (!year || !swapDate || !swapDetails || swapDetails.length < minDetails) {
       return NextResponse.json(
-        { success: false, error: effectiveSwapType === 'promotion-chain' ? 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 1 ขั้นตอน' : 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 2 คนที่สลับตำแหน่ง' },
+        { success: false, error: (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion') ? 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 1 ขั้นตอน' : 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 2 คนที่สลับตำแหน่ง' },
         { status: 400 }
       );
     }

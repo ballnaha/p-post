@@ -34,6 +34,7 @@ import {
   AssignmentTurnedIn as AssignmentIcon,
   History as HistoryIcon,
   Sync as SyncIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { useNavigation } from './NavigationContext';
 import { usePathname, useRouter } from 'next/navigation';
@@ -100,6 +101,12 @@ const Sidebar: React.FC = () => {
           href: '/police-personnel/promotion-chain', 
           icon: <VacantIcon sx={{ fontSize: 20 }} />, 
           key: 'vacant-filling' 
+        },
+        { 
+          label: 'เลื่อนตำแหน่ง', 
+          href: '/police-personnel/promotion', 
+          icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, 
+          key: 'promotion' 
         },
       ]
     },

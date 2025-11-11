@@ -74,18 +74,23 @@ interface ChainNode {
   isPromotionValid: boolean;
 }
 
-interface VacantPosition {
+interface StartingPersonnel {
   id: string;
+  noId?: number;
   posCodeId: number;
   posCodeName?: string;
   position: string;
   unit: string;
   positionNumber?: string;
   actingAs?: string;
+  fullName: string;
+  rank: string;
+  nationalId: string;
+  seniority?: string;
 }
 
-interface PromotionChainTableProps {
-  vacantPosition: VacantPosition | null;
+interface PromotionTableProps {
+  startingPersonnel: StartingPersonnel | null;
   nodes: ChainNode[];
   onAddNode: (node: ChainNode) => void;
   onRemoveNode: (nodeId: string) => void;
@@ -93,14 +98,14 @@ interface PromotionChainTableProps {
   onReorder?: (nodes: ChainNode[]) => void;
 }
 
-export default function PromotionChainTable({
-  vacantPosition,
+export default function PromotionTable({
+  startingPersonnel,
   nodes,
   onAddNode,
   onRemoveNode,
   onInsertNode,
   onReorder,
-}: PromotionChainTableProps) {
+}: PromotionTableProps) {
   const theme = useTheme();
   const toast = useToast();
   const [showCandidateSelector, setShowCandidateSelector] = useState(false);
@@ -120,9 +125,9 @@ export default function PromotionChainTable({
   };
 
   const getCurrentVacantRankLevel = (): number | null => {
-    if (!vacantPosition && nodes.length === 0) return null;
+    if (!startingPersonnel && nodes.length === 0) return null;
     if (nodes.length === 0) {
-      return getRankLevelByPosCode(vacantPosition?.posCodeId || 0);
+      return getRankLevelByPosCode(startingPersonnel?.posCodeId || 0);
     }
     const lastNode = nodes[nodes.length - 1];
     return lastNode.fromRankLevel;
@@ -132,14 +137,14 @@ export default function PromotionChainTable({
   const canAddMore = currentVacantRankLevel !== null;
 
   const handleSelectCandidate = (candidate: any) => {
-    if (nodes.some(n => n.personnelId === candidate.id)) {
+    if (nodes.some((n: ChainNode) => n.personnelId === candidate.id)) {
       toast.warning('ไม่สามารถเลือกบุคคลเดิมซ้ำได้');
       return;
     }
 
     // ถ้ากำลังแทรก
     if (insertBeforeNodeId && onInsertNode) {
-      const targetNodeIndex = nodes.findIndex(n => n.id === insertBeforeNodeId);
+      const targetNodeIndex = nodes.findIndex((n: ChainNode) => n.id === insertBeforeNodeId);
       if (targetNodeIndex === -1) {
         toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
         return;
@@ -220,14 +225,14 @@ export default function PromotionChainTable({
       fromPositionNumber: candidate.positionNumber,
       fromUnit: candidate.unit,
       fromActingAs: candidate.actingAs,
-      toPosCodeId: nodes.length === 0 ? vacantPosition?.posCodeId || 0 : nodes[nodes.length - 1].fromPosCodeId,
-      toPosCodeName: nodes.length === 0 ? vacantPosition?.posCodeName || vacantPosition?.position : nodes[nodes.length - 1].fromPosCodeName,
-      toPosition: nodes.length === 0 ? vacantPosition?.position || '' : nodes[nodes.length - 1].fromPosition,
-      toPositionNumber: nodes.length === 0 ? (vacantPosition?.positionNumber || undefined) : nodes[nodes.length - 1].fromPositionNumber,
-      toUnit: nodes.length === 0 ? vacantPosition?.unit || '' : nodes[nodes.length - 1].fromUnit,
-      toActingAs: nodes.length === 0 ? (vacantPosition?.actingAs || undefined) : nodes[nodes.length - 1].fromActingAs,
+      toPosCodeId: nodes.length === 0 ? startingPersonnel?.posCodeId || 0 : nodes[nodes.length - 1].fromPosCodeId,
+      toPosCodeName: nodes.length === 0 ? startingPersonnel?.posCodeName || startingPersonnel?.position : nodes[nodes.length - 1].fromPosCodeName,
+      toPosition: nodes.length === 0 ? startingPersonnel?.position || '' : nodes[nodes.length - 1].fromPosition,
+      toPositionNumber: nodes.length === 0 ? (startingPersonnel?.positionNumber || undefined) : nodes[nodes.length - 1].fromPositionNumber,
+      toUnit: nodes.length === 0 ? startingPersonnel?.unit || '' : nodes[nodes.length - 1].fromUnit,
+      toActingAs: nodes.length === 0 ? (startingPersonnel?.actingAs || undefined) : nodes[nodes.length - 1].fromActingAs,
       fromRankLevel: candidate.rankLevel,
-      toRankLevel: nodes.length === 0 ? getRankLevelByPosCode(vacantPosition?.posCodeId || 0) : nodes[nodes.length - 1].fromRankLevel,
+      toRankLevel: nodes.length === 0 ? getRankLevelByPosCode(startingPersonnel?.posCodeId || 0) : nodes[nodes.length - 1].fromRankLevel,
       isPromotionValid: true,
     };
 
@@ -328,7 +333,7 @@ export default function PromotionChainTable({
     if (selectedRows.size === nodes.length) {
       setSelectedRows(new Set());
     } else {
-      setSelectedRows(new Set(nodes.map(n => n.id)));
+      setSelectedRows(new Set(nodes.map((n: ChainNode) => n.id)));
     }
   };
 
@@ -430,7 +435,7 @@ export default function PromotionChainTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                nodes.map((node, index) => {
+                nodes.map((node: ChainNode, index: number) => {
                   const isSelected = selectedRows.has(node.id);
                   const dragStyles = dragDropHighlight.getDragDropStyles(node.id, 'create-chain', index, theme);
                   
@@ -570,12 +575,15 @@ export default function PromotionChainTable({
         }}
         targetRankLevel={currentVacantRankLevel || 0}
         onSelect={handleSelectCandidate}
-        selectedPersonnelIds={nodes.map(n => n.personnelId).filter(Boolean) as string[]}
+        selectedPersonnelIds={[
+          ...(startingPersonnel?.id ? [startingPersonnel.id] : []),
+          ...nodes.map((n: ChainNode) => n.personnelId).filter(Boolean) as string[]
+        ]}
         isInsertMode={insertBeforeNodeId !== null}
         vacantPosition={
           insertBeforeNodeId !== null
             ? (() => {
-                const targetNode = nodes.find(n => n.id === insertBeforeNodeId);
+                const targetNode = nodes.find((n: ChainNode) => n.id === insertBeforeNodeId);
                 return targetNode ? {
                   id: targetNode.id,
                   posCodeId: targetNode.toPosCodeId,
@@ -586,7 +594,7 @@ export default function PromotionChainTable({
                 } : null;
               })()
             : nodes.length === 0
-              ? vacantPosition
+              ? startingPersonnel
               : {
                   id: nodes[nodes.length - 1].id,
                   posCodeId: nodes[nodes.length - 1].fromPosCodeId,
@@ -622,7 +630,7 @@ export default function PromotionChainTable({
           <DialogContentText component="div">
             คุณแน่ใจหรือไม่ว่าต้องการลบบุคลากรคนนี้ออกจากลูกโซ่?
             {nodeToDelete && (() => {
-              const node = nodes.find(n => n.id === nodeToDelete);
+              const node = nodes.find((n: ChainNode) => n.id === nodeToDelete);
               return node ? (
                 <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.50', borderRadius: 1, border: '1px solid', borderColor: 'error.main' }}>
                   <Typography variant="body2" component="div" fontWeight={600} sx={{ color: 'error.dark' }}>

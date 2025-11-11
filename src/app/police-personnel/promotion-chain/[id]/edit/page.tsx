@@ -8,6 +8,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  TextField,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
@@ -135,6 +136,7 @@ export default function EditPromotionChainPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [transaction, setTransaction] = useState<TransactionApi | null>(null);
+  const [groupNotes, setGroupNotes] = useState<string>(''); // หมายเหตุของกลุ่ม
   const [vacantPosition, setVacantPosition] = useState<VacantPosition | null>(null);
   const [nodes, setNodes] = useState<ChainNode[]>([]);
 
@@ -208,10 +210,32 @@ export default function EditPromotionChainPage() {
 
         // Synthesize a vacant position from the first detail's target
         const first = mappedNodes[0];
+        
+        // ถ้าไม่มี toPosCodeName ให้ลองค้นหาจากชื่อตำแหน่ง
+        let posCodeName = first?.toPosCodeName;
+        let posCodeId = first?.toPosCodeId || 0;
+        
+        if (!posCodeName && first?.toPosition) {
+          try {
+            const findPosCodeRes = await fetch(
+              `/api/pos-code/find-by-position?position=${encodeURIComponent(first.toPosition)}`
+            );
+            if (findPosCodeRes.ok) {
+              const findPosCodeData = await findPosCodeRes.json();
+              if (findPosCodeData?.success && findPosCodeData?.data) {
+                posCodeName = findPosCodeData.data.name;
+                posCodeId = findPosCodeData.data.id;
+              }
+            }
+          } catch (e) {
+            console.warn('Could not find pos code name from position:', e);
+          }
+        }
+        
         setVacantPosition(first ? {
           id: "from-transaction",
-          posCodeId: first.toPosCodeId || 0,
-          posCodeName: first.toPosCodeName || undefined,
+          posCodeId: posCodeId,
+          posCodeName: posCodeName || undefined,
           position: first.toPosition || "-",
           unit: first.toUnit || "-",
           positionNumber: first.toPositionNumber,
@@ -219,6 +243,7 @@ export default function EditPromotionChainPage() {
         } : null);
 
         setTransaction(t);
+        setGroupNotes(t.notes || ''); // ตั้งค่าหมายเหตุเริ่มต้น
       } catch (e: any) {
         console.error(e);
         toast.error(e?.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล");
@@ -405,7 +430,7 @@ export default function EditPromotionChainPage() {
         groupName: transaction.groupName,
         groupNumber: transaction.groupNumber,
         status: transaction.status,
-        notes: transaction.notes,
+        notes: groupNotes.trim() || null,
         swapDetails,
       };
 
@@ -416,8 +441,104 @@ export default function EditPromotionChainPage() {
       });
       const json = await res.json();
       if (!res.ok || json?.success === false) throw new Error(json?.error || "บันทึกไม่สำเร็จ");
+      
       toast.success("บันทึกการแก้ไขสำเร็จ");
-      router.push("/police-personnel/promotion-chain");
+      
+      // Reload ข้อมูลใหม่แทนการ redirect
+      const reloadRes = await fetch(`/api/swap-transactions/${transaction.id}`);
+      const reloadJson = await reloadRes.json();
+      if (reloadRes.ok && reloadJson?.data) {
+        const t: TransactionApi = reloadJson.data;
+        setTransaction(t);
+        
+        // Map details → nodes อีกครั้ง
+        const sorted = [...(t.swapDetails || [])].sort((a, b) => {
+          const sa = a.sequence ?? 9999;
+          const sb = b.sequence ?? 9999;
+          if (sa !== sb) return sa - sb;
+          return (a.fullName || "").localeCompare(b.fullName || "");
+        });
+
+        const mappedNodes: ChainNode[] = sorted.map((d, index, arr) => {
+          const fromRank = d.posCodeId ?? 0;
+          const prevFromRank = index > 0 ? (arr[index - 1].posCodeId ?? fromRank) : fromRank;
+          return {
+            id: `node-${d.id}`,
+            nodeOrder: d.sequence ?? index + 1,
+            personnelId: d.personnelId ?? undefined,
+            noId: d.noId ? parseInt(d.noId) : undefined,
+            nationalId: d.nationalId ?? "",
+            fullName: d.fullName,
+            rank: d.rank ?? "",
+            seniority: d.seniority ?? undefined,
+            birthDate: d.birthDate ?? undefined,
+            age: d.age ?? undefined,
+            education: d.education ?? undefined,
+            lastAppointment: d.lastAppointment ?? undefined,
+            currentRankSince: d.currentRankSince ?? undefined,
+            enrollmentDate: d.enrollmentDate ?? undefined,
+            retirementDate: d.retirementDate ?? undefined,
+            yearsOfService: d.yearsOfService ?? undefined,
+            trainingLocation: d.trainingLocation ?? undefined,
+            trainingCourse: d.trainingCourse ?? undefined,
+            supporterName: d.supportName ?? undefined,
+            supportReason: d.supportReason ?? undefined,
+            notes: d.notes ?? undefined,
+            fromPosCodeId: d.posCodeId ?? 0,
+            fromPosCodeName: d.posCodeMaster?.name ?? undefined,
+            fromPosition: d.fromPosition ?? "",
+            fromPositionNumber: d.fromPositionNumber ?? undefined,
+            fromUnit: d.fromUnit ?? "",
+            actingAs: d.fromActingAs ?? undefined,
+            fromActingAs: d.fromActingAs ?? undefined,
+            toPosCodeId: d.toPosCodeId ?? 0,
+            toPosCodeName: d.toPosCodeMaster?.name ?? undefined,
+            toPosition: d.toPosition ?? "",
+            toPositionNumber: d.toPositionNumber ?? undefined,
+            toUnit: d.toUnit ?? "",
+            toActingAs: d.toActingAs ?? undefined,
+            fromRankLevel: fromRank,
+            toRankLevel: prevFromRank,
+            isPromotionValid: true,
+          };
+        });
+
+        setNodes(mappedNodes);
+        
+        // อัปเดต vacantPosition จาก node แรกที่ reload มา
+        const first = mappedNodes[0];
+        
+        // ถ้าไม่มี toPosCodeName ให้ลองค้นหาจากชื่อตำแหน่ง
+        let posCodeName = first?.toPosCodeName;
+        let posCodeId = first?.toPosCodeId || 0;
+        
+        if (!posCodeName && first?.toPosition) {
+          try {
+            const findPosCodeRes = await fetch(
+              `/api/pos-code/find-by-position?position=${encodeURIComponent(first.toPosition)}`
+            );
+            if (findPosCodeRes.ok) {
+              const findPosCodeData = await findPosCodeRes.json();
+              if (findPosCodeData?.success && findPosCodeData?.data) {
+                posCodeName = findPosCodeData.data.name;
+                posCodeId = findPosCodeData.data.id;
+              }
+            }
+          } catch (e) {
+            console.warn('Could not find pos code name from position:', e);
+          }
+        }
+        
+        setVacantPosition(first ? {
+          id: "from-transaction",
+          posCodeId: posCodeId,
+          posCodeName: posCodeName || undefined,
+          position: first.toPosition || "-",
+          unit: first.toUnit || "-",
+          positionNumber: first.toPositionNumber,
+          actingAs: first.toActingAs,
+        } : null);
+      }
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "เกิดข้อผิดพลาดในการบันทึก");
@@ -474,6 +595,23 @@ export default function EditPromotionChainPage() {
               ย้อนกลับ
             </Button>
           </Box>
+
+          {/* หมายเหตุกลุ่ม */}
+          {!loading && vacantPosition && (
+            <Box sx={{ mt: 2 }}>
+              <TextField
+                fullWidth
+                label="หมายเหตุ"
+                placeholder="ระบุหมายเหตุเพิ่มเติมสำหรับกลุ่มนี้ (ถ้ามี)"
+                multiline
+                rows={2}
+                value={groupNotes}
+                onChange={(e) => setGroupNotes(e.target.value)}
+                variant="outlined"
+                size="small"
+              />
+            </Box>
+          )}
         </Paper>
 
         {!loading && (
@@ -487,18 +625,19 @@ export default function EditPromotionChainPage() {
                 onInsertNode={handleInsertNode}
                 onReorder={(reorderedNodes: ChainNode[]) => {
                   // อัปเดต nodeOrder และตำแหน่ง to ของแต่ละ node
+                  // fromPosCodeId และ fromPosCodeName ไม่เปลี่ยนแปลง เพราะเป็นตำแหน่งปัจจุบันของบุคลากร
                   const updatedNodes = reorderedNodes.map((node, index) => {
                     if (index === 0) {
-                      // โหนดแรก - ตำแหน่ง to ต้องเป็นตำแหน่งว่างต้นทาง
+                      // โหนดแรก - ตำแหน่ง to ต้องเป็นตำแหน่งว่างต้นทาง (บังคับใช้ vacantPosition)
                       return {
                         ...node,
                         nodeOrder: index + 1,
-                        toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
-                        toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
-                        toPosition: vacantPosition?.position || node.toPosition,
-                        toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
-                        toUnit: vacantPosition?.unit || node.toUnit,
-                        toActingAs: vacantPosition?.actingAs || node.toActingAs,
+                        toPosCodeId: vacantPosition?.posCodeId ?? 0,
+                        toPosCodeName: vacantPosition?.posCodeName ?? undefined,
+                        toPosition: vacantPosition?.position ?? "",
+                        toPositionNumber: vacantPosition?.positionNumber ?? undefined,
+                        toUnit: vacantPosition?.unit ?? "",
+                        toActingAs: vacantPosition?.actingAs ?? undefined,
                       };
                     } else {
                       // โหนดถัดไป - ตำแหน่ง to ต้องเป็นตำแหน่ง from ของโหนดก่อนหน้า

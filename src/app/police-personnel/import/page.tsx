@@ -265,7 +265,7 @@ export default function ImportPolicePersonnelPage() {
               </Typography>
             ) : (
               <Typography variant="body2">
-                <strong>✨ อัปเดตผู้สนับสนุน:</strong> ระบบจะอัปเดตเฉพาะฟิลด์ "ชื่อผู้สนับสนุน" และ "เหตุผล" โดยไม่กระทบข้อมูลอื่น
+                <strong>✨ อัปเดตผู้สนับสนุน:</strong> ระบบจะอัปเดตเฉพาะฟิลด์ "ชื่อผู้สนับสนุน" และ "เหตุผล" โดยค้นหาจากเลขตำแหน่ง (รองรับทั้งตำแหน่งที่มีคนและตำแหน่งว่าง)
               </Typography>
             )}
           </Alert>
@@ -351,11 +351,11 @@ export default function ImportPolicePersonnelPage() {
             {/* Supporter Update Columns */}
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" fontWeight={600} color="secondary.main" sx={{ mb: 1 }}>
-                อัปเดตผู้สนับสนุน (4 คอลัมน์):
+                อัปเดตผู้สนับสนุน (5 คอลัมน์):
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 {[
-                  'ชื่อ สกุล', 'เลขประจำตัวประชาชน', 'ชื่อผู้สนับสนุน', 'เหตุผล'
+                  'ชื่อ สกุล', 'เลขตำแหน่ง', 'เลขประจำตัวประชาชน', 'ชื่อผู้สนับสนุน', 'เหตุผล'
                 ].map((column, index) => (
                   <Chip 
                     key={column} 
@@ -373,7 +373,9 @@ export default function ImportPolicePersonnelPage() {
               <strong>⚠️ ข้อควรระวัง:</strong>
               <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
                 <li><strong>Import แบบเต็ม:</strong> จะลบข้อมูลเดิมทั้งหมดในระบบ (23 คอลัมน์)</li>
-                <li><strong>อัปเดตผู้สนับสนุน:</strong> จะอัปเดตเฉพาะฟิลด์ผู้สนับสนุนและเหตุผล โดยอ้างอิงจากชื่อ-นามสกุลและเลขบัตรประชาชน (4 คอลัมน์)</li>
+                <li><strong>อัปเดตผู้สนับสนุน:</strong> จะอัปเดตเฉพาะฟิลด์ผู้สนับสนุนและเหตุผล โดยอ้างอิงจากเลขตำแหน่ง (5 คอลัมน์)</li>
+                <li><strong>สำหรับตำแหน่งที่มีคน:</strong> ใส่เลขบัตรประชาชน</li>
+                <li><strong>สำหรับตำแหน่งว่าง:</strong> เว้นเลขบัตรประชาชนว่างไว้ ระบบจะใช้เลขตำแหน่งในการค้นหา</li>
                 <li>ห้ามลบหรือเปลี่ยนชื่อหัวคอลัมน์ เพราะจะทำให้การ import ผิดพลาด</li>
                 <li>ตรวจสอบรูปแบบข้อมูลให้ถูกต้องก่อนอัปโหลด</li>
               </ul>

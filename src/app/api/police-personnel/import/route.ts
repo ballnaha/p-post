@@ -256,7 +256,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               for (const personnelData of personnelDataArray) {
                 try {
                   if (personnelData.nationalId) {
-                    // UPSERT: UPDATE ถ้ามี nationalId + year ซ้ำ, INSERT ถ้าไม่มี
+                    // กรณีที่ 1: มีเลขบัตรประชาชน → UPSERT ด้วย nationalId + year
                     await tx.policePersonnel.upsert({
                       where: {
                         // ใช้ compound unique key (ต้องสร้าง unique index ใน schema)
@@ -274,8 +274,68 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
                     });
                     results.success++;
                     results.updated++;
+                  } else if (personnelData.positionNumber) {
+                    // กรณีที่ 2: ไม่มีเลขบัตรประชาชน (ตำแหน่งว่าง) → ค้นหาด้วยเลขตำแหน่ง + ปี
+                    const existingRecord = await tx.policePersonnel.findFirst({
+                      where: {
+                        positionNumber: personnelData.positionNumber,
+                        year: importYear,
+                        isActive: true,
+                        nationalId: null // ต้องเป็นตำแหน่งว่าง
+                      }
+                    });
+
+                    if (existingRecord) {
+                      // UPDATE ข้อมูลเดิม
+                      await tx.policePersonnel.update({
+                        where: { id: existingRecord.id },
+                        data: {
+                          ...personnelData,
+                          updatedBy: username,
+                          updatedAt: new Date()
+                        }
+                      });
+                      results.success++;
+                      results.updated++;
+                    } else {
+                      // INSERT ข้อมูลใหม่
+                      await tx.policePersonnel.create({
+                        data: personnelData
+                      });
+                      results.success++;
+                    }
+                  } else if (personnelData.noId) {
+                    // กรณีที่ 3: ไม่มีเลขบัตรและเลขตำแหน่ง แต่มี noId → ค้นหาด้วย noId + ปี
+                    const existingRecord = await tx.policePersonnel.findFirst({
+                      where: {
+                        noId: personnelData.noId,
+                        year: importYear,
+                        isActive: true,
+                        nationalId: null // ต้องเป็นตำแหน่งว่าง
+                      }
+                    });
+
+                    if (existingRecord) {
+                      // UPDATE ข้อมูลเดิม
+                      await tx.policePersonnel.update({
+                        where: { id: existingRecord.id },
+                        data: {
+                          ...personnelData,
+                          updatedBy: username,
+                          updatedAt: new Date()
+                        }
+                      });
+                      results.success++;
+                      results.updated++;
+                    } else {
+                      // INSERT ข้อมูลใหม่
+                      await tx.policePersonnel.create({
+                        data: personnelData
+                      });
+                      results.success++;
+                    }
                   } else {
-                    // ถ้าไม่มี nationalId ให้ INSERT เท่านั้น
+                    // กรณีที่ 4: ไม่มีทั้งเลขบัตร เลขตำแหน่ง และ noId → INSERT เท่านั้น
                     await tx.policePersonnel.create({
                       data: personnelData
                     });
@@ -284,7 +344,8 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
                 } catch (upsertError: any) {
                   console.error('Upsert error:', upsertError);
                   results.failed++;
-                  results.errors.push(`nationalId ${personnelData.nationalId}: ${upsertError.message}`);
+                  const identifier = personnelData.nationalId || personnelData.positionNumber || personnelData.noId || 'unknown';
+                  results.errors.push(`${identifier}: ${upsertError.message}`);
                 }
               }
             } else {

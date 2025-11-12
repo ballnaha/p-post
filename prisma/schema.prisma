@@ -103,6 +103,10 @@ model PolicePersonnel {
   @@index([rank])
   @@index([unit])
   @@index([position])
+  @@index([positionNumber]) // Index for position number search
+  @@index([positionNumber, year]) // Index for vacant position UPSERT
+  @@index([noId]) // Index for no_id search
+  @@index([noId, year]) // Index for vacant position UPSERT by noId
   @@index([supporterName]) // Index for supporter search
   @@index([rank, posCodeId, fullName]) // Composite index for drawer query optimization
   @@index([unit, posCodeId, fullName]) // Composite index for unit filter with posCode

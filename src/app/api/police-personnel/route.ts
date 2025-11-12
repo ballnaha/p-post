@@ -22,11 +22,21 @@ export async function GET(request: NextRequest) {
     const posCodeFilter = searchParams.get('posCode') || 'all';
     const supporterFilter = searchParams.get('supporter') || 'all';
     const transactionTypeFilter = searchParams.get('transactionType') || 'all';
+    
+    // เพิ่ม year และ isActive filters (default = ปีปัจจุบัน และ active เท่านั้น)
+    const currentBuddhistYear = new Date().getFullYear() + 543;
+    const yearParam = searchParams.get('year');
+    const yearFilter = yearParam ? parseInt(yearParam) : currentBuddhistYear;
+    const isActiveParam = searchParams.get('isActive');
+    const isActiveFilter = isActiveParam === 'false' ? false : true; // default = true
 
     const skip = (page - 1) * limit;
 
     // สร้าง where clause สำหรับค้นหา
-    const where: any = {};
+    const where: any = {
+      year: yearFilter,
+      isActive: isActiveFilter
+    };
     
     // เพิ่ม position filter - ตรวจสอบจาก rank แทน fullName
     if (positionFilter === 'vacant') {

@@ -35,6 +35,7 @@ import {
   History as HistoryIcon,
   Sync as SyncIcon,
   TrendingUp as TrendingUpIcon,
+  TableView as TableViewIcon,
 } from '@mui/icons-material';
 import { useNavigation } from './NavigationContext';
 import { usePathname, useRouter } from 'next/navigation';
@@ -107,6 +108,12 @@ const Sidebar: React.FC = () => {
           href: '/police-personnel/promotion', 
           icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, 
           key: 'promotion' 
+        },
+        { 
+          label: 'In-Out', 
+          href: '/in-out', 
+          icon: <TableViewIcon sx={{ fontSize: 20 }} />, 
+          key: 'in-out' 
         },
       ]
     },

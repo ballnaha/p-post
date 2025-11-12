@@ -28,6 +28,10 @@ import {
   AccordionDetails,
   ToggleButtonGroup,
   ToggleButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -51,7 +55,12 @@ export default function ImportPolicePersonnelPage() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
   const [importMode, setImportMode] = useState<ImportMode>('full');
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
+  const [jobId, setJobId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const currentBuddhistYear = new Date().getFullYear() + 543;
+  const yearOptions = Array.from({ length: 7 }, (_, i) => currentBuddhistYear - 5 + i);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -85,6 +94,7 @@ export default function ImportPolicePersonnelPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('year', selectedYear.toString());
 
       // เลือก API endpoint ตาม import mode
       const apiEndpoint = importMode === 'supporter' 
@@ -96,65 +106,68 @@ export default function ImportPolicePersonnelPage() {
         body: formData,
       });
 
-      // อ่าน response เป็น stream เพื่อรับ progress updates
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      const data = await response.json();
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.trim().startsWith('data: ')) {
-              try {
-                const jsonStr = line.substring(6); // Remove 'data: ' prefix
-                const data = JSON.parse(jsonStr);
-                
-                if (data.type === 'progress') {
-                  setProgress({
-                    current: data.current,
-                    total: data.total,
-                    percentage: Math.round((data.current / data.total) * 100)
-                  });
-                } else if (data.type === 'complete') {
-                  setResult(data.results);
-                  setFile(null);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                  }
-                } else if (data.type === 'error') {
-                  setError(data.error || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
-                }
-              } catch (e) {
-                console.error('Error parsing progress data:', e);
-              }
-            }
-          }
-        }
+      if (data.success && data.jobId) {
+        setJobId(data.jobId);
+        // เริ่ม polling
+        pollJobStatus(data.jobId);
       } else {
-        // Fallback to regular JSON response
-        const data = await response.json();
-        if (data.success) {
-          setResult(data.results);
-          setFile(null);
-          if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-          }
-        } else {
-          setError(data.error || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
-        }
+        setError(data.error || 'เกิดข้อผิดพลาด');
+        setLoading(false);
       }
+
     } catch (err: any) {
       setError(err.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
-    } finally {
       setLoading(false);
     }
+  };
+
+  // Polling function
+  const pollJobStatus = async (jobId: string) => {
+    const intervalId = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/import-job/${jobId}`);
+        const data = await response.json();
+
+        if (data.success && data.job) {
+          const job = data.job;
+          
+          // Update progress
+          setProgress({
+            current: job.processedRows,
+            total: job.totalRows,
+            percentage: job.percentage
+          });
+
+          // Check if completed or failed
+          if (job.status === 'completed') {
+            clearInterval(intervalId);
+            setResult({
+              success: job.successRows,
+              failed: job.failedRows,
+              updated: job.updatedRows,
+              errors: job.errors || [],
+              totalProcessed: job.processedRows
+            });
+            setFile(null);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+            setLoading(false);
+          } else if (job.status === 'failed') {
+            clearInterval(intervalId);
+            setError(job.errorMessage || 'เกิดข้อผิดพลาด');
+            setLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error('Error polling job status:', err);
+      }
+    }, 2000); // Poll ทุก 2 วินาที
+
+    // Cleanup ถ้า component unmount
+    return () => clearInterval(intervalId);
   };
 
   const downloadTemplate = async () => {
@@ -199,29 +212,49 @@ export default function ImportPolicePersonnelPage() {
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
               เลือกประเภทการ Import:
             </Typography>
-            <ToggleButtonGroup
-              value={importMode}
-              exclusive
-              onChange={(e, newMode) => {
-                if (newMode !== null) {
-                  setImportMode(newMode);
-                  setFile(null);
-                  setResult(null);
-                  setError('');
-                }
-              }}
-              aria-label="import mode"
-              color="primary"
-            >
-              <ToggleButton value="full" aria-label="full import">
-                <RefreshIcon sx={{ mr: 1 }} />
-                Import แบบเต็ม (ลบข้อมูลเดิมทั้งหมด)
-              </ToggleButton>
-              <ToggleButton value="supporter" aria-label="supporter update">
-                <UpdateIcon sx={{ mr: 1 }} />
-                อัปเดตผู้สนับสนุนเท่านั้น (ไม่ลบข้อมูลเดิม)
-              </ToggleButton>
-            </ToggleButtonGroup>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <ToggleButtonGroup
+                value={importMode}
+                exclusive
+                onChange={(e, newMode) => {
+                  if (newMode !== null) {
+                    setImportMode(newMode);
+                    setFile(null);
+                    setResult(null);
+                    setError('');
+                  }
+                }}
+                aria-label="import mode"
+                color="primary"
+              >
+                <ToggleButton value="full" aria-label="full import">
+                  <RefreshIcon sx={{ mr: 1 }} />
+                  Import แบบเต็ม (ลบข้อมูลเดิมทั้งหมด)
+                </ToggleButton>
+                <ToggleButton value="supporter" aria-label="supporter update">
+                  <UpdateIcon sx={{ mr: 1 }} />
+                  อัปเดตผู้สนับสนุนเท่านั้น (ไม่ลบข้อมูลเดิม)
+                </ToggleButton>
+              </ToggleButtonGroup>
+              
+              {/* Year Selection Dropdown */}
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel id="year-select-label">ปี พ.ศ.</InputLabel>
+                <Select
+                  labelId="year-select-label"
+                  id="year-select"
+                  value={selectedYear}
+                  label="ปี พ.ศ."
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                >
+                  {yearOptions.map((year) => (
+                    <MenuItem key={year} value={year}>
+                      {year}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
           </Box>
 
           {/* Mode Description */}

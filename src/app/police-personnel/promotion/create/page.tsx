@@ -141,22 +141,16 @@ function CreatePromotionContent() {
   const loadStartingPersonnel = async (id: string) => {
     setLoading(true);
     try {
-      const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/police-personnel/promotion-eligible?year=${currentYear}`);
+      // ดึงข้อมูลบุคลากรโดยตรงจาก ID
+      const personnelResponse = await fetch(`/api/police-personnel/${id}`);
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch personnel');
+      if (!personnelResponse.ok) {
+        throw new Error('Failed to fetch personnel by ID');
       }
 
-      const result = await response.json();
-      const allPersonnel = result.data || [];
+      const personnelResult = await personnelResponse.json();
       
-      console.log('Looking for personnel:', { id, totalPersonnel: allPersonnel.length });
-      
-      const data = allPersonnel.find((p: any) => p.id === id);
-      
-      if (!data) {
-        console.error('Personnel not found. Available IDs:', allPersonnel.map((p: any) => p.id).slice(0, 5));
+      if (!personnelResult.success || !personnelResult.data) {
         toast.error('ไม่พบข้อมูลบุคลากรที่เลือก กรุณาเลือกใหม่');
         setTimeout(() => {
           router.push('/police-personnel/promotion');
@@ -164,10 +158,13 @@ function CreatePromotionContent() {
         return;
       }
       
-      console.log('Raw data from API:', {
+      const data = personnelResult.data;
+      
+      console.log('Loaded personnel:', {
         id: data.id,
+        fullName: data.fullName,
         posCodeId: data.posCodeId,
-        posCodeName: data.posCodeName,
+        posCodeMaster: data.posCodeMaster,
         position: data.position,
       });
       
@@ -175,7 +172,7 @@ function CreatePromotionContent() {
         id: data.id,
         noId: data.noId,
         posCodeId: data.posCodeId,
-        posCodeName: data.posCodeName,
+        posCodeName: data.posCodeMaster?.name || '',
         position: data.position || '-',
         unit: data.unit || '-',
         requestedPositionId: data.requestedPositionId,

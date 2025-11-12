@@ -145,28 +145,34 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
       });
 
       if (data.length === 0) {
-        throw new Error('ไม่พบข้อมูลในไฟล์ Excel');
+        sendProgress({ type: 'error', error: 'ไม่พบข้อมูลในไฟล์ Excel' });
+        close();
+        return;
       }
 
-      // ตรวจสอบจำนวนคอลัมน์ในไฟล์
+      // ตรวจสอบจำนวนคอลัมน์ในไฟล์ (Import แบบเต็มต้องมีอย่างน้อย 10 คอลัมน์)
       const firstRow: any = data[0];
       const columnCount = Object.keys(firstRow).length;
       
       if (columnCount < 10) {
-        throw new Error(`ไฟล์นี้มีเพียง ${columnCount} คอลัมน์ ต้องมีอย่างน้อย 21 คอลัมน์`);
+        sendProgress({ 
+          type: 'error', 
+          error: `ไฟล์นี้มีเพียง ${columnCount} คอลัมน์ ซึ่งไม่ใช่ไฟล์ Template สำหรับ Import แบบเต็ม (ต้องมีอย่างน้อย 21 คอลัมน์)\n\nหากต้องการอัปเดตเฉพาะผู้สนับสนุน กรุณาเลือก "อัปเดตผู้สนับสนุนเท่านั้น" แทน` 
+        });
+        close();
+        return;
       }
 
       // ตรวจสอบว่ามี pos_code_master ในระบบหรือไม่
       const posCodeCount = await prisma.posCodeMaster.count();
       if (posCodeCount === 0) {
-        throw new Error('กรุณาเพิ่มข้อมูล POS Code Master ในระบบก่อน');
+        sendProgress({ 
+          type: 'error', 
+          error: 'กรุณาเพิ่มข้อมูล POS Code Master ในระบบก่อน (ใช้คำสั่ง npm run seed:poscode)' 
+        });
+        close();
+        return;
       }
-
-      // Update total rows
-      await prisma.importJob.update({
-        where: { id: jobId },
-        data: { totalRows: data.length }
-      });
 
       const results = {
         success: 0,
@@ -187,7 +193,15 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
       });
 
       const isUpdateMode = existingRecordsCount > 0;
-      console.log(`[Import] Job ${jobId}: ${isUpdateMode ? 'UPSERT' : 'INSERT'} mode (${existingRecordsCount} existing records)`);
+      console.log(`[Import] Year ${importYear}: ${isUpdateMode ? 'UPSERT' : 'INSERT'} mode (${existingRecordsCount} existing records)`);
+      
+      // Send initial progress
+      sendProgress({
+        type: 'progress',
+        current: 0,
+        total: data.length,
+        message: isUpdateMode ? 'กำลัง UPSERT ข้อมูลปี ' + importYear + '...' : 'กำลังนำเข้าข้อมูลปี ' + importYear + ' ใหม่...'
+      });
 
       // นำเข้าข้อมูลแบบ batch เพื่อความเร็ว
       // ลด batch size ลงเพื่อป้องกัน connection timeout บน production
@@ -301,23 +315,21 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
           });
         }
 
-        // Update progress in database
-        await prisma.importJob.update({
-          where: { id: jobId },
-          data: {
-            processedRows: endIndex,
-            successRows: results.success,
-            failedRows: results.failed,
-            updatedRows: results.updated,
-            errors: results.errors.length > 0 ? JSON.stringify(results.errors.slice(0, 100)) : null
-          }
+        console.log(`Batch ${batchIndex + 1}/${totalBatches} completed (${endIndex}/${data.length} records)`);
+        results.totalProcessed = endIndex;
+
+        // Send progress update
+        sendProgress({
+          type: 'progress',
+          current: endIndex,
+          total: data.length,
+          batch: batchIndex + 1,
+          totalBatches: totalBatches,
         });
 
-        console.log(`[Import] Job ${jobId}: Batch ${batchIndex + 1}/${totalBatches} completed (${endIndex}/${data.length})`);
-
-        // Delay เล็กน้อย
+        // เพิ่ม delay เล็กน้อยระหว่าง batch เพื่อป้องกัน connection overload
         if (batchIndex < totalBatches - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 100)); // delay 100ms
         }
 
       } catch (batchError: any) {
@@ -376,32 +388,32 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
       }
     }
 
-      // Complete job
       const successMessage = isUpdateMode 
-        ? `อัปเดตข้อมูลปี ${importYear} สำเร็จ: ${results.success} รายการ (อัปเดต ${results.updated} รายการ, ล้มเหลว ${results.failed} รายการ)`
-        : `นำเข้าข้อมูลปี ${importYear} ใหม่สำเร็จ ${results.success} รายการ (ล้มเหลว ${results.failed} รายการ)`;
-
-      await prisma.importJob.update({
-        where: { id: jobId },
-        data: {
-          status: 'completed',
-          completedAt: new Date(),
-          errorMessage: successMessage
-        }
-      });
-
-      console.log(`[Import] Job ${jobId}: Completed - ${successMessage}`);
-
-    } catch (error: any) {
-      console.error(`[Import] Job ${jobId} error:`, error);
+        ? `อัปเดตข้อมูลปี ${importYear} สำเร็จ: แทนที่ ${results.deleted} แถว ด้วยข้อมูลใหม่ ${results.success} แถว (ล้มเหลว ${results.failed} แถว)`
+        : `นำเข้าข้อมูลปี ${importYear} ใหม่สำเร็จ ${results.success} แถว (ล้มเหลว ${results.failed} แถว)`;
       
-      await prisma.importJob.update({
-        where: { id: jobId },
-        data: {
-          status: 'failed',
-          completedAt: new Date(),
-          errorMessage: error.message || 'เกิดข้อผิดพลาด'
-        }
+      sendProgress({
+        type: 'complete',
+        success: true,
+        message: successMessage,
+        results,
       });
+    } catch (error: any) {
+      console.error('Import error:', error);
+      sendProgress({
+        type: 'error',
+        error: error.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล'
+      });
+    } finally {
+      close();
     }
+  })();
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }

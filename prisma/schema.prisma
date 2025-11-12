@@ -47,6 +47,11 @@ model PosCodeMaster {
 model PolicePersonnel {
   id             String         @id @default(cuid())
   noId           Int?           @map("no_id")
+  
+  // ข้อมูลปี (Year & Status) - สำหรับเก็บข้อมูลประวัติข้ามปี
+  year           Int            @default(2024) // ปีที่บันทึกข้อมูล (พ.ศ.)
+  isActive       Boolean        @default(true) @map("is_active") // ข้อมูลปัจจุบันหรือไม่
+  
   // ข้อมูลตำแหน่ง (Position Information)
   posCodeId      Int?           @map("pos_code") // รหัสตำแหน่ง (FK to PosCodeMaster)
   posCodeMaster  PosCodeMaster? @relation(fields: [posCodeId], references: [id])
@@ -88,6 +93,11 @@ model PolicePersonnel {
   createdBy String?  @map("created_by") // ผู้สร้างข้อมูล
   updatedBy String?  @map("updated_by") // ผู้แก้ไขข้อมูล
 
+  @@unique([nationalId, year], name: "nationalId_year") // UPSERT key: คนเดียวกันในปีเดียวกันต้องไม่ซ้ำ
+  @@index([year])
+  @@index([isActive])
+  @@index([year, isActive])
+  @@index([nationalId, year]) // สำหรับหาประวัติบุคคลข้ามปี
   @@index([posCodeId])
   @@index([nationalId])
   @@index([rank])
@@ -246,4 +256,42 @@ model SwapTransactionDetail {
   @@index([posCodeId])
   @@index([sequence])
   @@map("swap_transaction_detail")
+}
+
+// Import Job (Background Job สำหรับ Import Personnel)
+// ใช้สำหรับ track progress และ status ของการ import ข้อมูล
+model ImportJob {
+  id            String   @id @default(cuid())
+  year          Int      // ปีที่ import
+  importMode    String   @default("full") // full, supporter
+  status        String   @default("pending") // pending, processing, completed, failed, cancelled
+  
+  // Progress tracking
+  totalRows     Int      @default(0) // จำนวนแถวทั้งหมด
+  processedRows Int      @default(0) // จำนวนแถวที่ประมวลผลแล้ว
+  successRows   Int      @default(0) // จำนวนแถวที่สำเร็จ
+  failedRows    Int      @default(0) // จำนวนแถวที่ล้มเหลว
+  updatedRows   Int      @default(0) // จำนวนแถวที่ update (สำหรับ UPSERT mode)
+  
+  // File info
+  fileName      String?  @map("file_name") // ชื่อไฟล์
+  fileSize      Int?     @map("file_size") // ขนาดไฟล์ (bytes)
+  
+  // Error tracking
+  errors        String?  @db.Text // JSON array ของ errors
+  errorMessage  String?  @db.Text @map("error_message") // error message หลัก (ถ้า job fail)
+  
+  // Timestamps
+  startedAt     DateTime? @map("started_at") // เวลาเริ่มประมวลผล
+  completedAt   DateTime? @map("completed_at") // เวลาเสร็จสิ้น
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  // Audit
+  createdBy     String?  @map("created_by") // ผู้สร้าง job
+  
+  @@index([status])
+  @@index([year])
+  @@index([createdAt])
+  @@map("import_job")
 }

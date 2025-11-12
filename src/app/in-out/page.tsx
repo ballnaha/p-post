@@ -173,6 +173,16 @@ export default function InOutPage() {
       if (result.success) {
         setData(result.data);
         
+        // Debug: ตรวจสอบข้อมูลที่ได้รับ
+        console.log('In-Out Data:', result.data.swapDetails?.slice(0, 3));
+        console.log('Sample with toPosition:', result.data.swapDetails?.find((d: any) => d.toPosition));
+        console.log('All fields check:', result.data.swapDetails?.[0] && {
+          fromPosition: result.data.swapDetails[0].fromPosition,
+          toPosition: result.data.swapDetails[0].toPosition,
+          posCodeId: result.data.swapDetails[0].posCodeId,
+          toPosCodeId: result.data.swapDetails[0].toPosCodeId,
+        });
+        
         // Fetch replaced persons for all swap details
         if (result.data.swapDetails && result.data.swapDetails.length > 0) {
           fetchReplacedPersons(result.data.swapDetails);
@@ -201,17 +211,60 @@ export default function InOutPage() {
         if (response.ok) {
           const result = await response.json();
           if (result.success && result.data.swapDetails) {
-            // For each detail in current page, find who they replaced
-            swappedDetails
-              .filter(d => d.transaction!.id === transactionId)
-              .forEach(detail => {
-                const replaced = result.data.swapDetails.find((d: SwapDetail) => 
-                  d.id !== detail.id && d.posCodeId === detail.toPosCodeId
-                );
-                if (replaced) {
-                  newMap.set(detail.id, replaced);
+            // For each detail in current page, find who previously held the NEW position
+            // (คนที่เราไปแทน = คนที่เดิมอยู่ในตำแหน่งใหม่ของเรา)
+            const txDetails: SwapDetail[] = swappedDetails.filter(d => d.transaction!.id === transactionId);
+            const rawTxDetails: SwapDetail[] = result.data.swapDetails;
+            const swapTypeFromApi: string | undefined = result?.data?.swapType;
+            const isTwoWay = swapTypeFromApi === 'two-way' && rawTxDetails.length >= 2;
+            
+            console.log('[In-Out] Transaction debug', {
+              transactionId,
+              swapType: swapTypeFromApi,
+              apiRecords: rawTxDetails.length,
+              apiDetails: rawTxDetails.map(d => ({ id: d.id, fullName: d.fullName })),
+              pageRecords: txDetails.length,
+              pageDetails: txDetails.map(d => ({ id: d.id, fullName: d.fullName }))
+            });
+
+            txDetails.forEach(detail => {
+              let replaced: SwapDetail | undefined;
+
+              if (isTwoWay) {
+                // Two-way: ใช้ personnelId หรือ nationalId ในการ match (เพราะ ID ของ detail ไม่ตรงกัน)
+                if (rawTxDetails.length === 2) {
+                  // เอาคนอื่นใน transaction (match by personnelId or nationalId)
+                  replaced = rawTxDetails.find(d => 
+                    d.personnelId !== detail.personnelId || 
+                    d.nationalId !== detail.nationalId
+                  );
+                  console.log('[In-Out] Two-way match by personnelId:', {
+                    person: detail.fullName,
+                    personPersonnelId: detail.personnelId,
+                    personNationalId: detail.nationalId,
+                    otherPerson: replaced?.fullName || 'NOT FOUND',
+                    otherPersonnelId: replaced?.personnelId,
+                    otherNationalId: replaced?.nationalId
+                  });
+                } else if (detail.toPosCodeId) {
+                  // Fallback: ใช้ posCode
+                  replaced = rawTxDetails.find((d: SwapDetail) => 
+                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                    d.posCodeId === detail.toPosCodeId
+                  );
                 }
-              });
+              } else {
+                // ไม่ใช่ two-way: match by toPosCodeId (และต้องไม่ใช่คนเดิม)
+                replaced = rawTxDetails.find((d: SwapDetail) => 
+                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                  d.posCodeId === detail.toPosCodeId
+                );
+              }
+
+              if (replaced) {
+                newMap.set(detail.id, replaced);
+              }
+            });
           }
         }
       } catch (error) {
@@ -275,6 +328,13 @@ export default function InOutPage() {
     setPage(0);
   };
 
+  // รวมข้อความสั้นให้อยู่บรรทัดเดียว คั่นด้วยสัญลักษณ์จุด
+  const joinInline = (...parts: (string | null | undefined)[]) =>
+    parts
+      .map(p => (typeof p === 'string' ? p.trim() : p))
+      .filter((p): p is string => !!p && p.length > 0)
+      .join(' · ');
+
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return '-';
     
@@ -302,6 +362,8 @@ export default function InOutPage() {
       case 'two-way': return 'สลับ 2 คน';
       case 'three-way': return 'สามเส้า';
       case 'multi-way': return 'หลายคน';
+      case 'promotion': return 'เลื่อนตำแหน่ง';
+      case 'promotion-chain': return 'เลื่อนตำแหน่งแบบลูกโซ่';
       default: return type;
     }
   };
@@ -483,10 +545,10 @@ export default function InOutPage() {
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ width: 50, py: 1 }}>#</TableCell>
-                  <TableCell sx={{ width: 80, py: 1 }}>ยศ</TableCell>
-                  <TableCell sx={{ minWidth: 150, py: 1 }}>ชื่อ-สกุล</TableCell>
-                  <TableCell sx={{ minWidth: 180, py: 1 }}>ตำแหน่งเก่า</TableCell>
-                  <TableCell sx={{ minWidth: 180, py: 1 }}>ตำแหน่งใหม่</TableCell>
+                  
+                  <TableCell sx={{ minWidth: 260, py: 1 }}>ชื่อ-สกุล / ตำแหน่งเดิม</TableCell>
+                  <TableCell sx={{ minWidth: 220, py: 1 }}>ตำแหน่งใหม่</TableCell>
+                  <TableCell sx={{ width: 120, py: 1 }}>ประเภท</TableCell>
                   <TableCell align="center" sx={{ width: 80, py: 1 }}>ดูข้อมูล</TableCell>
                 </TableRow>
               </TableHead>
@@ -519,64 +581,78 @@ export default function InOutPage() {
                           {page * rowsPerPage + index + 1}
                         </Typography>
                       </TableCell>
-                      <TableCell sx={{ py: 1.5 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem' }}>
-                          {detail.rank || '-'}
+                      
+                      <TableCell sx={{ py: 1.25 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                          {joinInline(detail.rank || '-', detail.fullName || '-')}
                         </Typography>
-                      </TableCell>
-                      <TableCell sx={{ py: 1.5 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem' }}>
-                          {detail.fullName || '-'}
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
+                          {(() => {
+                            const code = detail.posCodeMaster ? `${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}` : '';
+                            const unit = detail.fromUnit ? `หน่วย: ${detail.fromUnit}` : '';
+                            return joinInline(code, detail.fromPosition || undefined, unit) || '-';
+                          })()}
                         </Typography>
                         {detail.nationalId && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                            {detail.nationalId}
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.25 }}>
+                            เลขบัตร: {detail.nationalId}
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell sx={{ py: 1.5 }}>
-                        <Box>
-                          {detail.posCodeMaster && (
-                            <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main', fontSize: '0.8125rem', mb: 0.3 }}>
-                              {detail.posCodeMaster.id} - {detail.posCodeMaster.name}
-                            </Typography>
-                          )}
-                          {detail.fromPosition && (
-                            <Typography variant="caption" sx={{ fontSize: '0.75rem', display: 'block', mb: 0.2 }}>
-                              {detail.fromPosition}
-                            </Typography>
-                          )}
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                            หน่วย: {detail.fromUnit || '-'}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ py: 1.5, bgcolor: detail.toPosCodeMaster ? alpha('#4caf50', 0.05) : 'transparent' }}>
-                        {detail.toPosCodeMaster ? (
+                      <TableCell sx={{ py: 1.25, bgcolor: (detail.toPosCodeMaster || detail.toPosition) ? alpha('#4caf50', 0.05) : 'transparent' }}>
+                        {(detail.toPosCodeMaster || detail.toPosition) ? (
                           <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', fontSize: '0.8125rem', mb: 0.3 }}>
-                              {detail.toPosCodeMaster.id} - {detail.toPosCodeMaster.name}
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', fontSize: '0.8rem' }}>
+                              {(() => {
+                                const code = detail.toPosCodeMaster ? `${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}` : '';
+                                const unit = detail.toUnit ? `หน่วย: ${detail.toUnit}` : '';
+                                return joinInline(code, detail.toPosition || undefined, unit);
+                              })()}
                             </Typography>
-                            {detail.toPosition && (
-                              <Typography variant="caption" sx={{ fontSize: '0.75rem', display: 'block', mb: 0.2, fontWeight: 500 }}>
-                                {detail.toPosition}
-                              </Typography>
-                            )}
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', mb: 0.3 }}>
-                              หน่วย: {detail.toUnit || '-'}
-                            </Typography>
-                            {replacedPersonsMap.get(detail.id) && (
-                              <Box sx={{ mt: 0.5, p: 0.5, bgcolor: alpha('#ff9800', 0.1), borderRadius: 0.5, border: 1, borderColor: alpha('#ff9800', 0.3) }}>
-                                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'warning.dark', fontWeight: 600 }}>
-                                  แทน: {replacedPersonsMap.get(detail.id)?.rank} {replacedPersonsMap.get(detail.id)?.fullName}
-                                </Typography>
-                              </Box>
-                            )}
+                            {/* ผู้ที่เดิมครองตำแหน่งนี้ */}
+                            <Box sx={{ mt: 0.4 }}>
+                              {(() => {
+                                const replaced = replacedPersonsMap.get(detail.id);
+                                if (replaced) {
+                                  return (
+                                    <Typography variant="caption" sx={{ fontSize: '0.62rem', color: 'warning.dark', fontWeight: 600 }}>
+                                      เดิม: {joinInline(replaced.rank || '', replaced.fullName || '')}
+                                    </Typography>
+                                  );
+                                }
+                                // ถ้ามี toPosCode แต่ไม่มี replaced และเป็น two-way ถือว่า fallback ล้มเหลว -> แสดงข้อความเฉพาะ
+                                if (detail.transaction?.swapType === 'two-way' && detail.toPosCodeId) {
+                                  return (
+                                    <Typography variant="caption" color="error.main" sx={{ fontSize: '0.62rem', fontStyle: 'italic' }}>
+                                      เดิม: ข้อมูลไม่พบ (ตรวจสอบข้อมูล transaction)
+                                    </Typography>
+                                  );
+                                }
+                                return (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem', fontStyle: 'italic' }}>
+                                    เดิม: ตำแหน่งว่าง
+                                  </Typography>
+                                );
+                              })()}
+                            </Box>
                           </Box>
                         ) : (
-                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.75rem', fontStyle: 'italic' }}>
+                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', fontStyle: 'italic' }}>
                             ยังไม่ได้สลับตำแหน่ง
                           </Typography>
+                        )}
+                      </TableCell>
+                      
+                      {/* ประเภทการสลับ */}
+                      <TableCell sx={{ py: 1.5 }}>
+                        {detail.transaction ? (
+                          <Chip 
+                            label={getSwapTypeLabel(detail.transaction.swapType)}
+                            size="small"
+                            color={detail.transaction.swapType === 'three-way' ? 'warning' : (detail.transaction.swapType === 'promotion' ? 'info' : 'primary')}
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.disabled">-</Typography>
                         )}
                       </TableCell>
                       <TableCell align="center" sx={{ py: 1.5 }}>

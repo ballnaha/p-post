@@ -94,25 +94,21 @@ export async function GET(request: NextRequest) {
             personnelWhere.AND = andConditions;
         }
 
-        // Get total count
-        const totalCount = await prisma.policePersonnel.count({ where: personnelWhere });
-
-        // Fetch all personnel with pagination
+        // Fetch all personnel (ข้อมูลปัจจุบัน - ปีปัจจุบันและ active เท่านั้น)
+        const currentBuddhistYear = new Date().getFullYear() + 543;
         const personnel = await prisma.policePersonnel.findMany({
-            where: personnelWhere,
+            where: {
+                ...personnelWhere,
+                year: currentBuddhistYear,
+                isActive: true
+            },
             include: {
                 posCodeMaster: true,
             },
-            orderBy: [
-                { unit: 'asc' },
-                { rank: 'asc' },
-                { fullName: 'asc' },
-            ],
-            skip: page * pageSize,
-            take: pageSize,
         });
 
-        // Fetch swap details for the selected year to match with personnel
+        // Fetch swap details for the selected year
+        // รวมทุกประเภท: two-way, three-way, multi-way, promotion, promotion-chain
         const swapDetails = await prisma.swapTransactionDetail.findMany({
             where: {
                 transaction: {
@@ -127,17 +123,49 @@ export async function GET(request: NextRequest) {
             },
         });
 
-        // Create a map of personnelId to swap detail
-        const swapMap = new Map();
+        // สร้าง Map สำหรับจับคู่ข้อมูล (ใช้หลายเงื่อนไข)
+        const swapByPersonnelId = new Map();
+        const swapByNationalId = new Map();
+        const swapByNameRank = new Map();
+        
         swapDetails.forEach(detail => {
             if (detail.personnelId) {
-                swapMap.set(detail.personnelId, detail);
+                swapByPersonnelId.set(detail.personnelId, detail);
+            }
+            if (detail.nationalId) {
+                swapByNationalId.set(detail.nationalId, detail);
+            }
+            if (detail.fullName && detail.rank) {
+                const key = `${detail.rank}|${detail.fullName}`;
+                swapByNameRank.set(key, detail);
             }
         });
 
-        // Combine personnel with their swap information
-        const combinedData = personnel.map(person => {
-            const swapInfo = swapMap.get(person.id);
+        // Function สำหรับหา swap info ที่ตรงกับ person
+        const findSwapInfo = (person: any) => {
+            // 1. ลองจับคู่ด้วย personnelId
+            let swapInfo = swapByPersonnelId.get(person.id);
+            if (swapInfo) return swapInfo;
+            
+            // 2. ลองจับคู่ด้วย nationalId
+            if (person.nationalId) {
+                swapInfo = swapByNationalId.get(person.nationalId);
+                if (swapInfo) return swapInfo;
+            }
+            
+            // 3. ลองจับคู่ด้วย rank + fullName
+            if (person.rank && person.fullName) {
+                const key = `${person.rank}|${person.fullName}`;
+                swapInfo = swapByNameRank.get(key);
+                if (swapInfo) return swapInfo;
+            }
+            
+            return null;
+        };
+
+        // Part 1: รวมข้อมูลจาก police_personnel + swap info
+        const personnelWithSwap = personnel.map(person => {
+            const swapInfo = findSwapInfo(person);
             
             return {
                 id: person.id,
@@ -157,15 +185,15 @@ export async function GET(request: NextRequest) {
                 trainingLocation: person.trainingLocation,
                 trainingCourse: person.trainingCourse,
                 
-                // ตำแหน่งเดิม (จาก police_personnel)
-                posCodeId: person.posCodeId,
-                posCodeMaster: person.posCodeMaster,
-                fromPosition: person.position,
-                fromPositionNumber: person.positionNumber,
-                fromUnit: person.unit,
-                fromActingAs: person.actingAs,
+                // ตำแหน่งเดิม - ใช้จาก swap ถ้ามี (เพราะเป็น snapshot ที่ถูกต้อง)
+                posCodeId: swapInfo?.posCodeId || person.posCodeId,
+                posCodeMaster: swapInfo?.posCodeMaster || person.posCodeMaster,
+                fromPosition: swapInfo?.fromPosition || person.position,
+                fromPositionNumber: swapInfo?.fromPositionNumber || person.positionNumber,
+                fromUnit: swapInfo?.fromUnit || person.unit,
+                fromActingAs: swapInfo?.fromActingAs || person.actingAs,
                 
-                // ตำแหน่งใหม่ (จาก swap_transaction_detail ถ้ามี)
+                // ตำแหน่งใหม่ - มีเฉพาะคนที่สลับแล้ว
                 toPosCodeId: swapInfo?.toPosCodeId || null,
                 toPosCodeMaster: swapInfo?.toPosCodeMaster || null,
                 toPosition: swapInfo?.toPosition || null,
@@ -173,7 +201,7 @@ export async function GET(request: NextRequest) {
                 toUnit: swapInfo?.toUnit || null,
                 toActingAs: swapInfo?.toActingAs || null,
                 
-                // Transaction info (ถ้ามี)
+                // Transaction info
                 transaction: swapInfo ? {
                     id: swapInfo.transaction.id,
                     year: swapInfo.transaction.year,
@@ -182,13 +210,139 @@ export async function GET(request: NextRequest) {
                     groupNumber: swapInfo.transaction.groupNumber,
                 } : null,
                 
-                // Flag สำหรับการเรียงลำดับ
                 hasSwapped: !!swapInfo,
+                source: 'personnel' as const,
             };
         });
 
-        // เรียงลำดับ: คนที่สลับแล้วขึ้นก่อน
-        combinedData.sort((a, b) => {
+        // Part 2: หาคนที่สลับแล้วแต่ไม่อยู่ใน police_personnel (เช่น ลาออก/เกษียณ)
+        const personnelIds = new Set(personnel.map(p => p.id));
+        const personnelNationalIds = new Set(personnel.map(p => p.nationalId).filter(Boolean));
+        const personnelNameRanks = new Set(
+            personnel.map(p => p.rank && p.fullName ? `${p.rank}|${p.fullName}` : null).filter(Boolean)
+        );
+
+        const swappedButNotInPersonnel = swapDetails
+            .filter(detail => {
+                // ตรวจสอบว่าคนนี้ไม่อยู่ใน personnel แล้ว
+                if (detail.personnelId && personnelIds.has(detail.personnelId)) return false;
+                if (detail.nationalId && personnelNationalIds.has(detail.nationalId)) return false;
+                if (detail.rank && detail.fullName) {
+                    const key = `${detail.rank}|${detail.fullName}`;
+                    if (personnelNameRanks.has(key)) return false;
+                }
+                return true;
+            })
+            .map(detail => ({
+                id: detail.id,
+                personnelId: detail.personnelId || detail.id,
+                fullName: detail.fullName,
+                rank: detail.rank,
+                nationalId: detail.nationalId,
+                age: detail.age,
+                seniority: detail.seniority,
+                birthDate: detail.birthDate,
+                education: detail.education,
+                lastAppointment: detail.lastAppointment,
+                currentRankSince: detail.currentRankSince,
+                enrollmentDate: detail.enrollmentDate,
+                retirementDate: detail.retirementDate,
+                yearsOfService: detail.yearsOfService,
+                trainingLocation: detail.trainingLocation,
+                trainingCourse: detail.trainingCourse,
+                
+                // ตำแหน่งเดิม
+                posCodeId: detail.posCodeId,
+                posCodeMaster: detail.posCodeMaster,
+                fromPosition: detail.fromPosition,
+                fromPositionNumber: detail.fromPositionNumber,
+                fromUnit: detail.fromUnit,
+                fromActingAs: detail.fromActingAs,
+                
+                // ตำแหน่งใหม่
+                toPosCodeId: detail.toPosCodeId,
+                toPosCodeMaster: detail.toPosCodeMaster,
+                toPosition: detail.toPosition,
+                toPositionNumber: detail.toPositionNumber,
+                toUnit: detail.toUnit,
+                toActingAs: detail.toActingAs,
+                
+                // Transaction info
+                transaction: {
+                    id: detail.transaction.id,
+                    year: detail.transaction.year,
+                    swapDate: detail.transaction.swapDate,
+                    swapType: detail.transaction.swapType,
+                    groupNumber: detail.transaction.groupNumber,
+                },
+                
+                hasSwapped: true,
+                source: 'swap_only' as const, // คนที่ไม่อยู่ใน personnel แล้ว
+            }));
+
+        // รวมข้อมูลทั้ง 2 ส่วน
+        let combinedData = [...personnelWithSwap, ...swappedButNotInPersonnel];
+
+        // หาคนเดิมที่ดำรงตำแหน่งใหม่ (คนที่ถูกแทนที่)
+        // สร้าง Map: toPosCodeId -> คนเดิมที่อยู่ตำแหน่งนั้น
+        const replacedPersonMap = new Map();
+        swapDetails.forEach(detail => {
+            if (detail.toPosCodeId) {
+                // หาคนที่เคยอยู่ในตำแหน่งนี้ (posCodeId ของคนอื่น = toPosCodeId ของคนนี้)
+                const previousPerson = swapDetails.find(d => 
+                    d.id !== detail.id && 
+                    d.posCodeId === detail.toPosCodeId &&
+                    d.transaction.id === detail.transaction.id // ต้องอยู่ใน transaction เดียวกัน
+                );
+                if (previousPerson) {
+                    replacedPersonMap.set(detail.id, {
+                        rank: previousPerson.rank,
+                        fullName: previousPerson.fullName,
+                        nationalId: previousPerson.nationalId,
+                    });
+                }
+            }
+        });
+
+        // เพิ่มข้อมูลคนที่ถูกแทนที่เข้าไปใน combinedData
+        combinedData = combinedData.map(item => ({
+            ...item,
+            replacedPerson: replacedPersonMap.get(item.id) || null,
+        }));
+
+        // Debug: ตรวจสอบข้อมูลที่มี toPosition
+        const withToPosition = combinedData.filter(d => d.toPosition);
+        console.log(`Total records: ${combinedData.length}, With toPosition: ${withToPosition.length}`);
+        if (withToPosition.length > 0) {
+            console.log('Sample with toPosition:', {
+                fullName: withToPosition[0].fullName,
+                fromPosition: withToPosition[0].fromPosition,
+                toPosition: withToPosition[0].toPosition,
+                toPosCodeMaster: withToPosition[0].toPosCodeMaster,
+                replacedPerson: withToPosition[0].replacedPerson,
+            });
+        }
+
+        // Filter by search text (in memory)
+        let filteredData = combinedData;
+        if (search) {
+            const searchLower = search.toLowerCase();
+            filteredData = filteredData.filter(d => 
+                d.fullName?.toLowerCase().includes(searchLower) ||
+                d.nationalId?.toLowerCase().includes(searchLower) ||
+                d.rank?.toLowerCase().includes(searchLower) ||
+                d.fromUnit?.toLowerCase().includes(searchLower) ||
+                d.toUnit?.toLowerCase().includes(searchLower) ||
+                d.fromPosition?.toLowerCase().includes(searchLower) ||
+                d.toPosition?.toLowerCase().includes(searchLower)
+            );
+        }
+
+        // Get total count after filtering
+        const totalCount = filteredData.length;
+
+        // เรียงลำดับ: คนที่มีตำแหน่งใหม่ (hasSwapped) ขึ้นก่อน
+        filteredData.sort((a, b) => {
             // เรียงตาม hasSwapped ก่อน (true ขึ้นก่อน)
             if (a.hasSwapped !== b.hasSwapped) {
                 return b.hasSwapped ? 1 : -1;
@@ -203,9 +357,16 @@ export async function GET(request: NextRequest) {
             return (a.fullName || '').localeCompare(b.fullName || '');
         });
 
-        // Get unique units
+        // Apply pagination AFTER sorting
+        const paginatedData = filteredData.slice(page * pageSize, (page + 1) * pageSize);
+
+        // Get unique units from personnel (current year & active only)
         const units = await prisma.policePersonnel.findMany({
-            where: { unit: { not: null } },
+            where: { 
+                unit: { not: null },
+                year: currentBuddhistYear,
+                isActive: true
+            },
             select: { unit: true },
             distinct: ['unit'],
             orderBy: { unit: 'asc' },
@@ -219,7 +380,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             data: {
-                swapDetails: combinedData,
+                swapDetails: paginatedData,
                 totalCount,
                 page,
                 pageSize,

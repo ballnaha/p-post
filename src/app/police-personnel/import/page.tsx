@@ -222,6 +222,10 @@ export default function ImportPolicePersonnelPage() {
                     setFile(null);
                     setResult(null);
                     setError('');
+                    // Reset file input
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
                   }
                 }}
                 aria-label="import mode"
@@ -229,7 +233,7 @@ export default function ImportPolicePersonnelPage() {
               >
                 <ToggleButton value="full" aria-label="full import">
                   <RefreshIcon sx={{ mr: 1 }} />
-                  Import แบบเต็ม (ลบข้อมูลเดิมทั้งหมด)
+                  Import แบบเต็ม (ไม่ลบข้อมูลเดิม)
                 </ToggleButton>
                 <ToggleButton value="supporter" aria-label="supporter update">
                   <UpdateIcon sx={{ mr: 1 }} />

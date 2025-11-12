@@ -44,6 +44,13 @@ export async function GET(request: NextRequest) {
             fromPositionNumber: true,
             fromUnit: true,
             fromActingAs: true,
+            toPosCodeId: true,
+            toPosCodeMaster: {
+              select: {
+                id: true,
+                name: true,
+              }
+            },
             toPosition: true,
             toPositionNumber: true,
             toUnit: true,
@@ -158,11 +165,16 @@ export async function POST(request: NextRequest) {
             // ข้อมูลการฝึกอบรม
             trainingLocation: detail.trainingLocation,
             trainingCourse: detail.trainingCourse,
-            // ตำแหน่ง
+            // ข้อมูลการเสนอชื่อ
+            supportName: detail.supportName,
+            supportReason: detail.supportReason,
+            // ตำแหน่งเดิม (From)
             fromPosition: detail.fromPosition,
             fromPositionNumber: detail.fromPositionNumber,
             fromUnit: detail.fromUnit,
             fromActingAs: detail.fromActingAs,
+            // ตำแหน่งใหม่ (To)
+            toPosCodeId: detail.toPosCodeId,
             toPosition: detail.toPosition,
             toPositionNumber: detail.toPositionNumber,
             toUnit: detail.toUnit,

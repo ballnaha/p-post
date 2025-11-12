@@ -246,19 +246,51 @@ export default function InOutPage() {
                     otherPersonnelId: replaced?.personnelId,
                     otherNationalId: replaced?.nationalId
                   });
-                } else if (detail.toPosCodeId) {
-                  // Fallback: ใช้ posCode
+                } else if (detail.toPositionNumber) {
+                  // Fallback: ใช้ position_number
                   replaced = rawTxDetails.find((d: SwapDetail) => 
                     (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                    d.posCodeId === detail.toPosCodeId
+                    d.fromPositionNumber === detail.toPositionNumber
+                  );
+                } else if (detail.toPosition) {
+                  // Fallback: ใช้ position
+                  replaced = rawTxDetails.find((d: SwapDetail) => 
+                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                    d.fromPosition === detail.toPosition
                   );
                 }
               } else {
-                // ไม่ใช่ two-way: match by toPosCodeId (และต้องไม่ใช่คนเดิม)
-                replaced = rawTxDetails.find((d: SwapDetail) => 
-                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                  d.posCodeId === detail.toPosCodeId
-                );
+                // Three-way หรือ multi-way: หาคนที่ตำแหน่งเดิม (fromPosition/fromPositionNumber) ตรงกับตำแหน่งใหม่ของเรา (toPosition/toPositionNumber)
+                // ลำดับความสำคัญ: position_number > position (เพราะ position_number แม่นยำกว่า)
+                if (detail.toPositionNumber) {
+                  // ใช้ position_number ในการ match (แม่นยำที่สุด)
+                  replaced = rawTxDetails.find((d: SwapDetail) => 
+                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                    d.fromPositionNumber === detail.toPositionNumber
+                  );
+                } else if (detail.toPosition) {
+                  // ถ้าไม่มี toPositionNumber ให้ match จาก position
+                  replaced = rawTxDetails.find((d: SwapDetail) => 
+                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                    d.fromPosition === detail.toPosition
+                  );
+                }
+                
+                console.log('[In-Out] Three-way match:', {
+                  person: detail.fullName,
+                  toPosition: detail.toPosition,
+                  toPositionNumber: detail.toPositionNumber,
+                  replaced: replaced?.fullName || 'NOT FOUND',
+                  replacedFromPosition: replaced?.fromPosition,
+                  replacedFromPositionNumber: replaced?.fromPositionNumber,
+                  allDetails: rawTxDetails.map(d => ({ 
+                    name: d.fullName, 
+                    fromPosition: d.fromPosition,
+                    fromPositionNumber: d.fromPositionNumber,
+                    toPosition: d.toPosition,
+                    toPositionNumber: d.toPositionNumber
+                  }))
+                });
               }
 
               if (replaced) {
@@ -504,7 +536,7 @@ export default function InOutPage() {
             <TextField
               fullWidth
               label="ค้นหา"
-              placeholder="ค้นหาชื่อ, นามสกุล, ยศ, เลขบัตร, หน่วย, ตำแหน่ง..."
+              placeholder="ค้นหาชื่อ, นามสกุล, ยศ, เลขตำแหน่ง, หน่วย, ตำแหน่ง..."
               size="small"
               value={searchText}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -524,12 +556,22 @@ export default function InOutPage() {
                 },
               }}
             />
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={() => fetchData()}
+              startIcon={<RefreshIcon />}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              โหลดข้อมูลใหม่
+            </Button>
             {(searchText || selectedUnit !== 'all' || selectedPosCode !== 'all' || selectedStatus !== 'all') && (
               <Button
                 variant="outlined"
                 size="medium"
+                color="secondary"
                 onClick={handleResetFilters}
-                startIcon={<RefreshIcon />}
+                startIcon={<ClearIcon />}
                 sx={{ whiteSpace: 'nowrap' }}
               >
                 ล้างตัวกรอง
@@ -595,7 +637,7 @@ export default function InOutPage() {
                         </Typography>
                         {detail.nationalId && (
                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.25 }}>
-                            เลขบัตร: {detail.nationalId}
+                            เลขตำแหน่ง: {detail.nationalId}
                           </Typography>
                         )}
                       </TableCell>
@@ -620,8 +662,8 @@ export default function InOutPage() {
                                     </Typography>
                                   );
                                 }
-                                // ถ้ามี toPosCode แต่ไม่มี replaced และเป็น two-way ถือว่า fallback ล้มเหลว -> แสดงข้อความเฉพาะ
-                                if (detail.transaction?.swapType === 'two-way' && detail.toPosCodeId) {
+                                // ถ้ามี toPosCode แต่ไม่มี replaced และเป็น two-way หรือ three-way ถือว่า fallback ล้มเหลว -> แสดงข้อความเฉพาะ
+                                if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way') && detail.toPosCodeId) {
                                   return (
                                     <Typography variant="caption" color="error.main" sx={{ fontSize: '0.62rem', fontStyle: 'italic' }}>
                                       เดิม: ข้อมูลไม่พบ (ตรวจสอบข้อมูล transaction)

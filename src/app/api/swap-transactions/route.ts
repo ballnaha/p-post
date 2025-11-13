@@ -108,8 +108,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-  const body = await request.json();
-  const { year, swapDate, swapType, groupName, groupNumber, notes, swapDetails } = body;
+    const body = await request.json();
+    const { year, swapDate, swapType, groupName, groupNumber, notes, startingPersonnel, swapDetails } = body;
 
     // Validate
     const effectiveSwapType = swapType || 'two-way';
@@ -121,6 +121,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // สร้าง swapDetails array โดยเพิ่ม startingPersonnel เป็น sequence = 0 (สำหรับ promotion)
+    const allDetails: any[] = [];
+    
+    // ถ้าเป็น promotion ให้เพิ่ม startingPersonnel เป็น detail แรก (sequence = 0)
+    if ((swapType === 'promotion' || swapType === 'promotion-chain') && startingPersonnel) {
+      allDetails.push({
+        sequence: 0,
+        personnelId: startingPersonnel.id,
+        noId: startingPersonnel.noId ? parseInt(startingPersonnel.noId.toString()) : null,
+        nationalId: startingPersonnel.nationalId,
+        fullName: startingPersonnel.fullName,
+        rank: startingPersonnel.rank,
+        seniority: startingPersonnel.seniority,
+        posCodeId: startingPersonnel.posCodeId,
+        toPosCodeId: null,
+        fromPosition: startingPersonnel.position,
+        fromPositionNumber: startingPersonnel.positionNumber,
+        fromUnit: startingPersonnel.unit,
+        fromActingAs: startingPersonnel.actingAs,
+        toPosition: null,
+        toPositionNumber: null,
+        toUnit: null,
+        toActingAs: null,
+      });
+    }
+    
+    // เพิ่ม swapDetails ที่ส่งมา
+    swapDetails.forEach((detail: any, index: number) => {
+      allDetails.push({
+        sequence: detail.sequence !== undefined ? detail.sequence : ((swapType === 'three-way' || swapType === 'promotion' || swapType === 'promotion-chain') ? index + 1 : null),
+        personnelId: detail.personnelId,
+        noId: detail.noId ? parseInt(detail.noId.toString()) : null,
+        nationalId: detail.nationalId,
+        fullName: detail.fullName,
+        rank: detail.rank,
+        seniority: detail.seniority,
+        posCodeId: detail.posCodeId,
+        toPosCodeId: detail.toPosCodeId || null,
+        birthDate: detail.birthDate,
+        age: detail.age,
+        education: detail.education,
+        lastAppointment: detail.lastAppointment,
+        currentRankSince: detail.currentRankSince,
+        enrollmentDate: detail.enrollmentDate,
+        retirementDate: detail.retirementDate,
+        yearsOfService: detail.yearsOfService,
+        trainingLocation: detail.trainingLocation,
+        trainingCourse: detail.trainingCourse,
+        supportName: detail.supportName,
+        supportReason: detail.supportReason,
+        fromPosition: detail.fromPosition,
+        fromPositionNumber: detail.fromPositionNumber,
+        fromUnit: detail.fromUnit,
+        fromActingAs: detail.fromActingAs,
+        toPosition: detail.toPosition,
+        toPositionNumber: detail.toPositionNumber,
+        toUnit: detail.toUnit,
+        toActingAs: detail.toActingAs,
+        notes: detail.notes
+      });
+    });
+    
     // Create transaction with details
     const transaction = await prisma.swapTransaction.create({
       data: {
@@ -132,43 +194,7 @@ export async function POST(request: NextRequest) {
         status: 'completed',
         notes,
         swapDetails: {
-          create: swapDetails.map((detail: any, index: number) => ({
-            sequence: detail.sequence !== undefined ? detail.sequence : (swapType === 'three-way' ? index + 1 : null),
-            personnelId: detail.personnelId,
-            noId: detail.noId,
-            nationalId: detail.nationalId,
-            fullName: detail.fullName,
-            rank: detail.rank,
-            seniority: detail.seniority,
-            posCodeId: detail.posCodeId,
-            toPosCodeId: detail.toPosCodeId || null,
-            // ข้อมูลส่วนตัว
-            birthDate: detail.birthDate,
-            age: detail.age,
-            education: detail.education,
-            // ข้อมูลการแต่งตั้ง
-            lastAppointment: detail.lastAppointment,
-            currentRankSince: detail.currentRankSince,
-            enrollmentDate: detail.enrollmentDate,
-            retirementDate: detail.retirementDate,
-            yearsOfService: detail.yearsOfService,
-            // ข้อมูลการฝึกอบรม
-            trainingLocation: detail.trainingLocation,
-            trainingCourse: detail.trainingCourse,
-            // ข้อมูลการเสนอชื่อ
-            supportName: detail.supportName,
-            supportReason: detail.supportReason,
-            // ตำแหน่ง
-            fromPosition: detail.fromPosition,
-            fromPositionNumber: detail.fromPositionNumber,
-            fromUnit: detail.fromUnit,
-            fromActingAs: detail.fromActingAs,
-            toPosition: detail.toPosition,
-            toPositionNumber: detail.toPositionNumber,
-            toUnit: detail.toUnit,
-            toActingAs: detail.toActingAs,
-            notes: detail.notes
-          }))
+          create: allDetails
         }
       },
       include: {

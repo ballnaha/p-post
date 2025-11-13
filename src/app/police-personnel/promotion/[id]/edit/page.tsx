@@ -161,7 +161,11 @@ export default function EditPromotionPage() {
           return (a.fullName || "").localeCompare(b.fullName || "");
         });
 
-        const mappedNodes: ChainNode[] = sorted.map((d, index) => {
+        // แยก startingPersonnel (sequence = 0) ออกจาก chain nodes (sequence >= 1)
+        const startingDetail = sorted.find(d => d.sequence === 0);
+        const chainDetails = sorted.filter(d => d.sequence !== 0);
+
+        const mappedNodes: ChainNode[] = chainDetails.map((d, index) => {
           const fromRank = d.posCodeId ?? 0;
           const toRank = d.toPosCodeId ?? 0;
           return {
@@ -206,22 +210,40 @@ export default function EditPromotionPage() {
 
         setNodes(mappedNodes);
 
-        // Get starting personnel from first node
-        const first = mappedNodes[0];
-        setStartingPersonnel(first ? {
-          id: first.personnelId || "from-transaction",
-          noId: first.noId,
-          posCodeId: first.fromPosCodeId,
-          posCodeName: first.fromPosCodeName,
-          position: first.fromPosition,
-          unit: first.fromUnit,
-          positionNumber: first.fromPositionNumber,
-          actingAs: first.fromActingAs,
-          fullName: first.fullName,
-          rank: first.rank,
-          nationalId: first.nationalId,
-          seniority: first.seniority,
-        } : null);
+        // Get starting personnel from detail with sequence = 0
+        if (startingDetail) {
+          setStartingPersonnel({
+            id: startingDetail.personnelId || "from-transaction",
+            noId: startingDetail.noId || undefined,
+            posCodeId: startingDetail.posCodeId || 0,
+            posCodeName: startingDetail.posCodeMaster?.name || undefined,
+            position: startingDetail.fromPosition || "",
+            unit: startingDetail.fromUnit || "",
+            positionNumber: startingDetail.fromPositionNumber || undefined,
+            actingAs: startingDetail.fromActingAs || undefined,
+            fullName: startingDetail.fullName || "",
+            rank: startingDetail.rank || "",
+            nationalId: startingDetail.nationalId || "",
+            seniority: startingDetail.seniority || undefined,
+          });
+        } else {
+          // Fallback: ถ้าไม่มี detail sequence = 0 (ข้อมูลเก่า) ให้ดึงจาก node แรก
+          const first = mappedNodes[0];
+          setStartingPersonnel(first ? {
+            id: first.personnelId || "from-transaction",
+            noId: first.noId,
+            posCodeId: first.fromPosCodeId,
+            posCodeName: first.fromPosCodeName,
+            position: first.fromPosition,
+            unit: first.fromUnit,
+            positionNumber: first.fromPositionNumber,
+            actingAs: first.fromActingAs,
+            fullName: first.fullName,
+            rank: first.rank,
+            nationalId: first.nationalId,
+            seniority: first.seniority,
+          } : null);
+        }
 
         setTransaction(t);
         setGroupNotes(t.notes || '');
@@ -310,6 +332,21 @@ export default function EditPromotionPage() {
         groupNumber: transaction.groupNumber,
         status: transaction.status,
         notes: groupNotes.trim() || null,
+        // ข้อมูลบุคลากรที่จะเลื่อนตำแหน่ง
+        startingPersonnel: startingPersonnel ? {
+          id: startingPersonnel.id,
+          noId: startingPersonnel.noId,
+          fullName: startingPersonnel.fullName,
+          rank: startingPersonnel.rank,
+          nationalId: startingPersonnel.nationalId,
+          seniority: startingPersonnel.seniority,
+          posCodeId: startingPersonnel.posCodeId,
+          posCodeName: startingPersonnel.posCodeName,
+          position: startingPersonnel.position,
+          positionNumber: startingPersonnel.positionNumber,
+          unit: startingPersonnel.unit,
+          actingAs: startingPersonnel.actingAs,
+        } : null,
         swapDetails,
       };
 

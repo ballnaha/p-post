@@ -233,6 +233,32 @@ export async function GET(request: NextRequest) {
                     const key = `${detail.rank}|${detail.fullName}`;
                     if (personnelNameRanks.has(key)) return false;
                 }
+                
+                // ตรวจสอบว่าตรงกับ filter ที่เลือกหรือไม่
+                // Filter by unit (ตำแหน่งเดิม)
+                if (unit !== 'all' && detail.fromUnit !== unit) return false;
+                
+                // Filter by posCodeId (ตำแหน่งเดิม)
+                if (posCodeId !== 'all') {
+                    const posCodeIdNum = parseInt(posCodeId);
+                    if (!isNaN(posCodeIdNum) && detail.posCodeId !== posCodeIdNum) return false;
+                }
+                
+                // Filter by status
+                if (status !== 'all') {
+                    if (status === 'vacant') {
+                        // ตำแหน่งว่าง - ไม่มี rank
+                        if (detail.rank && detail.rank.trim() !== '') return false;
+                        if (detail.fullName && (detail.fullName.includes('ว่าง (กันตำแหน่ง)') || detail.fullName.includes('ว่าง(กันตำแหน่ง)'))) return false;
+                    } else if (status === 'reserved') {
+                        // ว่าง (กันตำแหน่ง)
+                        if (!detail.fullName || (!detail.fullName.includes('ว่าง (กันตำแหน่ง)') && !detail.fullName.includes('ว่าง(กันตำแหน่ง)'))) return false;
+                    } else if (status === 'occupied') {
+                        // มีคนดำรงตำแหน่ง
+                        if (!detail.rank || detail.rank.trim() === '') return false;
+                    }
+                }
+                
                 return true;
             })
             .map(detail => ({

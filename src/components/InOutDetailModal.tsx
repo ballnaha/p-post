@@ -94,7 +94,17 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return '-';
     
+    // ถ้าเป็นรูปแบบ DD/MM/YYYY ให้ตรวจสอบว่าเป็น พ.ศ. หรือ ค.ศ.
     if (typeof dateString === 'string' && dateString.includes('/')) {
+      const parts = dateString.split('/');
+      if (parts.length === 3) {
+        const year = parseInt(parts[2]);
+        // ถ้าปีน้อยกว่า 2500 แสดงว่าเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
+        if (!isNaN(year) && year < 2500) {
+          return `${parts[0]}/${parts[1]}/${year + 543}`;
+        }
+      }
+      // ถ้าเป็น พ.ศ. อยู่แล้ว หรือไม่สามารถ parse ได้ ให้ return ตรงๆ
       return dateString;
     }
     
@@ -203,7 +213,7 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
               <Box>
                 <Typography variant="caption" color="text.secondary" fontWeight={500}>ปี พ.ศ.</Typography>
                 <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }}>
-                  {detail.transaction.year}
+                  {detail.transaction.year > 2500 ? detail.transaction.year : detail.transaction.year + 543}
                 </Typography>
               </Box>
               <Box>

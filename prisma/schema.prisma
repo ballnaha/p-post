@@ -171,7 +171,7 @@ model SwapTransaction {
   id               String   @id @default(cuid())
   year             Int // ปีที่ทำการสลับ (พ.ศ.)
   swapDate         DateTime // วันที่ทำการสลับ
-  swapType         String   @default("two-way") // two-way, three-way, multi-way
+  swapType         String   @default("two-way") // two-way, three-way, multi-way, promotion-chain
   groupName        String?  @map("group_name") // ชื่อกลุ่ม เช่น "นาย A ⟷ นาย B"
   groupNumber      String?  @map("group_number") // เลขกลุ่ม เช่น "2568/001"
   status           String   @default("completed") // completed, pending, cancelled
@@ -194,14 +194,15 @@ model SwapTransaction {
 
 // Swap Transaction Detail (รายละเอียดการสลับของแต่ละคน)
 // เก็บข้อมูลว่าใครย้ายจากตำแหน่งไหนไปตำแหน่งไหน
-// รองรับทั้ง two-way และ three-way swap
+// รองรับทั้ง two-way, three-way swap และ promotion-chain
+// สำหรับ promotion-chain: sequence = 0 คือบุคลากรที่จะเลื่อนตำแหน่ง, sequence >= 1 คือลูกโซ่
 model SwapTransactionDetail {
   id              String @id @default(cuid())
   transactionId   String @map("transaction_id")
   transaction     SwapTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   
-  // ลำดับในวงจร (สำหรับ three-way: 1, 2, 3 / สำหรับ two-way: 1, 2)
-  sequence        Int? // คนที่ 1, 2, 3, ... (optional สำหรับ two-way)
+  // ลำดับในวงจร (สำหรับ three-way: 1, 2, 3 / สำหรับ two-way: 1, 2 / สำหรับ promotion: 0=คนที่เลื่อน, 1,2,3...=ลูกโซ่)
+  sequence        Int? // คนที่ 0, 1, 2, 3, ... (optional สำหรับ two-way)
   
   // ข้อมูลบุคคล
   personnelId     String? @map("personnel_id") // ID อ้างอิงกับ police_personnel

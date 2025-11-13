@@ -412,6 +412,21 @@ function CreatePromotionContent() {
         groupNumber: groupNumber || null,
         status: 'completed',
         notes: groupNotes.trim() || null,
+        // ข้อมูลบุคลากรที่จะเลื่อนตำแหน่ง
+        startingPersonnel: {
+          id: startingPersonnel.id,
+          noId: startingPersonnel.noId,
+          fullName: startingPersonnel.fullName,
+          rank: startingPersonnel.rank,
+          nationalId: startingPersonnel.nationalId,
+          seniority: startingPersonnel.seniority,
+          posCodeId: startingPersonnel.posCodeId,
+          posCodeName: startingPersonnel.posCodeName,
+          position: startingPersonnel.position,
+          positionNumber: startingPersonnel.positionNumber,
+          unit: startingPersonnel.unit,
+          actingAs: startingPersonnel.actingAs,
+        },
         swapDetails,
       };
 

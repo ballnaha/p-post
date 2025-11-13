@@ -30,7 +30,7 @@ export async function GET(
               }
             }
           },
-          orderBy: { fullName: 'asc' }
+          orderBy: { sequence: 'asc' }
         }
       }
     });
@@ -66,7 +66,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { year, swapDate, swapType, groupName, groupNumber, status, notes, swapDetails } = body;
+    const { year, swapDate, swapType, groupName, groupNumber, status, notes, startingPersonnel, swapDetails } = body;
 
     // ตรวจสอบว่ามีข้อมูลอยู่หรือไม่
     const existingTransaction = await prisma.swapTransaction.findUnique({
@@ -97,9 +97,35 @@ export async function PUT(
         where: { transactionId: id }
       });
 
-      // สร้าง swapDetails ใหม่ พร้อมข้อมูลครบถ้วน
-      updateData.swapDetails = {
-        create: swapDetails.map((detail: any) => ({
+      // สร้าง swapDetails array โดยเพิ่ม startingPersonnel เป็น sequence = 0 (สำหรับ promotion)
+      const allDetails = [];
+      
+      // ถ้าเป็น promotion และมี startingPersonnel ให้เพิ่มเป็น detail แรก (sequence = 0)
+      const effectiveSwapType = swapType || existingTransaction.swapType;
+      if ((effectiveSwapType === 'promotion' || effectiveSwapType === 'promotion-chain') && startingPersonnel) {
+        allDetails.push({
+          sequence: 0,
+          personnelId: startingPersonnel.id,
+          noId: startingPersonnel.noId ? parseInt(startingPersonnel.noId.toString()) : null,
+          nationalId: startingPersonnel.nationalId,
+          fullName: startingPersonnel.fullName,
+          rank: startingPersonnel.rank,
+          seniority: startingPersonnel.seniority,
+          posCodeId: startingPersonnel.posCodeId,
+          toPosCodeId: null,
+          fromPosition: startingPersonnel.position,
+          fromPositionNumber: startingPersonnel.positionNumber,
+          fromUnit: startingPersonnel.unit,
+          fromActingAs: startingPersonnel.actingAs,
+          toPosition: null,
+          toPositionNumber: null,
+          toUnit: null,
+          toActingAs: null,
+        });
+      }
+      
+      // เพิ่ม swapDetails ที่ส่งมา
+      allDetails.push(...swapDetails.map((detail: any) => ({
           sequence: detail.sequence,
           personnelId: detail.personnelId,
           noId: detail.noId ? parseInt(detail.noId.toString()) : null,
@@ -135,7 +161,11 @@ export async function PUT(
           toUnit: detail.toUnit,
           toActingAs: detail.toActingAs,
           notes: detail.notes
-        }))
+        }))),
+      
+      // สร้าง swapDetails ใหม่
+      updateData.swapDetails = {
+        create: allDetails
       };
     }
 

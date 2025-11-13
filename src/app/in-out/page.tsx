@@ -127,6 +127,7 @@ export default function InOutPage() {
   
   const [data, setData] = useState<InOutData | null>(null);
   const [loading, setLoading] = useState(false); // เริ่มต้นเป็น false - ไม่โหลดอัตโนมัติ
+  const [loadingFilters, setLoadingFilters] = useState(true); // Track filter loading
   const [initialLoad, setInitialLoad] = useState(true); // Track initial load
   const [hasSearched, setHasSearched] = useState(false); // Track ว่าเคย search แล้วหรือยัง
   
@@ -192,6 +193,7 @@ export default function InOutPage() {
   // Fetch filter options only once on mount
   const fetchFilters = async () => {
     try {
+      setLoadingFilters(true);
       const response = await fetch('/api/in-out?page=0&pageSize=1');
       if (!response.ok) return;
       
@@ -204,11 +206,13 @@ export default function InOutPage() {
       }
     } catch (error) {
       console.error('Failed to fetch filters:', error);
+    } finally {
+      setLoadingFilters(false);
     }
   };
 
   // Fetch table data (can be called multiple times)
-  const fetchData = async (abortSignal?: AbortSignal) => {
+  const fetchData = async (abortSignal?: AbortSignal, forceReload: boolean = false) => {
     try {
       setLoading(true);
       
@@ -218,8 +222,8 @@ export default function InOutPage() {
       const cacheAge = now - dataCacheRef.current.timestamp;
       const CACHE_DURATION = 30000; // 30 วินาที (เหมือน police-personnel)
       
-      // ใช้ cache ถ้าข้อมูลยังไม่เก่าเกินไปและ filters เหมือนเดิม
-      if (dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION) {
+      // ใช้ cache ถ้าข้อมูลยังไม่เก่าเกินไปและ filters เหมือนเดิม (และไม่ได้ force reload)
+      if (!forceReload && dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION) {
         setData(dataCacheRef.current.data);
         setReplacedPersonsMap(dataCacheRef.current.replacedPersonsMap);
         setInitialLoad(false);
@@ -250,15 +254,25 @@ export default function InOutPage() {
       if (abortSignal?.aborted) return;
       
       if (!response.ok) {
-        throw new Error('Failed to fetch data');
+        console.error('API response not OK:', response.status, response.statusText);
+        throw new Error(`Failed to fetch data: ${response.status}`);
       }
       
       const result = await response.json();
+      console.log('API result:', { success: result.success, dataCount: result.data?.swapDetails?.length, totalCount: result.data?.totalCount });
       
       if (result.success) {
         // แสดงข้อมูลทันที (ไม่รอ replaced persons)
         setData(result.data);
         setInitialLoad(false);
+        
+        // อัพเดท cache
+        dataCacheRef.current = {
+          data: result.data,
+          replacedPersonsMap: new Map(),
+          timestamp: Date.now(),
+          filters: cacheKey
+        };
         
         // โหลด replaced persons ในพื้นหลัง (ไม่ block UI)
         if (result.data.swapDetails && result.data.swapDetails.length > 0) {
@@ -271,13 +285,14 @@ export default function InOutPage() {
               setLoadingReplacedPersons(false);
             });
         }
+      } else {
+        console.error('API returned success: false', result);
+        setData({ swapDetails: [], totalCount: 0, page: 0, pageSize: rowsPerPage, filters: { units: [], positionCodes: [] } });
       }
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Failed to fetch in-out data:', error);
-        if (initialLoad) {
-          setData(null);
-        }
+        // ไม่ clear data ที่มีอยู่ เพื่อไม่ให้หน้าจอว่างเปล่า
       }
     } finally {
       if (!abortSignal?.aborted) {
@@ -450,16 +465,18 @@ export default function InOutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load data when filters change (with debounce) - only after first search
+  // Load data when filters change (with debounce) - only after user interaction
   useEffect(() => {
-    // Skip ถ้ายังไม่เคย search
-    if (!hasSearched) return;
+    // Skip initial load - ไม่โหลดข้อมูลตอนเข้าหน้าครั้งแรก
+    if (initialLoad) return;
     
     // ใช้ AbortController เพื่อป้องกัน race condition
     const abortController = new AbortController();
     
     // เพิ่ม debounce สำหรับ filter เพื่อลดการเรียก API
     const timer = setTimeout(() => {
+      // โหลดข้อมูลทันทีเมื่อ filter เปลี่ยน
+      setHasSearched(true);
       fetchData(abortController.signal);
     }, 150); // รอ 150ms หลังจาก filter เปลี่ยน
     
@@ -476,25 +493,30 @@ export default function InOutPage() {
   }, [data?.swapDetails]);
 
   const handleUnitChange = (event: SelectChangeEvent<string>) => {
+    setInitialLoad(false); // Mark that user has interacted
     setSelectedUnit(event.target.value);
     setPage(0);
   };
 
   const handlePosCodeChange = (event: SelectChangeEvent<string>) => {
+    setInitialLoad(false); // Mark that user has interacted
     setSelectedPosCode(event.target.value);
     setPage(0);
   };
 
   const handleYearChange = (event: SelectChangeEvent<number>) => {
+    setInitialLoad(false); // Mark that user has interacted
     setSelectedYear(Number(event.target.value));
     setPage(0);
   };
 
   const handleChangePage = (newPage: number) => {
+    setInitialLoad(false); // Mark that user has interacted
     setPage(newPage);
   };
 
   const handleChangeRowsPerPage = (newRowsPerPage: number) => {
+    setInitialLoad(false); // Mark that user has interacted
     setRowsPerPage(newRowsPerPage);
     setPage(0);
   };
@@ -513,16 +535,26 @@ export default function InOutPage() {
     setHasSearched(true);
     setInitialLoad(false);
     
-    // โหลดเฉพาะข้อมูล (filters โหลดแล้วตอน mount)
-    fetchData();
+    // Clear cache และ force reload ข้อมูลใหม่
+    dataCacheRef.current = {
+      data: null,
+      replacedPersonsMap: new Map(),
+      timestamp: 0,
+      filters: ''
+    };
+    
+    // โหลดเฉพาะข้อมูล (filters โหลดแล้วตอน mount) - force reload
+    fetchData(undefined, true);
   };
 
   const handleStatusChange = (event: SelectChangeEvent<string>) => {
+    setInitialLoad(false); // Mark that user has interacted
     setSelectedStatus(event.target.value);
     setPage(0);
   };
 
   const handleSearchChange = (value: string) => {
+    setInitialLoad(false); // Mark that user has interacted
     setSearchText(value);
     setPage(0);
   };
@@ -615,16 +647,6 @@ export default function InOutPage() {
     setSelectedPersonnelForDetail(null);
   };
 
-  if (loading && !data) {
-    return (
-      <Layout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-          <CircularProgress />
-        </Box>
-      </Layout>
-    );
-  }
-
   return (
     <Layout>
       <Box>
@@ -669,50 +691,61 @@ export default function InOutPage() {
             gap: 2,
             mb: 2
           }}>
-            <FormControl size="small">
-              <InputLabel>หน่วยเดิม</InputLabel>
-              <Select value={selectedUnit} label="หน่วยเดิม" onChange={handleUnitChange}>
-                <MenuItem value="all">ทุกหน่วย</MenuItem>
-                {filterOptions.units.map((unit) => (
-                  <MenuItem key={unit} value={unit}>
-                    {unit}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            {loadingFilters ? (
+              <>
+                <Skeleton variant="rounded" height={40} />
+                <Skeleton variant="rounded" height={40} />
+                <Skeleton variant="rounded" height={40} />
+                <Skeleton variant="rounded" height={40} />
+              </>
+            ) : (
+              <>
+                <FormControl size="small">
+                  <InputLabel>หน่วยเดิม</InputLabel>
+                  <Select value={selectedUnit} label="หน่วยเดิม" onChange={handleUnitChange}>
+                    <MenuItem value="all">ทุกหน่วย</MenuItem>
+                    {filterOptions.units.map((unit) => (
+                      <MenuItem key={unit} value={unit}>
+                        {unit}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-            <FormControl size="small">
-              <InputLabel>ตำแหน่งเดิม (POS CODE)</InputLabel>
-              <Select value={selectedPosCode} label="ตำแหน่งเดิม (POS CODE)" onChange={handlePosCodeChange}>
-                <MenuItem value="all">ทุกตำแหน่ง</MenuItem>
-                {filterOptions.positionCodes.map((pos) => (
-                  <MenuItem key={pos.id} value={pos.id.toString()}>
-                    {pos.id} - {pos.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                <FormControl size="small">
+                  <InputLabel>ตำแหน่งเดิม (POS CODE)</InputLabel>
+                  <Select value={selectedPosCode} label="ตำแหน่งเดิม (POS CODE)" onChange={handlePosCodeChange}>
+                    <MenuItem value="all">ทุกตำแหน่ง</MenuItem>
+                    {filterOptions.positionCodes.map((pos) => (
+                      <MenuItem key={pos.id} value={pos.id.toString()}>
+                        {pos.id} - {pos.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-            <FormControl size="small">
-              <InputLabel>สถานะตำแหน่ง</InputLabel>
-              <Select value={selectedStatus} label="สถานะตำแหน่ง" onChange={handleStatusChange}>
-                <MenuItem value="all">ทั้งหมด</MenuItem>
-                <MenuItem value="occupied">มีคนดำรงตำแหน่ง</MenuItem>
-                <MenuItem value="vacant">ว่าง</MenuItem>
-                <MenuItem value="reserved">ว่าง (กันตำแหน่ง)</MenuItem>
-              </Select>
-            </FormControl>
+                <FormControl size="small">
+                  <InputLabel>สถานะตำแหน่ง</InputLabel>
+                  <Select value={selectedStatus} label="สถานะตำแหน่ง" onChange={handleStatusChange}>
+                    <MenuItem value="all">ทั้งหมด</MenuItem>
+                    <MenuItem value="occupied">มีคนดำรงตำแหน่ง</MenuItem>
+                    <MenuItem value="vacant">ว่าง</MenuItem>
+                    <MenuItem value="reserved">ว่าง (กันตำแหน่ง)</MenuItem>
+                  </Select>
+                </FormControl>
 
-            <FormControl size="small">
-              <InputLabel>ปี</InputLabel>
-              <Select value={selectedYear} label="ปี" onChange={handleYearChange}>
-                {availableYears.map((year) => (
-                  <MenuItem key={year} value={year}>
-                    {year}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                <FormControl size="small">
+                  <InputLabel>ปี</InputLabel>
+                  <Select value={selectedYear} label="ปี" onChange={handleYearChange}>
+                    {availableYears.map((year) => (
+                      <MenuItem key={year} value={year}>
+                        {year}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </>
+            )}
           </Box>
 
           <Box sx={{ 
@@ -721,58 +754,69 @@ export default function InOutPage() {
             gap: 2, 
             alignItems: { xs: 'stretch', sm: 'center' }
           }}>
-            <TextField
-              fullWidth
-              label="ค้นหา"
-              placeholder={isMobile ? "ค้นหา..." : "ค้นหาชื่อ, นามสกุล, ยศ, เลขตำแหน่ง, หน่วย, ตำแหน่ง..."}
-              size="small"
-              value={searchText}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              slotProps={{
-                input: {
-                  endAdornment: searchText && (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleSearchChange('')}
-                        edge="end"
-                      >
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 1,
-              flexShrink: 0
-            }}>
-              <Button
-                variant={hasSearched ? "outlined" : "contained"}
-                size="medium"
-                onClick={handleLoadData}
-                startIcon={!isMobile && <RefreshIcon />}
-                sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
-                fullWidth={isMobile}
-              >
-                {isMobile ? <RefreshIcon /> : (hasSearched ? 'โหลดข้อมูลใหม่' : 'โหลดข้อมูล')}
-              </Button>
-              {(searchText || selectedUnit !== 'all' || selectedPosCode !== 'all' || selectedStatus !== 'all') && (
-                <Button
-                  variant="outlined"
-                  size="medium"
-                  color="secondary"
-                  onClick={handleResetFilters}
-                  startIcon={!isMobile && <ClearIcon />}
-                  sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
-                  fullWidth={isMobile}
-                >
-                  {isMobile ? <ClearIcon /> : 'ล้างตัวกรอง'}
-                </Button>
-              )}
-            </Box>
+            {loadingFilters ? (
+              <>
+                <Skeleton variant="rounded" height={40} sx={{ flex: 1 }} />
+                <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+                  <Skeleton variant="rounded" width={isMobile ? '100%' : 140} height={40} />
+                </Box>
+              </>
+            ) : (
+              <>
+                <TextField
+                  fullWidth
+                  label="ค้นหา"
+                  placeholder={isMobile ? "ค้นหา..." : "ค้นหาชื่อ, นามสกุล, ยศ, เลขตำแหน่ง, หน่วย, ตำแหน่ง..."}
+                  size="small"
+                  value={searchText}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  slotProps={{
+                    input: {
+                      endAdornment: searchText && (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSearchChange('')}
+                            edge="end"
+                          >
+                            <ClearIcon fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+                <Box sx={{ 
+                  display: 'flex', 
+                  gap: 1,
+                  flexShrink: 0
+                }}>
+                  <Button
+                    variant={hasSearched ? "outlined" : "contained"}
+                    size="medium"
+                    onClick={handleLoadData}
+                    startIcon={!isMobile && <RefreshIcon />}
+                    sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
+                    fullWidth={isMobile}
+                  >
+                    {isMobile ? <RefreshIcon /> : (hasSearched ? 'โหลดข้อมูลใหม่' : 'โหลดข้อมูล')}
+                  </Button>
+                  {(searchText || selectedUnit !== 'all' || selectedPosCode !== 'all' || selectedStatus !== 'all') && (
+                    <Button
+                      variant="outlined"
+                      size="medium"
+                      color="secondary"
+                      onClick={handleResetFilters}
+                      startIcon={!isMobile && <ClearIcon />}
+                      sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
+                      fullWidth={isMobile}
+                    >
+                      {isMobile ? <ClearIcon /> : 'ล้างตัวกรอง'}
+                    </Button>
+                  )}
+                </Box>
+              </>
+            )}
           </Box>
         </Paper>
 
@@ -826,8 +870,8 @@ export default function InOutPage() {
                       <TableCell colSpan={5} sx={{ p: 0, border: 'none' }}>
                         <EmptyState
                           icon={PersonIcon}
-                          title={!hasSearched ? 'เลือก Filter และกดโหลดข้อมูล' : (searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล')}
-                          description={!hasSearched ? 'กรุณาเลือกตัวกรองและกดปุ่ม "โหลดข้อมูล" เพื่อแสดงข้อมูล' : (searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`)}
+                          title={!hasSearched ? 'เลือก Filter แล้วจะแสดงข้อมูล' : (searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล')}
+                          description={!hasSearched ? 'กรุณาเลือกตัวกรอง เพื่อแสดงข้อมูล' : (searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`)}
                           variant="compact"
                         />
                       </TableCell>
@@ -972,13 +1016,16 @@ export default function InOutPage() {
                                         </Box>
                                       );
                                     }
-                                    if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way') && detail.toPosCodeId) {
+                                    // ถ้าไม่มีคนเดิม
+                                    // ถ้าเป็น two-way หรือ three-way แต่ไม่พบข้อมูลคนเดิม (ผิดปกติ)
+                                    if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way' || detail.transaction?.swapType === 'multi-way') && detail.toPosCodeId) {
                                       return (
                                         <Typography variant="caption" color="error.main" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
                                           เดิม: ข้อมูลไม่พบ
                                         </Typography>
                                       );
                                     }
+                                    // กรณีอื่นๆ (promotion, promotion-chain หรือตำแหน่งว่าง)
                                     return (
                                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
                                         เดิม: ตำแหน่งว่าง
@@ -1207,13 +1254,16 @@ export default function InOutPage() {
                                     </Typography>
                                   );
                                 }
-                                if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way') && detail.toPosCodeId) {
+                                // ถ้าไม่มีคนเดิม
+                                // ถ้าเป็น two-way หรือ three-way แต่ไม่พบข้อมูลคนเดิม (ผิดปกติ)
+                                if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way' || detail.transaction?.swapType === 'multi-way') && detail.toPosCodeId) {
                                   return (
                                     <Typography variant="caption" color="error.main" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
                                       เดิม: ข้อมูลไม่พบ
                                     </Typography>
                                   );
                                 }
+                                // กรณีอื่นๆ (promotion, promotion-chain หรือตำแหน่งว่าง)
                                 return (
                                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
                                     เดิม: ตำแหน่งว่าง

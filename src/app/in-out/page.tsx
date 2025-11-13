@@ -126,8 +126,9 @@ export default function InOutPage() {
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
   const [data, setData] = useState<InOutData | null>(null);
-  const [loading, setLoading] = useState(true); // เริ่มต้นเป็น true เพื่อโหลดข้อมูลทันที
+  const [loading, setLoading] = useState(false); // เริ่มต้นเป็น false - ไม่โหลดอัตโนมัติ
   const [initialLoad, setInitialLoad] = useState(true); // Track initial load
+  const [hasSearched, setHasSearched] = useState(false); // Track ว่าเคย search แล้วหรือยัง
   
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
@@ -162,6 +163,19 @@ export default function InOutPage() {
   
   // Cache for transaction details to avoid duplicate API calls
   const transactionCacheRef = useRef<Map<string, any>>(new Map());
+  
+  // Page-level cache (เหมือน police-personnel)
+  const dataCacheRef = useRef<{
+    data: InOutData | null;
+    replacedPersonsMap: Map<string, SwapDetail>;
+    timestamp: number;
+    filters: string; // cache key based on filters
+  }>({
+    data: null,
+    replacedPersonsMap: new Map(),
+    timestamp: 0,
+    filters: ''
+  });
 
   const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
@@ -197,8 +211,23 @@ export default function InOutPage() {
   const fetchData = async (abortSignal?: AbortSignal) => {
     try {
       setLoading(true);
-      // Don't clear data immediately - keep showing old data with loading state
-      // Only clear replaced persons map
+      
+      // สร้าง cache key จาก filters
+      const cacheKey = `${selectedUnit}-${selectedPosCode}-${selectedStatus}-${selectedYear}-${page}-${rowsPerPage}-${searchText}`;
+      const now = Date.now();
+      const cacheAge = now - dataCacheRef.current.timestamp;
+      const CACHE_DURATION = 30000; // 30 วินาที (เหมือน police-personnel)
+      
+      // ใช้ cache ถ้าข้อมูลยังไม่เก่าเกินไปและ filters เหมือนเดิม
+      if (dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION) {
+        setData(dataCacheRef.current.data);
+        setReplacedPersonsMap(dataCacheRef.current.replacedPersonsMap);
+        setInitialLoad(false);
+        setLoading(false);
+        return;
+      }
+      
+      // Clear old data
       setReplacedPersonsMap(new Map());
       
       const params = new URLSearchParams({
@@ -404,26 +433,27 @@ export default function InOutPage() {
     });
     
     setReplacedPersonsMap(newMap);
+    
+    // อัพเดท cache
+    const cacheKey = `${selectedUnit}-${selectedPosCode}-${selectedStatus}-${selectedYear}-${page}-${rowsPerPage}-${searchText}`;
+    dataCacheRef.current = {
+      data: data,
+      replacedPersonsMap: newMap,
+      timestamp: Date.now(),
+      filters: cacheKey
+    };
   };
 
-  // Load filters and data in parallel on mount (โหลดพร้อมกันเพื่อความเร็ว)
+  // โหลด filter options ตอน mount (แสดง filters ทันที)
   useEffect(() => {
-    const loadInitialData = async () => {
-      // โหลดทั้ง filters และ data พร้อมกัน
-      await Promise.all([
-        fetchFilters(),
-        fetchData()
-      ]);
-    };
-    
-    loadInitialData();
+    fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load data when filters change (with debounce) - skip initial load
+  // Load data when filters change (with debounce) - only after first search
   useEffect(() => {
-    // Skip initial load (already loaded in mount effect)
-    if (initialLoad) return;
+    // Skip ถ้ายังไม่เคย search
+    if (!hasSearched) return;
     
     // ใช้ AbortController เพื่อป้องกัน race condition
     const abortController = new AbortController();
@@ -431,7 +461,7 @@ export default function InOutPage() {
     // เพิ่ม debounce สำหรับ filter เพื่อลดการเรียก API
     const timer = setTimeout(() => {
       fetchData(abortController.signal);
-    }, 150); // รอ 150ms หลังจาก filter เปลี่ยน (ลดลงเพื่อความเร็ว)
+    }, 150); // รอ 150ms หลังจาก filter เปลี่ยน
     
     return () => {
       clearTimeout(timer);
@@ -477,6 +507,14 @@ export default function InOutPage() {
     setSelectedPosCode('all');
     setSelectedStatus('all');
     setPage(0);
+  };
+
+  const handleLoadData = () => {
+    setHasSearched(true);
+    setInitialLoad(false);
+    
+    // โหลดเฉพาะข้อมูล (filters โหลดแล้วตอน mount)
+    fetchData();
   };
 
   const handleStatusChange = (event: SelectChangeEvent<string>) => {
@@ -712,14 +750,14 @@ export default function InOutPage() {
               flexShrink: 0
             }}>
               <Button
-                variant="outlined"
+                variant={hasSearched ? "outlined" : "contained"}
                 size="medium"
-                onClick={() => fetchData()}
+                onClick={handleLoadData}
                 startIcon={!isMobile && <RefreshIcon />}
                 sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
                 fullWidth={isMobile}
               >
-                {isMobile ? <RefreshIcon /> : 'โหลดข้อมูลใหม่'}
+                {isMobile ? <RefreshIcon /> : (hasSearched ? 'โหลดข้อมูลใหม่' : 'โหลดข้อมูล')}
               </Button>
               {(searchText || selectedUnit !== 'all' || selectedPosCode !== 'all' || selectedStatus !== 'all') && (
                 <Button
@@ -788,8 +826,8 @@ export default function InOutPage() {
                       <TableCell colSpan={5} sx={{ p: 0, border: 'none' }}>
                         <EmptyState
                           icon={PersonIcon}
-                          title={searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล'}
-                          description={searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`}
+                          title={!hasSearched ? 'เลือก Filter และกดโหลดข้อมูล' : (searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล')}
+                          description={!hasSearched ? 'กรุณาเลือกตัวกรองและกดปุ่ม "โหลดข้อมูล" เพื่อแสดงข้อมูล' : (searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`)}
                           variant="compact"
                         />
                       </TableCell>
@@ -1067,8 +1105,8 @@ export default function InOutPage() {
               <Paper sx={{ p: 0 }}>
                 <EmptyState
                   icon={PersonIcon}
-                  title={searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล'}
-                  description={searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`}
+                  title={!hasSearched ? 'เลือก Filter และกดโหลดข้อมูล' : (searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล')}
+                  description={!hasSearched ? 'กรุณาเลือกตัวกรองและกดปุ่ม "โหลดข้อมูล" เพื่อแสดงข้อมูล' : (searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`)}
                   variant="compact"
                 />
               </Paper>

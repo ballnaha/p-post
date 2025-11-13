@@ -252,6 +252,7 @@ export default function AddSwapTransactionPage() {
           rank: personnelA.rank,
           seniority: personnelA.seniority,
           posCodeId: personnelA.posCodeId,
+          toPosCodeId: personnelB.posCodeId,
           // ข้อมูลส่วนตัว
           birthDate: personnelA.birthDate,
           age: personnelA.age,
@@ -289,6 +290,7 @@ export default function AddSwapTransactionPage() {
           rank: personnelB.rank,
           seniority: personnelB.seniority,
           posCodeId: personnelB.posCodeId,
+          toPosCodeId: personnelA.posCodeId,
           // ข้อมูลส่วนตัว
           birthDate: personnelB.birthDate,
           age: personnelB.age,

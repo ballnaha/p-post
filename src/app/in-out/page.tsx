@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -30,12 +30,17 @@ import {
   Tooltip,
   alpha,
   Stack,
+  useTheme,
+  useMediaQuery,
+  Card,
+  CardContent,
+  Skeleton,
 } from '@mui/material';
 import {
   Clear as ClearIcon,
   Refresh as RefreshIcon,
   Person as PersonIcon,
-  Visibility as ViewIcon,
+  InfoOutlined as InfoIcon,
   Close as CloseIcon,
   SwapHoriz as SwapHorizIcon,
   CalendarToday as CalendarIcon,
@@ -43,10 +48,13 @@ import {
 import Layout from '../components/Layout';
 import DataTablePagination from '@/components/DataTablePagination';
 import { EmptyState } from '@/app/components/EmptyState';
+import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import InOutDetailModal from '@/components/InOutDetailModal';
 
 interface SwapDetail {
   id: string;
   personnelId: string;
+  noId?: string;
   fullName: string;
   rank: string | null;
   nationalId: string | null;
@@ -113,8 +121,13 @@ interface InOutData {
 }
 
 export default function InOutPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [data, setData] = useState<InOutData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // เริ่มต้นเป็น true เพื่อโหลดข้อมูลทันที
+  const [initialLoad, setInitialLoad] = useState(true); // Track initial load
   
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
@@ -130,8 +143,25 @@ export default function InOutPage() {
   const [swapPartner, setSwapPartner] = useState<SwapDetail | null>(null);
   const [replacedPerson, setReplacedPerson] = useState<SwapDetail | null>(null);
   
+  // Personnel Detail Modal states
+  const [personnelDetailModalOpen, setPersonnelDetailModalOpen] = useState(false);
+  const [selectedPersonnelForDetail, setSelectedPersonnelForDetail] = useState<SwapDetail | null>(null);
+  
   // Store replaced persons for table display
   const [replacedPersonsMap, setReplacedPersonsMap] = useState<Map<string, SwapDetail>>(new Map());
+  const [loadingReplacedPersons, setLoadingReplacedPersons] = useState(false);
+  
+  // Store filter options (loaded once)
+  const [filterOptions, setFilterOptions] = useState<{
+    units: string[];
+    positionCodes: { id: number; name: string }[];
+  }>({
+    units: [],
+    positionCodes: []
+  });
+  
+  // Cache for transaction details to avoid duplicate API calls
+  const transactionCacheRef = useRef<Map<string, any>>(new Map());
 
   const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
@@ -145,9 +175,31 @@ export default function InOutPage() {
     return years;
   }, []);
 
-  const fetchData = useCallback(async () => {
+  // Fetch filter options only once on mount
+  const fetchFilters = async () => {
+    try {
+      const response = await fetch('/api/in-out?page=0&pageSize=1');
+      if (!response.ok) return;
+      
+      const result = await response.json();
+      if (result.success && result.data.filters) {
+        setFilterOptions({
+          units: result.data.filters.units || [],
+          positionCodes: result.data.filters.positionCodes || []
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch filters:', error);
+    }
+  };
+
+  // Fetch table data (can be called multiple times)
+  const fetchData = async (abortSignal?: AbortSignal) => {
     try {
       setLoading(true);
+      // Don't clear data immediately - keep showing old data with loading state
+      // Only clear replaced persons map
+      setReplacedPersonsMap(new Map());
       
       const params = new URLSearchParams({
         unit: selectedUnit,
@@ -162,7 +214,11 @@ export default function InOutPage() {
         params.append('search', searchText.trim());
       }
 
-      const response = await fetch(`/api/in-out?${params}`);
+      const response = await fetch(`/api/in-out?${params}`, 
+        abortSignal ? { signal: abortSignal } : {}
+      );
+      
+      if (abortSignal?.aborted) return;
       
       if (!response.ok) {
         throw new Error('Failed to fetch data');
@@ -171,30 +227,35 @@ export default function InOutPage() {
       const result = await response.json();
       
       if (result.success) {
+        // แสดงข้อมูลทันที (ไม่รอ replaced persons)
         setData(result.data);
+        setInitialLoad(false);
         
-        // Debug: ตรวจสอบข้อมูลที่ได้รับ
-        console.log('In-Out Data:', result.data.swapDetails?.slice(0, 3));
-        console.log('Sample with toPosition:', result.data.swapDetails?.find((d: any) => d.toPosition));
-        console.log('All fields check:', result.data.swapDetails?.[0] && {
-          fromPosition: result.data.swapDetails[0].fromPosition,
-          toPosition: result.data.swapDetails[0].toPosition,
-          posCodeId: result.data.swapDetails[0].posCodeId,
-          toPosCodeId: result.data.swapDetails[0].toPosCodeId,
-        });
-        
-        // Fetch replaced persons for all swap details
+        // โหลด replaced persons ในพื้นหลัง (ไม่ block UI)
         if (result.data.swapDetails && result.data.swapDetails.length > 0) {
-          fetchReplacedPersons(result.data.swapDetails);
+          setLoadingReplacedPersons(true);
+          fetchReplacedPersons(result.data.swapDetails)
+            .catch(error => {
+              console.error('Error fetching replaced persons:', error);
+            })
+            .finally(() => {
+              setLoadingReplacedPersons(false);
+            });
         }
       }
-    } catch (error) {
-      console.error('Failed to fetch in-out data:', error);
-      setData(null);
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Failed to fetch in-out data:', error);
+        if (initialLoad) {
+          setData(null);
+        }
+      }
     } finally {
-      setLoading(false);
+      if (!abortSignal?.aborted) {
+        setLoading(false);
+      }
     }
-  }, [selectedUnit, selectedPosCode, selectedStatus, selectedYear, page, rowsPerPage, searchText]);
+  };
 
   const fetchReplacedPersons = async (swapDetails: SwapDetail[]) => {
     const newMap = new Map<string, SwapDetail>();
@@ -205,111 +266,179 @@ export default function InOutPage() {
     // Group by transaction ID to minimize API calls
     const transactionIds = [...new Set(swappedDetails.map(d => d.transaction!.id))];
     
-    for (const transactionId of transactionIds) {
-      try {
-        const response = await fetch(`/api/swap-transactions/${transactionId}`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data.swapDetails) {
-            // For each detail in current page, find who previously held the NEW position
-            // (คนที่เราไปแทน = คนที่เดิมอยู่ในตำแหน่งใหม่ของเรา)
-            const txDetails: SwapDetail[] = swappedDetails.filter(d => d.transaction!.id === transactionId);
-            const rawTxDetails: SwapDetail[] = result.data.swapDetails;
-            const swapTypeFromApi: string | undefined = result?.data?.swapType;
-            const isTwoWay = swapTypeFromApi === 'two-way' && rawTxDetails.length >= 2;
-            
-            console.log('[In-Out] Transaction debug', {
-              transactionId,
-              swapType: swapTypeFromApi,
-              apiRecords: rawTxDetails.length,
-              apiDetails: rawTxDetails.map(d => ({ id: d.id, fullName: d.fullName })),
-              pageRecords: txDetails.length,
-              pageDetails: txDetails.map(d => ({ id: d.id, fullName: d.fullName }))
-            });
-
-            txDetails.forEach(detail => {
-              let replaced: SwapDetail | undefined;
-
-              if (isTwoWay) {
-                // Two-way: ใช้ personnelId หรือ nationalId ในการ match (เพราะ ID ของ detail ไม่ตรงกัน)
-                if (rawTxDetails.length === 2) {
-                  // เอาคนอื่นใน transaction (match by personnelId or nationalId)
-                  replaced = rawTxDetails.find(d => 
-                    d.personnelId !== detail.personnelId || 
-                    d.nationalId !== detail.nationalId
-                  );
-                  console.log('[In-Out] Two-way match by personnelId:', {
-                    person: detail.fullName,
-                    personPersonnelId: detail.personnelId,
-                    personNationalId: detail.nationalId,
-                    otherPerson: replaced?.fullName || 'NOT FOUND',
-                    otherPersonnelId: replaced?.personnelId,
-                    otherNationalId: replaced?.nationalId
-                  });
-                } else if (detail.toPositionNumber) {
-                  // Fallback: ใช้ position_number
-                  replaced = rawTxDetails.find((d: SwapDetail) => 
-                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                    d.fromPositionNumber === detail.toPositionNumber
-                  );
-                } else if (detail.toPosition) {
-                  // Fallback: ใช้ position
-                  replaced = rawTxDetails.find((d: SwapDetail) => 
-                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                    d.fromPosition === detail.toPosition
-                  );
-                }
-              } else {
-                // Three-way หรือ multi-way: หาคนที่ตำแหน่งเดิม (fromPosition/fromPositionNumber) ตรงกับตำแหน่งใหม่ของเรา (toPosition/toPositionNumber)
-                // ลำดับความสำคัญ: position_number > position (เพราะ position_number แม่นยำกว่า)
-                if (detail.toPositionNumber) {
-                  // ใช้ position_number ในการ match (แม่นยำที่สุด)
-                  replaced = rawTxDetails.find((d: SwapDetail) => 
-                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                    d.fromPositionNumber === detail.toPositionNumber
-                  );
-                } else if (detail.toPosition) {
-                  // ถ้าไม่มี toPositionNumber ให้ match จาก position
-                  replaced = rawTxDetails.find((d: SwapDetail) => 
-                    (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                    d.fromPosition === detail.toPosition
-                  );
-                }
-                
-                console.log('[In-Out] Three-way match:', {
-                  person: detail.fullName,
-                  toPosition: detail.toPosition,
-                  toPositionNumber: detail.toPositionNumber,
-                  replaced: replaced?.fullName || 'NOT FOUND',
-                  replacedFromPosition: replaced?.fromPosition,
-                  replacedFromPositionNumber: replaced?.fromPositionNumber,
-                  allDetails: rawTxDetails.map(d => ({ 
-                    name: d.fullName, 
-                    fromPosition: d.fromPosition,
-                    fromPositionNumber: d.fromPositionNumber,
-                    toPosition: d.toPosition,
-                    toPositionNumber: d.toPositionNumber
-                  }))
-                });
-              }
-
-              if (replaced) {
-                newMap.set(detail.id, replaced);
-              }
-            });
+    // แยก transactions ที่มี cache และไม่มี cache
+    const cachedResults: any[] = [];
+    const uncachedIds: string[] = [];
+    
+    transactionIds.forEach(id => {
+      if (transactionCacheRef.current.has(id)) {
+        cachedResults.push(transactionCacheRef.current.get(id));
+      } else {
+        uncachedIds.push(id);
+      }
+    });
+    
+    // โหลดเฉพาะ transactions ที่ยังไม่มี cache
+    const transactionResults: any[] = [...cachedResults];
+    
+    if (uncachedIds.length > 0) {
+      const batchSize = 10;
+      
+      for (let i = 0; i < uncachedIds.length; i += batchSize) {
+        const batch = uncachedIds.slice(i, i + batchSize);
+        const batchPromises = batch.map(transactionId =>
+          fetch(`/api/swap-transactions/${transactionId}`)
+            .then(response => response.ok ? response.json() : null)
+            .catch(error => {
+              console.error('Error fetching transaction details:', error);
+              return null;
+            })
+        );
+        const batchResults = await Promise.all(batchPromises);
+        
+        // เก็บใน cache
+        batch.forEach((id, index) => {
+          if (batchResults[index]) {
+            transactionCacheRef.current.set(id, batchResults[index]);
           }
-        }
-      } catch (error) {
-        console.error('Error fetching transaction details:', error);
+        });
+        
+        transactionResults.push(...batchResults);
       }
     }
+    
+    transactionResults.forEach((result, index) => {
+      if (result && result.success && result.data.swapDetails) {
+        const transactionId = transactionIds[index];
+        try {
+          // For each detail in current page, find who previously held the NEW position
+          // (คนที่เราไปแทน = คนที่เดิมอยู่ในตำแหน่งใหม่ของเรา)
+          const txDetails: SwapDetail[] = swappedDetails.filter(d => d.transaction!.id === transactionId);
+          const rawTxDetails: SwapDetail[] = result.data.swapDetails;
+          const swapTypeFromApi: string | undefined = result?.data?.swapType;
+          const isTwoWay = swapTypeFromApi === 'two-way' && rawTxDetails.length >= 2;
+          
+          console.log('[In-Out] Transaction debug', {
+            transactionId,
+            swapType: swapTypeFromApi,
+            apiRecords: rawTxDetails.length,
+            apiDetails: rawTxDetails.map(d => ({ id: d.id, fullName: d.fullName })),
+            pageRecords: txDetails.length,
+            pageDetails: txDetails.map(d => ({ id: d.id, fullName: d.fullName }))
+          });
+
+          txDetails.forEach(detail => {
+            let replaced: SwapDetail | undefined;
+
+            if (isTwoWay) {
+              // Two-way: ใช้ personnelId หรือ nationalId ในการ match (เพราะ ID ของ detail ไม่ตรงกัน)
+              if (rawTxDetails.length === 2) {
+                // เอาคนอื่นใน transaction (match by personnelId or nationalId)
+                replaced = rawTxDetails.find(d => 
+                  d.personnelId !== detail.personnelId || 
+                  d.nationalId !== detail.nationalId
+                );
+                console.log('[In-Out] Two-way match by personnelId:', {
+                  person: detail.fullName,
+                  personPersonnelId: detail.personnelId,
+                  personNationalId: detail.nationalId,
+                  otherPerson: replaced?.fullName || 'NOT FOUND',
+                  otherPersonnelId: replaced?.personnelId,
+                  otherNationalId: replaced?.nationalId
+                });
+              } else if (detail.toPositionNumber) {
+                // Fallback: ใช้ position_number
+                replaced = rawTxDetails.find((d: SwapDetail) => 
+                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                  d.fromPositionNumber === detail.toPositionNumber
+                );
+              } else if (detail.toPosition) {
+                // Fallback: ใช้ position
+                replaced = rawTxDetails.find((d: SwapDetail) => 
+                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                  d.fromPosition === detail.toPosition
+                );
+              }
+            } else {
+              // Three-way หรือ multi-way: หาคนที่ตำแหน่งเดิม (fromPosition/fromPositionNumber) ตรงกับตำแหน่งใหม่ของเรา (toPosition/toPositionNumber)
+              // ลำดับความสำคัญ: position_number > position (เพราะ position_number แม่นยำกว่า)
+              if (detail.toPositionNumber) {
+                // ใช้ position_number ในการ match (แม่นยำที่สุด)
+                replaced = rawTxDetails.find((d: SwapDetail) => 
+                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                  d.fromPositionNumber === detail.toPositionNumber
+                );
+              } else if (detail.toPosition) {
+                // ถ้าไม่มี toPositionNumber ให้ match จาก position
+                replaced = rawTxDetails.find((d: SwapDetail) => 
+                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
+                  d.fromPosition === detail.toPosition
+                );
+              }
+              
+              console.log('[In-Out] Three-way match:', {
+                person: detail.fullName,
+                toPosition: detail.toPosition,
+                toPositionNumber: detail.toPositionNumber,
+                replaced: replaced?.fullName || 'NOT FOUND',
+                replacedFromPosition: replaced?.fromPosition,
+                replacedFromPositionNumber: replaced?.fromPositionNumber,
+                allDetails: rawTxDetails.map(d => ({ 
+                  name: d.fullName, 
+                  fromPosition: d.fromPosition,
+                  fromPositionNumber: d.fromPositionNumber,
+                  toPosition: d.toPosition,
+                  toPositionNumber: d.toPositionNumber
+                }))
+              });
+            }
+
+            if (replaced) {
+              newMap.set(detail.id, replaced);
+            }
+          });
+        } catch (error) {
+          console.error('Error processing transaction:', error);
+        }
+      }
+    });
     
     setReplacedPersonsMap(newMap);
   };
 
+  // Load filters and data in parallel on mount (โหลดพร้อมกันเพื่อความเร็ว)
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const loadInitialData = async () => {
+      // โหลดทั้ง filters และ data พร้อมกัน
+      await Promise.all([
+        fetchFilters(),
+        fetchData()
+      ]);
+    };
+    
+    loadInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load data when filters change (with debounce) - skip initial load
+  useEffect(() => {
+    // Skip initial load (already loaded in mount effect)
+    if (initialLoad) return;
+    
+    // ใช้ AbortController เพื่อป้องกัน race condition
+    const abortController = new AbortController();
+    
+    // เพิ่ม debounce สำหรับ filter เพื่อลดการเรียก API
+    const timer = setTimeout(() => {
+      fetchData(abortController.signal);
+    }, 150); // รอ 150ms หลังจาก filter เปลี่ยน (ลดลงเพื่อความเร็ว)
+    
+    return () => {
+      clearTimeout(timer);
+      abortController.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedUnit, selectedPosCode, selectedStatus, selectedYear, page, rowsPerPage, searchText]);
 
   const filteredSwapDetails = useMemo(() => {
     if (!data?.swapDetails) return [];
@@ -437,6 +566,17 @@ export default function InOutPage() {
     setReplacedPerson(null);
   };
 
+  // Handler สำหรับเปิด Personnel Detail Modal
+  const handleViewPersonnelDetail = (personnel: SwapDetail) => {
+    setSelectedPersonnelForDetail(personnel);
+    setPersonnelDetailModalOpen(true);
+  };
+
+  const handleClosePersonnelDetailModal = () => {
+    setPersonnelDetailModalOpen(false);
+    setSelectedPersonnelForDetail(null);
+  };
+
   if (loading && !data) {
     return (
       <Layout>
@@ -451,21 +591,21 @@ export default function InOutPage() {
     <Layout>
       <Box>
         {/* Header */}
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
           <Box sx={{ 
             display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between', 
-            alignItems: 'center',
-            flexWrap: 'wrap',
+            alignItems: { xs: 'flex-start', sm: 'center' },
             gap: 2
           }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <PersonIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
+              <PersonIcon sx={{ fontSize: { xs: 32, sm: 40 }, color: 'primary.main' }} />
               <Box>
-                <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
+                <Typography variant={isMobile ? 'h6' : 'h5'} component="h1" sx={{ fontWeight: 600 }}>
                   In and Out
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
                   ข้อมูลการสลับตำแหน่งเจ้าหน้าที่
                 </Typography>
               </Box>
@@ -473,16 +613,21 @@ export default function InOutPage() {
             <Chip 
               label={`ทั้งหมด ${data?.totalCount || 0} รายการ`}
               color="primary"
-              sx={{ fontWeight: 600, fontSize: '0.875rem', px: 1 }}
+              sx={{ 
+                fontWeight: 600, 
+                fontSize: { xs: '0.8125rem', sm: '0.875rem' }, 
+                px: 1,
+                alignSelf: { xs: 'flex-start', sm: 'center' }
+              }}
             />
           </Box>
         </Paper>
 
         {/* Filters */}
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, 
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, 
             gap: 2,
             mb: 2
           }}>
@@ -490,7 +635,7 @@ export default function InOutPage() {
               <InputLabel>หน่วยเดิม</InputLabel>
               <Select value={selectedUnit} label="หน่วยเดิม" onChange={handleUnitChange}>
                 <MenuItem value="all">ทุกหน่วย</MenuItem>
-                {data?.filters.units.map((unit) => (
+                {filterOptions.units.map((unit) => (
                   <MenuItem key={unit} value={unit}>
                     {unit}
                   </MenuItem>
@@ -502,7 +647,7 @@ export default function InOutPage() {
               <InputLabel>ตำแหน่งเดิม (POS CODE)</InputLabel>
               <Select value={selectedPosCode} label="ตำแหน่งเดิม (POS CODE)" onChange={handlePosCodeChange}>
                 <MenuItem value="all">ทุกตำแหน่ง</MenuItem>
-                {data?.filters.positionCodes.map((pos) => (
+                {filterOptions.positionCodes.map((pos) => (
                   <MenuItem key={pos.id} value={pos.id.toString()}>
                     {pos.id} - {pos.name}
                   </MenuItem>
@@ -532,11 +677,16 @@ export default function InOutPage() {
             </FormControl>
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 2, 
+            alignItems: { xs: 'stretch', sm: 'center' }
+          }}>
             <TextField
               fullWidth
               label="ค้นหา"
-              placeholder="ค้นหาชื่อ, นามสกุล, ยศ, เลขตำแหน่ง, หน่วย, ตำแหน่ง..."
+              placeholder={isMobile ? "ค้นหา..." : "ค้นหาชื่อ, นามสกุล, ยศ, เลขตำแหน่ง, หน่วย, ตำแหน่ง..."}
               size="small"
               value={searchText}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -556,122 +706,478 @@ export default function InOutPage() {
                 },
               }}
             />
-            <Button
-              variant="outlined"
-              size="medium"
-              onClick={() => fetchData()}
-              startIcon={<RefreshIcon />}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              โหลดข้อมูลใหม่
-            </Button>
-            {(searchText || selectedUnit !== 'all' || selectedPosCode !== 'all' || selectedStatus !== 'all') && (
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 1,
+              flexShrink: 0
+            }}>
               <Button
                 variant="outlined"
                 size="medium"
-                color="secondary"
-                onClick={handleResetFilters}
-                startIcon={<ClearIcon />}
-                sx={{ whiteSpace: 'nowrap' }}
+                onClick={() => fetchData()}
+                startIcon={!isMobile && <RefreshIcon />}
+                sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
+                fullWidth={isMobile}
               >
-                ล้างตัวกรอง
+                {isMobile ? <RefreshIcon /> : 'โหลดข้อมูลใหม่'}
               </Button>
-            )}
+              {(searchText || selectedUnit !== 'all' || selectedPosCode !== 'all' || selectedStatus !== 'all') && (
+                <Button
+                  variant="outlined"
+                  size="medium"
+                  color="secondary"
+                  onClick={handleResetFilters}
+                  startIcon={!isMobile && <ClearIcon />}
+                  sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
+                  fullWidth={isMobile}
+                >
+                  {isMobile ? <ClearIcon /> : 'ล้างตัวกรอง'}
+                </Button>
+              )}
+            </Box>
           </Box>
         </Paper>
 
-        {/* Table */}
-        <Paper sx={{ p: 0 }}>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 50, py: 1 }}>#</TableCell>
-                  
-                  <TableCell sx={{ minWidth: 260, py: 1 }}>ชื่อ-สกุล / ตำแหน่งเดิม</TableCell>
-                  <TableCell sx={{ minWidth: 220, py: 1 }}>ตำแหน่งใหม่</TableCell>
-                  <TableCell sx={{ width: 120, py: 1 }}>ประเภท</TableCell>
-                  <TableCell align="center" sx={{ width: 80, py: 1 }}>ดูข้อมูล</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
+        {/* Table - Desktop/Tablet */}
+        {!isMobile ? (
+          <Paper sx={{ p: 0 }}>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                      <CircularProgress size={32} />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-                        กำลังโหลดข้อมูล...
-                      </Typography>
-                    </TableCell>
+                    <TableCell sx={{ width: 50, py: 1.5, fontWeight: 600 }}>#</TableCell>                  
+                    <TableCell sx={{ minWidth: isTablet ? 200 : 280, py: 1.5, fontWeight: 600 }}>ชื่อ-สกุล / ตำแหน่งเดิม</TableCell>
+                    <TableCell sx={{ minWidth: isTablet ? 180 : 240, py: 1.5, fontWeight: 600 }}>ตำแหน่งใหม่</TableCell>
+                    <TableCell sx={{ width: isTablet ? 100 : 120, py: 1.5, fontWeight: 600 }}>ประเภท</TableCell>
+                    <TableCell align="center" sx={{ width: 80, py: 1.5, fontWeight: 600 }}>ดูข้อมูล</TableCell>
                   </TableRow>
-                ) : filteredSwapDetails.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} sx={{ p: 0, border: 'none' }}>
-                      <EmptyState
-                        icon={PersonIcon}
-                        title={searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล'}
-                        description={searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`}
-                        variant="compact"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredSwapDetails.map((detail, index) => (
-                    <TableRow key={detail.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                      <TableCell sx={{ py: 1.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {page * rowsPerPage + index + 1}
-                        </Typography>
-                      </TableCell>
-                      
-                      <TableCell sx={{ py: 1.25 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
-                          {joinInline(detail.rank || '-', detail.fullName || '-')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
-                          {(() => {
-                            const code = detail.posCodeMaster ? `${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}` : '';
-                            const unit = detail.fromUnit ? `หน่วย: ${detail.fromUnit}` : '';
-                            return joinInline(code, detail.fromPosition || undefined, unit) || '-';
-                          })()}
-                        </Typography>
-                        {detail.nationalId && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', display: 'block', mt: 0.25 }}>
-                            เลขตำแหน่ง: {detail.nationalId}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell sx={{ py: 1.25, bgcolor: (detail.toPosCodeMaster || detail.toPosition) ? alpha('#4caf50', 0.05) : 'transparent' }}>
-                        {(detail.toPosCodeMaster || detail.toPosition) ? (
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    // Skeleton Loading Rows
+                    Array.from({ length: rowsPerPage }).map((_, index) => (
+                      <TableRow key={`skeleton-${index}`}>
+                        <TableCell sx={{ py: 1.5 }}>
+                          <Skeleton variant="text" width={30} />
+                        </TableCell>
+                        <TableCell sx={{ py: 1.5 }}>
                           <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', fontSize: '0.8rem' }}>
-                              {(() => {
-                                const code = detail.toPosCodeMaster ? `${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}` : '';
-                                const unit = detail.toUnit ? `หน่วย: ${detail.toUnit}` : '';
-                                return joinInline(code, detail.toPosition || undefined, unit);
-                              })()}
+                            <Skeleton variant="text" width="80%" height={20} />
+                            <Skeleton variant="text" width="90%" height={16} sx={{ mt: 0.5 }} />
+                            <Skeleton variant="text" width="60%" height={14} sx={{ mt: 0.25 }} />
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ py: 1.5 }}>
+                          <Box>
+                            <Skeleton variant="text" width="70%" height={16} />
+                            <Skeleton variant="text" width="85%" height={20} sx={{ mt: 0.25 }} />
+                            <Skeleton variant="text" width="50%" height={14} sx={{ mt: 0.25 }} />
+                            <Skeleton variant="text" width="75%" height={14} sx={{ mt: 0.5 }} />
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ py: 1.5 }}>
+                          <Skeleton variant="rounded" width={80} height={24} />
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1.5 }}>
+                          <Skeleton variant="circular" width={32} height={32} sx={{ mx: 'auto' }} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : filteredSwapDetails.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} sx={{ p: 0, border: 'none' }}>
+                        <EmptyState
+                          icon={PersonIcon}
+                          title={searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล'}
+                          description={searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`}
+                          variant="compact"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredSwapDetails.map((detail, index) => (
+                      <TableRow key={detail.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                        <TableCell sx={{ py: 1.5 }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                            {page * rowsPerPage + index + 1}
+                          </Typography>
+                        </TableCell>
+                        
+                        <TableCell sx={{ py: 1.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: isTablet ? '0.8125rem' : '0.875rem' }}>
+                                {joinInline(detail.rank || '-', detail.fullName || '-')}
+                              </Typography>
+                              <Typography 
+                                variant="caption" 
+                                color="text.secondary" 
+                                sx={{ 
+                                  fontSize: isTablet ? '0.75rem' : '0.8125rem', 
+                                  display: 'block', 
+                                  mt: 0.25,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {(() => {
+                                  const code = detail.posCodeMaster ? `${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}` : '';
+                                  const unit = detail.fromUnit ? `หน่วย: ${detail.fromUnit}` : '';
+                                  return joinInline(code, detail.fromPosition || undefined, unit) || '-';
+                                })()}
+                              </Typography>
+                              {detail.nationalId && (
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
+                                  เลขตำแหน่ง: {detail.nationalId}
+                                </Typography>
+                              )}
+                            </Box>
+                            {!isTablet && (
+                              <Tooltip title="ดูข้อมูลเต็ม">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleViewPersonnelDetail(detail)}
+                                  sx={{
+                                    color: 'primary.main',
+                                    '&:hover': { bgcolor: 'primary.50' }
+                                  }}
+                                >
+                                  <InfoIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ py: 1.5, bgcolor: (detail.toPosCodeMaster || detail.toPosition) ? alpha('#4caf50', 0.05) : 'transparent' }}>
+                          {(detail.toPosCodeMaster || detail.toPosition) ? (
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                {detail.toPosCodeMaster && (
+                                  <Typography 
+                                    variant="caption" 
+                                    color="success.main" 
+                                    sx={{ 
+                                      fontSize: isTablet ? '0.7rem' : '0.75rem', 
+                                      display: 'block', 
+                                      fontWeight: 600,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {detail.toPosCodeMaster.id} - {detail.toPosCodeMaster.name}
+                                  </Typography>
+                                )}
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontWeight: 600, 
+                                    color: 'success.main', 
+                                    fontSize: isTablet ? '0.8125rem' : '0.875rem',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {(() => {
+                                    const unit = detail.toUnit ? `หน่วย: ${detail.toUnit}` : '';
+                                    return joinInline(detail.toPosition || undefined, unit);
+                                  })()}
+                                </Typography>
+                                {detail.toPositionNumber && (
+                                  <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
+                                    เลขตำแหน่ง: {detail.toPositionNumber}
+                                  </Typography>
+                                )}
+                                {/* ผู้ที่เดิมครองตำแหน่งนี้ */}
+                                <Box sx={{ mt: 0.4 }}>
+                                  {(() => {
+                                    // แสดง skeleton loading ถ้ากำลังโหลด replaced persons
+                                    if (loadingReplacedPersons && !replacedPersonsMap.has(detail.id)) {
+                                      return (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                          <Skeleton variant="text" width={120} height={14} />
+                                        </Box>
+                                      );
+                                    }
+                                    
+                                    const replaced = replacedPersonsMap.get(detail.id);
+                                    if (replaced) {
+                                      return (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                                          <Typography 
+                                            variant="caption" 
+                                            sx={{ 
+                                              fontSize: isTablet ? '0.7rem' : '0.75rem', 
+                                              color: 'warning.dark', 
+                                              fontWeight: 600 
+                                            }}
+                                          >
+                                            เดิม: {joinInline(replaced.rank || '', replaced.fullName || '')}
+                                          </Typography>
+                                          {!isTablet && (
+                                            <Tooltip title="ดูข้อมูลเต็ม">
+                                              <IconButton
+                                                size="small"
+                                                onClick={() => handleViewPersonnelDetail(replaced)}
+                                                sx={{
+                                                  color: 'warning.dark',
+                                                  p: 0.25,
+                                                  '&:hover': { bgcolor: 'warning.50' }
+                                                }}
+                                              >
+                                                <InfoIcon sx={{ fontSize: 14 }} />
+                                              </IconButton>
+                                            </Tooltip>
+                                          )}
+                                        </Box>
+                                      );
+                                    }
+                                    if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way') && detail.toPosCodeId) {
+                                      return (
+                                        <Typography variant="caption" color="error.main" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                                          เดิม: ข้อมูลไม่พบ
+                                        </Typography>
+                                      );
+                                    }
+                                    return (
+                                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                                        เดิม: ตำแหน่งว่าง
+                                      </Typography>
+                                    );
+                                  })()}
+                                </Box>
+                              </Box>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                              ยังไม่ได้สลับตำแหน่ง
                             </Typography>
-                            {/* ผู้ที่เดิมครองตำแหน่งนี้ */}
-                            <Box sx={{ mt: 0.4 }}>
+                          )}
+                        </TableCell>
+                        
+                        {/* ประเภทการสลับ */}
+                        <TableCell sx={{ py: 1.5 }}>
+                          {detail.transaction ? (
+                            <Chip 
+                              label={getSwapTypeLabel(detail.transaction.swapType)}
+                              size="small"
+                              color={detail.transaction.swapType === 'three-way' ? 'warning' : (detail.transaction.swapType === 'promotion' ? 'info' : 'primary')}
+                              sx={{ fontSize: isTablet ? '0.7rem' : '0.75rem' }}
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">-</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1.5 }}>
+                          {detail.transaction ? (
+                            <Tooltip title="ดูรายละเอียด">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleViewDetail(detail)}
+                                sx={{
+                                  color: 'primary.main',
+                                  '&:hover': {
+                                    bgcolor: 'primary.50',
+                                  }
+                                }}
+                              >
+                                <InfoIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">
+                              -
+                            </Typography>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            
+            {/* Pagination */}
+            <DataTablePagination
+              count={data?.totalCount || 0}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              variant="minimal"
+              disabled={loading}
+            />
+          </Paper>
+        ) : (
+          /* Card View - Mobile */
+          <Box>
+            {loading ? (
+              // Skeleton Loading Cards
+              <Stack spacing={2}>
+                {Array.from({ length: rowsPerPage }).map((_, index) => (
+                  <Card key={`skeleton-card-${index}`}>
+                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                      {/* Header */}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                        <Skeleton variant="text" width={40} height={20} />
+                        <Skeleton variant="rounded" width={80} height={20} />
+                      </Box>
+
+                      {/* Personnel Info */}
+                      <Box sx={{ mb: 1.5 }}>
+                        <Skeleton variant="text" width="70%" height={20} sx={{ mb: 0.5 }} />
+                        <Skeleton variant="text" width="90%" height={16} />
+                      </Box>
+
+                      <Divider sx={{ my: 1.5 }} />
+
+                      {/* From Position */}
+                      <Box sx={{ mb: 1.5 }}>
+                        <Skeleton variant="text" width={100} height={16} sx={{ mb: 0.5 }} />
+                        <Skeleton variant="text" width="80%" height={18} />
+                        <Skeleton variant="text" width="60%" height={14} sx={{ mt: 0.25 }} />
+                        <Skeleton variant="text" width="50%" height={14} sx={{ mt: 0.25 }} />
+                      </Box>
+
+                      {/* To Position */}
+                      <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Skeleton variant="text" width={100} height={16} sx={{ mb: 0.5 }} />
+                        <Skeleton variant="text" width="85%" height={16} />
+                        <Skeleton variant="text" width="75%" height={18} sx={{ mt: 0.25 }} />
+                        <Skeleton variant="text" width="65%" height={14} sx={{ mt: 0.25 }} />
+                        <Skeleton variant="text" width="55%" height={14} sx={{ mt: 0.25 }} />
+                        <Box sx={{ mt: 1, pt: 1 }}>
+                          <Skeleton variant="text" width="70%" height={14} />
+                        </Box>
+                      </Box>
+
+                      {/* Actions */}
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                        <Skeleton variant="rounded" width="50%" height={32} />
+                        <Skeleton variant="rounded" width="50%" height={32} />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
+            ) : filteredSwapDetails.length === 0 ? (
+              <Paper sx={{ p: 0 }}>
+                <EmptyState
+                  icon={PersonIcon}
+                  title={searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล'}
+                  description={searchText ? 'ลองปรับเปลี่ยนคำค้นหาหรือล้างตัวกรอง' : `ยังไม่มีข้อมูลการสลับตำแหน่งในปี ${selectedYear}`}
+                  variant="compact"
+                />
+              </Paper>
+            ) : (
+              <>
+                <Stack spacing={2}>
+                  {filteredSwapDetails.map((detail, index) => (
+                    <Card key={detail.id} sx={{ position: 'relative' }}>
+                      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                        {/* Header */}
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                            #{page * rowsPerPage + index + 1}
+                          </Typography>
+                          {detail.transaction && (
+                            <Chip 
+                              label={getSwapTypeLabel(detail.transaction.swapType)}
+                              size="small"
+                              color={detail.transaction.swapType === 'three-way' ? 'warning' : (detail.transaction.swapType === 'promotion' ? 'info' : 'primary')}
+                              sx={{ fontSize: '0.7rem', height: 20 }}
+                            />
+                          )}
+                        </Box>
+
+                        {/* Personnel Info */}
+                        <Box sx={{ mb: 1.5 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                            {joinInline(detail.rank || '-', detail.fullName || '-')}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                            {(() => {
+                              const code = detail.posCodeMaster ? `${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}` : '';
+                              return code || '-';
+                            })()}
+                          </Typography>
+                        </Box>
+
+                        <Divider sx={{ my: 1.5 }} />
+
+                        {/* From Position */}
+                        <Box sx={{ mb: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                            ตำแหน่งเดิม
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
+                            {detail.fromPosition || '-'}
+                          </Typography>
+                          {detail.fromUnit && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', display: 'block' }}>
+                              หน่วย: {detail.fromUnit}
+                            </Typography>
+                          )}
+                          {detail.nationalId && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block' }}>
+                              เลขตำแหน่ง: {detail.nationalId}
+                            </Typography>
+                          )}
+                        </Box>
+
+                        {/* To Position */}
+                        {(detail.toPosCodeMaster || detail.toPosition) ? (
+                          <Box sx={{ p: 1.5, bgcolor: alpha('#4caf50', 0.08), borderRadius: 1 }}>
+                            <Typography variant="caption" color="success.dark" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                              ตำแหน่งใหม่
+                            </Typography>
+                            {detail.toPosCodeMaster && (
+                              <Typography variant="caption" color="success.main" sx={{ fontSize: '0.75rem', display: 'block', fontWeight: 600 }}>
+                                {detail.toPosCodeMaster.id} - {detail.toPosCodeMaster.name}
+                              </Typography>
+                            )}
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', fontSize: '0.8125rem' }}>
+                              {detail.toPosition || '-'}
+                            </Typography>
+                            {detail.toUnit && (
+                              <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.75rem', display: 'block' }}>
+                                หน่วย: {detail.toUnit}
+                              </Typography>
+                            )}
+                            {detail.toPositionNumber && (
+                              <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.7rem', display: 'block' }}>
+                                เลขตำแหน่ง: {detail.toPositionNumber}
+                              </Typography>
+                            )}
+                            
+                            {/* Replaced Person */}
+                            <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'success.light' }}>
                               {(() => {
+                                // แสดง skeleton loading ถ้ากำลังโหลด replaced persons
+                                if (loadingReplacedPersons && !replacedPersonsMap.has(detail.id)) {
+                                  return <Skeleton variant="text" width={140} height={16} />;
+                                }
+                                
                                 const replaced = replacedPersonsMap.get(detail.id);
                                 if (replaced) {
                                   return (
-                                    <Typography variant="caption" sx={{ fontSize: '0.62rem', color: 'warning.dark', fontWeight: 600 }}>
+                                    <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'warning.dark', fontWeight: 600 }}>
                                       เดิม: {joinInline(replaced.rank || '', replaced.fullName || '')}
                                     </Typography>
                                   );
                                 }
-                                // ถ้ามี toPosCode แต่ไม่มี replaced และเป็น two-way หรือ three-way ถือว่า fallback ล้มเหลว -> แสดงข้อความเฉพาะ
                                 if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way') && detail.toPosCodeId) {
                                   return (
-                                    <Typography variant="caption" color="error.main" sx={{ fontSize: '0.62rem', fontStyle: 'italic' }}>
-                                      เดิม: ข้อมูลไม่พบ (ตรวจสอบข้อมูล transaction)
+                                    <Typography variant="caption" color="error.main" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
+                                      เดิม: ข้อมูลไม่พบ
                                     </Typography>
                                   );
                                 }
                                 return (
-                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.62rem', fontStyle: 'italic' }}>
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
                                     เดิม: ตำแหน่งว่าง
                                   </Typography>
                                 );
@@ -679,426 +1185,100 @@ export default function InOutPage() {
                             </Box>
                           </Box>
                         ) : (
-                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', fontStyle: 'italic' }}>
-                            ยังไม่ได้สลับตำแหน่ง
-                          </Typography>
+                          <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.75rem', fontStyle: 'italic' }}>
+                              ยังไม่ได้สลับตำแหน่ง
+                            </Typography>
+                          </Box>
                         )}
-                      </TableCell>
-                      
-                      {/* ประเภทการสลับ */}
-                      <TableCell sx={{ py: 1.5 }}>
-                        {detail.transaction ? (
-                          <Chip 
-                            label={getSwapTypeLabel(detail.transaction.swapType)}
+
+                        {/* Actions */}
+                        <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                          <Button
+                            fullWidth
                             size="small"
-                            color={detail.transaction.swapType === 'three-way' ? 'warning' : (detail.transaction.swapType === 'promotion' ? 'info' : 'primary')}
-                          />
-                        ) : (
-                          <Typography variant="caption" color="text.disabled">-</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="center" sx={{ py: 1.5 }}>
-                        {detail.transaction ? (
-                          <Tooltip title="ดูรายละเอียด">
-                            <IconButton
+                            variant="outlined"
+                            startIcon={<InfoIcon />}
+                            onClick={() => handleViewPersonnelDetail(detail)}
+                          >
+                            ข้อมูลบุคลากร
+                          </Button>
+                          {detail.transaction && (
+                            <Button
+                              fullWidth
                               size="small"
+                              variant="contained"
+                              startIcon={<InfoIcon />}
                               onClick={() => handleViewDetail(detail)}
-                              sx={{
-                                color: 'primary.main',
-                                '&:hover': {
-                                  bgcolor: 'primary.50',
-                                }
-                              }}
                             >
-                              <ViewIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        ) : (
-                          <Typography variant="caption" color="text.disabled">
-                            -
-                          </Typography>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          
-          {/* Pagination */}
-          <DataTablePagination
-            count={data?.totalCount || 0}
-            page={page}
-            rowsPerPage={rowsPerPage}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            variant="minimal"
-            disabled={loading}
-          />
-        </Paper>
+                              รายละเอียด
+                            </Button>
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+
+                {/* Pagination for Mobile */}
+                <Paper sx={{ mt: 2 }}>
+                  <DataTablePagination
+                    count={data?.totalCount || 0}
+                    page={page}
+                    rowsPerPage={rowsPerPage}
+                    onPageChange={handleChangePage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    rowsPerPageOptions={[5, 10, 25]}
+                    variant="minimal"
+                    disabled={loading}
+                  />
+                </Paper>
+              </>
+            )}
+          </Box>
+        )}
 
         {/* Detail Modal */}
-        <Dialog
+        <InOutDetailModal
           open={detailModalOpen}
           onClose={handleCloseDetailModal}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SwapHorizIcon color="primary" />
-              <Typography variant="h6" fontWeight={600}>
-                รายละเอียดการสลับตำแหน่ง
-              </Typography>
-            </Box>
-            <IconButton onClick={handleCloseDetailModal} size="small">
-              <CloseIcon />
-            </IconButton>
-          </DialogTitle>
-          <Divider />
-          <DialogContent sx={{ pt: 3 }}>
-            {selectedDetail && selectedDetail.transaction && (
-              <Stack spacing={3}>
-                {/* ข้อมูลทั่วไป */}
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    ข้อมูลทั่วไป
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mt: 1.5 }}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">วันที่สลับ</Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                        <CalendarIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                        <Typography variant="body2" fontWeight={500}>
-                          {formatDate(selectedDetail.transaction.swapDate)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">เลขกลุ่ม</Typography>
-                      <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                        {selectedDetail.transaction.groupNumber || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">ประเภท</Typography>
-                      <Box sx={{ mt: 0.5 }}>
-                        <Chip 
-                          label={getSwapTypeLabel(selectedDetail.transaction.swapType)}
-                          size="small"
-                          color={selectedDetail.transaction.swapType === 'three-way' ? 'warning' : 'primary'}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">ปี</Typography>
-                      <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                        {selectedDetail.transaction.year}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
+          detail={selectedDetail}
+          swapPartner={swapPartner}
+          replacedPerson={replacedPerson}
+          onViewPersonnelDetail={handleViewPersonnelDetail}
+        />
 
-                {/* ข้อมูลบุคคล */}
-                <Paper sx={{ p: 2, bgcolor: 'primary.50' }}>
-                  <Typography variant="subtitle2" color="primary.main" gutterBottom fontWeight={600}>
-                    ข้อมูลบุคคล
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mt: 1.5 }}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">ยศ</Typography>
-                      <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                        {selectedDetail.rank || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">ชื่อ-สกุล</Typography>
-                      <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }}>
-                        {selectedDetail.fullName}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">ตำแหน่งเดิม</Typography>
-                      <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }}>
-                        {selectedDetail.fromPosition}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">เลขบัตรประชาชน</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {selectedDetail.nationalId || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">วันเกิด</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {formatDate(selectedDetail.birthDate) || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">อายุ</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {selectedDetail.age ? `${selectedDetail.age} ปี` : '-'}
-                      </Typography>
-                    </Box>
-                    {selectedDetail.seniority && (
-                      <Box sx={{ gridColumn: '1 / -1' }}>
-                        <Typography variant="caption" color="text.secondary">อาวุโส</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {selectedDetail.seniority}
-                        </Typography>
-                      </Box>
-                    )}
-                    {selectedDetail.education && (
-                      <Box sx={{ gridColumn: '1 / -1' }}>
-                        <Typography variant="caption" color="text.secondary">คุณวุฒิการศึกษา</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {selectedDetail.education}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                </Paper>
-
-                {/* ข้อมูลการดำรงตำแหน่ง */}
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom fontWeight={600}>
-                    ข้อมูลการดำรงตำแหน่ง
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mt: 1.5 }}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">วันบรรจุ</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {formatDate(selectedDetail.enrollmentDate) || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">วันเกษียณ</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {formatDate(selectedDetail.retirementDate) || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">จำนวนปีราชการ</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {selectedDetail.yearsOfService ? `${selectedDetail.yearsOfService} ปี` : '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">แต่งตั้งครั้งสุดท้าย</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {formatDate(selectedDetail.lastAppointment) || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">ระดับนี้เมื่อ</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {formatDate(selectedDetail.currentRankSince) || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">สถานที่ฝึกอบรม</Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {selectedDetail.trainingLocation || '-'}
-                      </Typography>
-                    </Box>
-                    {selectedDetail.trainingCourse && (
-                      <Box sx={{ gridColumn: '1 / -1' }}>
-                        <Typography variant="caption" color="text.secondary">หลักสูตรฝึกอบรม</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {selectedDetail.trainingCourse}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                </Paper>
-
-                {/* สรุปการสลับตำแหน่ง */}
-                <Paper sx={{ p: 3, bgcolor: alpha('#2196f3', 0.05), border: 2, borderColor: 'primary.main' }}>
-                  <Typography variant="h6" fontWeight={600} color="primary.main" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <SwapHorizIcon />
-                    สรุปการสลับตำแหน่ง
-                  </Typography>
-                  <Divider sx={{ my: 2 }} />
-                  
-                  {/* คำอธิบาย */}
-                  <Stack spacing={2.5}>
-                    {/* ตำแหน่งเดิม */}
-                    <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 2, border: 1, borderColor: 'grey.300' }}>
-                      <Typography variant="subtitle2" fontWeight={600} color="text.primary" gutterBottom>
-                        📍 ตำแหน่งเดิม (ที่เคยอยู่)
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                        {selectedDetail.rank} {selectedDetail.fullName} เดิมอยู่ที่ตำแหน่งนี้
-                      </Typography>
-                      <Box sx={{ pl: 2, borderLeft: 3, borderColor: 'grey.400' }}>
-                        {selectedDetail.posCodeMaster && (
-                          <Typography variant="body2" fontWeight={600} color="primary.main">
-                            {selectedDetail.posCodeMaster.id} - {selectedDetail.posCodeMaster.name}
-                          </Typography>
-                        )}
-                        <Typography variant="body2" color="text.secondary">
-                          {selectedDetail.fromPosition || '-'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          หน่วย: {selectedDetail.fromUnit || '-'}
-                        </Typography>
-                      </Box>
-                      {swapPartner && (
-                        <Box sx={{ mt: 2, p: 1.5, bgcolor: 'info.50', borderRadius: 1 }}>
-                          <Typography variant="caption" color="info.dark" fontWeight={600}>
-                            💡 ตำแหน่งเดิมนี้ตอนนี้มี {swapPartner.rank} {swapPartner.fullName} มาอยู่แทน
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
-
-                    {/* ลูกศร */}
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                      <Chip 
-                        icon={<SwapHorizIcon />}
-                        label="สลับตำแหน่ง"
-                        color="primary"
-                        sx={{ fontWeight: 600, px: 2 }}
-                      />
-                    </Box>
-
-                    {/* ตำแหน่งใหม่ */}
-                    <Box sx={{ p: 2, bgcolor: alpha('#4caf50', 0.1), borderRadius: 2, border: 2, borderColor: 'success.main' }}>
-                      <Typography variant="subtitle2" fontWeight={600} color="success.dark" gutterBottom>
-                        ✅ ตำแหน่งใหม่ (ที่ได้รับ)
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                        {selectedDetail.rank} {selectedDetail.fullName} ได้รับตำแหน่งใหม่นี้
-                      </Typography>
-                      <Box sx={{ pl: 2, borderLeft: 3, borderColor: 'success.main' }}>
-                        {selectedDetail.toPosCodeMaster && (
-                          <Typography variant="body2" fontWeight={600} color="success.main">
-                            {selectedDetail.toPosCodeMaster.id} - {selectedDetail.toPosCodeMaster.name}
-                          </Typography>
-                        )}
-                        <Typography variant="body2" fontWeight={500}>
-                          {selectedDetail.toPosition || '-'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          หน่วย: {selectedDetail.toUnit || '-'}
-                        </Typography>
-                      </Box>
-                      {replacedPerson && (
-                        <Box sx={{ mt: 2, p: 1.5, bgcolor: 'warning.50', borderRadius: 1 }}>
-                          <Typography variant="caption" color="warning.dark" fontWeight={600}>
-                            💡 ตำแหน่งใหม่นี้เดิมมี {replacedPerson.rank} {replacedPerson.fullName} อยู่
-                          </Typography>
-                        </Box>
-                      )}
-                    </Box>
-                  </Stack>
-                </Paper>
-
-                {/* รายละเอียดตำแหน่ง */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
-                  {/* ตำแหน่งเดิม - รายละเอียด */}
-                  <Paper sx={{ p: 2.5, border: 1, borderColor: 'grey.300' }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
-                      รายละเอียดตำแหน่งเดิม
-                    </Typography>
-                    <Stack spacing={1.5}>
-                      {selectedDetail.posCodeMaster && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">POS CODE</Typography>
-                          <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ mt: 0.5 }}>
-                            {selectedDetail.posCodeMaster.id} - {selectedDetail.posCodeMaster.name}
-                          </Typography>
-                        </Box>
-                      )}
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">ตำแหน่ง</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {selectedDetail.fromPosition || '-'}
-                        </Typography>
-                      </Box>
-                      {selectedDetail.fromPositionNumber && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">เลขที่ตำแหน่ง</Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {selectedDetail.fromPositionNumber}
-                          </Typography>
-                        </Box>
-                      )}
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">หน่วย</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5 }}>
-                          {selectedDetail.fromUnit || '-'}
-                        </Typography>
-                      </Box>
-                      {selectedDetail.fromActingAs && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">ทำหน้าที่</Typography>
-                          <Typography variant="body2" sx={{ mt: 0.5 }}>
-                            {selectedDetail.fromActingAs}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Stack>
-                  </Paper>
-
-                  {/* ตำแหน่งใหม่ - รายละเอียด */}
-                  <Paper sx={{ p: 2.5, border: 1, borderColor: 'success.main', bgcolor: alpha('#4caf50', 0.03) }}>
-                    <Typography variant="subtitle2" color="success.main" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
-                      รายละเอียดตำแหน่งใหม่
-                    </Typography>
-                    <Stack spacing={1.5}>
-                      {selectedDetail.toPosCodeMaster && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">POS CODE</Typography>
-                          <Typography variant="body2" fontWeight={600} color="success.main" sx={{ mt: 0.5 }}>
-                            {selectedDetail.toPosCodeMaster.id} - {selectedDetail.toPosCodeMaster.name}
-                          </Typography>
-                        </Box>
-                      )}
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">ตำแหน่ง</Typography>
-                        <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                          {selectedDetail.toPosition || '-'}
-                        </Typography>
-                      </Box>
-                      {selectedDetail.toPositionNumber && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">เลขที่ตำแหน่ง</Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {selectedDetail.toPositionNumber}
-                          </Typography>
-                        </Box>
-                      )}
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">หน่วย</Typography>
-                        <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                          {selectedDetail.toUnit || '-'}
-                        </Typography>
-                      </Box>
-                      {selectedDetail.toActingAs && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary">ทำหน้าที่</Typography>
-                          <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                            {selectedDetail.toActingAs}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Stack>
-                  </Paper>
-                </Box>
-              </Stack>
-            )}
-          </DialogContent>
-          <Divider />
-          <DialogActions sx={{ p: 2 }}>
-            <Button onClick={handleCloseDetailModal} variant="outlined">
-              ปิด
-            </Button>
-          </DialogActions>
-        </Dialog>
+        {/* Personnel Detail Modal */}
+        {selectedPersonnelForDetail && (
+          <PersonnelDetailModal
+            open={personnelDetailModalOpen}
+            onClose={handleClosePersonnelDetailModal}
+            personnel={{
+              id: selectedPersonnelForDetail.personnelId,
+              noId: selectedPersonnelForDetail.noId,
+              fullName: selectedPersonnelForDetail.fullName,
+              rank: selectedPersonnelForDetail.rank,
+              nationalId: selectedPersonnelForDetail.nationalId,
+              age: selectedPersonnelForDetail.age,
+              seniority: selectedPersonnelForDetail.seniority,
+              posCodeId: selectedPersonnelForDetail.posCodeId,
+              posCodeMaster: selectedPersonnelForDetail.posCodeMaster,
+              position: selectedPersonnelForDetail.fromPosition,
+              positionNumber: selectedPersonnelForDetail.fromPositionNumber,
+              unit: selectedPersonnelForDetail.fromUnit,
+              actingAs: selectedPersonnelForDetail.fromActingAs,
+              birthDate: selectedPersonnelForDetail.birthDate,
+              education: selectedPersonnelForDetail.education,
+              lastAppointment: selectedPersonnelForDetail.lastAppointment,
+              currentRankSince: selectedPersonnelForDetail.currentRankSince,
+              enrollmentDate: selectedPersonnelForDetail.enrollmentDate,
+              retirementDate: selectedPersonnelForDetail.retirementDate,
+              yearsOfService: selectedPersonnelForDetail.yearsOfService,
+              trainingLocation: selectedPersonnelForDetail.trainingLocation,
+              trainingCourse: selectedPersonnelForDetail.trainingCourse,
+            }}
+          />
+        )}
       </Box>
     </Layout>
   );

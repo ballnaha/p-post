@@ -170,6 +170,7 @@ export async function GET(request: NextRequest) {
             return {
                 id: person.id,
                 personnelId: person.id,
+                noId: person.noId,
                 fullName: person.fullName,
                 rank: person.rank,
                 nationalId: person.nationalId,
@@ -212,6 +213,7 @@ export async function GET(request: NextRequest) {
                 
                 hasSwapped: !!swapInfo,
                 source: 'personnel' as const,
+                replacedPerson: null as { rank: string | null; fullName: string | null; nationalId: string | null } | null,
             };
         });
 
@@ -236,6 +238,7 @@ export async function GET(request: NextRequest) {
             .map(detail => ({
                 id: detail.id,
                 personnelId: detail.personnelId || detail.id,
+                noId: detail.noId,
                 fullName: detail.fullName,
                 rank: detail.rank,
                 nationalId: detail.nationalId,
@@ -278,6 +281,7 @@ export async function GET(request: NextRequest) {
                 
                 hasSwapped: true,
                 source: 'swap_only' as const, // คนที่ไม่อยู่ใน personnel แล้ว
+                replacedPerson: null as { rank: string | null; fullName: string | null; nationalId: string | null } | null,
             }));
 
         // รวมข้อมูลทั้ง 2 ส่วน

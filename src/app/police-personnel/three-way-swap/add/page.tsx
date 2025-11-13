@@ -241,6 +241,7 @@ export default function AddThreeWaySwapPage() {
           rank: personnelA.rank,
           seniority: personnelA.seniority,
           posCodeId: personnelA.posCodeId,
+          toPosCodeId: personnelB.posCodeId,
           // ข้อมูลส่วนตัว
           birthDate: personnelA.birthDate,
           age: personnelA.age,
@@ -278,6 +279,7 @@ export default function AddThreeWaySwapPage() {
           rank: personnelB.rank,
           seniority: personnelB.seniority,
           posCodeId: personnelB.posCodeId,
+          toPosCodeId: personnelC.posCodeId,
           // ข้อมูลส่วนตัว
           birthDate: personnelB.birthDate,
           age: personnelB.age,
@@ -315,6 +317,7 @@ export default function AddThreeWaySwapPage() {
           rank: personnelC.rank,
           seniority: personnelC.seniority,
           posCodeId: personnelC.posCodeId,
+          toPosCodeId: personnelA.posCodeId,
           // ข้อมูลส่วนตัว
           birthDate: personnelC.birthDate,
           age: personnelC.age,

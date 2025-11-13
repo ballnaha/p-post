@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -20,8 +20,6 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  IconButton,
-  Collapse,
   CircularProgress,
   Accordion,
   AccordionSummary,
@@ -36,11 +34,9 @@ import {
 import {
   CloudUpload as UploadIcon,
   CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
   Download as DownloadIcon,
   Info as InfoIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
   Update as UpdateIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
@@ -56,11 +52,20 @@ export default function ImportPolicePersonnelPage() {
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
   const [importMode, setImportMode] = useState<ImportMode>('full');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
-  const [jobId, setJobId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const currentBuddhistYear = new Date().getFullYear() + 543;
-  const yearOptions = Array.from({ length: 7 }, (_, i) => currentBuddhistYear - 5 + i);
+  // Generate available years (from 2568 to current year) - same as swap-list
+  const availableYears = useMemo(() => {
+    const currentBuddhistYear = new Date().getFullYear() + 543;
+    const startYear = 2568;
+    const years: number[] = [];
+    
+    for (let year = currentBuddhistYear; year >= startYear; year--) {
+      years.push(year);
+    }
+    
+    return years;
+  }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -109,7 +114,6 @@ export default function ImportPolicePersonnelPage() {
       const data = await response.json();
 
       if (data.success && data.jobId) {
-        setJobId(data.jobId);
         // เริ่ม polling
         pollJobStatus(data.jobId);
       } else {
@@ -212,11 +216,11 @@ export default function ImportPolicePersonnelPage() {
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
               เลือกประเภทการ Import:
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'space-between' }}>
               <ToggleButtonGroup
                 value={importMode}
                 exclusive
-                onChange={(e, newMode) => {
+                onChange={(_e, newMode) => {
                   if (newMode !== null) {
                     setImportMode(newMode);
                     setFile(null);
@@ -242,7 +246,7 @@ export default function ImportPolicePersonnelPage() {
               </ToggleButtonGroup>
               
               {/* Year Selection Dropdown */}
-              <FormControl size="small" sx={{ minWidth: 120 }}>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel id="year-select-label">ปี พ.ศ.</InputLabel>
                 <Select
                   labelId="year-select-label"
@@ -251,7 +255,7 @@ export default function ImportPolicePersonnelPage() {
                   label="ปี พ.ศ."
                   onChange={(e) => setSelectedYear(Number(e.target.value))}
                 >
-                  {yearOptions.map((year) => (
+                  {availableYears.map((year) => (
                     <MenuItem key={year} value={year}>
                       {year}
                     </MenuItem>
@@ -262,10 +266,10 @@ export default function ImportPolicePersonnelPage() {
           </Box>
 
           {/* Mode Description */}
-          <Alert severity={importMode === 'full' ? 'warning' : 'info'} sx={{ mb: 0 }}>
+          <Alert severity={importMode === 'full' ? 'info' : 'info'} sx={{ mb: 0 }}>
             {importMode === 'full' ? (
               <Typography variant="body2">
-                <strong>⚠️ Import แบบเต็ม:</strong> ระบบจะลบข้อมูลบุคลากรทั้งหมดในระบบ แล้วนำเข้าข้อมูลใหม่จากไฟล์ Excel
+                <strong>✨ Import แบบเต็ม:</strong> ระบบจะนำเข้าข้อมูลบุคลากรจากไฟล์ Excel โดยไม่ลบข้อมูลเดิม หากมีข้อมูลซ้ำ (เลขบัตรประชาชนเดียวกัน) จะอัปเดตข้อมูลเดิม
               </Typography>
             ) : (
               <Typography variant="body2">
@@ -294,11 +298,11 @@ export default function ImportPolicePersonnelPage() {
             </Box>
           </AccordionSummary>
           <AccordionDetails sx={{ pt: 1 }}>
-            <Typography variant="body2" color="text.secondary" paragraph>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               <strong>📌 วัตถุประสงค์:</strong> ระบบ Import ใช้สำหรับนำเข้าข้อมูลบุคลากรตำรวจจากไฟล์ Excel เข้าสู่ระบบฐานข้อมูล
             </Typography>
 
-            <Typography variant="body2" color="text.secondary" paragraph>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               <strong>📋 ขั้นตอนการใช้งาน:</strong>
             </Typography>
 
@@ -325,7 +329,7 @@ export default function ImportPolicePersonnelPage() {
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="body2" color="text.secondary" paragraph fontWeight={600}>
+            <Typography variant="body2" color="text.secondary" fontWeight={600} sx={{ mb: 2 }}>
               📊 รูปแบบคอลัมน์ใน Excel:
             </Typography>
 
@@ -376,12 +380,13 @@ export default function ImportPolicePersonnelPage() {
             <Alert severity="warning" sx={{ mb: 2 }}>
               <strong>⚠️ ข้อควรระวัง:</strong>
               <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                <li><strong>Import แบบเต็ม:</strong> จะลบข้อมูลเดิมทั้งหมดในระบบ (23 คอลัมน์)</li>
+                <li><strong>Import แบบเต็ม:</strong> จะไม่ลบข้อมูลเดิม แต่จะเพิ่มข้อมูลใหม่เข้าไปในระบบ (23 คอลัมน์)</li>
                 <li><strong>อัปเดตผู้สนับสนุน:</strong> จะอัปเดตเฉพาะฟิลด์ผู้สนับสนุนและเหตุผล โดยอ้างอิงจากเลขตำแหน่ง (5 คอลัมน์)</li>
                 <li><strong>สำหรับตำแหน่งที่มีคน:</strong> ใส่เลขบัตรประชาชน</li>
                 <li><strong>สำหรับตำแหน่งว่าง:</strong> เว้นเลขบัตรประชาชนว่างไว้ ระบบจะใช้เลขตำแหน่งในการค้นหา</li>
                 <li>ห้ามลบหรือเปลี่ยนชื่อหัวคอลัมน์ เพราะจะทำให้การ import ผิดพลาด</li>
                 <li>ตรวจสอบรูปแบบข้อมูลให้ถูกต้องก่อนอัปโหลด</li>
+                <li><strong>การจัดการข้อมูลซ้ำ:</strong> หากมีข้อมูลซ้ำ (เลขบัตรประชาชนเดียวกัน) ระบบจะอัปเดตข้อมูลเดิมแทนการสร้างใหม่</li>
               </ul>
             </Alert>
 

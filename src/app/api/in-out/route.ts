@@ -16,7 +16,18 @@ export async function GET(request: NextRequest) {
         const page = parseInt(searchParams.get('page') || '0');
         const pageSize = parseInt(searchParams.get('pageSize') || '10');
 
-        console.log('[In-Out API] Request params:', { unit, posCodeId, status, swapType, year, page, pageSize, search });
+        console.log('[In-Out API] Request params:', { 
+            unit, 
+            posCodeId, 
+            status, 
+            swapType, 
+            swapTypeIsAll: swapType === 'all',
+            swapTypeIsNone: swapType === 'none',
+            year, 
+            page, 
+            pageSize, 
+            search 
+        });
         
         // ถ้าขอแค่ filters ให้ return เฉพาะ filters เท่านั้น (เร็วมาก)
         if (filtersOnly) {
@@ -151,11 +162,11 @@ export async function GET(request: NextRequest) {
         console.log('[In-Out API] Personnel count:', personnel.length);
 
         // 3. ดึงข้อมูลจาก swap_transaction_detail (ข้อมูลที่สลับแล้ว)
+        // ไม่ filter swapType ตอน query เพราะจะ filter ทีหลัง
         const swapWhere: Prisma.SwapTransactionDetailWhereInput = {
             transaction: {
                 year: year,
-                status: 'completed',
-                ...(swapType !== 'all' && { swapType: swapType })
+                status: 'completed'
             }
         };
 
@@ -168,7 +179,19 @@ export async function GET(request: NextRequest) {
             },
         });
 
-        console.log('[In-Out API] Swap details count:', swapDetails.length);
+        console.log('[In-Out API] Swap details count:', swapDetails.length, 'for year', year);
+        
+        // Debug: ถ้าไม่มีข้อมูล ให้ดูว่ามีข้อมูลปีไหนบ้าง
+        if (swapDetails.length === 0) {
+            const availableYears = await prisma.swapTransaction.findMany({
+                where: { status: 'completed' },
+                select: { year: true },
+                distinct: ['year'],
+                orderBy: { year: 'desc' },
+                take: 10
+            });
+            console.log('[In-Out API] No swap data for year', year, '. Available years:', availableYears.map(y => y.year));
+        }
 
         // 4. สร้าง Map สำหรับจับคู่ข้อมูล
         const swapByPersonnelId = new Map();
@@ -234,21 +257,25 @@ export async function GET(request: NextRequest) {
             };
         });
 
+        console.log('[In-Out API] Before swapType filter:', combinedData.length);
+
         // 5.1 Filter ตาม swapType (ถ้ามีการเลือก)
         if (swapType !== 'all') {
             console.log('[In-Out API] Filtering by swapType:', swapType);
             
             if (swapType === 'none') {
                 // กรองเฉพาะคนที่ยังไม่ได้จับคู่ (ไม่มี transaction)
+                const beforeFilter = combinedData.length;
                 combinedData = combinedData.filter(d => !d.transaction);
+                console.log('[In-Out API] Filter "none": before =', beforeFilter, ', after =', combinedData.length);
             } else {
                 // กรองเฉพาะคนที่มี transaction และ swapType ตรงกับที่เลือก
+                const beforeFilter = combinedData.length;
                 combinedData = combinedData.filter(d => 
                     d.transaction && d.transaction.swapType === swapType
                 );
+                console.log('[In-Out API] Filter', swapType, ': before =', beforeFilter, ', after =', combinedData.length);
             }
-            
-            console.log('[In-Out API] After swapType filter:', combinedData.length);
         }
 
         // 6. เรียงลำดับ: คนที่สลับแล้วขึ้นก่อน
@@ -266,9 +293,11 @@ export async function GET(request: NextRequest) {
         });
 
         totalCount = combinedData.length;
+        console.log('[In-Out API] Total count after filter:', totalCount);
 
         // 7. Paginate
         combinedData = combinedData.slice(page * pageSize, (page + 1) * pageSize);
+        console.log('[In-Out API] After pagination:', combinedData.length, 'items (page', page, ', pageSize', pageSize, ')');
 
         // 8. หา replaced persons
         try {

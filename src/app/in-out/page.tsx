@@ -257,6 +257,16 @@ export default function InOutPage() {
         pageSize: rowsPerPage.toString(),
       });
       
+      console.log('[Frontend] Fetching with params:', {
+        unit: selectedUnit,
+        posCodeId: selectedPosCode,
+        status: selectedStatus,
+        swapType: selectedSwapType,
+        year: selectedYear,
+        page,
+        pageSize: rowsPerPage
+      });
+      
       if (searchText.trim()) {
         params.append('search', searchText.trim());
       }
@@ -445,6 +455,7 @@ export default function InOutPage() {
   };
 
   const handleSwapTypeChange = (event: SelectChangeEvent<string>) => {
+    console.log('[Frontend] SwapType changed to:', event.target.value);
     setInitialLoad(false);
     setLoading(true); // แสดง skeleton loading ทันที
     setData(null); // Clear data ทันทีเพื่อแสดง skeleton

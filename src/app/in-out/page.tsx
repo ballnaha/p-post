@@ -105,6 +105,9 @@ interface SwapDetail {
   
   // Sequence สำหรับเรียงลำดับ (จาก swap_transaction_detail.sequence)
   sequence?: number | null;
+  
+  // Replaced person (คนที่เดิมอยู่ในตำแหน่งใหม่) - มาจาก API แล้ว
+  replacedPerson?: SwapDetail | null;
 }
 
 interface PositionCode {
@@ -129,10 +132,10 @@ export default function InOutPage() {
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
   const [data, setData] = useState<InOutData | null>(null);
-  const [loading, setLoading] = useState(false); // เริ่มต้นเป็น false - ไม่โหลดอัตโนมัติ
-  const [loadingFilters, setLoadingFilters] = useState(true); // Track filter loading
-  const [initialLoad, setInitialLoad] = useState(true); // Track initial load
-  const [hasSearched, setHasSearched] = useState(false); // Track ว่าเคย search แล้วหรือยัง
+  const [loading, setLoading] = useState(false);
+  const [loadingFilters, setLoadingFilters] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [hasSearched, setHasSearched] = useState(false);
   
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
@@ -153,10 +156,6 @@ export default function InOutPage() {
   const [personnelDetailModalOpen, setPersonnelDetailModalOpen] = useState(false);
   const [selectedPersonnelForDetail, setSelectedPersonnelForDetail] = useState<SwapDetail | null>(null);
   
-  // Store replaced persons for table display
-  const [replacedPersonsMap, setReplacedPersonsMap] = useState<Map<string, SwapDetail>>(new Map());
-  const [loadingReplacedPersons, setLoadingReplacedPersons] = useState(false);
-  
   // Store filter options (loaded once)
   const [filterOptions, setFilterOptions] = useState<{
     units: string[];
@@ -166,18 +165,13 @@ export default function InOutPage() {
     positionCodes: []
   });
   
-  // Cache for transaction details to avoid duplicate API calls
-  const transactionCacheRef = useRef<Map<string, any>>(new Map());
-  
-  // Page-level cache (เหมือน police-personnel)
+  // Page-level cache
   const dataCacheRef = useRef<{
     data: InOutData | null;
-    replacedPersonsMap: Map<string, SwapDetail>;
     timestamp: number;
-    filters: string; // cache key based on filters
+    filters: string;
   }>({
     data: null,
-    replacedPersonsMap: new Map(),
     timestamp: 0,
     filters: ''
   });
@@ -236,24 +230,22 @@ export default function InOutPage() {
     try {
       setLoading(true);
       
-      // สร้าง cache key จาก filters (รวม selectedSwapType ด้วย)
+      // สร้าง cache key จาก filters
       const cacheKey = `${selectedUnit}-${selectedPosCode}-${selectedStatus}-${selectedSwapType}-${selectedYear}-${page}-${rowsPerPage}-${searchText}`;
       const now = Date.now();
       const cacheAge = now - dataCacheRef.current.timestamp;
-      const CACHE_DURATION = 30000; // 30 วินาที (เหมือน police-personnel)
+      const CACHE_DURATION = 30000; // 30 วินาที
       
       // ใช้ cache ถ้าข้อมูลยังไม่เก่าเกินไปและ filters เหมือนเดิม (และไม่ได้ force reload)
       if (!forceReload && dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION) {
         setData(dataCacheRef.current.data);
-        setReplacedPersonsMap(dataCacheRef.current.replacedPersonsMap);
         setInitialLoad(false);
         setLoading(false);
         return;
       }
       
-      // Clear old data และ replaced persons map
+      // Clear old data
       setData(null);
-      setReplacedPersonsMap(new Map());
       
       const params = new URLSearchParams({
         unit: selectedUnit,
@@ -281,29 +273,14 @@ export default function InOutPage() {
       }
       
       const result = await response.json();
-      console.log('API result:', { success: result.success, dataCount: result.data?.swapDetails?.length, totalCount: result.data?.totalCount });
       
       if (result.success) {
-        // โหลด replaced persons ก่อน (ถ้ามี)
-        if (result.data.swapDetails && result.data.swapDetails.length > 0) {
-          setLoadingReplacedPersons(true);
-          try {
-            await fetchReplacedPersons(result.data.swapDetails);
-          } catch (error) {
-            console.error('Error fetching replaced persons:', error);
-          } finally {
-            setLoadingReplacedPersons(false);
-          }
-        }
-        
-        // แสดงข้อมูลหลังจากโหลดเสร็จทั้งหมด
         setData(result.data);
         setInitialLoad(false);
         
         // อัพเดท cache
         dataCacheRef.current = {
           data: result.data,
-          replacedPersonsMap: replacedPersonsMap,
           timestamp: Date.now(),
           filters: cacheKey
         };
@@ -321,155 +298,6 @@ export default function InOutPage() {
         setLoading(false);
       }
     }
-  };
-
-  const fetchReplacedPersons = async (swapDetails: SwapDetail[]) => {
-    const newMap = new Map<string, SwapDetail>();
-    
-    // Filter only those who have transaction (already swapped)
-    const swappedDetails = swapDetails.filter(d => d.transaction);
-    
-    // Group by transaction ID to minimize API calls
-    const transactionIds = [...new Set(swappedDetails.map(d => d.transaction!.id))];
-    
-    // แยก transactions ที่มี cache และไม่มี cache
-    const cachedResults: any[] = [];
-    const uncachedIds: string[] = [];
-    
-    transactionIds.forEach(id => {
-      if (transactionCacheRef.current.has(id)) {
-        cachedResults.push(transactionCacheRef.current.get(id));
-      } else {
-        uncachedIds.push(id);
-      }
-    });
-    
-    // โหลดเฉพาะ transactions ที่ยังไม่มี cache
-    const transactionResults: any[] = [...cachedResults];
-    
-    if (uncachedIds.length > 0) {
-      const batchSize = 10;
-      
-      for (let i = 0; i < uncachedIds.length; i += batchSize) {
-        const batch = uncachedIds.slice(i, i + batchSize);
-        const batchPromises = batch.map(transactionId =>
-          fetch(`/api/swap-transactions/${transactionId}`)
-            .then(response => response.ok ? response.json() : null)
-            .catch(error => {
-              console.error('Error fetching transaction details:', error);
-              return null;
-            })
-        );
-        const batchResults = await Promise.all(batchPromises);
-        
-        // เก็บใน cache
-        batch.forEach((id, index) => {
-          if (batchResults[index]) {
-            transactionCacheRef.current.set(id, batchResults[index]);
-          }
-        });
-        
-        transactionResults.push(...batchResults);
-      }
-    }
-    
-    transactionResults.forEach((result, index) => {
-      if (result && result.success && result.data.swapDetails) {
-        const transactionId = transactionIds[index];
-        try {
-          // For each detail in current page, find who previously held the NEW position
-          // (คนที่เราไปแทน = คนที่เดิมอยู่ในตำแหน่งใหม่ของเรา)
-          const txDetails: SwapDetail[] = swappedDetails.filter(d => d.transaction!.id === transactionId);
-          const rawTxDetails: SwapDetail[] = result.data.swapDetails;
-          const swapTypeFromApi: string | undefined = result?.data?.swapType;
-          const isTwoWay = swapTypeFromApi === 'two-way' && rawTxDetails.length >= 2;
-          
-          console.log('[In-Out] Transaction debug', {
-            transactionId,
-            swapType: swapTypeFromApi,
-            apiRecords: rawTxDetails.length,
-            apiDetails: rawTxDetails.map(d => ({ id: d.id, fullName: d.fullName })),
-            pageRecords: txDetails.length,
-            pageDetails: txDetails.map(d => ({ id: d.id, fullName: d.fullName }))
-          });
-
-          txDetails.forEach(detail => {
-            let replaced: SwapDetail | undefined;
-
-            if (isTwoWay) {
-              // Two-way: ใช้ personnelId หรือ nationalId ในการ match (เพราะ ID ของ detail ไม่ตรงกัน)
-              if (rawTxDetails.length === 2) {
-                // เอาคนอื่นใน transaction (match by personnelId or nationalId)
-                replaced = rawTxDetails.find(d => 
-                  d.personnelId !== detail.personnelId || 
-                  d.nationalId !== detail.nationalId
-                );
-                console.log('[In-Out] Two-way match by personnelId:', {
-                  person: detail.fullName,
-                  personPersonnelId: detail.personnelId,
-                  personNationalId: detail.nationalId,
-                  otherPerson: replaced?.fullName || 'NOT FOUND',
-                  otherPersonnelId: replaced?.personnelId,
-                  otherNationalId: replaced?.nationalId
-                });
-              } else if (detail.toPositionNumber) {
-                // Fallback: ใช้ position_number
-                replaced = rawTxDetails.find((d: SwapDetail) => 
-                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                  d.fromPositionNumber === detail.toPositionNumber
-                );
-              } else if (detail.toPosition) {
-                // Fallback: ใช้ position
-                replaced = rawTxDetails.find((d: SwapDetail) => 
-                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                  d.fromPosition === detail.toPosition
-                );
-              }
-            } else {
-              // Three-way หรือ multi-way: หาคนที่ตำแหน่งเดิม (fromPosition/fromPositionNumber) ตรงกับตำแหน่งใหม่ของเรา (toPosition/toPositionNumber)
-              // ลำดับความสำคัญ: position_number > position (เพราะ position_number แม่นยำกว่า)
-              if (detail.toPositionNumber) {
-                // ใช้ position_number ในการ match (แม่นยำที่สุด)
-                replaced = rawTxDetails.find((d: SwapDetail) => 
-                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                  d.fromPositionNumber === detail.toPositionNumber
-                );
-              } else if (detail.toPosition) {
-                // ถ้าไม่มี toPositionNumber ให้ match จาก position
-                replaced = rawTxDetails.find((d: SwapDetail) => 
-                  (d.personnelId !== detail.personnelId || d.nationalId !== detail.nationalId) && 
-                  d.fromPosition === detail.toPosition
-                );
-              }
-              
-              console.log('[In-Out] Three-way match:', {
-                person: detail.fullName,
-                toPosition: detail.toPosition,
-                toPositionNumber: detail.toPositionNumber,
-                replaced: replaced?.fullName || 'NOT FOUND',
-                replacedFromPosition: replaced?.fromPosition,
-                replacedFromPositionNumber: replaced?.fromPositionNumber,
-                allDetails: rawTxDetails.map(d => ({ 
-                  name: d.fullName, 
-                  fromPosition: d.fromPosition,
-                  fromPositionNumber: d.fromPositionNumber,
-                  toPosition: d.toPosition,
-                  toPositionNumber: d.toPositionNumber
-                }))
-              });
-            }
-
-            if (replaced) {
-              newMap.set(detail.id, replaced);
-            }
-          });
-        } catch (error) {
-          console.error('Error processing transaction:', error);
-        }
-      }
-    });
-    
-    setReplacedPersonsMap(newMap);
   };
 
   // โหลด filter options ตอน mount (แสดง filters ทันที)
@@ -631,7 +459,6 @@ export default function InOutPage() {
     // Clear cache และ force reload ข้อมูลใหม่
     dataCacheRef.current = {
       data: null,
-      replacedPersonsMap: new Map(),
       timestamp: 0,
       filters: ''
     };
@@ -836,6 +663,7 @@ export default function InOutPage() {
                   <InputLabel>ประเภท</InputLabel>
                   <Select value={selectedSwapType} label="ประเภท" onChange={handleSwapTypeChange}>
                     <MenuItem value="all">ทุกประเภท</MenuItem>
+                    <MenuItem value="none">ยังไม่มีประเภท (ยังไม่จับคู่)</MenuItem>
                     <MenuItem value="two-way">สลับตำแหน่ง (2 คน)</MenuItem>
                     <MenuItem value="three-way">สลับสามเส้า (3 คน)</MenuItem>
                     <MenuItem value="promotion">เลื่อนตำแหน่ง</MenuItem>
@@ -1098,16 +926,7 @@ export default function InOutPage() {
                                 {/* ผู้ที่เดิมครองตำแหน่งนี้ */}
                                 <Box sx={{ mt: 0.4 }}>
                                   {(() => {
-                                    // แสดง skeleton loading ถ้ากำลังโหลด replaced persons
-                                    if (loadingReplacedPersons && !replacedPersonsMap.has(detail.id)) {
-                                      return (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                          <Skeleton variant="text" width={120} height={14} />
-                                        </Box>
-                                      );
-                                    }
-                                    
-                                    const replaced = replacedPersonsMap.get(detail.id);
+                                    const replaced = detail.replacedPerson;
                                     if (replaced) {
                                       return (
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
@@ -1364,12 +1183,7 @@ export default function InOutPage() {
                             {/* Replaced Person */}
                             <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'success.light' }}>
                               {(() => {
-                                // แสดง skeleton loading ถ้ากำลังโหลด replaced persons
-                                if (loadingReplacedPersons && !replacedPersonsMap.has(detail.id)) {
-                                  return <Skeleton variant="text" width={140} height={16} />;
-                                }
-                                
-                                const replaced = replacedPersonsMap.get(detail.id);
+                                const replaced = detail.replacedPerson;
                                 if (replaced) {
                                   return (
                                     <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'warning.dark', fontWeight: 600 }}>

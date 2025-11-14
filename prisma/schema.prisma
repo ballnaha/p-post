@@ -189,6 +189,8 @@ model SwapTransaction {
   @@index([year])
   @@index([swapDate])
   @@index([status])
+  @@index([year, status]) // Composite index for common query
+  @@index([swapType])
   @@map("swap_transaction")
 }
 
@@ -260,6 +262,9 @@ model SwapTransactionDetail {
   @@index([nationalId])
   @@index([posCodeId])
   @@index([sequence])
+  @@index([toPosCodeId])
+  @@index([fromUnit])
+  @@index([transactionId, sequence]) // Composite index for sorting within transaction
   @@map("swap_transaction_detail")
 }
 

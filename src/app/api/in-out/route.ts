@@ -289,13 +289,40 @@ export async function GET(request: NextRequest) {
                 console.log('[In-Out API] All transaction details for replaced persons:', allTransactionDetails.length);
 
                 combinedData = combinedData.map(detail => {
-                    if (!detail.toPosCodeId) return { ...detail, replacedPerson: null };
+                    if (!detail.toPosition && !detail.toPositionNumber) return { ...detail, replacedPerson: null };
 
-                    const replaced = allTransactionDetails.find(d => 
-                        d.transactionId === detail.transaction?.id &&
-                        d.id !== detail.id &&
-                        d.posCodeId === detail.toPosCodeId
+                    // หาคนที่เดิมอยู่ในตำแหน่งใหม่ของเรา
+                    // คนที่ถูกแทนที่ = คนที่ตำแหน่งเดิมของเขาตรงกับตำแหน่งใหม่ของเรา
+                    
+                    const transactionPeople = allTransactionDetails.filter(d => 
+                        d.transactionId === detail.transaction?.id
                     );
+                    
+                    let replaced = null;
+                    
+                    // ลำดับความสำคัญ: position number > position name
+                    // เพราะ posCodeId อาจเหมือนกันแต่ position ต่างกัน
+                    
+                    // 1. ลองหาจาก position number (แม่นยำที่สุด)
+                    if (detail.toPositionNumber) {
+                        replaced = transactionPeople.find(d => 
+                            d.id !== detail.id &&
+                            d.fromPositionNumber === detail.toPositionNumber
+                        );
+                    }
+                    
+                    // 2. ถ้าไม่เจอ ลองหาจาก position name
+                    if (!replaced && detail.toPosition) {
+                        replaced = transactionPeople.find(d => 
+                            d.id !== detail.id &&
+                            d.fromPosition === detail.toPosition
+                        );
+                    }
+                    
+                    // 3. ถ้ายังไม่เจอและเป็น two-way swap ให้เอาคนอื่นใน transaction
+                    if (!replaced && detail.transaction?.swapType === 'two-way' && transactionPeople.length === 2) {
+                        replaced = transactionPeople.find(d => d.id !== detail.id);
+                    }
 
                     return {
                         ...detail,

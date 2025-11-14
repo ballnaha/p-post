@@ -102,6 +102,9 @@ interface SwapDetail {
     swapType: string;
     groupNumber: string | null;
   } | null;
+  
+  // Sequence สำหรับเรียงลำดับ (จาก swap_transaction_detail.sequence)
+  sequence?: number | null;
 }
 
 interface PositionCode {
@@ -135,6 +138,7 @@ export default function InOutPage() {
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
   const [selectedStatus, setSelectedStatus] = useState<string>('all'); // all, vacant, reserved, occupied
+  const [selectedSwapType, setSelectedSwapType] = useState<string>('all'); // all, two-way, three-way, promotion, promotion-chain
   const [searchText, setSearchText] = useState<string>('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -194,14 +198,30 @@ export default function InOutPage() {
   const fetchFilters = async () => {
     try {
       setLoadingFilters(true);
-      const response = await fetch('/api/in-out?page=0&pageSize=1');
+      const response = await fetch('/api/in-out?filtersOnly=true');
       if (!response.ok) return;
       
       const result = await response.json();
       if (result.success && result.data.filters) {
+        // เรียงลำดับ units - ประเภทที่ไม่ว่างขึ้นก่อน (เรียง A-Z)
+        const sortedUnits = [...(result.data.filters.units || [])].sort((a, b) => {
+          // ถ้าเป็นค่าว่าง ให้ไปอยู่ท้าย
+          if (!a || a.trim() === '') return 1;
+          if (!b || b.trim() === '') return -1;
+          return a.localeCompare(b, 'th');
+        });
+        
+        // เรียงลำดับ positionCodes - ประเภทที่ไม่ว่างขึ้นก่อน (เรียงตาม id)
+        const sortedPositionCodes = [...(result.data.filters.positionCodes || [])].sort((a, b) => {
+          // ถ้าเป็นค่าว่าง ให้ไปอยู่ท้าย
+          if (!a.name || a.name.trim() === '') return 1;
+          if (!b.name || b.name.trim() === '') return -1;
+          return a.id - b.id;
+        });
+        
         setFilterOptions({
-          units: result.data.filters.units || [],
-          positionCodes: result.data.filters.positionCodes || []
+          units: sortedUnits,
+          positionCodes: sortedPositionCodes
         });
       }
     } catch (error) {
@@ -216,8 +236,8 @@ export default function InOutPage() {
     try {
       setLoading(true);
       
-      // สร้าง cache key จาก filters
-      const cacheKey = `${selectedUnit}-${selectedPosCode}-${selectedStatus}-${selectedYear}-${page}-${rowsPerPage}-${searchText}`;
+      // สร้าง cache key จาก filters (รวม selectedSwapType ด้วย)
+      const cacheKey = `${selectedUnit}-${selectedPosCode}-${selectedStatus}-${selectedSwapType}-${selectedYear}-${page}-${rowsPerPage}-${searchText}`;
       const now = Date.now();
       const cacheAge = now - dataCacheRef.current.timestamp;
       const CACHE_DURATION = 30000; // 30 วินาที (เหมือน police-personnel)
@@ -231,13 +251,15 @@ export default function InOutPage() {
         return;
       }
       
-      // Clear old data
+      // Clear old data และ replaced persons map
+      setData(null);
       setReplacedPersonsMap(new Map());
       
       const params = new URLSearchParams({
         unit: selectedUnit,
         posCodeId: selectedPosCode,
         status: selectedStatus,
+        swapType: selectedSwapType,
         year: selectedYear.toString(),
         page: page.toString(),
         pageSize: rowsPerPage.toString(),
@@ -262,29 +284,29 @@ export default function InOutPage() {
       console.log('API result:', { success: result.success, dataCount: result.data?.swapDetails?.length, totalCount: result.data?.totalCount });
       
       if (result.success) {
-        // แสดงข้อมูลทันที (ไม่รอ replaced persons)
+        // โหลด replaced persons ก่อน (ถ้ามี)
+        if (result.data.swapDetails && result.data.swapDetails.length > 0) {
+          setLoadingReplacedPersons(true);
+          try {
+            await fetchReplacedPersons(result.data.swapDetails);
+          } catch (error) {
+            console.error('Error fetching replaced persons:', error);
+          } finally {
+            setLoadingReplacedPersons(false);
+          }
+        }
+        
+        // แสดงข้อมูลหลังจากโหลดเสร็จทั้งหมด
         setData(result.data);
         setInitialLoad(false);
         
         // อัพเดท cache
         dataCacheRef.current = {
           data: result.data,
-          replacedPersonsMap: new Map(),
+          replacedPersonsMap: replacedPersonsMap,
           timestamp: Date.now(),
           filters: cacheKey
         };
-        
-        // โหลด replaced persons ในพื้นหลัง (ไม่ block UI)
-        if (result.data.swapDetails && result.data.swapDetails.length > 0) {
-          setLoadingReplacedPersons(true);
-          fetchReplacedPersons(result.data.swapDetails)
-            .catch(error => {
-              console.error('Error fetching replaced persons:', error);
-            })
-            .finally(() => {
-              setLoadingReplacedPersons(false);
-            });
-        }
       } else {
         console.error('API returned success: false', result);
         setData({ swapDetails: [], totalCount: 0, page: 0, pageSize: rowsPerPage, filters: { units: [], positionCodes: [] } });
@@ -292,7 +314,7 @@ export default function InOutPage() {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Failed to fetch in-out data:', error);
-        // ไม่ clear data ที่มีอยู่ เพื่อไม่ให้หน้าจอว่างเปล่า
+        setData({ swapDetails: [], totalCount: 0, page: 0, pageSize: rowsPerPage, filters: { units: [], positionCodes: [] } });
       }
     } finally {
       if (!abortSignal?.aborted) {
@@ -448,15 +470,6 @@ export default function InOutPage() {
     });
     
     setReplacedPersonsMap(newMap);
-    
-    // อัพเดท cache
-    const cacheKey = `${selectedUnit}-${selectedPosCode}-${selectedStatus}-${selectedYear}-${page}-${rowsPerPage}-${searchText}`;
-    dataCacheRef.current = {
-      data: data,
-      replacedPersonsMap: newMap,
-      timestamp: Date.now(),
-      filters: cacheKey
-    };
   };
 
   // โหลด filter options ตอน mount (แสดง filters ทันที)
@@ -485,27 +498,96 @@ export default function InOutPage() {
       abortController.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUnit, selectedPosCode, selectedStatus, selectedYear, page, rowsPerPage, searchText]);
+  }, [selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, page, rowsPerPage, searchText]);
 
   const filteredSwapDetails = useMemo(() => {
-    if (!data?.swapDetails) return [];
-    return data.swapDetails;
-  }, [data?.swapDetails]);
+    // ถ้ากำลังโหลด ให้ return [] เพื่อแสดง skeleton
+    if (loading || !data?.swapDetails) return [];
+    
+    // ไม่ต้อง filter ประเภทที่ frontend เพราะ API filter ให้แล้ว
+    const filtered = data.swapDetails;
+    
+    // Debug: ตรวจสอบ sequence ที่ได้จาก API
+    if (filtered.length > 0 && filtered.some(d => d.transaction)) {
+      const withSequence = filtered.filter(d => d.sequence != null);
+      console.log('[In-Out] Sequence debug:', {
+        total: filtered.length,
+        withSequence: withSequence.length,
+        samples: filtered.slice(0, 5).map(d => ({
+          name: d.fullName,
+          transactionId: d.transaction?.id,
+          sequence: d.sequence,
+          swapType: d.transaction?.swapType
+        }))
+      });
+    }
+    
+    // จัดกลุ่มตาม transaction ID และ sequence
+    const sorted = [...filtered].sort((a, b) => {
+      // 0. แยกคนที่มี transaction กับไม่มี transaction (ตำแหน่งว่าง)
+      const hasTransactionA = !!a.transaction?.id;
+      const hasTransactionB = !!b.transaction?.id;
+      
+      // คนที่มี transaction ขึ้นก่อน (ตำแหน่งว่างไปท้าย)
+      if (hasTransactionA !== hasTransactionB) {
+        return hasTransactionA ? -1 : 1;
+      }
+      
+      // ถ้าทั้งคู่ไม่มี transaction (ตำแหน่งว่างทั้งคู่) เรียงตามชื่อ
+      if (!hasTransactionA && !hasTransactionB) {
+        return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+      }
+      
+      // 1. จัดกลุ่มตาม transaction ID (คนที่สลับกันอยู่ด้วยกัน)
+      const transactionA = a.transaction?.id || '';
+      const transactionB = b.transaction?.id || '';
+      
+      if (transactionA !== transactionB) {
+        return transactionA.localeCompare(transactionB);
+      }
+      
+      // 2. ภายในกลุ่มเดียวกัน เรียงตาม sequence (ASC: น้อยไปมาก)
+      const sequenceA = a.sequence;
+      const sequenceB = b.sequence;
+      
+      // ถ้าทั้งคู่มี sequence ให้เรียงตาม sequence
+      if (sequenceA != null && sequenceB != null) {
+        if (sequenceA !== sequenceB) {
+          return sequenceA - sequenceB; // ASC: 0, 1, 2, 3...
+        }
+      }
+      
+      // ถ้ามีแค่ฝั่งใดฝั่งหนึ่งมี sequence ให้ฝั่งที่มีขึ้นก่อน
+      if (sequenceA != null && sequenceB == null) return -1;
+      if (sequenceA == null && sequenceB != null) return 1;
+      
+      // 3. ถ้า sequence เท่ากัน หรือทั้งคู่ไม่มี sequence เรียงตามชื่อ
+      return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+    });
+    
+    return sorted;
+  }, [data?.swapDetails, loading]);
 
   const handleUnitChange = (event: SelectChangeEvent<string>) => {
     setInitialLoad(false); // Mark that user has interacted
+    setLoading(true); // แสดง skeleton loading ทันที
+    setData(null); // Clear data ทันทีเพื่อแสดง skeleton
     setSelectedUnit(event.target.value);
     setPage(0);
   };
 
   const handlePosCodeChange = (event: SelectChangeEvent<string>) => {
     setInitialLoad(false); // Mark that user has interacted
+    setLoading(true); // แสดง skeleton loading ทันที
+    setData(null); // Clear data ทันทีเพื่อแสดง skeleton
     setSelectedPosCode(event.target.value);
     setPage(0);
   };
 
   const handleYearChange = (event: SelectChangeEvent<number>) => {
     setInitialLoad(false); // Mark that user has interacted
+    setLoading(true); // แสดง skeleton loading ทันที
+    setData(null); // Clear data ทันทีเพื่อแสดง skeleton
     setSelectedYear(Number(event.target.value));
     setPage(0);
   };
@@ -524,10 +606,21 @@ export default function InOutPage() {
 
 
   const handleResetFilters = () => {
+    setLoading(true); // แสดง skeleton loading ทันที
+    setData(null); // Clear data ทันทีเพื่อแสดง skeleton
     setSearchText('');
     setSelectedUnit('all');
     setSelectedPosCode('all');
     setSelectedStatus('all');
+    setSelectedSwapType('all');
+    setPage(0);
+  };
+
+  const handleSwapTypeChange = (event: SelectChangeEvent<string>) => {
+    setInitialLoad(false);
+    setLoading(true); // แสดง skeleton loading ทันที
+    setData(null); // Clear data ทันทีเพื่อแสดง skeleton
+    setSelectedSwapType(event.target.value);
     setPage(0);
   };
 
@@ -549,12 +642,16 @@ export default function InOutPage() {
 
   const handleStatusChange = (event: SelectChangeEvent<string>) => {
     setInitialLoad(false); // Mark that user has interacted
+    setLoading(true); // แสดง skeleton loading ทันที
+    setData(null); // Clear data ทันทีเพื่อแสดง skeleton
     setSelectedStatus(event.target.value);
     setPage(0);
   };
 
   const handleSearchChange = (value: string) => {
     setInitialLoad(false); // Mark that user has interacted
+    setLoading(true); // แสดง skeleton loading ทันที
+    setData(null); // Clear data ทันทีเพื่อแสดง skeleton
     setSearchText(value);
     setPage(0);
   };
@@ -687,12 +784,13 @@ export default function InOutPage() {
         <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, 
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, 
             gap: 2,
             mb: 2
           }}>
             {loadingFilters ? (
               <>
+                <Skeleton variant="rounded" height={40} />
                 <Skeleton variant="rounded" height={40} />
                 <Skeleton variant="rounded" height={40} />
                 <Skeleton variant="rounded" height={40} />
@@ -731,6 +829,17 @@ export default function InOutPage() {
                     <MenuItem value="occupied">มีคนดำรงตำแหน่ง</MenuItem>
                     <MenuItem value="vacant">ว่าง</MenuItem>
                     <MenuItem value="reserved">ว่าง (กันตำแหน่ง)</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small">
+                  <InputLabel>ประเภท</InputLabel>
+                  <Select value={selectedSwapType} label="ประเภท" onChange={handleSwapTypeChange}>
+                    <MenuItem value="all">ทุกประเภท</MenuItem>
+                    <MenuItem value="two-way">สลับตำแหน่ง (2 คน)</MenuItem>
+                    <MenuItem value="three-way">สลับสามเส้า (3 คน)</MenuItem>
+                    <MenuItem value="promotion">เลื่อนตำแหน่ง</MenuItem>
+                    <MenuItem value="promotion-chain">เลื่อนตำแหน่งแบบลูกโซ่</MenuItem>
                   </Select>
                 </FormControl>
 
@@ -877,13 +986,27 @@ export default function InOutPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredSwapDetails.map((detail, index) => (
-                      <TableRow key={detail.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                        <TableCell sx={{ py: 1.5 }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                            {page * rowsPerPage + index + 1}
-                          </Typography>
-                        </TableCell>
+                    filteredSwapDetails.map((detail, index) => {
+                      // ตรวจสอบว่าเป็นคนแรกของกลุ่มใหม่หรือไม่
+                      const prevDetail = index > 0 ? filteredSwapDetails[index - 1] : null;
+                      const isNewGroup = !prevDetail || prevDetail.transaction?.id !== detail.transaction?.id;
+                      
+                      return (
+                        <TableRow 
+                          key={detail.id} 
+                          hover 
+                          sx={{ 
+                            '&:hover': { bgcolor: 'action.hover' },
+                            // เพิ่มเส้นแบ่งกลุ่ม
+                            borderTop: isNewGroup && index > 0 ? 2 : 0,
+                            borderTopColor: isNewGroup && index > 0 ? 'primary.main' : 'transparent',
+                          }}
+                        >
+                          <TableCell sx={{ py: 1.5 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                              {page * rowsPerPage + index + 1}
+                            </Typography>
+                          </TableCell>
                         
                         <TableCell sx={{ py: 1.5 }}>
                           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
@@ -1078,8 +1201,8 @@ export default function InOutPage() {
                           )}
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
+                    );
+                  }))}
                 </TableBody>
               </Table>
             </TableContainer>

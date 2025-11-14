@@ -879,8 +879,9 @@ export default function PromotionPage() {
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
                         <TableCell sx={{ color: 'white', width: 50 }} />
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>เลขกลุ่ม</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>ชื่อกลุ่ม</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>ชื่อกลุ่ม</TableCell>                        
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>วันที่</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>หมายเหตุ</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }} align="center">จัดการ</TableCell>
                       </TableRow>
                     </TableHead>
@@ -907,6 +908,17 @@ export default function PromotionPage() {
                                 {formatDate(row.swapDate)}
                               </Typography>
                             </TableCell>
+                            <TableCell>
+                              {row.notes ? (
+                                <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                                  {row.notes}
+                                </Typography>
+                              ) : (
+                                <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.disabled' }}>
+                                  -
+                                </Typography>
+                              )}
+                            </TableCell>
                             <TableCell align="center">
                               <IconButton size="small" onClick={(e) => handleMenuOpen(e, row)}>
                                 <MoreVertIcon />
@@ -914,7 +926,7 @@ export default function PromotionPage() {
                             </TableCell>
                           </TableRow>
                           <TableRow>
-                            <TableCell colSpan={5} sx={{ p: 0 }}>
+                            <TableCell colSpan={6} sx={{ p: 0 }}>
                               <Collapse in={expandedRows.has(row.id)} timeout="auto" unmountOnExit>
                                 <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
                                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

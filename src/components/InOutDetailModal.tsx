@@ -76,7 +76,7 @@ interface InOutDetailModalProps {
   onClose: () => void;
   detail: SwapDetail | null;
   swapPartner: SwapDetail | null;
-  replacedPerson: SwapDetail | null;
+  replacedPerson?: SwapDetail | null;
   onViewPersonnelDetail: (personnel: SwapDetail) => void;
 }
 
@@ -85,7 +85,6 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
   onClose,
   detail,
   swapPartner,
-  replacedPerson,
   onViewPersonnelDetail,
 }) => {
   const theme = useTheme();
@@ -144,14 +143,14 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
       maxWidth="md"
       fullWidth
       fullScreen={isMobile}
-      TransitionProps={{
-        timeout: 0,
+      slotProps={{
+        backdrop: {
+          timeout: 0,
+        },
       }}
       sx={{
         zIndex: 10001,
-      }}
-      PaperProps={{
-        sx: {
+        '& .MuiDialog-paper': {
           width: { xs: '100%' },
           height: { xs: '100%', sm: 'auto' },
           maxHeight: { xs: '100%', sm: '90vh' },

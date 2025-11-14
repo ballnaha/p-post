@@ -6,13 +6,50 @@ const prisma = new PrismaClient();
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
+        const filtersOnly = searchParams.get('filtersOnly') === 'true';
         const unit = searchParams.get('unit') || 'all';
         const posCodeId = searchParams.get('posCodeId') || 'all';
         const status = searchParams.get('status') || 'all';
+        const swapType = searchParams.get('swapType') || 'all';
         const search = searchParams.get('search') || '';
         const year = parseInt(searchParams.get('year') || String(new Date().getFullYear() + 543));
         const page = parseInt(searchParams.get('page') || '0');
         const pageSize = parseInt(searchParams.get('pageSize') || '10');
+        
+        // ถ้าขอแค่ filters ให้ return เฉพาะ filters เท่านั้น (เร็วมาก)
+        if (filtersOnly) {
+            const currentBuddhistYear = new Date().getFullYear() + 543;
+            
+            // Get unique units from personnel (current year & active only)
+            const units = await prisma.policePersonnel.findMany({
+                where: { 
+                    unit: { not: null },
+                    year: currentBuddhistYear,
+                    isActive: true
+                },
+                select: { unit: true },
+                distinct: ['unit'],
+                orderBy: { unit: 'asc' },
+            });
+
+            // Get unique position codes
+            const positionCodes = await prisma.posCodeMaster.findMany({
+                orderBy: { id: 'asc' },
+            });
+            
+            return NextResponse.json({
+                success: true,
+                data: {
+                    filters: {
+                        units: units.map(u => u.unit).filter(Boolean),
+                        positionCodes: positionCodes.map(p => ({
+                            id: p.id,
+                            name: p.name,
+                        })),
+                    },
+                },
+            });
+        }
 
         // Build where clause for police personnel
         const personnelWhere: Record<string, unknown> = {};
@@ -116,11 +153,52 @@ export async function GET(request: NextRequest) {
                     status: 'completed',
                 },
             },
-            include: {
+            select: {
+                id: true,
+                transactionId: true,
+                personnelId: true,
+                noId: true,
+                fullName: true,
+                rank: true,
+                nationalId: true,
+                age: true,
+                seniority: true,
+                birthDate: true,
+                education: true,
+                lastAppointment: true,
+                currentRankSince: true,
+                enrollmentDate: true,
+                retirementDate: true,
+                yearsOfService: true,
+                trainingLocation: true,
+                trainingCourse: true,
+                posCodeId: true,
+                fromPosition: true,
+                fromPositionNumber: true,
+                fromUnit: true,
+                fromActingAs: true,
+                toPosCodeId: true,
+                toPosition: true,
+                toPositionNumber: true,
+                toUnit: true,
+                toActingAs: true,
+                sequence: true, // ← เพิ่ม sequence
                 transaction: true,
                 posCodeMaster: true,
                 toPosCodeMaster: true,
             },
+        });
+        
+        // Debug: ตรวจสอบ sequence จาก DB
+        const withSequence = swapDetails.filter(d => d.sequence != null);
+        console.log('[API In-Out] Sequence from DB:', {
+            total: swapDetails.length,
+            withSequence: withSequence.length,
+            samples: swapDetails.slice(0, 3).map(d => ({
+                name: d.fullName,
+                sequence: d.sequence,
+                transactionId: d.transactionId
+            }))
         });
 
         // สร้าง Map สำหรับจับคู่ข้อมูล (ใช้หลายเงื่อนไข)
@@ -210,6 +288,9 @@ export async function GET(request: NextRequest) {
                     swapType: swapInfo.transaction.swapType,
                     groupNumber: swapInfo.transaction.groupNumber,
                 } : null,
+                
+                // Sequence สำหรับเรียงลำดับ
+                sequence: swapInfo?.sequence ?? null,
                 
                 hasSwapped: !!swapInfo,
                 source: 'personnel' as const,
@@ -305,6 +386,9 @@ export async function GET(request: NextRequest) {
                     groupNumber: detail.transaction.groupNumber,
                 },
                 
+                // Sequence สำหรับเรียงลำดับ
+                sequence: detail.sequence ?? null,
+                
                 hasSwapped: true,
                 source: 'swap_only' as const, // คนที่ไม่อยู่ใน personnel แล้ว
                 replacedPerson: null as { rank: string | null; fullName: string | null; nationalId: string | null } | null,
@@ -353,8 +437,13 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        // Filter by search text (in memory)
+        // Filter by swap type (in memory)
         let filteredData = combinedData;
+        if (swapType !== 'all') {
+            filteredData = filteredData.filter(d => d.transaction?.swapType === swapType);
+        }
+        
+        // Filter by search text (in memory)
         if (search) {
             const searchLower = search.toLowerCase();
             filteredData = filteredData.filter(d => 

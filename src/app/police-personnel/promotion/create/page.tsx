@@ -408,7 +408,7 @@ function CreatePromotionContent() {
         year,
         swapDate: new Date().toISOString(),
         swapType: 'promotion',
-        groupName: `เลื่อนตำแหน่ง ${startingPersonnel.fullName} • ${startingPersonnel.position}`,
+        groupName: `เลื่อนตำแหน่ง • ${startingPersonnel.position}`,
         groupNumber: groupNumber || null,
         status: 'completed',
         notes: groupNotes.trim() || null,
@@ -493,7 +493,7 @@ function CreatePromotionContent() {
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                     <Typography variant="caption" color="success.main" sx={{ fontWeight: 600 }}>
-                      🎖️ บุคลากรที่จะเลื่อนตำแหน่ง
+                      🎖️ บุคลากร
                     </Typography>
                     <Chip label={`${nodes.length} ขั้น`} size="small" color="success" sx={{ height: 30, fontSize: '0.85rem' }} />
                   </Box>

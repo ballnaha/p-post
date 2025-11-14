@@ -529,7 +529,7 @@ export default function InOutPage() {
       case 'three-way': return 'สามเส้า';
       case 'multi-way': return 'หลายคน';
       case 'promotion': return 'เลื่อนตำแหน่ง';
-      case 'promotion-chain': return 'เลื่อนตำแหน่งแบบลูกโซ่';
+      case 'promotion-chain': return 'จัดคนเข้าตำแหน่งว่าง';
       default: return type;
     }
   };
@@ -696,8 +696,8 @@ export default function InOutPage() {
                     <MenuItem value="none">ยังไม่มีประเภท (ยังไม่จับคู่)</MenuItem>
                     <MenuItem value="two-way">สลับตำแหน่ง (2 คน)</MenuItem>
                     <MenuItem value="three-way">สลับสามเส้า (3 คน)</MenuItem>
-                    <MenuItem value="promotion">เลื่อนตำแหน่ง</MenuItem>
-                    <MenuItem value="promotion-chain">เลื่อนตำแหน่งแบบลูกโซ่</MenuItem>
+                    <MenuItem value="promotion-chain">จัดคนเข้าตำแหน่งว่าง</MenuItem>
+                    <MenuItem value="promotion">เลื่อนตำแหน่ง</MenuItem>                    
                   </Select>
                 </FormControl>
 

@@ -15,40 +15,25 @@ export async function GET(request: NextRequest) {
         const year = parseInt(searchParams.get('year') || String(new Date().getFullYear() + 543));
         const page = parseInt(searchParams.get('page') || '0');
         const pageSize = parseInt(searchParams.get('pageSize') || '10');
-
-        console.log('[In-Out API] Request params:', { 
-            unit, 
-            posCodeId, 
-            status, 
-            swapType, 
-            swapTypeIsAll: swapType === 'all',
-            swapTypeIsNone: swapType === 'none',
-            year, 
-            page, 
-            pageSize, 
-            search 
-        });
         
-        // ถ้าขอแค่ filters ให้ return เฉพาะ filters เท่านั้น (เร็วมาก)
         if (filtersOnly) {
             const currentBuddhistYear = new Date().getFullYear() + 543;
             
-            // Get unique units from personnel (current year & active only)
-            const units = await prisma.policePersonnel.findMany({
-                where: { 
-                    unit: { not: null },
-                    year: currentBuddhistYear,
-                    isActive: true
-                },
-                select: { unit: true },
-                distinct: ['unit'],
-                orderBy: { unit: 'asc' },
-            });
-
-            // Get unique position codes
-            const positionCodes = await prisma.posCodeMaster.findMany({
-                orderBy: { id: 'asc' },
-            });
+            const [units, positionCodes] = await Promise.all([
+                prisma.policePersonnel.findMany({
+                    where: { 
+                        unit: { not: null },
+                        year: currentBuddhistYear,
+                        isActive: true
+                    },
+                    select: { unit: true },
+                    distinct: ['unit'],
+                    orderBy: { unit: 'asc' },
+                }),
+                prisma.posCodeMaster.findMany({
+                    orderBy: { id: 'asc' },
+                })
+            ]);
             
             return NextResponse.json({
                 success: true,
@@ -66,64 +51,44 @@ export async function GET(request: NextRequest) {
 
         const currentBuddhistYear = new Date().getFullYear() + 543;
 
-        let combinedData: any[] = [];
-        let totalCount = 0;
-
-        // ใช้ police_personnel เป็นหลักเสมอ เพื่อดูว่าใครจับคู่แล้วและใครยังไม่ได้จับคู่
-        
-        // 1. Build where clause สำหรับ police_personnel
         const personnelWhere: Prisma.PolicePersonnelWhereInput = {
             year: currentBuddhistYear,
             isActive: true
         };
 
-        const personnelAndConditions: Prisma.PolicePersonnelWhereInput[] = [];
+        const andConditions: Prisma.PolicePersonnelWhereInput[] = [];
 
-        if (unit !== 'all') {
-            personnelAndConditions.push({ unit: unit });
-        }
-
+        if (unit !== 'all') andConditions.push({ unit });
         if (posCodeId !== 'all') {
             const posCodeIdNum = parseInt(posCodeId);
-            if (!isNaN(posCodeIdNum)) {
-                personnelAndConditions.push({ posCodeId: posCodeIdNum });
-            }
+            if (!isNaN(posCodeIdNum)) andConditions.push({ posCodeId: posCodeIdNum });
         }
 
         if (status !== 'all') {
             if (status === 'vacant') {
-                personnelAndConditions.push({
+                andConditions.push({
                     AND: [
-                        {
-                            OR: [
-                                { rank: null },
-                                { rank: '' }
-                            ]
-                        },
-                        {
-                            OR: [
-                                { fullName: null },
-                                { fullName: '' },
-                                {
-                                    AND: [
-                                        { fullName: { not: null } },
-                                        { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } },
-                                        { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }
-                                    ]
-                                }
-                            ]
-                        }
+                        { OR: [{ rank: null }, { rank: '' }] },
+                        { OR: [
+                            { fullName: null },
+                            { fullName: '' },
+                            { AND: [
+                                { fullName: { not: null } },
+                                { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } },
+                                { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }
+                            ]}
+                        ]}
                     ]
                 });
             } else if (status === 'reserved') {
-                personnelAndConditions.push({
+                andConditions.push({
                     OR: [
                         { fullName: { contains: 'ว่าง (กันตำแหน่ง)' } },
                         { fullName: { contains: 'ว่าง(กันตำแหน่ง)' } }
                     ]
                 });
             } else if (status === 'occupied') {
-                personnelAndConditions.push({
+                andConditions.push({
                     AND: [
                         { rank: { not: null } },
                         { rank: { not: '' } }
@@ -133,7 +98,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (search) {
-            personnelAndConditions.push({
+            andConditions.push({
                 OR: [
                     { fullName: { contains: search } },
                     { nationalId: { contains: search } },
@@ -145,69 +110,39 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        if (personnelAndConditions.length > 0) {
-            personnelWhere.AND = personnelAndConditions;
+        if (andConditions.length > 0) {
+            personnelWhere.AND = andConditions;
         }
 
-        console.log('[In-Out API] Fetching personnel with filters...');
+        const [personnel, swapDetails] = await Promise.all([
+            prisma.policePersonnel.findMany({
+                where: personnelWhere,
+                include: { posCodeMaster: true },
+            }),
+            prisma.swapTransactionDetail.findMany({
+                where: {
+                    transaction: {
+                        year,
+                        status: 'completed'
+                    }
+                },
+                include: {
+                    transaction: true,
+                    posCodeMaster: true,
+                    toPosCodeMaster: true,
+                },
+            })
+        ]);
 
-        // 2. ดึงข้อมูลจาก police_personnel ตาม filter
-        const personnel = await prisma.policePersonnel.findMany({
-            where: personnelWhere,
-            include: {
-                posCodeMaster: true,
-            },
-        });
-
-        console.log('[In-Out API] Personnel count:', personnel.length);
-
-        // 3. ดึงข้อมูลจาก swap_transaction_detail (ข้อมูลที่สลับแล้ว)
-        // ไม่ filter swapType ตอน query เพราะจะ filter ทีหลัง
-        const swapWhere: Prisma.SwapTransactionDetailWhereInput = {
-            transaction: {
-                year: year,
-                status: 'completed'
-            }
-        };
-
-        const swapDetails = await prisma.swapTransactionDetail.findMany({
-            where: swapWhere,
-            include: {
-                transaction: true,
-                posCodeMaster: true,
-                toPosCodeMaster: true,
-            },
-        });
-
-        console.log('[In-Out API] Swap details count:', swapDetails.length, 'for year', year);
-        
-        // Debug: ถ้าไม่มีข้อมูล ให้ดูว่ามีข้อมูลปีไหนบ้าง
-        if (swapDetails.length === 0) {
-            const availableYears = await prisma.swapTransaction.findMany({
-                where: { status: 'completed' },
-                select: { year: true },
-                distinct: ['year'],
-                orderBy: { year: 'desc' },
-                take: 10
-            });
-            console.log('[In-Out API] No swap data for year', year, '. Available years:', availableYears.map(y => y.year));
-        }
-
-        // 4. สร้าง Map สำหรับจับคู่ข้อมูล
         const swapByPersonnelId = new Map();
         const swapByNationalId = new Map();
         
         swapDetails.forEach(detail => {
-            if (detail.personnelId) {
-                swapByPersonnelId.set(detail.personnelId, detail);
-            }
-            if (detail.nationalId) {
-                swapByNationalId.set(detail.nationalId, detail);
-            }
+            if (detail.personnelId) swapByPersonnelId.set(detail.personnelId, detail);
+            if (detail.nationalId) swapByNationalId.set(detail.nationalId, detail);
         });
 
-        // 5. รวมข้อมูล personnel + swap info
-        combinedData = personnel.map(person => {
+        let combinedData = personnel.map(person => {
             const swapInfo = swapByPersonnelId.get(person.id) || 
                             (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
             
@@ -254,172 +189,129 @@ export async function GET(request: NextRequest) {
                 
                 sequence: swapInfo?.sequence ?? null,
                 hasSwapped: !!swapInfo,
+                replacedPerson: null as any,
             };
         });
 
-        console.log('[In-Out API] Before swapType filter:', combinedData.length);
-
-        // 5.1 Filter ตาม swapType (ถ้ามีการเลือก)
         if (swapType !== 'all') {
-            console.log('[In-Out API] Filtering by swapType:', swapType);
-            
             if (swapType === 'none') {
-                // กรองเฉพาะคนที่ยังไม่ได้จับคู่ (ไม่มี transaction)
-                const beforeFilter = combinedData.length;
                 combinedData = combinedData.filter(d => !d.transaction);
-                console.log('[In-Out API] Filter "none": before =', beforeFilter, ', after =', combinedData.length);
             } else {
-                // กรองเฉพาะคนที่มี transaction และ swapType ตรงกับที่เลือก
-                const beforeFilter = combinedData.length;
                 combinedData = combinedData.filter(d => 
                     d.transaction && d.transaction.swapType === swapType
                 );
-                console.log('[In-Out API] Filter', swapType, ': before =', beforeFilter, ', after =', combinedData.length);
             }
         }
 
-        // 6. เรียงลำดับ: คนที่สลับแล้วขึ้นก่อน
         combinedData.sort((a, b) => {
-            if (a.hasSwapped !== b.hasSwapped) {
-                return b.hasSwapped ? 1 : -1;
-            }
-            if (a.transaction?.id !== b.transaction?.id) {
-                return (a.transaction?.id || '').localeCompare(b.transaction?.id || '');
-            }
-            if (a.sequence !== b.sequence) {
-                return (a.sequence ?? 999) - (b.sequence ?? 999);
-            }
+            if (a.hasSwapped !== b.hasSwapped) return b.hasSwapped ? 1 : -1;
+            if (a.transaction?.id !== b.transaction?.id) return (a.transaction?.id || '').localeCompare(b.transaction?.id || '');
+            if (a.sequence !== b.sequence) return (a.sequence ?? 999) - (b.sequence ?? 999);
             return (a.fullName || '').localeCompare(b.fullName || '', 'th');
         });
 
-        totalCount = combinedData.length;
-        console.log('[In-Out API] Total count after filter:', totalCount);
+        const totalCount = combinedData.length;
+        const paginatedData = combinedData.slice(page * pageSize, (page + 1) * pageSize);
 
-        // 7. Paginate
-        combinedData = combinedData.slice(page * pageSize, (page + 1) * pageSize);
-        console.log('[In-Out API] After pagination:', combinedData.length, 'items (page', page, ', pageSize', pageSize, ')');
+        const transactionIds = [...new Set(paginatedData.filter(d => d.transaction).map(d => d.transaction!.id))];
+        
+        if (transactionIds.length > 0) {
+            const allTransactionDetails = await prisma.swapTransactionDetail.findMany({
+                where: { transactionId: { in: transactionIds } },
+                include: {
+                    posCodeMaster: true,
+                    toPosCodeMaster: true,
+                }
+            });
 
-        // 8. หา replaced persons
-        try {
-            const transactionIds = [...new Set(combinedData.filter(d => d.transaction).map(d => d.transaction.id))];
-            console.log('[In-Out API] Transaction IDs for replaced persons:', transactionIds.length);
-            
-            if (transactionIds.length > 0) {
-                const allTransactionDetails = await prisma.swapTransactionDetail.findMany({
-                    where: {
-                        transactionId: { in: transactionIds }
-                    },
-                    include: {
-                        posCodeMaster: true,
-                        toPosCodeMaster: true,
-                    }
-                });
+            paginatedData.forEach((detail, index) => {
+                if (!detail.toPosition && !detail.toPositionNumber) {
+                    paginatedData[index].replacedPerson = null;
+                    return;
+                }
 
-                console.log('[In-Out API] All transaction details for replaced persons:', allTransactionDetails.length);
-
-                combinedData = combinedData.map(detail => {
-                    if (!detail.toPosition && !detail.toPositionNumber) return { ...detail, replacedPerson: null };
-
-                    // หาคนที่เดิมอยู่ในตำแหน่งใหม่ของเรา
-                    // คนที่ถูกแทนที่ = คนที่ตำแหน่งเดิมของเขาตรงกับตำแหน่งใหม่ของเรา
-                    
-                    const transactionPeople = allTransactionDetails.filter(d => 
-                        d.transactionId === detail.transaction?.id
+                const transactionPeople = allTransactionDetails.filter(d => 
+                    d.transactionId === detail.transaction?.id
+                );
+                
+                let replaced = null;
+                
+                if (detail.toPositionNumber) {
+                    replaced = transactionPeople.find(d => 
+                        d.id !== detail.id && d.fromPositionNumber === detail.toPositionNumber
                     );
-                    
-                    let replaced = null;
-                    
-                    // ลำดับความสำคัญ: position number > position name
-                    // เพราะ posCodeId อาจเหมือนกันแต่ position ต่างกัน
-                    
-                    // 1. ลองหาจาก position number (แม่นยำที่สุด)
-                    if (detail.toPositionNumber) {
-                        replaced = transactionPeople.find(d => 
-                            d.id !== detail.id &&
-                            d.fromPositionNumber === detail.toPositionNumber
-                        );
-                    }
-                    
-                    // 2. ถ้าไม่เจอ ลองหาจาก position name
-                    if (!replaced && detail.toPosition) {
-                        replaced = transactionPeople.find(d => 
-                            d.id !== detail.id &&
-                            d.fromPosition === detail.toPosition
-                        );
-                    }
-                    
-                    // 3. ถ้ายังไม่เจอและเป็น two-way swap ให้เอาคนอื่นใน transaction
-                    if (!replaced && detail.transaction?.swapType === 'two-way' && transactionPeople.length === 2) {
-                        replaced = transactionPeople.find(d => d.id !== detail.id);
-                    }
+                }
+                
+                if (!replaced && detail.toPosition) {
+                    replaced = transactionPeople.find(d => 
+                        d.id !== detail.id && d.fromPosition === detail.toPosition
+                    );
+                }
+                
+                if (!replaced && detail.transaction?.swapType === 'two-way' && transactionPeople.length === 2) {
+                    replaced = transactionPeople.find(d => d.id !== detail.id);
+                }
 
-                    return {
-                        ...detail,
-                        replacedPerson: replaced ? {
-                            id: replaced.id,
-                            personnelId: replaced.personnelId,
-                            noId: replaced.noId,
-                            fullName: replaced.fullName,
-                            rank: replaced.rank,
-                            nationalId: replaced.nationalId,
-                            age: replaced.age,
-                            seniority: replaced.seniority,
-                            birthDate: replaced.birthDate,
-                            education: replaced.education,
-                            lastAppointment: replaced.lastAppointment,
-                            currentRankSince: replaced.currentRankSince,
-                            enrollmentDate: replaced.enrollmentDate,
-                            retirementDate: replaced.retirementDate,
-                            yearsOfService: replaced.yearsOfService,
-                            trainingLocation: replaced.trainingLocation,
-                            trainingCourse: replaced.trainingCourse,
-                            posCodeId: replaced.posCodeId,
-                            posCodeMaster: replaced.posCodeMaster,
-                            fromPosition: replaced.fromPosition,
-                            fromPositionNumber: replaced.fromPositionNumber,
-                            fromUnit: replaced.fromUnit,
-                            fromActingAs: replaced.fromActingAs,
-                            toPosCodeId: replaced.toPosCodeId,
-                            toPosCodeMaster: replaced.toPosCodeMaster,
-                            toPosition: replaced.toPosition,
-                            toPositionNumber: replaced.toPositionNumber,
-                            toUnit: replaced.toUnit,
-                            toActingAs: replaced.toActingAs,
-                            transaction: null,
-                            sequence: replaced.sequence,
-                        } : null
-                    };
-                });
-            } else {
-                // ไม่มี transaction ให้ set replacedPerson เป็น null ทั้งหมด
-                combinedData = combinedData.map(detail => ({ ...detail, replacedPerson: null }));
-            }
-        } catch (replacedError: any) {
-            console.error('[In-Out API] Error fetching replaced persons:', replacedError);
-            // ถ้า error ให้ set replacedPerson เป็น null ทั้งหมด
-            combinedData = combinedData.map(detail => ({ ...detail, replacedPerson: null }));
+                paginatedData[index].replacedPerson = replaced ? {
+                    id: replaced.id,
+                    personnelId: replaced.personnelId,
+                    noId: replaced.noId,
+                    fullName: replaced.fullName,
+                    rank: replaced.rank,
+                    nationalId: replaced.nationalId,
+                    age: replaced.age,
+                    seniority: replaced.seniority,
+                    birthDate: replaced.birthDate,
+                    education: replaced.education,
+                    lastAppointment: replaced.lastAppointment,
+                    currentRankSince: replaced.currentRankSince,
+                    enrollmentDate: replaced.enrollmentDate,
+                    retirementDate: replaced.retirementDate,
+                    yearsOfService: replaced.yearsOfService,
+                    trainingLocation: replaced.trainingLocation,
+                    trainingCourse: replaced.trainingCourse,
+                    posCodeId: replaced.posCodeId,
+                    posCodeMaster: replaced.posCodeMaster,
+                    fromPosition: replaced.fromPosition,
+                    fromPositionNumber: replaced.fromPositionNumber,
+                    fromUnit: replaced.fromUnit,
+                    fromActingAs: replaced.fromActingAs,
+                    toPosCodeId: replaced.toPosCodeId,
+                    toPosCodeMaster: replaced.toPosCodeMaster,
+                    toPosition: replaced.toPosition,
+                    toPositionNumber: replaced.toPositionNumber,
+                    toUnit: replaced.toUnit,
+                    toActingAs: replaced.toActingAs,
+                    transaction: null,
+                    sequence: replaced.sequence,
+                } : null;
+            });
+        } else {
+            paginatedData.forEach((_, index) => {
+                paginatedData[index].replacedPerson = null;
+            });
         }
 
-        // Get filter options
-        const units = await prisma.policePersonnel.findMany({
-            where: { 
-                unit: { not: null },
-                year: currentBuddhistYear,
-                isActive: true
-            },
-            select: { unit: true },
-            distinct: ['unit'],
-            orderBy: { unit: 'asc' },
-        });
-
-        const positionCodes = await prisma.posCodeMaster.findMany({
-            orderBy: { id: 'asc' },
-        });
+        const [units, positionCodes] = await Promise.all([
+            prisma.policePersonnel.findMany({
+                where: { 
+                    unit: { not: null },
+                    year: currentBuddhistYear,
+                    isActive: true
+                },
+                select: { unit: true },
+                distinct: ['unit'],
+                orderBy: { unit: 'asc' },
+            }),
+            prisma.posCodeMaster.findMany({
+                orderBy: { id: 'asc' },
+            })
+        ]);
 
         return NextResponse.json({
             success: true,
             data: {
-                swapDetails: combinedData,
+                swapDetails: paginatedData,
                 totalCount,
                 page,
                 pageSize,
@@ -434,13 +326,11 @@ export async function GET(request: NextRequest) {
         });
     } catch (error: any) {
         console.error('[In-Out API] Error:', error);
-        console.error('[In-Out API] Error stack:', error?.stack);
         return NextResponse.json(
             { 
                 success: false, 
                 error: 'Failed to fetch data',
                 message: error?.message || 'Unknown error',
-                details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
             },
             { status: 500 }
         );

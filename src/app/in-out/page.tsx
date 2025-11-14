@@ -535,17 +535,36 @@ export default function InOutPage() {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data.swapDetails) {
-          // หาคนที่ไปอยู่ตำแหน่งเดิมของเรา (fromPosition)
-          const partner = result.data.swapDetails.find((d: SwapDetail) => 
-            d.id !== detail.id && d.toPosCodeId === detail.posCodeId
-          );
+          const allDetails: SwapDetail[] = result.data.swapDetails;
+          
+          // หาคนที่ไปอยู่ตำแหน่งเดิมของเรา
+          // ลำดับความสำคัญ: position number > position name
+          let partner = null;
+          
+          // 1. ลองหาจาก position number
+          if (detail.fromPositionNumber) {
+            partner = allDetails.find((d: SwapDetail) => 
+              d.id !== detail.id && d.toPositionNumber === detail.fromPositionNumber
+            );
+          }
+          
+          // 2. ถ้าไม่เจอ ลองหาจาก position name
+          if (!partner && detail.fromPosition) {
+            partner = allDetails.find((d: SwapDetail) => 
+              d.id !== detail.id && d.toPosition === detail.fromPosition
+            );
+          }
+          
+          // 3. ถ้ายังไม่เจอและเป็น two-way swap ให้เอาคนอื่นใน transaction
+          if (!partner && detail.transaction.swapType === 'two-way' && allDetails.length === 2) {
+            partner = allDetails.find((d: SwapDetail) => d.id !== detail.id);
+          }
+          
           setSwapPartner(partner || null);
           
-          // หาคนที่เราไปแทน (คนที่อยู่ในตำแหน่งใหม่ของเรา)
-          const replaced = result.data.swapDetails.find((d: SwapDetail) => 
-            d.id !== detail.id && d.posCodeId === detail.toPosCodeId
-          );
-          setReplacedPerson(replaced || null);
+          // หาคนที่เราไปแทน (คนที่เดิมอยู่ในตำแหน่งใหม่ของเรา)
+          // ใช้ replacedPerson ที่มาจาก API แทน
+          setReplacedPerson(detail.replacedPerson || null);
         }
       }
     } catch (error) {

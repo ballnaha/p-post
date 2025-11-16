@@ -104,10 +104,10 @@ const Sidebar: React.FC = () => {
           key: 'vacant-filling' 
         },
         { 
-          label: 'เลื่อนตำแหน่ง', 
+          label: 'ย้ายบุคลากร', 
           href: '/police-personnel/promotion', 
           icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, 
-          key: 'promotion' 
+          key: 'transfer' 
         },
         { 
           label: 'In-Out', 

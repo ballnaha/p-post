@@ -206,6 +206,9 @@ model SwapTransactionDetail {
   // ลำดับในวงจร (สำหรับ three-way: 1, 2, 3 / สำหรับ two-way: 1, 2 / สำหรับ promotion: 0=คนที่เลื่อน, 1,2,3...=ลูกโซ่)
   sequence        Int? // คนที่ 0, 1, 2, 3, ... (optional สำหรับ two-way)
   
+  // ตำแหน่งว่าง (Placeholder) - ตำแหน่งที่ยังไม่ได้จัดคนใส่
+  isPlaceholder   Boolean @default(false) @map("is_placeholder") // true = ตำแหน่งว่าง (placeholder)
+  
   // ข้อมูลบุคคล
   personnelId     String? @map("personnel_id") // ID อ้างอิงกับ police_personnel
   noId            Int?    @map("no_id") // ลำดับที่จาก police_personnel
@@ -264,7 +267,9 @@ model SwapTransactionDetail {
   @@index([sequence])
   @@index([toPosCodeId])
   @@index([fromUnit])
+  @@index([isPlaceholder])
   @@index([transactionId, sequence]) // Composite index for sorting within transaction
+  @@index([transactionId, isPlaceholder]) // Composite index for filtering placeholders
   @@map("swap_transaction_detail")
 }
 

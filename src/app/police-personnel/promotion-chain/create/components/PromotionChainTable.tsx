@@ -38,11 +38,12 @@ import { useTheme } from '@mui/material';
 interface ChainNode {
   id: string;
   nodeOrder: number;
+  isPlaceholder?: boolean; // true = ตำแหน่งว่าง (ยังไม่ได้เลือกบุคลากร)
   personnelId?: string;
   noId?: number;
-  nationalId: string;
+  nationalId?: string; // เปลี่ยนเป็น optional สำหรับ placeholder
   fullName: string;
-  rank: string;
+  rank?: string; // เปลี่ยนเป็น optional สำหรับ placeholder
   seniority?: string;
   birthDate?: string;
   age?: string;
@@ -91,6 +92,8 @@ interface PromotionChainTableProps {
   onRemoveNode: (nodeId: string) => void;
   onInsertNode?: (node: ChainNode, beforeNodeId: string) => void;
   onReorder?: (nodes: ChainNode[]) => void;
+  onAddPlaceholder?: () => void; // สำหรับเพิ่มตำแหน่งว่างต่อท้าย
+  onInsertPlaceholder?: (beforeNodeId: string) => void; // สำหรับแทรกตำแหน่งว่าง
 }
 
 export default function PromotionChainTable({
@@ -100,6 +103,8 @@ export default function PromotionChainTable({
   onRemoveNode,
   onInsertNode,
   onReorder,
+  onAddPlaceholder,
+  onInsertPlaceholder,
 }: PromotionChainTableProps) {
   const theme = useTheme();
   const toast = useToast();
@@ -434,6 +439,86 @@ export default function PromotionChainTable({
                   const isSelected = selectedRows.has(node.id);
                   const dragStyles = dragDropHighlight.getDragDropStyles(node.id, 'create-chain', index, theme);
                   
+                  // ถ้าเป็น Placeholder แสดง row พิเศษ (สามารถลากวางได้)
+                  if (node.isPlaceholder) {
+                    return (
+                      <TableRow
+                        key={node.id}
+                        draggable
+                        onDragStart={(e: React.DragEvent) => dragDropHighlight.handleDragStart(e, 'create-chain', node.id, index)}
+                        onDragOver={(e: React.DragEvent) => dragDropHighlight.handleDragOver(e, 'create-chain', index)}
+                        onDragLeave={dragDropHighlight.handleDragLeave}
+                        onDrop={(e: React.DragEvent) => dragDropHighlight.handleDrop(e, 'create-chain', index, handleReorder)}
+                        onDragEnd={dragDropHighlight.handleDragEnd}
+                        sx={{
+                          ...dragDropHighlight.getDragDropStyles(node.id, 'create-chain', index, theme),
+                          bgcolor: 'grey.50',
+                          borderLeft: '4px dashed',
+                          borderColor: 'warning.main',
+                          cursor: 'grab',
+                          '&:active': {
+                            cursor: 'grabbing',
+                          },
+                        }}
+                      >
+                        <TableCell sx={{ py: 1 }} padding="checkbox" />
+                        <TableCell sx={{ py: 1 }}>
+                          <DragIndicatorIcon sx={{ color: 'warning.main', fontSize: 18 }} />
+                        </TableCell>
+                        <TableCell sx={{ py: 1 }}>
+                          <Chip label={node.nodeOrder} color="warning" size="small" sx={{ fontWeight: 700, height: 22, fontSize: '0.75rem' }} />
+                        </TableCell>
+                        <TableCell colSpan={3} sx={{ py: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary', fontSize: '0.875rem' }}>
+                              📋 ตำแหน่งว่าง - รอการเลือกบุคลากร
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="warning"
+                              startIcon={<AddIcon />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInsertBeforeNodeId(node.id);
+                                setShowCandidateSelector(true);
+                              }}
+                              sx={{ fontSize: '0.75rem', height: 26 }}
+                            >
+                              เลือกบุคลากร
+                            </Button>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
+                          <Box>
+                            {node.toPosCodeName && (
+                              <Chip label={node.toPosCodeName} size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                            )}
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
+                              {node.toPosition}
+                            </Typography>
+                            {node.toPositionNumber && (
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                ({node.toPositionNumber})
+                              </Typography>
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
+                          <Tooltip title="ลบ">
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDeleteClick(node.id); }} color="error" sx={{ p: 0.5 }}>
+                              <DeleteIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+                  
+                  // แสดง row ปกติ
                   return (
                   <TableRow
                     key={node.id}
@@ -516,11 +601,31 @@ export default function PromotionChainTable({
                       <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
                     </TableCell>
                     <TableCell align="center" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
-                      <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
+                      <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center', flexWrap: 'wrap' }}>
                         {onInsertNode && (
-                          <Tooltip title="แทรกก่อนหน้า">
+                          <Tooltip title="แทรกบุคลากร">
                             <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleInsertBefore(node.id); }} color="primary" sx={{ p: 0.5 }}>
                               <AddIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {onInsertPlaceholder && (
+                          <Tooltip title="แทรกตำแหน่งว่าง">
+                            <IconButton 
+                              size="small" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                onInsertPlaceholder(node.id); 
+                              }} 
+                              sx={{ 
+                                p: 0.5,
+                                color: 'warning.main',
+                                border: '1px dashed',
+                                borderColor: 'warning.main',
+                                borderRadius: 0.5,
+                              }}
+                            >
+                              <AddIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                           </Tooltip>
                         )}
@@ -544,19 +649,38 @@ export default function PromotionChainTable({
           </Table>
         </TableContainer>
 
-        {/* Add Button */}
+        {/* Add Buttons */}
         {canAddMore && (
           <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setShowCandidateSelector(true)}
-              fullWidth
-              size="medium"
-              sx={{ fontWeight: 700, py: 0.75 }}
-            >
-              {nodes.length === 0 ? 'เพิ่มบุคลากรคนแรก' : 'เพิ่มบุคลากรคนถัดไป'}
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setShowCandidateSelector(true)}
+                fullWidth
+                size="medium"
+                sx={{ fontWeight: 700, py: 0.75 }}
+              >
+                {nodes.length === 0 ? 'เพิ่มบุคลากรคนแรก' : 'เพิ่มบุคลากรคนถัดไป'}
+              </Button>
+              {onAddPlaceholder && nodes.length > 0 && (
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={onAddPlaceholder}
+                  size="medium"
+                  sx={{ 
+                    fontWeight: 700, 
+                    py: 0.75,
+                    minWidth: '180px',
+                    borderStyle: 'dashed',
+                    borderWidth: 2,
+                  }}
+                >
+                  เพิ่มตำแหน่งว่าง
+                </Button>
+              )}
+            </Box>
           </Box>
         )}
       </Paper>

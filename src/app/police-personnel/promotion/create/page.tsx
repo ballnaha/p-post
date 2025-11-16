@@ -90,38 +90,36 @@ function CreatePromotionContent() {
   const searchParams = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const personnelId = searchParams.get('personnelId');
   const toast = useToast();
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [groupNumber, setGroupNumber] = useState<string>('');
-  const [groupNotes, setGroupNotes] = useState<string>(''); // หมายเหตุของกลุ่ม
-  const [startingPersonnel, setStartingPersonnel] = useState<StartingPersonnel | null>(null);
+  const [groupNotes, setGroupNotes] = useState<string>('');
+  
+  // Unit Information
+  const [unitName, setUnitName] = useState<string>('');
+  const [unitDescription, setUnitDescription] = useState<string>('');
+  
+  // Selected Personnel to Transfer
+  const [selectedPersonnel, setSelectedPersonnel] = useState<StartingPersonnel[]>([]);
+  
+  // Chain nodes for filling vacant positions
   const [nodes, setNodes] = useState<ChainNode[]>([]);
   const [activeStep, setActiveStep] = useState(0);
-
-  useEffect(() => {
-    if (personnelId) {
-      loadStartingPersonnel(personnelId);
-    } else {
-      toast.error('กรุณาเลือกบุคลากรก่อนสร้างรายการ');
-      router.push('/police-personnel/promotion');
-    }
-  }, [personnelId]);
 
   useEffect(() => {
     const fetchNextGroupNumber = async () => {
       try {
         const currentYear = new Date().getFullYear() + 543;
-        const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=promotion`);
-        if (!response.ok) throw new Error('Failed to fetch promotion transactions');
+        const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=transfer`);
+        if (!response.ok) throw new Error('Failed to fetch transfer transactions');
         const result = await response.json();
         const transactions: any[] = Array.isArray(result?.data) ? result.data : [];
         let maxNumber = 0;
         for (const t of transactions) {
           if (t.groupNumber) {
-            const match = String(t.groupNumber).match(/\/PM-(\d+)$/);
+            const match = String(t.groupNumber).match(/\/TF-(\d+)$/);
             if (match) {
               const num = parseInt(match[1], 10);
               if (num > maxNumber) maxNumber = num;
@@ -129,86 +127,14 @@ function CreatePromotionContent() {
           }
         }
         const next = String(maxNumber + 1).padStart(3, '0');
-        setGroupNumber(`${currentYear}/PM-${next}`);
+        setGroupNumber(`${currentYear}/TF-${next}`);
       } catch (e) {
         const currentYear = new Date().getFullYear() + 543;
-        setGroupNumber(`${currentYear}/PM-001`);
+        setGroupNumber(`${currentYear}/TF-001`);
       }
     };
     fetchNextGroupNumber();
   }, []);
-
-  const loadStartingPersonnel = async (id: string) => {
-    setLoading(true);
-    try {
-      // ดึงข้อมูลบุคลากรโดยตรงจาก ID
-      const personnelResponse = await fetch(`/api/police-personnel/${id}`);
-      
-      if (!personnelResponse.ok) {
-        throw new Error('Failed to fetch personnel by ID');
-      }
-
-      const personnelResult = await personnelResponse.json();
-      
-      if (!personnelResult.success || !personnelResult.data) {
-        toast.error('ไม่พบข้อมูลบุคลากรที่เลือก กรุณาเลือกใหม่');
-        setTimeout(() => {
-          router.push('/police-personnel/promotion');
-        }, 2000);
-        return;
-      }
-      
-      const data = personnelResult.data;
-      
-      console.log('Loaded personnel:', {
-        id: data.id,
-        fullName: data.fullName,
-        posCodeId: data.posCodeId,
-        posCodeMaster: data.posCodeMaster,
-        position: data.position,
-      });
-      
-      const personnel: StartingPersonnel = {
-        id: data.id,
-        noId: data.noId,
-        posCodeId: data.posCodeId,
-        posCodeName: data.posCodeMaster?.name || '',
-        position: data.position || '-',
-        unit: data.unit || '-',
-        requestedPositionId: data.requestedPositionId,
-        requestedPosition: data.requestedPosition,
-        positionNumber: data.positionNumber,
-        actingAs: data.actingAs,
-        fullName: data.fullName || '-',
-        rank: data.rank || '-',
-        nationalId: data.nationalId || '',
-        seniority: data.seniority,
-        birthDate: data.birthDate,
-        age: data.age,
-        education: data.education,
-        lastAppointment: data.lastAppointment,
-        currentRankSince: data.currentRankSince,
-        enrollmentDate: data.enrollmentDate,
-        retirementDate: data.retirementDate,
-        yearsOfService: data.yearsOfService,
-        trainingLocation: data.trainingLocation,
-        trainingCourse: data.trainingCourse,
-        supporterName: data.supporterName,
-        supportReason: data.supportReason,
-      };
-      
-      console.log('Mapped starting personnel:', personnel);
-      setStartingPersonnel(personnel);
-    } catch (error) {
-      console.error('Error loading personnel:', error);
-      toast.error('ไม่สามารถโหลดข้อมูลบุคลากรได้');
-      setTimeout(() => {
-        router.push('/police-personnel/promotion');
-      }, 2000);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAddNode = (node: ChainNode) => {
     setNodes([...nodes, node]);
@@ -471,44 +397,78 @@ function CreatePromotionContent() {
           }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                สร้างรายการเลื่อนตำแหน่ง
+                สร้างรายการย้ายบุคลากร
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                เลือกบุคลากรทีละขั้นเพื่อจัดเลื่อนตำแหน่งแบบทอดต่อ
+                กรอกข้อมูลหน่วยงานปลายทาง เลือกบุคลากรที่จะย้าย และจัดคนเติมตำแหน่งว่าง
               </Typography>
 
-              {/* Starting Personnel Info */}
-              {loading ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                  <CircularProgress size={20} />
-                  <Typography variant="body2" color="text.secondary">กำลังโหลด...</Typography>
-                </Box>
-              ) : startingPersonnel && (
-                <Box sx={{ 
-                  p: 1.5,
-                  bgcolor: 'success.50',
-                  borderRadius: 1,
-                  borderLeft: '3px solid',
-                  borderColor: 'success.main',
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="caption" color="success.main" sx={{ fontWeight: 600 }}>
-                      🎖️ บุคลากร
-                    </Typography>
-                    <Chip label={`${nodes.length} ขั้น`} size="small" color="success" sx={{ height: 30, fontSize: '0.85rem' }} />
-                  </Box>
-                  <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                    {startingPersonnel.rank} {startingPersonnel.fullName}
+              {/* Unit Information */}
+              <Box sx={{ 
+                p: 1.5,
+                bgcolor: 'primary.50',
+                borderRadius: 1,
+                borderLeft: '3px solid',
+                borderColor: 'primary.main',
+                mb: 2,
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
+                    🏢 ข้อมูลหน่วยงานปลายทาง
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.85rem' }}>
-                    {startingPersonnel.posCodeName} • {startingPersonnel.position} • {startingPersonnel.unit}
-                  </Typography>
-                  <Box sx={{ mt: 1.25, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Chip label="เลขกลุ่ม" size="small" color="success" sx={{ height: 22 }} />
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{groupNumber || '-'}</Typography>
-                  </Box>
+                  <Chip label="เลขกลุ่ม" size="small" color="primary" sx={{ height: 22 }} />
                 </Box>
-              )}
+                
+                <TextField
+                  fullWidth
+                  label="ชื่อหน่วยงาน/Unit"
+                  placeholder="เช่น หน่วยที่ 1, กองบังคับการ..."
+                  value={unitName}
+                  onChange={(e) => setUnitName(e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  sx={{ mb: 1.5, bgcolor: 'white' }}
+                  required
+                />
+                
+                <TextField
+                  fullWidth
+                  label="รายละเอียดเพิ่มเติม"
+                  placeholder="ระบุรายละเอียดของหน่วยงาน (ถ้ามี)"
+                  value={unitDescription}
+                  onChange={(e) => setUnitDescription(e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  multiline
+                  rows={2}
+                  sx={{ bgcolor: 'white' }}
+                />
+                
+                <Box sx={{ mt: 1, display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>{groupNumber || '-'}</Typography>
+                </Box>
+              </Box>
+
+              {/* Selected Personnel Count */}
+              <Box sx={{ 
+                p: 1.5,
+                bgcolor: 'success.50',
+                borderRadius: 1,
+                borderLeft: '3px solid',
+                borderColor: 'success.main',
+              }}>
+                <Typography variant="caption" color="success.main" sx={{ fontWeight: 600 }}>
+                  👥 บุคลากรที่เลือก
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, mt: 0.5 }}>
+                  {selectedPersonnel.length} คน
+                </Typography>
+                {selectedPersonnel.length > 0 && (
+                  <Typography variant="caption" color="text.secondary">
+                    จะเกิดตำแหน่งว่าง {selectedPersonnel.length} ตำแหน่ง
+                  </Typography>
+                )}
+              </Box>
             </Box>
 
             <Button

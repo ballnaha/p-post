@@ -181,12 +181,7 @@ export default function PromotionPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   
-  const [eligiblePersonnel, setEligiblePersonnel] = useState<EligiblePerson[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
-  const [totalEligible, setTotalEligible] = useState(0);
-  const [loadingEligible, setLoadingEligible] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  
   const [mainSearchText, setMainSearchText] = useState('');
   
   const getAvailableYears = () => {
@@ -200,17 +195,6 @@ export default function PromotionPage() {
   };
 
   const availableYears = getAvailableYears();
-  
-  const [drawerPage, setDrawerPage] = useState(0);
-  const [drawerRowsPerPage, setDrawerRowsPerPage] = useState(20);
-  
-  const [searchText, setSearchText] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [filterPosCode, setFilterPosCode] = useState<string>('all');
-  const [filterUnit, setFilterUnit] = useState<string>('all');
-  
-  const [posCodeOptions, setPosCodeOptions] = useState<Array<{ id: number; name: string }>>([]);
-  const [unitOptions, setUnitOptions] = useState<string[]>([]);
   
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; groupName?: string | null; groupNumber?: string | null } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -231,31 +215,6 @@ export default function PromotionPage() {
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  // โหลดข้อมูล units และ positions จาก API
-  useEffect(() => {
-    const loadFilterOptions = async () => {
-      try {
-        // โหลดหน่วยงาน
-        const unitsResponse = await fetch('/api/police-personnel/units');
-        if (unitsResponse.ok) {
-          const unitsData = await unitsResponse.json();
-          setUnitOptions(unitsData.data || []);
-        }
-
-        // โหลดรหัสตำแหน่ง (PosCode)
-        const posCodesResponse = await fetch('/api/police-personnel/pos-codes');
-        if (posCodesResponse.ok) {
-          const posCodesData = await posCodesResponse.json();
-          setPosCodeOptions(posCodesData.data || []);
-        }
-      } catch (error) {
-        console.error('Error loading filter options:', error);
-      }
-    };
-
-    loadFilterOptions();
-  }, []);
-
   useEffect(() => {
     loadChains();
   }, [selectedYear]);
@@ -263,7 +222,7 @@ export default function PromotionPage() {
   const loadChains = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/swap-transactions?year=${selectedYear}&swapType=promotion`);
+      const response = await fetch(`/api/swap-transactions?year=${selectedYear}&swapType=transfer`);
       if (!response.ok) throw new Error('โหลดรายการไม่สำเร็จ');
       const result = await response.json();
       const list: TransactionChain[] = Array.isArray(result?.data) ? result.data : [];
@@ -290,10 +249,9 @@ export default function PromotionPage() {
         throw new Error(data?.error || 'ลบรายการไม่สำเร็จ');
       }
       toast.success('ลบรายการสำเร็จ');
-      const updatedChains = chains.filter(c => c.id !== deleteTarget.id);
-      setChains(updatedChains);
+      setChains(chains.filter(c => c.id !== deleteTarget.id));
       setDeleteTarget(null);
-      await loadEligiblePersonnel(updatedChains);
+      await loadChains();
     } catch (e: any) {
       console.error('Delete failed:', e);
       toast.error(e?.message || 'เกิดข้อผิดพลาดในการลบ');
@@ -302,125 +260,9 @@ export default function PromotionPage() {
     }
   };
 
-  const loadEligiblePersonnel = async (chainsToUse?: TransactionChain[]) => {
-    setLoadingEligible(true);
-    try {
-      const currentChains = chainsToUse !== undefined ? chainsToUse : chains;
-
-      const params = new URLSearchParams({
-        year: selectedYear.toString(),
-        page: drawerPage.toString(),
-        limit: drawerRowsPerPage.toString(),
-        includeAll: 'true', // ดึงข้อมูลทั้งหมดจาก police_personnel (รวมทั้งที่ไม่มียศ)
-      });
-
-      if (searchText && searchText.trim()) {
-        params.append('search', searchText.trim());
-      }
-
-      if (filterPosCode && filterPosCode !== 'all') {
-        params.append('posCodeId', filterPosCode);
-      }
-
-      if (filterUnit && filterUnit !== 'all') {
-        params.append('unit', filterUnit);
-      }
-
-      console.log('Fetching promotion-eligible personnel with params:', params.toString());
-      
-      const response = await fetch(`/api/police-personnel/promotion-eligible?${params}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('API Error:', errorData);
-        throw new Error(errorData?.error || 'Failed to fetch eligible personnel');
-      }
-      
-      const data = await response.json();
-      
-      const eligible: EligiblePerson[] = (data.data || []).map((p: any) => ({
-        id: p.id,
-        noId: p.noId,
-        posCodeId: p.posCodeId,
-        posCodeName: p.posCodeName,
-        position: p.position || p.posCodeName || '-',
-        unit: p.unit || '-',
-        fullName: p.fullName || '-',
-        rank: p.rank || '-',
-        nationalId: p.nationalId || '',
-        seniority: p.seniority || '',
-        positionNumber: p.positionNumber,
-        actingAs: p.actingAs,
-        age: p.age,
-        yearsOfService: p.yearsOfService,
-        trainingCourse: p.trainingCourse,
-      }));
-
-      // กรองคนที่ถูกใช้ไปแล้วใน promotion chains
-      const usedPersonnelIds = new Set<string>();
-      currentChains.forEach(chain => {
-        chain.swapDetails?.forEach(detail => {
-          if (detail.personnelId) {
-            usedPersonnelIds.add(detail.personnelId);
-          }
-        });
-      });
-
-      const availablePersonnel = eligible.filter(p => !usedPersonnelIds.has(p.id));
-
-      // ไม่ต้อง extract options จากข้อมูลที่กรองแล้ว
-      // เพราะ options ถูกโหลดจาก API แยกต่างหาก (ใน useEffect ตอนเริ่มต้น)
-      
-      setEligiblePersonnel(availablePersonnel);
-      setTotalEligible(data.total || availablePersonnel.length);
-    } catch (error) {
-      console.error('Error loading eligible personnel:', error);
-      setEligiblePersonnel([]);
-      setTotalEligible(0);
-    } finally {
-      setLoadingEligible(false);
-    }
-  };
-
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchText(searchInput);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
-
-  // Reset page to 0 when filters change
-  useEffect(() => {
-    if (showCreateDialog) {
-      setDrawerPage(0);
-    }
-  }, [searchText, filterPosCode, filterUnit]);
-
-  // โหลดข้อมูลเมื่อ drawer เปิด หรือเมื่อ page, rowsPerPage, หรือ filters เปลี่ยน
-  // ใช้ timeout เล็กน้อยเพื่อให้ page reset เสร็จก่อน
-  useEffect(() => {
-    if (!showCreateDialog) return;
-
-    const timer = setTimeout(() => {
-      loadEligiblePersonnel();
-    }, 10);
-
-    return () => clearTimeout(timer);
-  }, [showCreateDialog, drawerPage, drawerRowsPerPage, searchText, filterPosCode, filterUnit]);
-
-  useEffect(() => {
-    if (filterPosCode !== 'all') {
-      const exists = posCodeOptions.some((p) => p.id.toString() === filterPosCode);
-      if (!exists) {
-        setFilterPosCode('all');
-      }
-    }
-  }, [posCodeOptions]);
-
-  const handleCreateChain = (personnelId: string) => {
+  const handleCreateTransfer = () => {
     setShowCreateDialog(false);
-    router.push(`/police-personnel/promotion/create?personnelId=${personnelId}`);
+    router.push('/police-personnel/promotion/create');
   };
 
   const formatDate = (dateString?: string | null) => {
@@ -739,10 +581,10 @@ export default function PromotionPage() {
           }}>
             <Box>
               <Typography variant="h6" component="h1" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                🎖️ รายการเลื่อนตำแหน่ง
+                🚀 การย้ายบุคลากรไปหน่วยงานอื่น
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                จัดบุคลากรเพื่อเลื่อนตำแหน่ง โดยเลือกจากบุคลากรที่มีคุณสมบัติเหมาะสม
+                จัดการย้ายบุคลากรไปหน่วยงานอื่น พร้อมระบบเติมตำแหน่งว่างแบบทอดต่อ
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -773,17 +615,9 @@ export default function PromotionPage() {
                 variant="contained"
                 startIcon={<AddIcon />}
                 size="medium"
-                onClick={async () => {
-                  setSearchText('');
-                  setSearchInput('');
-                  setFilterPosCode('all');
-                  setFilterUnit('all');
-                  setDrawerPage(0);
-                  setShowCreateDialog(true);
-                  await loadEligiblePersonnel(chains);
-                }}
+                onClick={() => handleCreateTransfer()}
               >
-                เพิ่มรายการเลื่อนตำแหน่ง
+                เพิ่มรายการย้ายบุคลากร
               </Button>
             </Box>
           </Box>
@@ -850,23 +684,15 @@ export default function PromotionPage() {
               ยังไม่มีรายการ
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              เริ่มต้นสร้างรายการเลื่อนตำแหน่งแรกของคุณ
+              เริ่มต้นสร้างรายการย้ายบุคลากรแรกของคุณ
             </Typography>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               size="medium"
-              onClick={async () => {
-                setSearchText('');
-                setSearchInput('');
-                setFilterPosCode('all');
-                setFilterUnit('all');
-                setDrawerPage(0);
-                setShowCreateDialog(true);
-                await loadEligiblePersonnel(chains);
-              }}
+              onClick={() => handleCreateTransfer()}
             >
-              เพิ่มรายการเลื่อนตำแหน่ง
+              เพิ่มรายการย้ายบุคลากร
             </Button>
           </Paper>
         ) : (
@@ -1192,627 +1018,7 @@ export default function PromotionPage() {
           </>
         )}
 
-        {/* Drawer for selecting eligible personnel */}
-        <Drawer
-          anchor="right"
-          open={showCreateDialog}
-          onClose={() => {
-            setShowCreateDialog(false);
-            setSearchText('');
-            setSearchInput('');
-            setFilterPosCode('all');
-            setFilterUnit('all');
-            setDrawerPage(0);
-            setShowFilters(false);
-          }}
-          ModalProps={{
-            sx: {
-              zIndex: 10001, // สูงกว่า AppBar และ components อื่นๆ
-            }
-          }}
-          PaperProps={{
-            sx: {
-              width: { xs: '100%', sm: '90%', md: 700 },
-              backgroundImage: 'none',
-            }
-          }}
-          SlideProps={{
-            timeout: { enter: 300, exit: 250 }
-          }}
-        >
-          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* Header */}
-            <Box sx={{ 
-              p: { xs: 1.5, md: 1 }, 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              borderBottom: 1,
-              borderColor: 'divider',
-              bgcolor: 'background.paper',
-              position: 'sticky',
-              top: 0,
-              zIndex: 2,
-            }}>
-              <Box sx={{ lineHeight: 1, pl: { xs: 0, md: 1.5 } }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.25, fontSize: { xs: '1rem', md: '1.1rem' } }}>
-                  เลือกบุคลากรเลื่อนตำแหน่ง
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1, fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
-                  {loadingEligible ? (
-                    <>กำลังโหลด...</>
-                  ) : (
-                    <>
-                      {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') ? 'กรองแล้ว: ' : 'ทั้งหมด: '}
-                      {totalEligible} คน
-                    </>
-                  )}
-                </Typography>
-              </Box>
-              <IconButton onClick={() => {
-                setShowCreateDialog(false);
-                setSearchText('');
-                setSearchInput('');
-                setShowFilters(false);
-              }} size="small">
-                <CloseIcon sx={{ fontSize: { xs: 22, md: 20 } }} />
-              </IconButton>
-            </Box>
 
-            {/* Search and Filter - แสดงตลอดเวลา */}
-            <Box sx={{ 
-              p: 1, 
-              borderBottom: 1,
-              borderColor: 'divider',
-              bgcolor: 'background.paper',
-              position: 'sticky',
-              top: 56,
-              zIndex: 10,
-              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-              }}>
-                <Stack spacing={1}>
-                  {/* Search and Filter Toggle */}
-                  <Box sx={{ 
-                    display: 'flex', 
-                    gap: 1,
-                    alignItems: 'flex-start'
-                  }}>
-                    <TextField
-                      size="small"
-                      placeholder="ค้นหา ชื่อ, ตำแหน่ง, หน่วย..."
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon fontSize="small" />
-                          </InputAdornment>
-                        ),
-                      }}
-                      sx={{ flex: 1 }}
-                    />
-                    
-                    {/* Mobile: Toggle Filter Button */}
-                    {isMobile && (
-                      <Badge 
-                        badgeContent={
-                          (filterUnit !== 'all' ? 1 : 0) + 
-                          (filterPosCode !== 'all' ? 1 : 0)
-                        } 
-                        color="primary"
-                        invisible={filterUnit === 'all' && filterPosCode === 'all'}
-                      >
-                        <IconButton 
-                          onClick={() => setShowFilters(!showFilters)}
-                          color={showFilters ? 'primary' : 'default'}
-                          sx={{ 
-                            border: 1, 
-                            borderColor: showFilters ? 'primary.main' : 'divider',
-                            borderRadius: 1,
-                          }}
-                        >
-                          <FilterListIcon />
-                        </IconButton>
-                      </Badge>
-                    )}
-                  </Box>
-
-                  {/* Filter Controls */}
-                  <Collapse in={!isMobile || showFilters}>
-                    <Box sx={{ 
-                      display: 'flex', 
-                      gap: 1, 
-                      flexDirection: isMobile ? 'column' : 'row',
-                      mb: isMobile ? 1 : 0 
-                    }}>
-                      {/* Filter Unit */}
-                      <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 150 }}>
-                        <Select
-                          value={filterUnit}
-                          onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
-                          displayEmpty
-                          renderValue={(selected) => {
-                            if (selected === 'all') {
-                              return (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <FilterListIcon fontSize="small" />
-                                  <Typography variant="body2">ทุกหน่วย</Typography>
-                                </Box>
-                              );
-                            }
-                            return (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <FilterListIcon fontSize="small" />
-                                <Typography 
-                                  variant="body2"
-                                  sx={{
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {selected}
-                                </Typography>
-                              </Box>
-                            );
-                          }}
-                          MenuProps={{
-                            disablePortal: true,
-                            PaperProps: {
-                              sx: {
-                                maxHeight: 300,
-                              }
-                            },
-                          }}
-                          sx={{
-                            '& .MuiSelect-select': {
-                              py: 1,
-                            }
-                          }}
-                        >
-                          <MenuItem value="all">
-                            <Typography variant="body2">ทุกหน่วย</Typography>
-                          </MenuItem>
-                          {unitOptions.map((unit) => (
-                            <MenuItem key={unit} value={unit}>
-                              <Typography variant="body2" noWrap>
-                                {unit}
-                              </Typography>
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-
-                      {/* Filter PosCode */}
-                      <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 150 }}>
-                        <Select
-                          value={filterPosCode}
-                          onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
-                          displayEmpty
-                          renderValue={(selected) => {
-                            if (selected === 'all') {
-                              return (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <FilterListIcon fontSize="small" />
-                                  <Typography variant="body2">ทั้งหมด</Typography>
-                                </Box>
-                              );
-                            }
-                            const posCode = posCodeOptions.find(p => p.id.toString() === selected);
-                            return (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <FilterListIcon fontSize="small" />
-                                <Typography 
-                                  variant="body2"
-                                  sx={{
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {posCode ? `${posCode.id} - ${posCode.name}` : selected}
-                                </Typography>
-                              </Box>
-                            );
-                          }}
-                          MenuProps={{
-                            disablePortal: true,
-                            PaperProps: {
-                              sx: {
-                                maxHeight: 300,
-                              }
-                            },
-                          }}
-                          sx={{
-                            '& .MuiSelect-select': {
-                              py: 1,
-                            }
-                          }}
-                        >
-                          <MenuItem value="all">
-                            <Typography variant="body2">ทุกระดับ</Typography>
-                          </MenuItem>
-                          {posCodeOptions.map((posCode) => (
-                            <MenuItem key={posCode.id} value={posCode.id.toString()}>
-                              <Typography variant="body2" fontWeight={600} noWrap>
-                                {posCode.id} - {posCode.name}
-                              </Typography>
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Box>
-                  </Collapse>
-                  
-                  {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') && (
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'space-between',
-                      px: 0.5,
-                    }}>
-                      <Typography variant="caption" color="text.secondary">
-                        พบ {totalEligible} คน
-                      </Typography>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          setSearchText('');
-                          setSearchInput('');
-                          setFilterPosCode('all');
-                          setFilterUnit('all');
-                          setDrawerPage(0);
-                        }}
-                        sx={{ 
-                          minWidth: 'auto', 
-                          textTransform: 'none',
-                          fontSize: '0.75rem',
-                          py: 0.25,
-                        }}
-                      >
-                        ล้างตัวกรอง
-                      </Button>
-                    </Box>
-                  )}
-                </Stack>
-              </Box>
-
-            {/* Content - แยก Box สำหรับแสดง loading */}
-            <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 1.5 } }}>
-              {/* Skeleton Loading */}
-              {loadingEligible ? (
-                <List disablePadding>
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <ListItem key={index} disablePadding sx={{ mb: 0.75 }}>
-                      <Paper 
-                        elevation={0}
-                        sx={{ 
-                          width: '100%',
-                          border: '1.5px solid',
-                          borderColor: 'grey.200',
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'stretch' }}>
-                          <Box sx={{ py: 1, px: 1.5, flex: 1 }}>
-                            {/* Name & Rank */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                              <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: 0.5 }} />
-                              <Skeleton variant="text" width="60%" height={28} />
-                            </Box>
-                            {/* Position & Unit */}
-                            <Skeleton variant="text" width="85%" height={24} sx={{ mb: 0.5 }} />
-                            {/* Badges */}
-                            <Box sx={{ display: 'flex', gap: 0.5 }}>
-                              <Skeleton variant="rectangular" width={70} height={22} sx={{ borderRadius: 0.5 }} />
-                              <Skeleton variant="rectangular" width={60} height={22} sx={{ borderRadius: 0.5 }} />
-                              <Skeleton variant="rectangular" width={80} height={22} sx={{ borderRadius: 0.5 }} />
-                            </Box>
-                          </Box>
-                          {/* Buttons */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1 }}>
-                            <Skeleton variant="rectangular" width={36} height={36} sx={{ borderRadius: 1.5 }} />
-                            <Skeleton variant="rectangular" width={36} height={36} sx={{ borderRadius: 1.5 }} />
-                          </Box>
-                        </Box>
-                      </Paper>
-                    </ListItem>
-                  ))}
-                </List>
-              ) : eligiblePersonnel.length === 0 ? (
-                <Alert severity="warning" sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
-                  {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') 
-                    ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา'
-                    : <>ไม่มีบุคลากรที่เหมาะสมสำหรับเลื่อนตำแหน่งในปี {selectedYear}</>
-                  }
-                </Alert>
-              ) : (
-                <List disablePadding>
-                  {eligiblePersonnel.map((person) => (
-                    <ListItem
-                      key={person.id}
-                      disablePadding
-                      sx={{ mb: 0.75 }}
-                    >
-                      <Paper 
-                        elevation={0}
-                        sx={{ 
-                          width: '100%',
-                          border: '1.5px solid',
-                          borderColor: 'grey.200',
-                          borderRadius: 1,
-                          overflow: 'hidden',
-                          transition: 'all 0.2s ease-in-out',
-                          '&:hover': {
-                            borderColor: 'success.main',
-                            boxShadow: '0 3px 10px rgba(46, 125, 50, 0.15)',
-                            transform: 'translateY(-1px)',
-                          },
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'stretch' }}>
-                          {/* Main Content - Clickable */}
-                          <ListItemButton
-                            onClick={() => handleCreateChain(person.id)}
-                            sx={{ 
-                              py: 1,
-                              px: 1.5,
-                              flex: 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1.5,
-                              '&:hover': {
-                                bgcolor: 'success.50',
-                              }
-                            }}
-                          >
-                            {/* Content */}
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                              {/* Name & Rank Header */}
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                <Chip 
-                                  label={person.rank || '-'} 
-                                  size="small" 
-                                  color="success"
-                                  sx={{ 
-                                    height: 24,
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600,
-                                    '& .MuiChip-label': { px: 1.25 }
-                                  }}
-                                />
-                                <Typography 
-                                  variant="h6" 
-                                  fontWeight={600}
-                                  sx={{ 
-                                    fontSize: '0.9rem',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    color: 'text.primary',
-                                  }}
-                                >
-                                  {person.fullName}
-                                </Typography>
-                              </Box>
-                              
-                              {/* Position & Unit - Combined */}
-                              <Typography 
-                                variant="body2" 
-                                color="text.primary"
-                                fontWeight={500}
-                                sx={{ 
-                                  fontSize: '0.875rem',
-                                  display: 'block',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  mb: 0.5,
-                                }}
-                              >
-                                <TrendingUpIcon sx={{ fontSize: 16, verticalAlign: 'text-bottom', mr: 0.5, color: 'primary.main' }} />
-                                {person.position || person.posCodeName || '-'}
-                                {person.posCodeName && person.position !== person.posCodeName && (
-                                  <Typography component="span" color="text.secondary" sx={{fontSize:'0.875rem'}}>
-                                    {' '}({person.posCodeName})
-                                  </Typography>
-                                )}
-                                <Typography component="span" color="text.secondary" sx={{fontSize:'0.875rem'}}>
-                                  {' • '}{person.unit || '-'}
-                                </Typography>
-                              </Typography>
-                              
-                              {/* Details Row with Badges - Compact */}
-                              <Box sx={{ 
-                                display: 'flex', 
-                                flexWrap: 'wrap', 
-                                gap: 0.5,
-                              }}>
-                                {person.posCodeId && (
-                                  <Chip 
-                                    label={`รหัส ${person.posCodeId}`}
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ 
-                                      height: 22,
-                                      fontSize: '0.75rem',
-                                      borderColor: 'grey.300',
-                                      '& .MuiChip-label': { px: 1 }
-                                    }}
-                                  />
-                                )}
-                                {person.age && (
-                                  <Chip 
-                                    label={`อายุ ${person.age}`}
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ 
-                                      height: 22,
-                                      fontSize: '0.75rem',
-                                      borderColor: 'grey.300',
-                                      '& .MuiChip-label': { px: 1 }
-                                    }}
-                                  />
-                                )}
-                                {person.yearsOfService && (
-                                  <Chip 
-                                    label={`ราชการ ${person.yearsOfService}`}
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ 
-                                      height: 22,
-                                      fontSize: '0.75rem',
-                                      borderColor: 'grey.300',
-                                      '& .MuiChip-label': { px: 1 }
-                                    }}
-                                  />
-                                )}
-                                {person.trainingCourse && person.trainingCourse.trim() && person.trainingCourse !== '-' && (
-                                  <Chip 
-                                    label={
-                                      (person.trainingCourse.includes('นรต') || person.trainingCourse.includes('นรส'))
-                                        ? person.trainingCourse
-                                        : `นรต.${person.trainingCourse}`
-                                    }
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ 
-                                      height: 22,
-                                      fontSize: '0.75rem',
-                                      borderColor: 'grey.300',
-                                      '& .MuiChip-label': { px: 1 }
-                                    }}
-                                  />
-                                )}
-                              </Box>
-                            </Box>
-                            
-                            {/* Add Icon Button */}
-                            <Box sx={{ 
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              minWidth: 36,
-                              height: 36,
-                              borderRadius: 1.5,
-                              bgcolor: 'success.main',
-                              color: 'white',
-                              boxShadow: '0 2px 6px rgba(46, 125, 50, 0.25)',
-                              transition: 'all 0.2s',
-                              '&:hover': {
-                                bgcolor: 'success.dark',
-                                boxShadow: '0 3px 10px rgba(46, 125, 50, 0.35)',
-                              }
-                            }}>
-                              <AddIcon sx={{ fontSize: 22 }} />
-                            </Box>
-                          </ListItemButton>
-
-                          {/* Detail Button - Separate from main click */}
-                          <Box sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center',
-                            borderLeft: '1.5px solid',
-                            borderColor: 'grey.200',
-                            px: 0.5,
-                          }}>
-                            <Tooltip title="ดูรายละเอียด">
-                              <IconButton 
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleViewPersonnelDetail(person.id);
-                                }}
-                                sx={{ 
-                                  width: 36,
-                                  height: 36,
-                                  color: 'info.main',
-                                  '&:hover': {
-                                    bgcolor: 'info.lighter',
-                                    color: 'info.dark',
-                                  }
-                                }}
-                              >
-                                <InfoOutlinedIcon sx={{ fontSize: 20 }} />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </Box>
-                      </Paper>
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </Box>
-
-            {/* Footer with Pagination */}
-            {!loadingEligible && totalEligible > 0 && (
-              <Box sx={{
-                position: 'sticky',
-                bottom: 0,
-                bgcolor: 'background.paper',
-                borderTop: 1,
-                borderColor: 'divider',
-                zIndex: 10,
-                pt: { xs: 1, sm: 1.5 },
-                pb: { xs: 1, sm: 1.5 },
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 1,
-                px: { xs: 1, sm: 2 },
-              }}>
-                {/* Rows per page selector */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                    แสดง
-                  </Typography>
-                  <FormControl size="small" variant="standard" sx={{ minWidth: 60 }}>
-                    <Select
-                      value={drawerRowsPerPage}
-                      onChange={(e: SelectChangeEvent<number>) => {
-                        setDrawerRowsPerPage(Number(e.target.value));
-                        setDrawerPage(0);
-                      }}
-                      sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
-                      MenuProps={{
-                        disablePortal: true,
-                        PaperProps: {
-                          sx: {
-                            maxHeight: 300,
-                          }
-                        },
-                      }}
-                    >
-                      <MenuItem value={10}>10</MenuItem>
-                      <MenuItem value={20}>20</MenuItem>
-                      <MenuItem value={25}>25</MenuItem>
-                      <MenuItem value={50}>50</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                    รายการ
-                  </Typography>
-                </Box>
-
-                {/* Pagination */}
-                <Pagination
-                  count={Math.ceil(totalEligible / drawerRowsPerPage)}
-                  page={drawerPage + 1}
-                  onChange={(e, p) => setDrawerPage(p - 1)}
-                  color="primary"
-                  size={isMobile ? 'small' : 'medium'}
-                  siblingCount={isMobile ? 0 : 1}
-                  boundaryCount={1}
-                  showFirstButton={!isMobile}
-                  showLastButton={!isMobile}
-                />
-              </Box>
-            )}
-          </Box>
-        </Drawer>
 
         {/* Action Menu */}
         <Menu
@@ -1835,14 +1041,14 @@ export default function PromotionPage() {
         </Menu>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog
+          <Dialog
           open={!!deleteTarget}
           onClose={() => !deleting && setDeleteTarget(null)}
         >
           <DialogTitle>ยืนยันการลบข้อมูล</DialogTitle>
           <DialogContent>
             <Typography variant="body1" sx={{ mb: 2 }}>
-              คุณต้องการลบรายการเลื่อนตำแหน่ง กลุ่ม{' '}
+              คุณต้องการลบรายการย้ายบุคลากร{' '}
               <strong>
                 {deleteTarget && deleteTarget.groupName ? deleteTarget.groupName : '(ไม่ระบุชื่อกลุ่ม)'}
               </strong>{' '}
@@ -1850,7 +1056,7 @@ export default function PromotionPage() {
             </Typography>
             <Alert severity="warning" sx={{ mb: 2 }}>
               <Typography variant="body2">
-                ระบบจะตรวจสอบว่าบุคลากรในรายการนี้ได้ทำการสลับตำแหน่งในปีเดียวกันแล้วหรือไม่
+                การลบจะส่งผลต่อบุคลากรทั้งหมดในรายการนี้
               </Typography>
             </Alert>
             <Typography variant="body2" color="error">
@@ -1871,9 +1077,7 @@ export default function PromotionPage() {
               {deleting ? 'กำลังลบ...' : 'ลบ'}
             </Button>
           </DialogActions>
-        </Dialog>
-
-        {/* Personnel Detail Modal */}
+        </Dialog>        {/* Personnel Detail Modal */}
         {selectedPersonnel && (
           <PersonnelDetailModal
             open={personnelDetailModalOpen}

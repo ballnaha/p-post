@@ -125,43 +125,47 @@ export async function PUT(
       }
       
       // เพิ่ม swapDetails ที่ส่งมา
-      allDetails.push(...swapDetails.map((detail: any) => ({
+      allDetails.push(...swapDetails.map((detail: any) => {
+        const isPlaceholder = detail.isPlaceholder === true;
+        return {
           sequence: detail.sequence,
-          personnelId: detail.personnelId,
+          isPlaceholder: isPlaceholder,
+          personnelId: detail.personnelId || null,
           noId: detail.noId ? parseInt(detail.noId.toString()) : null,
-          nationalId: detail.nationalId,
-          fullName: detail.fullName,
-          rank: detail.rank,
-          seniority: detail.seniority,
-          posCodeId: detail.posCodeId,
-          toPosCodeId: detail.toPosCodeId || null,
+          nationalId: detail.nationalId || null,
+          fullName: detail.fullName || 'ตำแหน่งว่าง',
+          rank: detail.rank || null,
+          seniority: detail.seniority || null,
+          posCodeId: isPlaceholder ? null : (detail.posCodeId || null),
+          toPosCodeId: isPlaceholder ? null : (detail.toPosCodeId || null),
           // ข้อมูลส่วนตัว
-          birthDate: detail.birthDate,
-          age: detail.age,
-          education: detail.education,
+          birthDate: detail.birthDate || null,
+          age: detail.age || null,
+          education: detail.education || null,
           // ข้อมูลการแต่งตั้ง
-          lastAppointment: detail.lastAppointment,
-          currentRankSince: detail.currentRankSince,
-          enrollmentDate: detail.enrollmentDate,
-          retirementDate: detail.retirementDate,
-          yearsOfService: detail.yearsOfService,
+          lastAppointment: detail.lastAppointment || null,
+          currentRankSince: detail.currentRankSince || null,
+          enrollmentDate: detail.enrollmentDate || null,
+          retirementDate: detail.retirementDate || null,
+          yearsOfService: detail.yearsOfService || null,
           // ข้อมูลการฝึกอบรม
-          trainingLocation: detail.trainingLocation,
-          trainingCourse: detail.trainingCourse,
+          trainingLocation: detail.trainingLocation || null,
+          trainingCourse: detail.trainingCourse || null,
           // ข้อมูลการเสนอชื่อ
-          supportName: detail.supportName,
-          supportReason: detail.supportReason,
+          supportName: detail.supportName || null,
+          supportReason: detail.supportReason || null,
           // ตำแหน่ง
-          fromPosition: detail.fromPosition,
-          fromPositionNumber: detail.fromPositionNumber,
-          fromUnit: detail.fromUnit,
-          fromActingAs: detail.fromActingAs,
-          toPosition: detail.toPosition,
-          toPositionNumber: detail.toPositionNumber,
-          toUnit: detail.toUnit,
-          toActingAs: detail.toActingAs,
-          notes: detail.notes
-        }))),
+          fromPosition: detail.fromPosition || null,
+          fromPositionNumber: detail.fromPositionNumber || null,
+          fromUnit: detail.fromUnit || null,
+          fromActingAs: detail.fromActingAs || null,
+          toPosition: detail.toPosition || null,
+          toPositionNumber: detail.toPositionNumber || null,
+          toUnit: detail.toUnit || null,
+          toActingAs: detail.toActingAs || null,
+          notes: detail.notes || null
+        };
+      })),
       
       // สร้าง swapDetails ใหม่
       updateData.swapDetails = {

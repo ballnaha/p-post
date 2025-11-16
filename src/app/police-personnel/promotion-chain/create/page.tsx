@@ -11,13 +11,14 @@ import PromotionChainTable from './components/PromotionChainTable';
 interface ChainNode {
   id: string;
   nodeOrder: number;
+  isPlaceholder?: boolean; // true = ตำแหน่งว่าง (ยังไม่ได้เลือกบุคลากร)
   personnelId?: string; // อ้างอิง police_personnel.id
   noId?: number; // police_personnel.noId (ลำดับที่)
   
   // ข้อมูลบุคคล (Person Information)
-  nationalId: string; // police_personnel.nationalId
+  nationalId?: string; // police_personnel.nationalId (optional สำหรับ placeholder)
   fullName: string; // police_personnel.fullName
-  rank: string; // police_personnel.rank
+  rank?: string; // police_personnel.rank (optional สำหรับ placeholder)
   seniority?: string; // police_personnel.seniority
   
   // ข้อมูลส่วนตัว (Personal Information)
@@ -200,6 +201,126 @@ function CreatePromotionChainContent() {
     setActiveStep(nodes.length);
   };
 
+  const handleAddPlaceholder = () => {
+    // สร้าง placeholder node
+    const placeholderNode: ChainNode = {
+      id: `placeholder-${Date.now()}`,
+      nodeOrder: nodes.length + 1,
+      isPlaceholder: true,
+      fullName: '[รอการเลือกบุคลากร]',
+      
+      // ตำแหน่ง from ว่าง (เพราะยังไม่มีบุคคล)
+      fromPosCodeId: 0,
+      fromPosCodeName: undefined,
+      fromPosition: '',
+      fromPositionNumber: undefined,
+      fromUnit: '',
+      fromActingAs: undefined,
+      
+      // ตำแหน่ง to ตามโหนดก่อนหน้า (หรือ vacant position ถ้าเป็นโหนดแรก)
+      toPosCodeId: nodes.length === 0 ? vacantPosition?.posCodeId || 0 : nodes[nodes.length - 1].fromPosCodeId,
+      toPosCodeName: nodes.length === 0 ? vacantPosition?.posCodeName : nodes[nodes.length - 1].fromPosCodeName,
+      toPosition: nodes.length === 0 ? vacantPosition?.position || '' : nodes[nodes.length - 1].fromPosition,
+      toPositionNumber: nodes.length === 0 ? vacantPosition?.positionNumber : nodes[nodes.length - 1].fromPositionNumber,
+      toUnit: nodes.length === 0 ? vacantPosition?.unit || '' : nodes[nodes.length - 1].fromUnit,
+      toActingAs: nodes.length === 0 ? vacantPosition?.actingAs : nodes[nodes.length - 1].fromActingAs,
+      
+      // Rank levels
+      fromRankLevel: 0,
+      toRankLevel: nodes.length === 0 ? (vacantPosition?.posCodeId || 0) : nodes[nodes.length - 1].fromRankLevel,
+      isPromotionValid: false, // placeholder ยังไม่ valid
+    };
+
+    setNodes([...nodes, placeholderNode]);
+    toast.info('เพิ่มตำแหน่งว่างแล้ว กรุณาเลือกบุคลากรภายหลัง');
+  };
+
+  const handleInsertPlaceholder = (beforeNodeId: string) => {
+    const insertIndex = nodes.findIndex(n => n.id === beforeNodeId);
+    if (insertIndex === -1) {
+      toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
+      return;
+    }
+
+    const targetNode = nodes[insertIndex];
+
+    // สร้าง placeholder node
+    const placeholderNode: ChainNode = {
+      id: `placeholder-${Date.now()}`,
+      nodeOrder: targetNode.nodeOrder,
+      isPlaceholder: true,
+      fullName: '[รอการเลือกบุคลากร]',
+      
+      // ตำแหน่ง from ว่าง
+      fromPosCodeId: 0,
+      fromPosCodeName: undefined,
+      fromPosition: '',
+      fromPositionNumber: undefined,
+      fromUnit: '',
+      fromActingAs: undefined,
+      
+      // ตำแหน่ง to ตามโหนดที่จะแทรกก่อน
+      toPosCodeId: targetNode.toPosCodeId,
+      toPosCodeName: targetNode.toPosCodeName,
+      toPosition: targetNode.toPosition,
+      toPositionNumber: targetNode.toPositionNumber,
+      toUnit: targetNode.toUnit,
+      toActingAs: targetNode.toActingAs,
+      
+      // Rank levels
+      fromRankLevel: 0,
+      toRankLevel: targetNode.toRankLevel,
+      isPromotionValid: false,
+    };
+
+    // แทรก placeholder
+    const newNodes = [...nodes];
+    newNodes.splice(insertIndex, 0, placeholderNode);
+
+    // อัปเดต nodeOrder และ toPosition
+    const reorderedNodes = newNodes.map((node, index) => {
+      if (index === 0) {
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
+          toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
+          toPosition: vacantPosition?.position || node.toPosition,
+          toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
+          toUnit: vacantPosition?.unit || node.toUnit,
+          toActingAs: vacantPosition?.actingAs || node.toActingAs,
+        };
+      } else {
+        const prevNode = newNodes[index - 1];
+        
+        // ถ้า prevNode เป็น placeholder → ให้ข้ามไปหา node ก่อนหน้าที่ไม่ใช่ placeholder
+        // หรือถ้าไม่มีก็ใช้ค่าเดิมของ node นี้
+        if (prevNode.isPlaceholder) {
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            // คง toPosition เดิม (ไม่เปลี่ยน)
+          };
+        }
+        
+        return {
+          ...node,
+          nodeOrder: index + 1,
+          toPosCodeId: prevNode.fromPosCodeId,
+          toPosCodeName: prevNode.fromPosCodeName,
+          toPosition: prevNode.fromPosition,
+          toPositionNumber: prevNode.fromPositionNumber,
+          toUnit: prevNode.fromUnit,
+          toActingAs: prevNode.fromActingAs,
+          toRankLevel: prevNode.fromRankLevel,
+        };
+      }
+    });
+
+    setNodes(reorderedNodes);
+    toast.info(`แทรกตำแหน่งว่างก่อน ${targetNode.fullName} สำเร็จ`);
+  };
+
   const handleRemoveNode = (nodeId: string) => {
     const nodeIndex = nodes.findIndex(n => n.id === nodeId);
     if (nodeIndex === -1) return;
@@ -285,7 +406,61 @@ function CreatePromotionChainContent() {
       return;
     }
 
-    // แทรกโหนดใหม่และ reorder
+    const targetNode = nodes[insertIndex];
+
+    // ถ้า targetNode เป็น placeholder ให้แทนที่แทนการแทรก
+    if (targetNode.isPlaceholder) {
+      const newNodes = [...nodes];
+      // แทนที่ placeholder ด้วยบุคลากรจริง
+      newNodes[insertIndex] = {
+        ...newNode,
+        nodeOrder: targetNode.nodeOrder,
+        isPlaceholder: false,
+        // รักษาตำแหน่ง to ของ placeholder เดิม
+        toPosCodeId: targetNode.toPosCodeId,
+        toPosCodeName: targetNode.toPosCodeName,
+        toPosition: targetNode.toPosition,
+        toPositionNumber: targetNode.toPositionNumber,
+        toUnit: targetNode.toUnit,
+        toActingAs: targetNode.toActingAs,
+        toRankLevel: targetNode.toRankLevel,
+      };
+
+      // อัปเดต toPosition ของโหนดถัดไป (ถ้ามี)
+      const reorderedNodes = newNodes.map((node, index) => {
+        if (index === 0) {
+          return {
+            ...node,
+            nodeOrder: 1,
+            toPosCodeId: vacantPosition?.posCodeId || node.toPosCodeId,
+            toPosCodeName: vacantPosition?.posCodeName || node.toPosCodeName,
+            toPosition: vacantPosition?.position || node.toPosition,
+            toPositionNumber: vacantPosition?.positionNumber || node.toPositionNumber,
+            toUnit: vacantPosition?.unit || node.toUnit,
+            toActingAs: vacantPosition?.actingAs || node.toActingAs,
+          };
+        } else {
+          const prevNode = newNodes[index - 1];
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+            toRankLevel: prevNode.fromRankLevel,
+          };
+        }
+      });
+
+      setNodes(reorderedNodes);
+      toast.success(`เลือก ${newNode.fullName} สำเร็จ`);
+      return;
+    }
+
+    // แทรกโหนดใหม่และ reorder (กรณีปกติ)
     const newNodes = [...nodes];
     newNodes.splice(insertIndex, 0, newNode);
 
@@ -366,9 +541,23 @@ function CreatePromotionChainContent() {
         return;
       }
 
+      // ตรวจสอบว่ามีโหนดที่ไม่ใช่ placeholder อย่างน้อย 1 โหนด
+      const validNodes = nodes.filter(n => !n.isPlaceholder);
+      if (validNodes.length === 0) {
+        toast.error('ต้องมีบุคลากรอย่างน้อย 1 คน');
+        return;
+      }
+
+      // แจ้งเตือนถ้ามี placeholder
+      const placeholderCount = nodes.filter(n => n.isPlaceholder).length;
+      if (placeholderCount > 0) {
+        toast.info(`บันทึก ${validNodes.length} คน + ${placeholderCount} ตำแหน่งว่าง (รอจัดคน)`);
+      }
+
       const year = new Date().getFullYear() + 543; // พ.ศ.
       const swapDetails = nodes.map((node) => ({
         sequence: node.nodeOrder,
+        isPlaceholder: node.isPlaceholder || false,
         personnelId: node.personnelId,
         noId: node.noId,
         nationalId: node.nationalId,
@@ -409,7 +598,7 @@ function CreatePromotionChainContent() {
         year,
         swapDate: new Date().toISOString(),
         swapType: 'promotion-chain',
-        groupName: `เลื่อนตำแหน่ง ${vacantPosition.posCodeName || ''} • ${vacantPosition.position || ''}${vacantPosition.positionNumber ? ` (${vacantPosition.positionNumber})` : ''}`,
+        groupName: `ตำแหน่งว่าง ${vacantPosition.posCodeName || ''} • ${vacantPosition.position || ''}${vacantPosition.positionNumber ? ` (${vacantPosition.positionNumber})` : ''}`,
         groupNumber: groupNumber || null,
         status: 'completed',
         notes: groupNotes.trim() || null,
@@ -439,10 +628,18 @@ function CreatePromotionChainContent() {
 
   const validateChain = () => {
     if (nodes.length === 0) return false;
-    return nodes.every((node) => node.isPromotionValid);
+    
+    // อนุญาตให้บันทึกได้แม้มี placeholder
+    // แต่ต้องมีโหนดที่ valid อย่างน้อย 1 โหนด
+    const validNodes = nodes.filter(n => !n.isPlaceholder);
+    if (validNodes.length === 0) return false;
+    
+    // เช็คว่าโหนดที่ไม่ใช่ placeholder ทั้งหมด valid หรือไม่
+    return validNodes.every((node) => node.isPromotionValid);
   };
 
   const isChainValid = validateChain();
+  const hasPlaceholder = nodes.some(n => n.isPlaceholder);
 
   return (
     <Layout>
@@ -538,6 +735,8 @@ function CreatePromotionChainContent() {
                 onRemoveNode={handleRemoveNode}
                 onInsertNode={handleInsertNode}
                 onReorder={handleReorder}
+                onAddPlaceholder={handleAddPlaceholder}
+                onInsertPlaceholder={handleInsertPlaceholder}
               />
             </Box>
 
@@ -561,10 +760,11 @@ function CreatePromotionChainContent() {
                 {nodes.length > 0 ? (
                   <>
                     <Typography variant="body2" fontWeight={600} sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
-                      {isChainValid ? '✓ พร้อมบันทึก' : '⚠ ยังไม่สมบูรณ์'}
+                      {isChainValid ? (hasPlaceholder ? '✓ พร้อมบันทึก (มีตำแหน่งว่าง)' : '✓ พร้อมบันทึก') : '⚠ ยังไม่สมบูรณ์'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-                      {nodes.length} ขั้นในโซ่
+                      {nodes.filter(n => !n.isPlaceholder).length} บุคลากร
+                      {hasPlaceholder && ` • ${nodes.filter(n => n.isPlaceholder).length} ตำแหน่งว่าง (จะถูกข้าม)`}
                     </Typography>
                   </>
                 ) : (
@@ -605,7 +805,7 @@ function CreatePromotionChainContent() {
                     fontWeight: 600
                   }}
                 >
-                  {saving ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
+                  {saving ? 'กำลังบันทึก...' : hasPlaceholder ? 'บันทึก' : 'บันทึกรายการ'}
                 </Button>
               </Box>
             </Paper>

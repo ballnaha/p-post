@@ -105,7 +105,7 @@ const Breadcrumbs: React.FC = () => {
 
         case 'promotion':
           breadcrumbs.push({
-            label: 'เลื่อนตำแหน่ง',
+            label: 'ย้ายบุคลากร',
             href: isLast ? undefined : '/police-personnel/promotion',
             icon: <TrendingUpIcon sx={{ fontSize: 16 }} />,
             isActive: isLast,

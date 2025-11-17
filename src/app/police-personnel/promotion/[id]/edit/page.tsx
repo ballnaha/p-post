@@ -11,6 +11,7 @@ import {
   TextField,
   useMediaQuery,
   useTheme,
+  Autocomplete,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from "@mui/icons-material";
 import Layout from "@/app/components/Layout";
@@ -21,6 +22,7 @@ import { useToast } from "@/hooks/useToast";
 interface ChainNode {
   id: string;
   nodeOrder: number;
+  isPlaceholder?: boolean; // true = ตำแหน่งว่าง (ยังไม่ได้เลือกบุคลากร)
   personnelId?: string;
   noId?: number;
   nationalId: string;
@@ -143,6 +145,57 @@ export default function EditPromotionPage() {
   const [groupNotes, setGroupNotes] = useState<string>('');
   const [startingPersonnel, setStartingPersonnel] = useState<StartingPersonnel | null>(null);
   const [nodes, setNodes] = useState<ChainNode[]>([]);
+  const [unitName, setUnitName] = useState<string>('');
+  const [unitDescription, setUnitDescription] = useState<string>('');
+  const [unitOptions, setUnitOptions] = useState<string[]>([]);
+
+  // Fetch unique units from police_personnel
+  useEffect(() => {
+    const fetchUnits = async () => {
+      try {
+        const response = await fetch('/api/in-out?filtersOnly=true');
+        if (!response.ok) throw new Error('Failed to fetch filters');
+        const result = await response.json();
+        
+        if (result.success && result.data.filters) {
+          const units = result.data.filters.units || [];
+          setUnitOptions(units);
+        } else {
+          setUnitOptions([]);
+        }
+      } catch (e) {
+        console.error('Failed to fetch units:', e);
+        setUnitOptions([]);
+      }
+    };
+    fetchUnits();
+  }, []);
+
+  // อัพเดท toUnit ของ node แรกเมื่อเปลี่ยนหน่วยปลายทาง
+  useEffect(() => {
+    if (nodes.length > 0 && unitName) {
+      const updatedNodes = nodes.map((node, index) => {
+        if (index === 0) {
+          return {
+            ...node,
+            toUnit: unitName,
+          };
+        }
+        return node;
+      });
+      setNodes(updatedNodes);
+    }
+  }, [unitName]);
+
+  // อัพเดท groupName เมื่อเปลี่ยนหน่วยปลายทาง
+  useEffect(() => {
+    if (transaction && unitName && transaction.groupName !== `ย้ายหน่วยงาน → ${unitName}`) {
+      setTransaction({
+        ...transaction,
+        groupName: `ย้ายหน่วยงาน → ${unitName}`,
+      });
+    }
+  }, [unitName, transaction]);
 
   useEffect(() => {
     const load = async () => {
@@ -152,6 +205,14 @@ export default function EditPromotionPage() {
         const json = await res.json();
         if (!res.ok || !json?.data) throw new Error(json?.error || "ไม่พบข้อมูล");
         const t: TransactionApi = json.data;
+        
+        // Extract destination unit from first node's toUnit
+        if (t.swapDetails && t.swapDetails.length > 0) {
+          const firstDetail = t.swapDetails.find(d => d.sequence === 1);
+          if (firstDetail?.toUnit) {
+            setUnitName(firstDetail.toUnit);
+          }
+        }
 
         // Map details → nodes
         const sorted = [...(t.swapDetails || [])].sort((a, b) => {
@@ -259,39 +320,374 @@ export default function EditPromotionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const isChainValid = useMemo(() => nodes.length > 0 && nodes.every(n => n.isPromotionValid), [nodes]);
+  const isChainValid = useMemo(() => {
+    if (nodes.length === 0) return false;
+    
+    // อนุญาตให้บันทึกได้แม้มี placeholder
+    // แต่ต้องมีโหนดที่ valid อย่างน้อย 1 โหนด
+    const validNodes = nodes.filter(n => !n.isPlaceholder);
+    if (validNodes.length === 0) return false;
+    
+    // เช็คว่าโหนดที่ไม่ใช่ placeholder ทั้งหมด valid หรือไม่
+    return validNodes.every((node) => node.isPromotionValid);
+  }, [nodes]);
 
   const handleAddNode = (node: ChainNode) => {
     setNodes([...nodes, node]);
   };
 
   const handleRemoveNode = (nodeId: string) => {
+    const nodeIndex = nodes.findIndex(n => n.id === nodeId);
+    if (nodeIndex === -1) return;
+
     const newNodes = nodes.filter(n => n.id !== nodeId);
-    setNodes(newNodes.map((node, index) => ({ ...node, nodeOrder: index + 1 })));
+
+    if (newNodes.length === 0) {
+      setNodes([]);
+      toast.success('ลบตำแหน่งสำเร็จ');
+      return;
+    }
+
+    const reorderedNodes = newNodes.map((node, index) => {
+      if (index < nodeIndex) {
+        return {
+          ...node,
+          nodeOrder: index + 1,
+        };
+      }
+      
+      if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
+        };
+      } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosition: '',
+            toUnit: '',
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPositionNumber: undefined,
+            toActingAs: undefined,
+          };
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+            toRankLevel: prevNode.fromRankLevel,
+          };
+        }
+      }
+    });
+
+    setNodes(reorderedNodes);
     toast.success('ลบตำแหน่งสำเร็จ');
   };
 
   const handleInsertNode = (newNode: ChainNode, beforeNodeId: string) => {
-    const targetIndex = nodes.findIndex(n => n.id === beforeNodeId);
-    if (targetIndex === -1) {
+    const insertIndex = nodes.findIndex(n => n.id === beforeNodeId);
+    if (insertIndex === -1) {
       toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
       return;
     }
+
     const newNodes = [...nodes];
-    newNodes.splice(targetIndex, 0, newNode);
-    setNodes(newNodes.map((node, index) => ({ ...node, nodeOrder: index + 1 })));
-    toast.success('แทรกตำแหน่งใหม่สำเร็จ');
+    newNodes.splice(insertIndex, 0, newNode);
+
+    const reorderedNodes = newNodes.map((node, index) => {
+      if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
+        };
+      } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosition: '',
+            toUnit: '',
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPositionNumber: undefined,
+            toActingAs: undefined,
+          };
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+            toRankLevel: prevNode.fromRankLevel,
+          };
+        }
+      }
+    });
+
+    setNodes(reorderedNodes);
+    toast.success(`แทรก ${newNode.fullName} ก่อน ${nodes[insertIndex].fullName} สำเร็จ`);
   };
 
   const handleReorder = (reorderedNodes: ChainNode[]) => {
-    setNodes(reorderedNodes.map((node, index) => ({ ...node, nodeOrder: index + 1 })));
+    const updatedNodes = reorderedNodes.map((node, index) => {
+      if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
+        };
+      } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า (chain)
+        const prevNode = reorderedNodes[index - 1];
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosition: '',
+            toUnit: '',
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPositionNumber: undefined,
+            toActingAs: undefined,
+          };
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+            toRankLevel: prevNode.fromRankLevel,
+          };
+        }
+      }
+    });
+
+    setNodes(updatedNodes);
+    toast.success('จัดเรียงใหม่สำเร็จ');
+  };
+
+  const handleAddPlaceholder = () => {
+    const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+    const isLastNodePlaceholder = lastNode?.isPlaceholder === true;
+    
+    // สร้าง placeholder node
+    const placeholderNode: ChainNode = {
+      id: `placeholder-${Date.now()}`,
+      nodeOrder: nodes.length + 1,
+      isPlaceholder: true,
+      fullName: '[รอการเลือกบุคลากร]',
+      nationalId: '',
+      rank: '',
+      
+      // ตำแหน่ง from ว่าง (เพราะยังไม่มีบุคคล)
+      fromPosCodeId: 0,
+      fromPosCodeName: undefined,
+      fromPosition: '',
+      fromPositionNumber: undefined,
+      fromUnit: '',
+      fromActingAs: undefined,
+      
+      // ตำแหน่ง to: ถ้า node ก่อนหน้าเป็น placeholder ให้เป็นค่าว่าง
+      toPosCodeId: nodes.length === 0 
+        ? 0 
+        : isLastNodePlaceholder 
+          ? 0 
+          : (lastNode?.fromPosCodeId || 0),
+      toPosCodeName: nodes.length === 0 
+        ? undefined 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromPosCodeName,
+      toPosition: nodes.length === 0 
+        ? '' 
+        : isLastNodePlaceholder 
+          ? '' 
+          : (lastNode?.fromPosition || ''),
+      toPositionNumber: nodes.length === 0 
+        ? undefined 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromPositionNumber,
+      toUnit: nodes.length === 0 
+        ? unitName 
+        : isLastNodePlaceholder 
+          ? '' 
+          : (lastNode?.fromUnit || ''),
+      toActingAs: nodes.length === 0 
+        ? undefined 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromActingAs,
+      
+      // Rank levels
+      fromRankLevel: 0,
+      toRankLevel: nodes.length === 0 ? 0 : (lastNode?.fromRankLevel || 0),
+      isPromotionValid: false, // placeholder ยังไม่ valid
+    };
+
+    setNodes([...nodes, placeholderNode]);
+    toast.info('เพิ่มตำแหน่งว่างแล้ว กรุณาเลือกบุคลากรภายหลัง');
+  };
+
+  const handleInsertPlaceholder = (beforeNodeId: string) => {
+    const insertIndex = nodes.findIndex(n => n.id === beforeNodeId);
+    if (insertIndex === -1) {
+      toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
+      return;
+    }
+
+    const targetNode = nodes[insertIndex];
+
+    // สร้าง placeholder node
+    const placeholderNode: ChainNode = {
+      id: `placeholder-${Date.now()}`,
+      nodeOrder: targetNode.nodeOrder,
+      isPlaceholder: true,
+      fullName: '[รอการเลือกบุคลากร]',
+      nationalId: '',
+      rank: '',
+      
+      // ตำแหน่ง from ว่าง
+      fromPosCodeId: 0,
+      fromPosCodeName: undefined,
+      fromPosition: '',
+      fromPositionNumber: undefined,
+      fromUnit: '',
+      fromActingAs: undefined,
+      
+      // ตำแหน่ง to ตามโหนดที่จะแทรกก่อน
+      toPosCodeId: targetNode.toPosCodeId,
+      toPosCodeName: targetNode.toPosCodeName,
+      toPosition: targetNode.toPosition,
+      toPositionNumber: targetNode.toPositionNumber,
+      toUnit: targetNode.toUnit,
+      toActingAs: targetNode.toActingAs,
+      
+      // Rank levels
+      fromRankLevel: 0,
+      toRankLevel: targetNode.toRankLevel,
+      isPromotionValid: false,
+    };
+
+    // แทรก placeholder ก่อนโหนดที่เลือก
+    const newNodes = [...nodes];
+    newNodes.splice(insertIndex, 0, placeholderNode);
+
+    // อัพเดท nodeOrder และ toUnit ตาม chain logic
+    const reorderedNodes = newNodes.map((node, index) => {
+      if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
+        };
+      } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosition: '',
+            toUnit: '',
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPositionNumber: undefined,
+            toActingAs: undefined,
+          };
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+          };
+        }
+      }
+    });
+
+    setNodes(reorderedNodes);
+    toast.info('แทรกตำแหน่งว่างแล้ว กรุณาเลือกบุคลากรภายหลัง');
   };
 
   const handleSave = async () => {
     if (!transaction) return;
     setSaving(true);
     try {
-      const swapDetails = nodes.map((node) => ({
+      if (!unitName || unitName.trim() === '') {
+        toast.error('กรุณาระบุหน่วยงานปลายทาง');
+        setSaving(false);
+        return;
+      }
+
+      // กรองเฉพาะ node ที่ไม่ใช่ placeholder
+      const validNodes = nodes.filter(n => !n.isPlaceholder);
+      if (validNodes.length === 0) {
+        toast.error('กรุณาเลือกบุคลากรอย่างน้อย 1 คน (ไม่นับตำแหน่งว่าง)');
+        setSaving(false);
+        return;
+      }
+
+      const swapDetails = validNodes.map((node) => ({
         sequence: node.nodeOrder,
         personnelId: node.personnelId,
         noId: node.noId,
@@ -381,52 +777,98 @@ export default function EditPromotionPage() {
       <Box>
         {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                แก้ไขรายการเลื่อนตำแหน่ง
+          {/* Title and Back Button */}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            mb: 2,
+          }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                แก้ไขรายการย้ายบุคลากร
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                ใช้รูปแบบเดียวกับหน้าเพิ่มรายการ ปรับขั้นตอนและบันทึกอีกครั้ง
+              <Typography variant="body2" color="text.secondary">
+                ปรับแก้ไขข้อมูลการย้ายบุคลากรไปหน่วยงานปลายทาง
               </Typography>
-
-              {loading ? (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, p: 1.5, bgcolor: "grey.50", borderRadius: 1 }}>
-                  <CircularProgress size={20} />
-                  <Typography variant="body2" color="text.secondary">กำลังโหลด...</Typography>
-                </Box>
-              ) : startingPersonnel && (
-                <Box sx={{ p: 1.5, bgcolor: "success.50", borderRadius: 1, borderLeft: "3px solid", borderColor: "success.main" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
-                    <Typography variant="caption" color="success.main" sx={{ fontWeight: 600 }}>
-                      🎖️ บุคลากรที่จะเลื่อนตำแหน่ง (แก้ไข)
-                    </Typography>
-                    {transaction?.groupNumber && (
-                      <Chip label={transaction.groupNumber} size="small" color="success" sx={{ height: 28 }} />
-                    )}
-                  </Box>
-                  <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                    {startingPersonnel.rank} {startingPersonnel.fullName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.85rem" }}>
-                    {startingPersonnel.posCodeName} • {startingPersonnel.position} • {startingPersonnel.unit}
-                  </Typography>
-                </Box>
-              )}
             </Box>
-
             <Button
               variant="outlined"
               startIcon={<ArrowBackIcon />}
-              onClick={() => router.push("/police-personnel/promotion")}
+              onClick={() => router.push('/police-personnel/promotion')}
               sx={{ flexShrink: 0 }}
             >
               ย้อนกลับ
             </Button>
           </Box>
 
+          {/* Destination Unit Info - Full Width */}
+          {loading ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, p: 2, bgcolor: "grey.50", borderRadius: 1 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">กำลังโหลดข้อมูล...</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ 
+              p: 2,
+              bgcolor: 'primary.50',
+              borderRadius: 1,
+              borderLeft: '3px solid',
+              borderColor: 'primary.main',
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                  🏢 หน่วยงานปลายทาง
+                </Typography>
+                <Chip label={`${nodes.length} ขั้น`} size="small" color="primary" sx={{ height: 30, fontSize: '0.85rem' }} />
+              </Box>
+              
+              <Box sx={{ display: 'flex', gap: 2, mb: 1.5 }}>
+                <Autocomplete
+                  fullWidth
+                  freeSolo
+                  options={unitOptions}
+                  value={unitName}
+                  onChange={(event, newValue) => {
+                    setUnitName(newValue || '');
+                  }}
+                  onInputChange={(event, newInputValue) => {
+                    setUnitName(newInputValue);
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="ชื่อหน่วยงานปลายทาง"
+                      placeholder="เลือกหรือพิมพ์ชื่อหน่วยงาน..."
+                      variant="outlined"
+                      size="small"
+                      required
+                    />
+                  )}
+                  sx={{ bgcolor: 'white', flex: 1 }}
+                />
+                
+                <TextField
+                  label="รายละเอียดเพิ่มเติม"
+                  placeholder="ระบุรายละเอียดของหน่วยงาน (ถ้ามี)"
+                  value={unitDescription}
+                  onChange={(e) => setUnitDescription(e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  sx={{ bgcolor: 'white', flex: 1 }}
+                />
+              </Box>
+              
+              {/* Group Number Display */}
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Chip label="เลขกลุ่ม" size="small" color="primary" sx={{ height: 22 }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>{transaction?.groupNumber || '-'}</Typography>
+              </Box>
+            </Box>
+          )}
+
           {/* หมายเหตุกลุ่ม */}
-          {!loading && startingPersonnel && (
+          {!loading && (
             <Box sx={{ mt: 2 }}>
               <TextField
                 fullWidth
@@ -454,6 +896,9 @@ export default function EditPromotionPage() {
                 onRemoveNode={handleRemoveNode}
                 onInsertNode={handleInsertNode}
                 onReorder={handleReorder}
+                onAddPlaceholder={handleAddPlaceholder}
+                onInsertPlaceholder={handleInsertPlaceholder}
+                destinationUnit={unitName}
               />
             </Box>
 

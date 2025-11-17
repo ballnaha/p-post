@@ -110,28 +110,11 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
     prevIsMobileRef.current = isMobile;
   }, [isMobile]);
 
-  // จัดการ body scroll lock - ใช้เฉพาะเมื่อ sidebar เปิดใน mobile
+  // ไม่ต้องจัดการ body scroll lock เอง เพราะ MUI Drawer จะจัดการให้เมื่อ disableScrollLock={false}
+  // แต่ต้องทำความสะอาด style ที่อาจค้างจากการ resize
   useLayoutEffect(() => {
-    // Lock body scroll เฉพาะเมื่อ sidebar เปิดใน mobile
-    if (isMobile && isSidebarOpen) {
-      // เก็บค่า scroll position ปัจจุบัน
-      const scrollY = window.scrollY;
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
-      document.body.style.top = `-${scrollY}px`;
-      
-      // Cleanup: คืนค่า scroll position
-      return () => {
-        const scrollY = document.body.style.top;
-        document.body.style.overflow = '';
-        document.body.style.position = '';
-        document.body.style.width = '';
-        document.body.style.top = '';
-        window.scrollTo(0, parseInt(scrollY || '0') * -1);
-      };
-    } else {
-      // ถ้าไม่ใช่เงื่อนไข lock ให้ปลด lock เสมอ และรีเซ็ต style
+    if (!isMobile || !isSidebarOpen) {
+      // รีเซ็ต body styles เมื่อไม่ได้อยู่ในสถานะที่ต้อง lock
       document.body.style.overflow = '';
       document.body.style.position = '';
       document.body.style.width = '';

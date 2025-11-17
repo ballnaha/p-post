@@ -111,9 +111,8 @@ const Header: React.FC = () => {
         color: (theme) => theme.palette.text.primary,
         boxShadow: '0 2px 6px rgba(17,24,39,0.04)',
         borderBottom: '1px solid #e5e7eb',
-        zIndex: 10000,
+        zIndex: (theme) => theme.zIndex.drawer + 1,
         backdropFilter: 'blur(6px)',
-        pointerEvents: 'auto',
       }}
     >
       <Toolbar sx={{ justifyContent: 'space-between' }}>
@@ -128,11 +127,6 @@ const Header: React.FC = () => {
               size="large" 
               aria-label="Toggle menu" 
               color="inherit"
-              sx={{
-                pointerEvents: 'auto',
-                zIndex: 10000,
-                position: 'relative',
-              }}
             >
               <MenuIcon />
             </IconButton>
@@ -194,7 +188,7 @@ const Header: React.FC = () => {
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             sx={{
-              zIndex: 10001,
+              zIndex: (theme) => theme.zIndex.drawer + 2,
             }}
             slotProps={{
               paper: {

@@ -38,6 +38,7 @@ import { useTheme } from '@mui/material';
 interface ChainNode {
   id: string;
   nodeOrder: number;
+  isPlaceholder?: boolean; // true = ตำแหน่งว่าง (ยังไม่ได้เลือกบุคลากร)
   personnelId?: string;
   noId?: number;
   nationalId: string;
@@ -96,6 +97,9 @@ interface PromotionTableProps {
   onRemoveNode: (nodeId: string) => void;
   onInsertNode?: (node: ChainNode, beforeNodeId: string) => void;
   onReorder?: (nodes: ChainNode[]) => void;
+  onAddPlaceholder?: () => void;
+  onInsertPlaceholder?: (beforeNodeId: string) => void;
+  destinationUnit?: string;
 }
 
 export default function PromotionTable({
@@ -105,6 +109,9 @@ export default function PromotionTable({
   onRemoveNode,
   onInsertNode,
   onReorder,
+  onAddPlaceholder,
+  onInsertPlaceholder,
+  destinationUnit = '',
 }: PromotionTableProps) {
   const theme = useTheme();
   const toast = useToast();
@@ -125,7 +132,8 @@ export default function PromotionTable({
   };
 
   const getCurrentVacantRankLevel = (): number | null => {
-    if (!startingPersonnel && nodes.length === 0) return null;
+    // ถ้ายังไม่มีอะไรเลย ให้ return 0 เพื่อให้สามารถเลือกบุคลากรได้
+    if (!startingPersonnel && nodes.length === 0) return 0;
     if (nodes.length === 0) {
       return getRankLevelByPosCode(startingPersonnel?.posCodeId || 0);
     }
@@ -134,7 +142,7 @@ export default function PromotionTable({
   };
 
   const currentVacantRankLevel = getCurrentVacantRankLevel();
-  const canAddMore = currentVacantRankLevel !== null;
+  const canAddMore = true; // เปลี่ยนให้แสดงปุ่มเสมอ
 
   const handleSelectCandidate = (candidate: any) => {
     if (nodes.some((n: ChainNode) => n.personnelId === candidate.id)) {
@@ -142,7 +150,7 @@ export default function PromotionTable({
       return;
     }
 
-    // ถ้ากำลังแทรก
+    // ถ้ากำลังแทรก หรือ แทนที่ placeholder
     if (insertBeforeNodeId && onInsertNode) {
       const targetNodeIndex = nodes.findIndex((n: ChainNode) => n.id === insertBeforeNodeId);
       if (targetNodeIndex === -1) {
@@ -151,6 +159,76 @@ export default function PromotionTable({
       }
 
       const targetNode = nodes[targetNodeIndex];
+      
+      // ถ้า targetNode เป็น placeholder ให้แทนที่แทนการแทรก
+      if (targetNode.isPlaceholder) {
+        // แทนที่ placeholder ด้วยบุคลากรจริง
+        const replacementNode: ChainNode = {
+          id: `node-${Date.now()}`,
+          nodeOrder: targetNode.nodeOrder,
+          personnelId: candidate.id,
+          noId: candidate.noId,
+          nationalId: candidate.nationalId,
+          fullName: candidate.fullName,
+          rank: candidate.rank,
+          seniority: candidate.seniority,
+          birthDate: candidate.birthDate,
+          age: candidate.age,
+          education: candidate.education,
+          lastAppointment: candidate.lastAppointment,
+          currentRankSince: candidate.currentRankSince,
+          enrollmentDate: candidate.enrollmentDate,
+          retirementDate: candidate.retirementDate,
+          yearsOfService: candidate.yearsOfService,
+          trainingLocation: candidate.trainingLocation,
+          trainingCourse: candidate.trainingCourse,
+          supporterName: candidate.supporterName,
+          supportReason: candidate.supportReason,
+          notes: candidate.notes,
+          fromPosCodeId: candidate.posCodeId,
+          fromPosCodeName: candidate.posCodeName || candidate.position,
+          fromPosition: candidate.position,
+          fromPositionNumber: candidate.positionNumber,
+          fromUnit: candidate.unit,
+          fromActingAs: candidate.actingAs,
+          toPosCodeId: targetNode.toPosCodeId,
+          toPosCodeName: targetNode.toPosCodeName,
+          toPosition: targetNode.toPosition,
+          toPositionNumber: targetNode.toPositionNumber,
+          toUnit: targetNode.toUnit, // ใช้ toUnit จาก placeholder ที่ถูกต้องแล้ว
+          toActingAs: targetNode.toActingAs,
+          fromRankLevel: candidate.rankLevel,
+          toRankLevel: targetNode.toRankLevel,
+          isPromotionValid: true,
+        };
+        
+        // แทนที่ placeholder ด้วย node ใหม่
+        const newNodes = [...nodes];
+        newNodes[targetNodeIndex] = replacementNode;
+        
+        // อัปเดต node ถัดไป (ถ้ามี) เพราะตอนนี้รู้แล้วว่า placeholder คือใคร
+        if (targetNodeIndex + 1 < newNodes.length) {
+          const nextNode = newNodes[targetNodeIndex + 1];
+          newNodes[targetNodeIndex + 1] = {
+            ...nextNode,
+            toPosition: replacementNode.fromPosition,
+            toUnit: replacementNode.fromUnit,
+            toPosCodeId: replacementNode.fromPosCodeId,
+            toPosCodeName: replacementNode.fromPosCodeName,
+            toPositionNumber: replacementNode.fromPositionNumber,
+            toActingAs: replacementNode.fromActingAs,
+          };
+        }
+        
+        if (onReorder) {
+          onReorder(newNodes);
+        }
+        
+        setInsertBeforeNodeId(null);
+        setShowCandidateSelector(false);
+        toast.success(`เลือก ${candidate.rank} ${candidate.fullName} แทนตำแหน่งว่างสำเร็จ`);
+        return;
+      }
       const newNode: ChainNode = {
         id: `node-${Date.now()}`,
         nodeOrder: targetNode.nodeOrder,
@@ -197,6 +275,9 @@ export default function PromotionTable({
     }
 
     // การเพิ่มแบบปกติ (ต่อท้าย)
+    const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+    const isLastNodePlaceholder = lastNode?.isPlaceholder === true;
+    
     const newNode: ChainNode = {
       id: `node-${Date.now()}`,
       nodeOrder: nodes.length + 1,
@@ -225,14 +306,40 @@ export default function PromotionTable({
       fromPositionNumber: candidate.positionNumber,
       fromUnit: candidate.unit,
       fromActingAs: candidate.actingAs,
-      toPosCodeId: nodes.length === 0 ? startingPersonnel?.posCodeId || 0 : nodes[nodes.length - 1].fromPosCodeId,
-      toPosCodeName: nodes.length === 0 ? startingPersonnel?.posCodeName || startingPersonnel?.position : nodes[nodes.length - 1].fromPosCodeName,
-      toPosition: nodes.length === 0 ? startingPersonnel?.position || '' : nodes[nodes.length - 1].fromPosition,
-      toPositionNumber: nodes.length === 0 ? (startingPersonnel?.positionNumber || undefined) : nodes[nodes.length - 1].fromPositionNumber,
-      toUnit: nodes.length === 0 ? startingPersonnel?.unit || '' : nodes[nodes.length - 1].fromUnit,
-      toActingAs: nodes.length === 0 ? (startingPersonnel?.actingAs || undefined) : nodes[nodes.length - 1].fromActingAs,
+      // ถ้า node ก่อนหน้าเป็น placeholder ให้ toPosition และ toUnit เป็นค่าว่าง
+      toPosCodeId: nodes.length === 0 
+        ? startingPersonnel?.posCodeId || 0 
+        : isLastNodePlaceholder 
+          ? 0 
+          : (lastNode?.fromPosCodeId || 0),
+      toPosCodeName: nodes.length === 0 
+        ? startingPersonnel?.posCodeName || startingPersonnel?.position 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromPosCodeName,
+      toPosition: nodes.length === 0 
+        ? startingPersonnel?.position || '' 
+        : isLastNodePlaceholder 
+          ? '' 
+          : (lastNode?.fromPosition || ''),
+      toPositionNumber: nodes.length === 0 
+        ? (startingPersonnel?.positionNumber || undefined) 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromPositionNumber,
+      // Node 1: ไปหน่วยปลายทาง, Node 2+: ไปหน่วยของ node ก่อนหน้า (chain), แต่ถ้า node ก่อนหน้าเป็น placeholder ให้เป็นค่าว่าง
+      toUnit: nodes.length === 0 
+        ? (destinationUnit || startingPersonnel?.unit || '') 
+        : isLastNodePlaceholder 
+          ? '' 
+          : (lastNode?.fromUnit || ''),
+      toActingAs: nodes.length === 0 
+        ? (startingPersonnel?.actingAs || undefined) 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromActingAs,
       fromRankLevel: candidate.rankLevel,
-      toRankLevel: nodes.length === 0 ? getRankLevelByPosCode(startingPersonnel?.posCodeId || 0) : nodes[nodes.length - 1].fromRankLevel,
+      toRankLevel: nodes.length === 0 ? getRankLevelByPosCode(startingPersonnel?.posCodeId || 0) : (lastNode?.fromRankLevel || 0),
       isPromotionValid: true,
     };
 
@@ -370,11 +477,46 @@ export default function PromotionTable({
     const [removed] = newNodes.splice(sourceIndex, 1);
     newNodes.splice(targetIndex, 0, removed);
 
-    // อัปเดต nodeOrder
-    const updatedNodes = newNodes.map((node, index) => ({
-      ...node,
-      nodeOrder: index + 1,
-    }));
+    // อัปเดต nodeOrder และ toUnit
+    const updatedNodes = newNodes.map((node, index) => {
+      const updates: any = {
+        ...node,
+        nodeOrder: index + 1,
+      };
+      
+      // อัพเดท toUnit ตาม chain
+      if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
+        updates.toPosition = '';
+        updates.toUnit = destinationUnit || node.toUnit;
+        updates.toPosCodeId = 0;
+        updates.toPosCodeName = undefined;
+        updates.toPositionNumber = undefined;
+        updates.toActingAs = undefined;
+      } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน ให้ทุกอย่างเป็นค่าว่าง
+          updates.toPosition = '';
+          updates.toUnit = '';
+          updates.toPosCodeId = 0;
+          updates.toPosCodeName = undefined;
+          updates.toPositionNumber = undefined;
+          updates.toActingAs = undefined;
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ ให้ไปตำแหน่งและหน่วยของ node ก่อนหน้า
+          updates.toPosition = prevNode.fromPosition;
+          updates.toUnit = prevNode.fromUnit;
+          updates.toPosCodeId = prevNode.fromPosCodeId;
+          updates.toPosCodeName = prevNode.fromPosCodeName;
+          updates.toPositionNumber = prevNode.fromPositionNumber;
+          updates.toActingAs = prevNode.fromActingAs;
+        }
+      }
+      
+      return updates;
+    });
 
     // อัปเดตทันทีหลัง clear drag state
     onReorder(updatedNodes);
@@ -387,7 +529,7 @@ export default function PromotionTable({
         {/* Header */}
         <Box sx={{ p: 2, bgcolor: 'primary.main', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6" fontWeight={700}>
-            🔗 ลูกโซ่การเลื่อนตำแหน่ง
+            🔗 ลูกโซ่การย้ายบุคลากร
           </Typography>
           {nodes.length > 0 && (
             <Chip 
@@ -439,6 +581,86 @@ export default function PromotionTable({
                   const isSelected = selectedRows.has(node.id);
                   const dragStyles = dragDropHighlight.getDragDropStyles(node.id, 'create-chain', index, theme);
                   
+                  // ถ้าเป็น Placeholder แสดง row พิเศษ
+                  if (node.isPlaceholder) {
+                    return (
+                      <TableRow
+                        key={node.id}
+                        draggable
+                        onDragStart={(e: React.DragEvent) => dragDropHighlight.handleDragStart(e, 'create-chain', node.id, index)}
+                        onDragOver={(e: React.DragEvent) => dragDropHighlight.handleDragOver(e, 'create-chain', index)}
+                        onDragLeave={dragDropHighlight.handleDragLeave}
+                        onDrop={(e: React.DragEvent) => dragDropHighlight.handleDrop(e, 'create-chain', index, handleReorder)}
+                        onDragEnd={dragDropHighlight.handleDragEnd}
+                        sx={{
+                          ...dragDropHighlight.getDragDropStyles(node.id, 'create-chain', index, theme),
+                          bgcolor: 'grey.50',
+                          borderLeft: '4px dashed',
+                          borderColor: 'warning.main',
+                          cursor: 'grab',
+                          '&:active': {
+                            cursor: 'grabbing',
+                          },
+                        }}
+                      >
+                        <TableCell sx={{ py: 1 }} padding="checkbox" />
+                        <TableCell sx={{ py: 1 }}>
+                          <DragIndicatorIcon sx={{ color: 'warning.main', fontSize: 18 }} />
+                        </TableCell>
+                        <TableCell sx={{ py: 1 }}>
+                          <Chip label={node.nodeOrder} color="warning" size="small" sx={{ fontWeight: 700, height: 22, fontSize: '0.75rem' }} />
+                        </TableCell>
+                        <TableCell colSpan={3} sx={{ py: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary', fontSize: '0.875rem' }}>
+                              📋 ตำแหน่งว่าง - รอการเลือกบุคลากร
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="warning"
+                              startIcon={<AddIcon />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setInsertBeforeNodeId(node.id);
+                                setShowCandidateSelector(true);
+                              }}
+                              sx={{ fontSize: '0.75rem', height: 26 }}
+                            >
+                              เลือกบุคลากร
+                            </Button>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
+                          <Box>
+                            {node.toPosCodeName && (
+                              <Chip label={node.toPosCodeName} size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                            )}
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
+                              {node.toPosition}
+                            </Typography>
+                            {node.toPositionNumber && (
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                ({node.toPositionNumber})
+                              </Typography>
+                            )}
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
+                          <Tooltip title="ลบตำแหน่งว่าง">
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDeleteClick(node.id); }} color="error" sx={{ p: 0.5 }}>
+                              <DeleteIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+                  
+                  // Row ปกติสำหรับบุคลากร
                   return (
                   <TableRow
                     key={node.id}
@@ -521,11 +743,32 @@ export default function PromotionTable({
                       <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
                     </TableCell>
                     <TableCell align="center" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
-                      <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center' }}>
+                      <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center', flexWrap: 'wrap' }}>
                         {onInsertNode && (
-                          <Tooltip title="แทรกก่อนหน้า">
+                          <Tooltip title="แทรกบุคลากร">
                             <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleInsertBefore(node.id); }} color="primary" sx={{ p: 0.5 }}>
                               <AddIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {onInsertPlaceholder && (
+                          <Tooltip title="แทรกตำแหน่งว่าง">
+                            <IconButton 
+                              size="small" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                onInsertPlaceholder(node.id); 
+                              }} 
+                              sx={{ 
+                                p: 0.5,
+                                color: 'warning.main',
+                                border: '1px dashed',
+                                borderColor: 'warning.main',
+                                borderRadius: 0.5,
+                                '&:hover': { bgcolor: 'warning.50' }
+                              }}
+                            >
+                              <AddIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                           </Tooltip>
                         )}
@@ -549,19 +792,32 @@ export default function PromotionTable({
           </Table>
         </TableContainer>
 
-        {/* Add Button */}
+        {/* Add Buttons */}
         {canAddMore && (
-          <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
+          <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1 }}>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => setShowCandidateSelector(true)}
+              disabled={!destinationUnit || destinationUnit.trim() === ''}
               fullWidth
               size="medium"
               sx={{ fontWeight: 700, py: 0.75 }}
             >
               {nodes.length === 0 ? 'เพิ่มบุคลากรคนแรก' : 'เพิ่มบุคลากรคนถัดไป'}
             </Button>
+            {onAddPlaceholder && (
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={onAddPlaceholder}
+                disabled={!destinationUnit || destinationUnit.trim() === ''}
+                size="medium"
+                sx={{ fontWeight: 700, py: 0.75, minWidth: 180 }}
+              >
+                เพิ่มตำแหน่งว่าง
+              </Button>
+            )}
           </Box>
         )}
       </Paper>

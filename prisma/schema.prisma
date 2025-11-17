@@ -175,6 +175,7 @@ model SwapTransaction {
   groupName        String?  @map("group_name") // ชื่อกลุ่ม เช่น "นาย A ⟷ นาย B"
   groupNumber      String?  @map("group_number") // เลขกลุ่ม เช่น "2568/001"
   status           String   @default("completed") // completed, pending, cancelled
+  isCompleted      Boolean  @default(false) @map("is_completed") // สำหรับ promotion-chain: true = จัดคนครบแล้ว ไม่มี placeholder
   notes            String?  @db.Text // หมายเหตุ
   
   // Relations

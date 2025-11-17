@@ -44,6 +44,11 @@ import {
   Close as CloseIcon,
   SwapHoriz as SwapHorizIcon,
   CalendarToday as CalendarIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingFlat as TrendingFlatIcon,
+  Visibility as VisibilityIcon,
+  HelpOutline,
+  InfoOutline,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
 import DataTablePagination from '@/components/DataTablePagination';
@@ -120,6 +125,14 @@ interface InOutData {
   totalCount: number;
   page: number;
   pageSize: number;
+  summary?: {
+    totalPersonnel: number;
+    promoted: number;
+    transferred: number;
+    replacedOthers: number;
+    filledVacant: number;
+    notAssigned: number;
+  };
   filters: {
     units: string[];
     positionCodes: PositionCode[];
@@ -371,8 +384,18 @@ export default function InOutPage() {
         return hasTransactionA ? -1 : 1;
       }
       
-      // ถ้าทั้งคู่ไม่มี transaction (ตำแหน่งว่างทั้งคู่) เรียงตามชื่อ
+      // ถ้าทั้งคู่ไม่มี transaction (ตำแหน่งว่างทั้งคู่)
       if (!hasTransactionA && !hasTransactionB) {
+        // เรียงตามเลขตำแหน่ง (น้อย -> มาก)
+        const posNumA = a.fromPositionNumber || '';
+        const posNumB = b.fromPositionNumber || '';
+        
+        if (posNumA && posNumB) {
+          const compareNum = posNumA.localeCompare(posNumB, undefined, { numeric: true });
+          if (compareNum !== 0) return compareNum;
+        }
+        
+        // ถ้าเลขตำแหน่งเท่ากัน หรือไม่มี เรียงตามชื่อ
         return (a.fullName || '').localeCompare(b.fullName || '', 'th');
       }
       
@@ -399,7 +422,17 @@ export default function InOutPage() {
       if (sequenceA != null && sequenceB == null) return -1;
       if (sequenceA == null && sequenceB != null) return 1;
       
-      // 3. ถ้า sequence เท่ากัน หรือทั้งคู่ไม่มี sequence เรียงตามชื่อ
+      // 3. ถ้า sequence เท่ากัน หรือทั้งคู่ไม่มี sequence
+      // เรียงตามเลขตำแหน่ง (น้อย -> มาก) แล้วตามชื่อ
+      const posNumA = a.fromPositionNumber || '';
+      const posNumB = b.fromPositionNumber || '';
+      
+      if (posNumA && posNumB) {
+        const compareNum = posNumA.localeCompare(posNumB, undefined, { numeric: true });
+        if (compareNum !== 0) return compareNum;
+      }
+      
+      // ถ้าเลขตำแหน่งเท่ากัน หรือไม่มี เรียงตามชื่อ
       return (a.fullName || '').localeCompare(b.fullName || '', 'th');
     });
     
@@ -611,7 +644,8 @@ export default function InOutPage() {
             flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between', 
             alignItems: { xs: 'flex-start', sm: 'center' },
-            gap: 2
+            gap: 2,
+            mb: 3
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
               <PersonIcon sx={{ fontSize: { xs: 32, sm: 40 }, color: 'primary.main' }} />
@@ -635,6 +669,83 @@ export default function InOutPage() {
               }}
             />
           </Box>
+
+          {/* สรุปสถิติ - จาก Server */}
+          {hasSearched && data?.summary && (
+            <Box sx={{ 
+              display: 'grid', 
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, 
+              gap: 2,
+              pt: 2,
+              borderTop: 1,
+              borderColor: 'divider'
+            }}>
+              {/* เลื่อนตำแหน่ง */}
+              <Box sx={{ p: 2, bgcolor: alpha(theme.palette.success.main, 0.12), borderRadius: 1, border: 1, borderColor: 'success.light' }}>
+                <Typography variant="caption" color="success.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                  ⬆️ เลื่อนตำแหน่ง
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: 'success.dark' }}>
+                  {data.summary.promoted}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  คน
+                </Typography>
+              </Box>
+
+              {/* ย้ายแนวนอน */}
+              <Box sx={{ p: 2, bgcolor: alpha(theme.palette.grey[500], 0.1), borderRadius: 1, border: 1, borderColor: 'grey.300' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                  ➡️ ย้ายแนวนอน
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                  {data.summary.transferred}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  คน
+                </Typography>
+              </Box>
+
+              {/* แทนคนเดิม */}
+              <Box sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.12), borderRadius: 1, border: 1, borderColor: 'info.light' }}>
+                <Typography variant="caption" color="info.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                  �  แทนคนเดิม
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: 'info.dark' }}>
+                  {data.summary.replacedOthers}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  คน
+                </Typography>
+              </Box>
+
+              {/* เข้าตำแหน่งว่าง */}
+              <Box sx={{ p: 2, bgcolor: alpha(theme.palette.primary.main, 0.12), borderRadius: 1, border: 1, borderColor: 'primary.light' }}>
+                <Typography variant="caption" color="primary.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                  📋 เข้าตำแหน่งว่าง
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: 'primary.dark' }}>
+                  {data.summary.filledVacant}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  คน
+                </Typography>
+              </Box>
+
+              {/* ยังไม่ได้จัด */}
+              <Box sx={{ p: 2, bgcolor: alpha(theme.palette.warning.main, 0.12), borderRadius: 1, border: 1, borderColor: 'warning.light' }}>
+                <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                  ⚠️ ยังไม่ได้จัด
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: 'warning.dark' }}>
+                  {data.summary.notAssigned}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  คน
+                </Typography>
+              </Box>
+            </Box>
+          )}
         </Paper>
 
         {/* Filters */}
@@ -787,18 +898,26 @@ export default function InOutPage() {
           </Box>
         </Paper>
 
-        {/* Table - Desktop/Tablet */}
+        {/* Table - Desktop/Tablet - COMPACT DESIGN */}
         {!isMobile ? (
           <Paper sx={{ p: 0 }}>
             <TableContainer>
               <Table size="small">
                 <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ width: 50, py: 1.5, fontWeight: 600 }}>#</TableCell>                  
-                    <TableCell sx={{ minWidth: isTablet ? 200 : 280, py: 1.5, fontWeight: 600 }}>ชื่อ-สกุล / ตำแหน่งเดิม</TableCell>
-                    <TableCell sx={{ minWidth: isTablet ? 180 : 240, py: 1.5, fontWeight: 600 }}>ตำแหน่งใหม่</TableCell>
-                    <TableCell sx={{ width: isTablet ? 100 : 120, py: 1.5, fontWeight: 600 }}>ประเภท</TableCell>
-                    <TableCell align="center" sx={{ width: 80, py: 1.5, fontWeight: 600 }}>ดูข้อมูล</TableCell>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ width: 40, py: 1.75, fontWeight: 700, color: 'white', fontSize: '0.875rem', letterSpacing: 0.5 }}>#</TableCell>                  
+                    <TableCell sx={{ minWidth: 180, py: 1.75, fontWeight: 700, color: 'white', fontSize: '0.875rem', letterSpacing: 0.5 }}>
+                      เจ้าหน้าที่
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 180, py: 1.75, fontWeight: 700, color: 'white', fontSize: '0.875rem', letterSpacing: 0.5 }}>
+                      คนครอง
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 240, py: 1.75, fontWeight: 700, color: 'white', fontSize: '0.875rem', letterSpacing: 0.5 }}>
+                      ตำแหน่งใหม่
+                    </TableCell>
+                    <TableCell align="center" sx={{ width: 60, py: 1.75, fontWeight: 700, color: 'white', fontSize: '0.875rem' }}>
+                      •••
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -806,29 +925,20 @@ export default function InOutPage() {
                     // Skeleton Loading Rows
                     Array.from({ length: rowsPerPage }).map((_, index) => (
                       <TableRow key={`skeleton-${index}`}>
-                        <TableCell sx={{ py: 1.5 }}>
-                          <Skeleton variant="text" width={30} />
+                        <TableCell sx={{ py: 1 }}>
+                          <Skeleton variant="text" width={20} height={18} />
                         </TableCell>
-                        <TableCell sx={{ py: 1.5 }}>
-                          <Box>
-                            <Skeleton variant="text" width="80%" height={20} />
-                            <Skeleton variant="text" width="90%" height={16} sx={{ mt: 0.5 }} />
-                            <Skeleton variant="text" width="60%" height={14} sx={{ mt: 0.25 }} />
-                          </Box>
+                        <TableCell sx={{ py: 1 }}>
+                          <Skeleton variant="text" width="85%" height={18} />
                         </TableCell>
-                        <TableCell sx={{ py: 1.5 }}>
-                          <Box>
-                            <Skeleton variant="text" width="70%" height={16} />
-                            <Skeleton variant="text" width="85%" height={20} sx={{ mt: 0.25 }} />
-                            <Skeleton variant="text" width="50%" height={14} sx={{ mt: 0.25 }} />
-                            <Skeleton variant="text" width="75%" height={14} sx={{ mt: 0.5 }} />
-                          </Box>
+                        <TableCell sx={{ py: 1 }}>
+                          <Skeleton variant="text" width="75%" height={18} />
                         </TableCell>
-                        <TableCell sx={{ py: 1.5 }}>
-                          <Skeleton variant="rounded" width={80} height={24} />
+                        <TableCell sx={{ py: 1 }}>
+                          <Skeleton variant="text" width="90%" height={18} />
                         </TableCell>
-                        <TableCell align="center" sx={{ py: 1.5 }}>
-                          <Skeleton variant="circular" width={32} height={32} sx={{ mx: 'auto' }} />
+                        <TableCell align="center" sx={{ py: 1 }}>
+                          <Skeleton variant="circular" width={24} height={24} sx={{ mx: 'auto' }} />
                         </TableCell>
                       </TableRow>
                     ))
@@ -848,6 +958,13 @@ export default function InOutPage() {
                       // ตรวจสอบว่าเป็นคนแรกของกลุ่มใหม่หรือไม่
                       const prevDetail = index > 0 ? filteredSwapDetails[index - 1] : null;
                       const isNewGroup = !prevDetail || prevDetail.transaction?.id !== detail.transaction?.id;
+                      const replaced = detail.replacedPerson;
+                      const isVacant = !replaced;
+                      
+                      // ตรวจสอบว่าเป็นการเลื่อนตำแหน่ง (posCodeId ลดลง = เลื่อนขึ้น)
+                      const isPromotion = detail.posCodeId && detail.toPosCodeId && detail.toPosCodeId < detail.posCodeId;
+                      // ตรวจสอบว่า posCodeId ไม่เปลี่ยนแปลง (ย้ายแนวนอน)
+                      const isSameLevel = detail.posCodeId && detail.toPosCodeId && detail.toPosCodeId === detail.posCodeId;
                       
                       return (
                         <TableRow 
@@ -855,203 +972,250 @@ export default function InOutPage() {
                           hover 
                           sx={{ 
                             '&:hover': { bgcolor: 'action.hover' },
-                            // เพิ่มเส้นแบ่งกลุ่ม
-                            borderTop: isNewGroup && index > 0 ? 2 : 0,
-                            borderTopColor: isNewGroup && index > 0 ? 'primary.main' : 'transparent',
+                            borderTop: isNewGroup && index > 0 ? 1 : 0,
+                            borderTopColor: isNewGroup && index > 0 ? 'divider' : 'transparent',
+                            // Highlight ตำแหน่งว่างด้วยสีพื้นหลัง
+                            bgcolor: isVacant ? alpha(theme.palette.warning.main, 0.08) : 'transparent',
                           }}
                         >
+                          {/* # */}
                           <TableCell sx={{ py: 1.5 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700, fontSize: '0.8125rem' }}>
                               {page * rowsPerPage + index + 1}
                             </Typography>
                           </TableCell>
                         
-                        <TableCell sx={{ py: 1.5 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: isTablet ? '0.8125rem' : '0.875rem' }}>
-                                {joinInline(detail.rank || '-', detail.fullName || '-')}
-                              </Typography>
-                              <Typography 
-                                variant="caption" 
-                                color="text.secondary" 
-                                sx={{ 
-                                  fontSize: isTablet ? '0.75rem' : '0.8125rem', 
-                                  display: 'block', 
-                                  mt: 0.25,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {(() => {
-                                  const code = detail.posCodeMaster ? `${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}` : '';
-                                  const unit = detail.fromUnit ? `หน่วย: ${detail.fromUnit}` : '';
-                                  return joinInline(code, detail.fromPosition || undefined, unit) || '-';
-                                })()}
-                              </Typography>
-                              {detail.nationalId && (
-                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
-                                  เลขตำแหน่ง: {detail.nationalId}
+                          {/* ใคร */}
+                          <TableCell sx={{ py: 1.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.875rem', lineHeight: 1.4, letterSpacing: 0.2 }}>
+                                  {joinInline(detail.rank || '-', detail.fullName || '-')}
                                 </Typography>
+                                {/* PosCode ID + Name */}
+                                {detail.posCodeMaster && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.3, display: 'block', mt: 0.25 }}>
+                                    {detail.posCodeMaster.id} - {detail.posCodeMaster.name}
+                                  </Typography>
+                                )}
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.3, display: 'block', mt: 0.25 }}>
+                                  {detail.fromPosition || '-'}
+                                </Typography>
+                                {/* Unit + เลขตำแหน่ง */}
+                                {(detail.fromUnit || detail.fromPositionNumber) && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.3, mt: 0.25 }}>
+                                    {joinInline(detail.fromUnit, detail.fromPositionNumber ? `(${detail.fromPositionNumber})` : null)}
+                                  </Typography>
+                                )}
+                              </Box>
+                              {detail.personnelId && (
+                                <Tooltip title="ดูข้อมูลบุคลากร">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewPersonnelDetail(detail);
+                                    }}
+                                    sx={{
+                                      color: 'info.main',
+                                      p: 0.25,
+                                      '&:hover': { bgcolor: 'info.50' }
+                                    }}
+                                  >
+                                    <InfoOutline sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
                               )}
                             </Box>
-                            {!isTablet && (
-                              <Tooltip title="ดูข้อมูลเต็ม">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleViewPersonnelDetail(detail)}
-                                  sx={{
-                                    color: 'primary.main',
-                                    '&:hover': { bgcolor: 'primary.50' }
-                                  }}
-                                >
-                                  <InfoIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                          </TableCell>
+
+                          {/* แทนใคร - เน้นสีถ้าเป็นตำแหน่งว่าง */}
+                          <TableCell sx={{ py: 1.5 }}>
+                            {replaced ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.875rem', lineHeight: 1.4, letterSpacing: 0.2 }}>
+                                    {joinInline(replaced.rank || '', replaced.fullName || '')}
+                                  </Typography>
+                                  {/* PosCode ID + Name */}
+                                  {replaced.posCodeMaster && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.3, display: 'block', mt: 0.25 }}>
+                                      {replaced.posCodeMaster.id} - {replaced.posCodeMaster.name}
+                                    </Typography>
+                                  )}
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.3, display: 'block', mt: 0.25 }}>
+                                    {replaced.fromPosition || '-'}
+                                  </Typography>
+                                  {/* Unit + เลขตำแหน่ง */}
+                                  {(replaced.fromUnit || replaced.fromPositionNumber) && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.3, mt: 0.25 }}>
+                                      {joinInline(replaced.fromUnit, replaced.fromPositionNumber ? `(${replaced.fromPositionNumber})` : null)}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                {replaced.personnelId && (
+                                  <Tooltip title="ดูข้อมูลบุคลากร">
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewPersonnelDetail(replaced);
+                                      }}
+                                      sx={{
+                                        color: 'info.main',
+                                        p: 0.25,
+                                        '&:hover': { bgcolor: 'info.50' }
+                                      }}
+                                    >
+                                      <InfoIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                              </Box>
+                            ) : (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Box 
+                                  sx={{ 
+                                    width: 7, 
+                                    height: 7, 
+                                    borderRadius: '50%', 
+                                    bgcolor: 'warning.main',
+                                    flexShrink: 0
+                                  }} 
+                                />
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: 'warning.dark', fontSize: '0.875rem', letterSpacing: 0.2 }}>
+                                  ตำแหน่งว่าง
+                                </Typography>
+                              </Box>
                             )}
-                          </Box>
-                        </TableCell>
-                        <TableCell sx={{ py: 1.5, bgcolor: (detail.toPosCodeMaster || detail.toPosition) ? alpha('#4caf50', 0.05) : 'transparent' }}>
-                          {(detail.toPosCodeMaster || detail.toPosition) ? (
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                          </TableCell>
+                        
+                          {/* ได้ตำแหน่ง - แสดงว่า "ใคร ได้ตำแหน่งอะไร" */}
+                          <TableCell sx={{ py: 1.5 }}>
+                            {(detail.toPosCodeMaster || detail.toPosition) ? (
+                              <Box>
+                                {/* แสดง: ชื่อคน ได้ตำแหน่ง */}
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                                  {isPromotion && (
+                                    <Tooltip title="เลื่อนตำแหน่ง">
+                                      <TrendingUpIcon 
+                                        sx={{ 
+                                          fontSize: 16,
+                                          color: 'success.main',
+                                          fontWeight: 700
+                                        }}
+                                      />
+                                    </Tooltip>
+                                  )}
+                                  {isSameLevel && (
+                                    <Tooltip title="ย้ายแนวนอน (ระดับเดิม)">
+                                      <TrendingFlatIcon 
+                                        sx={{ 
+                                          fontSize: 16,
+                                          color: 'text.secondary',
+                                          fontWeight: 700
+                                        }}
+                                      />
+                                    </Tooltip>
+                                  )}
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontWeight: 700, 
+                                      fontSize: '0.875rem', 
+                                      lineHeight: 1.4,
+                                      letterSpacing: 0.2,
+                                      color: isPromotion ? 'success.dark' : (isSameLevel ? 'text.secondary' : 'text.primary')
+                                    }}
+                                  >
+                                    {detail.rank || ''} {detail.fullName || '-'}
+                                  </Typography>
+                                  <Typography 
+                                    variant="caption" 
+                                    sx={{ 
+                                      fontSize: '0.75rem',
+                                      color: 'text.secondary',
+                                      fontWeight: 500
+                                    }}
+                                  >
+                                    ได้
+                                  </Typography>
+                                </Box>
+                                
+                                {/* POS CODE ID + Name */}
                                 {detail.toPosCodeMaster && (
                                   <Typography 
                                     variant="caption" 
-                                    color="success.main" 
                                     sx={{ 
-                                      fontSize: isTablet ? '0.7rem' : '0.75rem', 
-                                      display: 'block', 
-                                      fontWeight: 600,
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
+                                      fontSize: '0.75rem', 
+                                      lineHeight: 1.3,
+                                      display: 'block',
+                                      mt: 0.25,
+                                      color: isPromotion ? 'success.dark' : (isSameLevel ? 'text.secondary' : 'text.secondary'),
+                                      fontWeight: 600
                                     }}
                                   >
                                     {detail.toPosCodeMaster.id} - {detail.toPosCodeMaster.name}
                                   </Typography>
                                 )}
+                                
+                                {/* ตำแหน่ง */}
                                 <Typography 
                                   variant="body2" 
                                   sx={{ 
-                                    fontWeight: 600, 
-                                    color: 'success.main', 
-                                    fontSize: isTablet ? '0.8125rem' : '0.875rem',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap'
+                                    fontWeight: 700, 
+                                    color: isPromotion ? 'success.dark' : (isSameLevel ? 'text.secondary' : 'text.primary'), 
+                                    fontSize: '0.875rem', 
+                                    lineHeight: 1.4,
+                                    letterSpacing: 0.2,
+                                    display: 'block',
+                                    mt: 0.25
                                   }}
                                 >
-                                  {(() => {
-                                    const unit = detail.toUnit ? `หน่วย: ${detail.toUnit}` : '';
-                                    return joinInline(detail.toPosition || undefined, unit);
-                                  })()}
+                                  {detail.toPosition || '-'}
                                 </Typography>
-                                {detail.toPositionNumber && (
-                                  <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.7rem', display: 'block', mt: 0.25 }}>
-                                    เลขตำแหน่ง: {detail.toPositionNumber}
+                                
+                                {/* Unit + เลขตำแหน่ง */}
+                                {(detail.toUnit || detail.toPositionNumber) && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.3, mt: 0.25 }}>
+                                    {joinInline(detail.toUnit, detail.toPositionNumber ? `(${detail.toPositionNumber})` : null)}
                                   </Typography>
                                 )}
-                                {/* ผู้ที่เดิมครองตำแหน่งนี้ */}
-                                <Box sx={{ mt: 0.4 }}>
-                                  {(() => {
-                                    const replaced = detail.replacedPerson;
-                                    if (replaced) {
-                                      return (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                                          <Typography 
-                                            variant="caption" 
-                                            sx={{ 
-                                              fontSize: isTablet ? '0.7rem' : '0.75rem', 
-                                              color: 'warning.dark', 
-                                              fontWeight: 600 
-                                            }}
-                                          >
-                                            เดิม: {joinInline(replaced.rank || '', replaced.fullName || '')}
-                                          </Typography>
-                                          {!isTablet && (
-                                            <Tooltip title="ดูข้อมูลเต็ม">
-                                              <IconButton
-                                                size="small"
-                                                onClick={() => handleViewPersonnelDetail(replaced)}
-                                                sx={{
-                                                  color: 'warning.dark',
-                                                  p: 0.25,
-                                                  '&:hover': { bgcolor: 'warning.50' }
-                                                }}
-                                              >
-                                                <InfoIcon sx={{ fontSize: 14 }} />
-                                              </IconButton>
-                                            </Tooltip>
-                                          )}
-                                        </Box>
-                                      );
-                                    }
-                                    // ถ้าไม่มีคนเดิม
-                                    // ถ้าเป็น two-way หรือ three-way แต่ไม่พบข้อมูลคนเดิม (ผิดปกติ)
-                                    if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way' || detail.transaction?.swapType === 'multi-way') && detail.toPosCodeId) {
-                                      return (
-                                        <Typography variant="caption" color="error.main" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
-                                          เดิม: ข้อมูลไม่พบ
-                                        </Typography>
-                                      );
-                                    }
-                                    // กรณีอื่นๆ (promotion, promotion-chain หรือตำแหน่งว่าง)
-                                    return (
-                                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
-                                        เดิม: ตำแหน่งว่าง
-                                      </Typography>
-                                    );
-                                  })()}
-                                </Box>
                               </Box>
-                            </Box>
-                          ) : (
-                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
-                              ยังไม่ได้สลับตำแหน่ง
-                            </Typography>
-                          )}
-                        </TableCell>
-                        
-                        {/* ประเภทการสลับ */}
-                        <TableCell sx={{ py: 1.5 }}>
-                          {detail.transaction ? (
-                            <Chip 
-                              label={getSwapTypeLabel(detail.transaction.swapType)}
-                              size="small"
-                              color={detail.transaction.swapType === 'three-way' ? 'warning' : (detail.transaction.swapType === 'promotion' ? 'info' : 'primary')}
-                              sx={{ fontSize: isTablet ? '0.7rem' : '0.75rem' }}
-                            />
-                          ) : (
-                            <Typography variant="caption" color="text.disabled">-</Typography>
-                          )}
-                        </TableCell>
-                        <TableCell align="center" sx={{ py: 1.5 }}>
-                          {detail.transaction ? (
-                            <Tooltip title="ดูรายละเอียด">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleViewDetail(detail)}
-                                sx={{
-                                  color: 'primary.main',
-                                  '&:hover': {
-                                    bgcolor: 'primary.50',
-                                  }
-                                }}
-                              >
-                                <InfoIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          ) : (
-                            <Typography variant="caption" color="text.disabled">
-                              -
-                            </Typography>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  }))}
+                            ) : (
+                              <Typography variant="body2" color="warning.main" sx={{ fontWeight: 700, fontSize: '0.875rem', letterSpacing: 0.2 }}>
+                                ยังไม่ได้จับคู่
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          {/* ข้อมูล */}
+                          <TableCell align="center" sx={{ py: 1 }}>
+                            {detail.transaction ? (
+                              <Tooltip title="ดูรายละเอียด">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleViewDetail(detail)}
+                                  sx={{
+                                    color: 'primary.main',
+                                    p: 0.4,
+                                    '&:hover': {
+                                      bgcolor: 'primary.50',
+                                    }
+                                  }}
+                                >
+                                  <InfoIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem' }}>
+                                -
+                              </Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }))}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -1150,74 +1314,82 @@ export default function InOutPage() {
                           )}
                         </Box>
 
-                        {/* Personnel Info */}
-                        <Box sx={{ mb: 1.5 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        {/* Personnel Info - ใคร */}
+                        <Box sx={{ mb: 1.5, p: 1.5, bgcolor: alpha(theme.palette.info.main, 0.08), borderRadius: 1, border: 1, borderColor: 'info.light' }}>
+                          <Typography variant="caption" color="info.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.75, fontSize: '0.7rem' }}>
+                            👤 ใคร
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5, color: 'info.dark' }}>
                             {joinInline(detail.rank || '-', detail.fullName || '-')}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
-                            {(() => {
-                              const code = detail.posCodeMaster ? `${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}` : '';
-                              return code || '-';
-                            })()}
-                          </Typography>
+                          {detail.posCodeMaster && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, mb: 0.25 }}>
+                              📋 {detail.posCodeMaster.id} - {detail.posCodeMaster.name}
+                            </Typography>
+                          )}
                         </Box>
 
-                        <Divider sx={{ my: 1.5 }} />
-
-                        {/* From Position */}
-                        <Box sx={{ mb: 1.5 }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                            ตำแหน่งเดิม
+                        {/* From Position - ตำแหน่งเดิม */}
+                        <Box sx={{ mb: 1.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1, border: 1, borderColor: 'grey.300' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.75, fontSize: '0.7rem' }}>
+                            📍 ตำแหน่งเดิม
                           </Typography>
-                          <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
+                          <Typography variant="body2" sx={{ fontSize: '0.8125rem', fontWeight: 600, mb: 0.25 }}>
                             {detail.fromPosition || '-'}
                           </Typography>
                           {detail.fromUnit && (
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', display: 'block' }}>
-                              หน่วย: {detail.fromUnit}
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', display: 'block', mb: 0.25 }}>
+                              🏢 {detail.fromUnit}
                             </Typography>
                           )}
                           {detail.nationalId && (
                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block' }}>
-                              เลขตำแหน่ง: {detail.nationalId}
+                              🔢 {detail.nationalId}
                             </Typography>
                           )}
                         </Box>
 
-                        {/* To Position */}
+                        {/* To Position - ย้ายไป */}
                         {(detail.toPosCodeMaster || detail.toPosition) ? (
-                          <Box sx={{ p: 1.5, bgcolor: alpha('#4caf50', 0.08), borderRadius: 1 }}>
-                            <Typography variant="caption" color="success.dark" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                              ตำแหน่งใหม่
+                          <Box sx={{ p: 1.5, bgcolor: alpha('#4caf50', 0.1), borderRadius: 1, border: 2, borderColor: 'success.main' }}>
+                            <Typography variant="caption" color="success.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.75, fontSize: '0.7rem' }}>
+                              ➡️ ย้ายไป
                             </Typography>
+                            
                             {detail.toPosCodeMaster && (
-                              <Typography variant="caption" color="success.main" sx={{ fontSize: '0.75rem', display: 'block', fontWeight: 600 }}>
-                                {detail.toPosCodeMaster.id} - {detail.toPosCodeMaster.name}
-                              </Typography>
-                            )}
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', fontSize: '0.8125rem' }}>
-                              {detail.toPosition || '-'}
-                            </Typography>
-                            {detail.toUnit && (
-                              <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.75rem', display: 'block' }}>
-                                หน่วย: {detail.toUnit}
-                              </Typography>
-                            )}
-                            {detail.toPositionNumber && (
-                              <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.7rem', display: 'block' }}>
-                                เลขตำแหน่ง: {detail.toPositionNumber}
+                              <Typography variant="caption" color="success.main" sx={{ fontSize: '0.75rem', display: 'block', fontWeight: 700, mb: 0.25 }}>
+                                📋 {detail.toPosCodeMaster.id} - {detail.toPosCodeMaster.name}
                               </Typography>
                             )}
                             
-                            {/* Replaced Person */}
-                            <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'success.light' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.dark', fontSize: '0.875rem', mb: 0.25 }}>
+                              {detail.toPosition || '-'}
+                            </Typography>
+                            
+                            {detail.toUnit && (
+                              <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.75rem', display: 'block', mb: 0.25 }}>
+                                🏢 {detail.toUnit}
+                              </Typography>
+                            )}
+                            
+                            {detail.toPositionNumber && (
+                              <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.7rem', display: 'block', mb: 0.75 }}>
+                                🔢 {detail.toPositionNumber}
+                              </Typography>
+                            )}
+                            
+                            {/* Replaced Person - แทนใคร */}
+                            <Divider sx={{ my: 1, borderColor: 'success.light' }} />
+                            <Box sx={{ p: 1, bgcolor: alpha('#ff9800', 0.15), borderRadius: 0.5, border: 1, borderColor: 'warning.light' }}>
+                              <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
+                                🔄 แทน
+                              </Typography>
                               {(() => {
                                 const replaced = detail.replacedPerson;
                                 if (replaced) {
                                   return (
-                                    <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'warning.dark', fontWeight: 600 }}>
-                                      เดิม: {joinInline(replaced.rank || '', replaced.fullName || '')}
+                                    <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'warning.dark', fontWeight: 700 }}>
+                                      {joinInline(replaced.rank || '', replaced.fullName || '')}
                                     </Typography>
                                   );
                                 }
@@ -1225,24 +1397,24 @@ export default function InOutPage() {
                                 // ถ้าเป็น two-way หรือ three-way แต่ไม่พบข้อมูลคนเดิม (ผิดปกติ)
                                 if ((detail.transaction?.swapType === 'two-way' || detail.transaction?.swapType === 'three-way' || detail.transaction?.swapType === 'multi-way') && detail.toPosCodeId) {
                                   return (
-                                    <Typography variant="caption" color="error.main" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
-                                      เดิม: ข้อมูลไม่พบ
+                                    <Typography variant="caption" color="error.main" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                                      ⚠️ ข้อมูลคนเดิมไม่พบ
                                     </Typography>
                                   );
                                 }
                                 // กรณีอื่นๆ (promotion, promotion-chain หรือตำแหน่งว่าง)
                                 return (
-                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', fontStyle: 'italic' }}>
-                                    เดิม: ตำแหน่งว่าง
+                                  <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 600, color: 'success.dark' }}>
+                                    ✅ ตำแหน่งว่าง (ไม่มีคนเดิม)
                                   </Typography>
                                 );
                               })()}
                             </Box>
                           </Box>
                         ) : (
-                          <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
-                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.75rem', fontStyle: 'italic' }}>
-                              ยังไม่ได้สลับตำแหน่ง
+                          <Box sx={{ p: 1.5, bgcolor: alpha('#ff9800', 0.15), borderRadius: 1, border: 2, borderColor: 'warning.main' }}>
+                            <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 700, color: 'warning.dark', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              ⚠️ ตำแหน่งว่าง (ยังไม่ได้จับคู่)
                             </Typography>
                           </Box>
                         )}

@@ -324,26 +324,34 @@ const Sidebar: React.FC = () => {
   );
 
   // Mobile: ใช้ Drawer (เปิดจากซ้าย)
+  // ไม่ render Drawer เลยถ้าปิดอยู่ เพื่อป้องกัน scroll lock
   if (isMobile) {
+    if (!isSidebarOpen) {
+      return null;
+    }
+    
     return (
       <Drawer
         variant="temporary"
         anchor="left"
-        open={isSidebarOpen}
+        open={true}
         onClose={closeAllMenus}
-        // Don't keep modal mounted and don't let Modal manage body scroll
         ModalProps={{ 
-          keepMounted: true, // เปลี่ยนเป็น true เพื่อให้ render ไว้ก่อน
-          disableScrollLock: true,
+          keepMounted: false,
+          disableScrollLock: false,
           slotProps: {
             backdrop: {
-              onClick: closeAllMenus, // เพิ่มการปิดเมื่อคลิก backdrop
+              onClick: closeAllMenus,
+              sx: {
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                top: { xs: '56px', sm: '64px' },
+              }
             }
           }
         }}
         hideBackdrop={false}
         sx={{
-          zIndex: (theme) => theme.zIndex.drawer, // ใช้ drawer zIndex มาตรฐาน (1200)
+          zIndex: (theme) => theme.zIndex.drawer,
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: drawerWidth,
@@ -352,9 +360,8 @@ const Sidebar: React.FC = () => {
             borderRight: '1px solid #374151',
             display: 'flex',
             flexDirection: 'column',
-            pt: { xs: '56px', sm: '64px' }, // เว้นที่สำหรับ Header
+            pt: { xs: '56px', sm: '64px' },
             overflow: 'hidden',
-            // เพิ่ม touch support สำหรับ mobile
             WebkitOverflowScrolling: 'touch',
           },
         }}

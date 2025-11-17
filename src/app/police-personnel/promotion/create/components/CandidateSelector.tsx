@@ -466,7 +466,7 @@ export default function CandidateSelector({
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}>
               {isInsertMode 
                 ? 'เลือกบุคลากรที่ต้องการแทรกเข้าไปในลูกโซ่' 
-                : 'เลือกบุคลากรที่ต้องการเลื่อนขึ้นมาแทนตำแหน่งว่าง'
+                : 'เลือกบุคลากร'
               }
             </Typography>
           </Box>

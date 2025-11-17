@@ -663,7 +663,7 @@ export default function PromotionChainTable({
               >
                 {nodes.length === 0 ? 'เพิ่มบุคลากรคนแรก' : 'เพิ่มบุคลากรคนถัดไป'}
               </Button>
-              {onAddPlaceholder && nodes.length > 0 && (
+              {onAddPlaceholder && (
                 <Button
                   variant="outlined"
                   startIcon={<AddIcon />}

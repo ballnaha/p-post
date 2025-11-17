@@ -15,20 +15,7 @@ interface LayoutProps {
 const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, customSidebar }) => {
   const { isMobile, isSidebarOpen, isSidebarCollapsed, closeAllMenus } = useNavigation();
   
-  // Force re-render and reset scroll when mobile state changes
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      // Reset any stuck scroll locks
-      if (!isSidebarOpen || !isMobile) {
-        document.body.style.overflow = '';
-        document.body.style.position = '';
-        document.body.style.width = '';
-        document.body.style.top = '';
-      }
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [isMobile, isSidebarOpen]);
+  // ไม่ต้องจัดการ body scroll ใน Layout เพราะ NavigationContext จัดการให้แล้ว
   
   // คำนวณ margin สำหรับ desktop (รวม custom sidebar)
   const getMarginLeft = () => {
@@ -44,13 +31,7 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
       height: '100vh', 
       overflow: 'hidden',
       position: 'relative',
-      // Mobile fixes
-      ...(isMobile && {
-        height: '100vh',
-        minHeight: '-webkit-fill-available',
-        overflow: 'hidden',
-        touchAction: 'manipulation',
-      }),
+      width: '100%',
     }}>
       {/* Backdrop: Removed to avoid duplicate overlays; Drawer provides its own backdrop on mobile. */}
 
@@ -66,15 +47,10 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
         flexDirection: 'column', 
         flexGrow: 1,
         ml: getMarginLeft(),
-        minWidth: 0, // ป้องกัน overflow ใน mobile
-        overflow: 'hidden', // ป้องกัน horizontal scroll
-        // Mobile fixes
-        ...(isMobile && {
-          ml: 0,
-          overflow: 'hidden',
-          height: '100vh',
-          minHeight: '-webkit-fill-available',
-        }),
+        minWidth: 0,
+        overflow: 'hidden',
+        height: '100vh',
+        width: '100%',
       }}>
         <Header />
         
@@ -84,20 +60,12 @@ const LayoutContent: React.FC<LayoutProps> = ({ children, showSidebar = true, cu
             flexGrow: 1,
             bgcolor: '#f8f9fa',
             overflow: 'auto',
-            minHeight: 0, // ป้องกัน layout ยืด
+            overflowX: 'hidden',
+            minHeight: 0,
             pt: { xs: '56px', sm: '64px' },
-            // เพิ่ม webkit scrolling สำหรับ iOS
             WebkitOverflowScrolling: 'touch',
-            // Mobile-specific fixes
-            ...(isMobile && {
-              overflow: 'auto !important',
-              overflowX: 'hidden',
-              WebkitOverflowScrolling: 'touch',
-              touchAction: 'pan-y',
-              height: 'calc(100vh - 56px)',
-              minHeight: 'calc(-webkit-fill-available - 56px)',
-              position: 'relative',
-            }),
+            position: 'relative',
+            width: '100%',
           }}
         >
           {/* Breadcrumbs */}

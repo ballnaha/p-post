@@ -308,6 +308,24 @@ export async function GET(request: NextRequest) {
             })
         ]);
 
+        // คำนวณสถิติสรุป
+        const summary = {
+            totalPersonnel: combinedData.length,
+            promoted: combinedData.filter(d => 
+                d.posCodeId && d.toPosCodeId && d.toPosCodeId < d.posCodeId
+            ).length,
+            transferred: combinedData.filter(d => 
+                d.posCodeId && d.toPosCodeId && d.toPosCodeId === d.posCodeId
+            ).length,
+            replacedOthers: combinedData.filter(d => d.replacedPerson).length,
+            filledVacant: combinedData.filter(d => 
+                (d.toPosCodeMaster || d.toPosition) && !d.replacedPerson
+            ).length,
+            notAssigned: combinedData.filter(d => 
+                !d.toPosCodeMaster && !d.toPosition
+            ).length,
+        };
+
         return NextResponse.json({
             success: true,
             data: {
@@ -315,6 +333,7 @@ export async function GET(request: NextRequest) {
                 totalCount,
                 page,
                 pageSize,
+                summary,
                 filters: {
                     units: units.map(u => u.unit).filter(Boolean),
                     positionCodes: positionCodes.map(p => ({

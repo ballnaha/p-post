@@ -129,6 +129,7 @@ interface TransactionChain {
   groupName?: string | null;
   groupNumber?: string | null;
   status: 'draft' | 'approved' | 'completed' | 'cancelled' | string;
+  isCompleted?: boolean;
   notes?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -964,7 +965,17 @@ export default function PromotionChainPage() {
                             </IconButton>
                           </TableCell>
                           <TableCell>
-                            <Chip label={row.groupNumber || '-'} color="primary" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Chip label={row.groupNumber || '-'} color="primary" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                              {row.isCompleted && (
+                                <Chip 
+                                  label="✓ เสร็จสิ้น" 
+                                  color="success" 
+                                  size="small" 
+                                  sx={{ fontWeight: 600, height: 24 }} 
+                                />
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight={600}>
@@ -1178,12 +1189,22 @@ export default function PromotionChainPage() {
                     {/* Card Header */}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                       <Box sx={{ flex: 1 }}>
-                        <Chip
-                          label={chain.groupNumber || '-'}
-                          color="primary"
-                          size="medium"
-                          sx={{ fontWeight: 600, mb: 1, fontSize: '0.9rem' }}
-                        />
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+                          <Chip
+                            label={chain.groupNumber || '-'}
+                            color="primary"
+                            size="medium"
+                            sx={{ fontWeight: 600, fontSize: '0.9rem' }}
+                          />
+                          {chain.isCompleted && (
+                            <Chip 
+                              label="✓ เสร็จสิ้น" 
+                              color="success" 
+                              size="small" 
+                              sx={{ fontWeight: 600 }} 
+                            />
+                          )}
+                        </Box>
                         <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '1.15rem' }}>
                           {chain.groupName || 'ไม่ระบุชื่อกลุ่ม'}
                         </Typography>

@@ -11,8 +11,18 @@ import {
   TextField,
   useMediaQuery,
   useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from "@mui/material";
-import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from "@mui/icons-material";
+import { 
+  ArrowBack as ArrowBackIcon, 
+  Save as SaveIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+} from "@mui/icons-material";
 import Layout from "@/app/components/Layout";
 import PromotionChainTable from "@/app/police-personnel/promotion-chain/create/components/PromotionChainTable";
 import { useToast } from "@/hooks/useToast";
@@ -123,6 +133,7 @@ interface TransactionApi {
   groupName?: string | null;
   groupNumber?: string | null;
   status: string;
+  isCompleted?: boolean;
   notes?: string | null;
   swapDetails: SwapDetailApi[];
 }
@@ -136,10 +147,12 @@ export default function EditPromotionChainPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [transaction, setTransaction] = useState<TransactionApi | null>(null);
   const [groupNotes, setGroupNotes] = useState<string>(''); // หมายเหตุของกลุ่ม
   const [vacantPosition, setVacantPosition] = useState<VacantPosition | null>(null);
   const [nodes, setNodes] = useState<ChainNode[]>([]);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
 
   const isChainValid = useMemo(() => {
     if (nodes.length === 0) return false;
@@ -537,6 +550,65 @@ export default function EditPromotionChainPage() {
     toast.success('แทรกตำแหน่งใหม่สำเร็จ');
   };
 
+  const handleComplete = async () => {
+    if (!transaction) return;
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/swap-transactions/${transaction.id}/complete`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.error || 'ทำเครื่องหมายเสร็จสิ้นไม่สำเร็จ');
+      }
+
+      toast.success('✓ ทำเครื่องหมายเสร็จสิ้นแล้ว');
+      setShowCompleteDialog(false);
+      
+      // Reload ข้อมูล
+      const reloadRes = await fetch(`/api/swap-transactions/${transaction.id}`);
+      const reloadJson = await reloadRes.json();
+      if (reloadRes.ok && reloadJson?.data) {
+        setTransaction(reloadJson.data);
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'เกิดข้อผิดพลาด');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleUncomplete = async () => {
+    if (!transaction) return;
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/swap-transactions/${transaction.id}/complete`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.error || 'ยกเลิกการทำเครื่องหมายไม่สำเร็จ');
+      }
+
+      toast.success('ยกเลิกการทำเครื่องหมายเสร็จสิ้นแล้ว');
+      
+      // Reload ข้อมูล
+      const reloadRes = await fetch(`/api/swap-transactions/${transaction.id}`);
+      const reloadJson = await reloadRes.json();
+      if (reloadRes.ok && reloadJson?.data) {
+        setTransaction(reloadJson.data);
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'เกิดข้อผิดพลาด');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!transaction) return;
     setSaving(true);
@@ -738,13 +810,23 @@ export default function EditPromotionChainPage() {
                 </Box>
               ) : vacantPosition && (
                 <Box sx={{ p: 1.5, bgcolor: "primary.50", borderRadius: 1, borderLeft: "3px solid", borderColor: "primary.main" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5, flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
                       🎯 ตำแหน่งว่างต้นทาง (แก้ไข)
                     </Typography>
-                    {transaction?.groupNumber && (
-                      <Chip label={transaction.groupNumber} size="small" color="primary" sx={{ height: 28 }} />
-                    )}
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      {transaction?.isCompleted && (
+                        <Chip 
+                          label="✓ เสร็จสิ้น" 
+                          size="small" 
+                          color="success" 
+                          sx={{ height: 28, fontWeight: 600 }} 
+                        />
+                      )}
+                      {transaction?.groupNumber && (
+                        <Chip label={transaction.groupNumber} size="small" color="primary" sx={{ height: 28 }} />
+                      )}
+                    </Box>
                   </Box>
                   <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
                     {vacantPosition.posCodeName ? `${vacantPosition.posCodeName} • ` : ""}{vacantPosition.position}
@@ -872,7 +954,7 @@ export default function EditPromotionChainPage() {
                 <Button 
                   variant="outlined" 
                   onClick={() => router.push("/police-personnel/promotion-chain")} 
-                  disabled={saving}
+                  disabled={saving || completing}
                   fullWidth={isMobile}
                   sx={{ 
                     minHeight: { xs: '44px', sm: 'auto' },
@@ -881,13 +963,57 @@ export default function EditPromotionChainPage() {
                 >
                   ยกเลิก
                 </Button>
+                
+                {/* ปุ่มสิ้นสุด - แสดงเฉพาะเมื่อไม่มี placeholder */}
+                {!hasPlaceholder && !transaction?.isCompleted && (
+                  <Button 
+                    variant="outlined" 
+                    color="success"
+                    size={isMobile ? 'medium' : 'large'}
+                    startIcon={<CheckCircleIcon />} 
+                    onClick={() => setShowCompleteDialog(true)} 
+                    disabled={!isChainValid || saving || completing || nodes.length === 0}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      minHeight: { xs: '44px', sm: 'auto' },
+                      fontSize: { xs: '0.875rem', md: '1rem' },
+                      fontWeight: 600,
+                      borderWidth: 2,
+                      '&:hover': {
+                        borderWidth: 2,
+                      }
+                    }}
+                  >
+                    สิ้นสุด
+                  </Button>
+                )}
+
+                {/* ปุ่มยกเลิกการสิ้นสุด - แสดงเฉพาะเมื่อทำเครื่องหมายเสร็จสิ้นแล้ว */}
+                {transaction?.isCompleted && (
+                  <Button 
+                    variant="outlined" 
+                    color="warning"
+                    size={isMobile ? 'medium' : 'large'}
+                    startIcon={<CancelIcon />} 
+                    onClick={handleUncomplete} 
+                    disabled={saving || completing}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      minHeight: { xs: '44px', sm: 'auto' },
+                      fontSize: { xs: '0.875rem', md: '1rem' },
+                    }}
+                  >
+                    {completing ? 'กำลังยกเลิก...' : 'ยกเลิกการสิ้นสุด'}
+                  </Button>
+                )}
+                
                 <Button 
                   variant="contained" 
                   color="primary" 
                   size={isMobile ? 'medium' : 'large'}
                   startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />} 
                   onClick={handleSave} 
-                  disabled={!isChainValid || saving || nodes.length === 0}
+                  disabled={!isChainValid || saving || completing || nodes.length === 0}
                   fullWidth={isMobile}
                   sx={{ 
                     minHeight: { xs: '48px', sm: 'auto' },
@@ -899,6 +1025,47 @@ export default function EditPromotionChainPage() {
                 </Button>
               </Box>
             </Paper>
+
+            {/* Dialog ยืนยันการสิ้นสุด */}
+            <Dialog
+              open={showCompleteDialog}
+              onClose={() => setShowCompleteDialog(false)}
+              maxWidth="sm"
+              fullWidth
+            >
+              <DialogTitle sx={{ fontWeight: 600 }}>
+                ยืนยันการทำเครื่องหมายเสร็จสิ้น
+              </DialogTitle>
+              <DialogContent>
+                <DialogContentText>
+                  คุณต้องการทำเครื่องหมายว่ากลุ่มนี้เสร็จสิ้นแล้วใช่หรือไม่?
+                  <br /><br />
+                  <strong>หมายเหตุ:</strong> การทำเครื่องหมายนี้แสดงว่าการจัดตำแหน่งว่างของกลุ่มนี้เสร็จสมบูรณ์แล้ว 
+                  ไม่มีตำแหน่งว่างที่เป็น placeholder อีกต่อไป
+                  <br /><br />
+                  คุณยังสามารถยกเลิกการทำเครื่องหมายนี้ได้ในภายหลัง หากต้องการแก้ไขเพิ่มเติม
+                </DialogContentText>
+              </DialogContent>
+              <DialogActions sx={{ p: 2, gap: 1 }}>
+                <Button 
+                  onClick={() => setShowCompleteDialog(false)} 
+                  disabled={completing}
+                  variant="outlined"
+                >
+                  ยกเลิก
+                </Button>
+                <Button 
+                  onClick={handleComplete} 
+                  disabled={completing}
+                  variant="contained"
+                  color="success"
+                  startIcon={completing ? <CircularProgress size={20} /> : <CheckCircleIcon />}
+                  sx={{ fontWeight: 600 }}
+                >
+                  {completing ? 'กำลังดำเนินการ...' : 'ยืนยัน'}
+                </Button>
+              </DialogActions>
+            </Dialog>
           </>
         )}
       </Box>

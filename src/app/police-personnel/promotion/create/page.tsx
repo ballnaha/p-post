@@ -1,16 +1,18 @@
 'use client';
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, useMediaQuery, useTheme, Autocomplete } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
 import PromotionTable from './components/PromotionTable';
 
+
 // Types
 interface ChainNode {
   id: string;
   nodeOrder: number;
+  isPlaceholder?: boolean; // true = ตำแหน่งว่าง (ยังไม่ได้เลือกบุคลากร)
   personnelId?: string;
   noId?: number;
   
@@ -100,9 +102,31 @@ function CreatePromotionContent() {
   // Unit Information
   const [unitName, setUnitName] = useState<string>('');
   const [unitDescription, setUnitDescription] = useState<string>('');
+  const [unitOptions, setUnitOptions] = useState<string[]>([]);
+  
+  // อัพเดท toUnit ของ node แรกเมื่อเปลี่ยนหน่วยปลายทาง
+  useEffect(() => {
+    if (nodes.length > 0 && unitName) {
+      const updatedNodes = nodes.map((node, index) => {
+        if (index === 0) {
+          return {
+            ...node,
+            toUnit: unitName,
+          };
+        }
+        return node;
+      });
+      setNodes(updatedNodes);
+    }
+  }, [unitName]);
+  
+
   
   // Selected Personnel to Transfer
   const [selectedPersonnel, setSelectedPersonnel] = useState<StartingPersonnel[]>([]);
+  
+  // Get starting personnel (first selected personnel)
+  const startingPersonnel = selectedPersonnel[0] || null;
   
   // Chain nodes for filling vacant positions
   const [nodes, setNodes] = useState<ChainNode[]>([]);
@@ -136,9 +160,189 @@ function CreatePromotionContent() {
     fetchNextGroupNumber();
   }, []);
 
+  // Fetch unique units from police_personnel
+  useEffect(() => {
+    const fetchUnits = async () => {
+      try {
+        // ใช้ API in-out ที่มี filtersOnly เพื่อดึง unique units
+        const response = await fetch('/api/in-out?filtersOnly=true');
+        if (!response.ok) throw new Error('Failed to fetch filters');
+        const result = await response.json();
+        
+        if (result.success && result.data.filters) {
+          const units = result.data.filters.units || [];
+          console.log('Fetched unique units:', units.length, units);
+          setUnitOptions(units);
+        } else {
+          setUnitOptions([]);
+        }
+      } catch (e) {
+        console.error('Failed to fetch units:', e);
+        setUnitOptions([]);
+      }
+    };
+    fetchUnits();
+  }, []);
+
   const handleAddNode = (node: ChainNode) => {
     setNodes([...nodes, node]);
     setActiveStep(nodes.length);
+  };
+
+  const handleAddPlaceholder = () => {
+    const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+    const isLastNodePlaceholder = lastNode?.isPlaceholder === true;
+    
+    // สร้าง placeholder node
+    const placeholderNode: ChainNode = {
+      id: `placeholder-${Date.now()}`,
+      nodeOrder: nodes.length + 1,
+      isPlaceholder: true,
+      fullName: '[รอการเลือกบุคลากร]',
+      nationalId: '',
+      rank: '',
+      
+      // ตำแหน่ง from ว่าง (เพราะยังไม่มีบุคคล)
+      fromPosCodeId: 0,
+      fromPosCodeName: undefined,
+      fromPosition: '',
+      fromPositionNumber: undefined,
+      fromUnit: '',
+      fromActingAs: undefined,
+      
+      // ตำแหน่ง to: ถ้า node ก่อนหน้าเป็น placeholder ให้เป็นค่าว่าง
+      toPosCodeId: nodes.length === 0 
+        ? 0 
+        : isLastNodePlaceholder 
+          ? 0 
+          : (lastNode?.fromPosCodeId || 0),
+      toPosCodeName: nodes.length === 0 
+        ? undefined 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromPosCodeName,
+      toPosition: nodes.length === 0 
+        ? '' 
+        : isLastNodePlaceholder 
+          ? '' 
+          : (lastNode?.fromPosition || ''),
+      toPositionNumber: nodes.length === 0 
+        ? undefined 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromPositionNumber,
+      toUnit: nodes.length === 0 
+        ? unitName 
+        : isLastNodePlaceholder 
+          ? '' 
+          : (lastNode?.fromUnit || ''),
+      toActingAs: nodes.length === 0 
+        ? undefined 
+        : isLastNodePlaceholder 
+          ? undefined 
+          : lastNode?.fromActingAs,
+      
+      // Rank levels
+      fromRankLevel: 0,
+      toRankLevel: nodes.length === 0 ? 0 : (lastNode?.fromRankLevel || 0),
+      isPromotionValid: false, // placeholder ยังไม่ valid
+    };
+
+    setNodes([...nodes, placeholderNode]);
+    toast.info('เพิ่มตำแหน่งว่างแล้ว กรุณาเลือกบุคลากรภายหลัง');
+  };
+
+  const handleInsertPlaceholder = (beforeNodeId: string) => {
+    const insertIndex = nodes.findIndex(n => n.id === beforeNodeId);
+    if (insertIndex === -1) {
+      toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
+      return;
+    }
+
+    const targetNode = nodes[insertIndex];
+
+    // สร้าง placeholder node
+    const placeholderNode: ChainNode = {
+      id: `placeholder-${Date.now()}`,
+      nodeOrder: targetNode.nodeOrder,
+      isPlaceholder: true,
+      fullName: '[รอการเลือกบุคลากร]',
+      nationalId: '',
+      rank: '',
+      
+      // ตำแหน่ง from ว่าง
+      fromPosCodeId: 0,
+      fromPosCodeName: undefined,
+      fromPosition: '',
+      fromPositionNumber: undefined,
+      fromUnit: '',
+      fromActingAs: undefined,
+      
+      // ตำแหน่ง to ตามโหนดที่จะแทรกก่อน
+      toPosCodeId: targetNode.toPosCodeId,
+      toPosCodeName: targetNode.toPosCodeName,
+      toPosition: targetNode.toPosition,
+      toPositionNumber: targetNode.toPositionNumber,
+      toUnit: targetNode.toUnit,
+      toActingAs: targetNode.toActingAs,
+      
+      // Rank levels
+      fromRankLevel: 0,
+      toRankLevel: targetNode.toRankLevel,
+      isPromotionValid: false,
+    };
+
+    // แทรก placeholder ก่อนโหนดที่เลือก
+    const newNodes = [...nodes];
+    newNodes.splice(insertIndex, 0, placeholderNode);
+
+    // อัพเดท nodeOrder และ toUnit ตาม chain logic
+    const reorderedNodes = newNodes.map((node, index) => {
+      if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง
+        return {
+          ...node,
+          nodeOrder: 1,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
+        };
+      } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า
+        const prevNode = newNodes[index - 1];
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosition: '',
+            toUnit: '',
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPositionNumber: undefined,
+            toActingAs: undefined,
+          };
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+          };
+        }
+      }
+    });
+
+    setNodes(reorderedNodes);
+    toast.info('แทรกตำแหน่งว่างแล้ว กรุณาเลือกบุคลากรภายหลัง');
   };
 
   const handleRemoveNode = (nodeId: string) => {
@@ -163,36 +367,46 @@ function CreatePromotionContent() {
       }
       
       if (index === 0) {
-        if (nodeIndex === 0 && startingPersonnel) {
-          return {
-            ...node,
-            nodeOrder: 1,
-            toPosCodeId: startingPersonnel.posCodeId || removedNode.toPosCodeId,
-            toPosCodeName: startingPersonnel.posCodeName || removedNode.toPosCodeName,
-            toPosition: startingPersonnel.position || removedNode.toPosition,
-            toPositionNumber: startingPersonnel.positionNumber || removedNode.toPositionNumber,
-            toUnit: startingPersonnel.unit || removedNode.toUnit,
-            toActingAs: startingPersonnel.actingAs || removedNode.toActingAs,
-            toRankLevel: removedNode.toRankLevel,
-          };
-        }
+        // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
         return {
           ...node,
           nodeOrder: 1,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
         };
       } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า
         const prevNode = newNodes[index - 1];
-        return {
-          ...node,
-          nodeOrder: index + 1,
-          toPosCodeId: prevNode.fromPosCodeId,
-          toPosCodeName: prevNode.fromPosCodeName,
-          toPosition: prevNode.fromPosition,
-          toPositionNumber: prevNode.fromPositionNumber,
-          toUnit: prevNode.fromUnit,
-          toActingAs: prevNode.fromActingAs,
-          toRankLevel: prevNode.fromRankLevel,
-        };
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosition: '',
+            toUnit: '',
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPositionNumber: undefined,
+            toActingAs: undefined,
+          };
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+            toRankLevel: prevNode.fromRankLevel,
+          };
+        }
       }
     });
 
@@ -220,17 +434,19 @@ function CreatePromotionContent() {
 
     const reorderedNodes = newNodes.map((node, index) => {
       if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
         return {
           ...node,
           nodeOrder: 1,
-          toPosCodeId: startingPersonnel?.posCodeId || node.toPosCodeId,
-          toPosCodeName: startingPersonnel?.posCodeName || node.toPosCodeName,
-          toPosition: startingPersonnel?.position || node.toPosition,
-          toPositionNumber: startingPersonnel?.positionNumber || node.toPositionNumber,
-          toUnit: startingPersonnel?.unit || node.toUnit,
-          toActingAs: startingPersonnel?.actingAs || node.toActingAs,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
         };
       } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า
         const prevNode = newNodes[index - 1];
         return {
           ...node,
@@ -253,29 +469,46 @@ function CreatePromotionContent() {
   const handleReorder = (reorderedNodes: ChainNode[]) => {
     const updatedNodes = reorderedNodes.map((node, index) => {
       if (index === 0) {
+        // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
         return {
           ...node,
           nodeOrder: 1,
-          toPosCodeId: startingPersonnel?.posCodeId || node.toPosCodeId,
-          toPosCodeName: startingPersonnel?.posCodeName || node.toPosCodeName,
-          toPosition: startingPersonnel?.position || node.toPosition,
-          toPositionNumber: startingPersonnel?.positionNumber || node.toPositionNumber,
-          toUnit: startingPersonnel?.unit || node.toUnit,
-          toActingAs: startingPersonnel?.actingAs || node.toActingAs,
+          toPosition: '',
+          toUnit: unitName || node.toUnit,
+          toPosCodeId: 0,
+          toPosCodeName: undefined,
+          toPositionNumber: undefined,
+          toActingAs: undefined,
         };
       } else {
+        // Node อื่นๆ: ไปหน่วยของ node ก่อนหน้า (chain)
         const prevNode = reorderedNodes[index - 1];
-        return {
-          ...node,
-          nodeOrder: index + 1,
-          toPosCodeId: prevNode.fromPosCodeId,
-          toPosCodeName: prevNode.fromPosCodeName,
-          toPosition: prevNode.fromPosition,
-          toPositionNumber: prevNode.fromPositionNumber,
-          toUnit: prevNode.fromUnit,
-          toActingAs: prevNode.fromActingAs,
-          toRankLevel: prevNode.fromRankLevel,
-        };
+        if (prevNode.isPlaceholder) {
+          // ถ้า node ก่อนหน้าเป็น placeholder ยังไม่รู้ว่าจะไปไหน
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosition: '',
+            toUnit: '',
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPositionNumber: undefined,
+            toActingAs: undefined,
+          };
+        } else {
+          // Node ก่อนหน้าเป็น node ปกติ
+          return {
+            ...node,
+            nodeOrder: index + 1,
+            toPosCodeId: prevNode.fromPosCodeId,
+            toPosCodeName: prevNode.fromPosCodeName,
+            toPosition: prevNode.fromPosition,
+            toPositionNumber: prevNode.fromPositionNumber,
+            toUnit: prevNode.fromUnit,
+            toActingAs: prevNode.fromActingAs,
+            toRankLevel: prevNode.fromRankLevel,
+          };
+        }
       }
     });
 
@@ -286,8 +519,8 @@ function CreatePromotionContent() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (!startingPersonnel) {
-        toast.error('กรุณาเลือกบุคลากรเริ่มต้น');
+      if (!unitName || unitName.trim() === '') {
+        toast.error('กรุณาระบุหน่วยงานปลายทาง');
         return;
       }
 
@@ -296,8 +529,17 @@ function CreatePromotionContent() {
         return;
       }
 
+      // กรองเฉพาะ node ที่ไม่ใช่ placeholder
+      const validNodes = nodes.filter(n => !n.isPlaceholder);
+      if (validNodes.length === 0) {
+        toast.error('กรุณาเลือกบุคลากรอย่างน้อย 1 คน (ไม่นับตำแหน่งว่าง)');
+        return;
+      }
+
       const year = new Date().getFullYear() + 543;
-      const swapDetails = nodes.map((node) => ({
+      
+      // กรองเฉพาะ node ที่ไม่ใช่ placeholder
+      const swapDetails = validNodes.map((node) => ({
         sequence: node.nodeOrder,
         personnelId: node.personnelId,
         noId: node.noId,
@@ -333,26 +575,11 @@ function CreatePromotionContent() {
       const payload = {
         year,
         swapDate: new Date().toISOString(),
-        swapType: 'promotion',
-        groupName: `เลื่อนตำแหน่ง • ${startingPersonnel.position}`,
+        swapType: 'transfer', // เปลี่ยนเป็น transfer เพราะเป็นการย้ายหน่วยงาน
+        groupName: `ย้ายหน่วยงาน → ${unitName}`,
         groupNumber: groupNumber || null,
         status: 'completed',
         notes: groupNotes.trim() || null,
-        // ข้อมูลบุคลากรที่จะเลื่อนตำแหน่ง
-        startingPersonnel: {
-          id: startingPersonnel.id,
-          noId: startingPersonnel.noId,
-          fullName: startingPersonnel.fullName,
-          rank: startingPersonnel.rank,
-          nationalId: startingPersonnel.nationalId,
-          seniority: startingPersonnel.seniority,
-          posCodeId: startingPersonnel.posCodeId,
-          posCodeName: startingPersonnel.posCodeName,
-          position: startingPersonnel.position,
-          positionNumber: startingPersonnel.positionNumber,
-          unit: startingPersonnel.unit,
-          actingAs: startingPersonnel.actingAs,
-        },
         swapDetails,
       };
 
@@ -379,7 +606,14 @@ function CreatePromotionContent() {
 
   const validateChain = () => {
     if (nodes.length === 0) return false;
-    return nodes.every((node) => node.isPromotionValid);
+    
+    // อนุญาตให้บันทึกได้แม้มี placeholder
+    // แต่ต้องมีโหนดที่ valid อย่างน้อย 1 โหนด
+    const validNodes = nodes.filter(n => !n.isPlaceholder);
+    if (validNodes.length === 0) return false;
+    
+    // เช็คว่าโหนดที่ไม่ใช่ placeholder ทั้งหมด valid หรือไม่
+    return validNodes.every((node) => node.isPromotionValid);
   };
 
   const isChainValid = validateChain();
@@ -389,88 +623,21 @@ function CreatePromotionContent() {
       <Box>
         {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
+          {/* Title and Back Button */}
           <Box sx={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
-            alignItems: 'flex-start',
-            gap: 2,
+            alignItems: 'center',
+            mb: 2,
           }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-                สร้างรายการย้ายบุคลากร
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                ย้ายบุคลากรไปหน่วยงานอื่น
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                กรอกข้อมูลหน่วยงานปลายทาง เลือกบุคลากรที่จะย้าย และจัดคนเติมตำแหน่งว่าง
+              <Typography variant="body2" color="text.secondary">
+                เลือกบุคลากรที่จะย้ายไปหน่วยงานปลายทาง และจัดคนเติมตำแหน่งว่างแบบทอดต่อ
               </Typography>
-
-              {/* Unit Information */}
-              <Box sx={{ 
-                p: 1.5,
-                bgcolor: 'primary.50',
-                borderRadius: 1,
-                borderLeft: '3px solid',
-                borderColor: 'primary.main',
-                mb: 2,
-              }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
-                    🏢 ข้อมูลหน่วยงานปลายทาง
-                  </Typography>
-                  <Chip label="เลขกลุ่ม" size="small" color="primary" sx={{ height: 22 }} />
-                </Box>
-                
-                <TextField
-                  fullWidth
-                  label="ชื่อหน่วยงาน/Unit"
-                  placeholder="เช่น หน่วยที่ 1, กองบังคับการ..."
-                  value={unitName}
-                  onChange={(e) => setUnitName(e.target.value)}
-                  variant="outlined"
-                  size="small"
-                  sx={{ mb: 1.5, bgcolor: 'white' }}
-                  required
-                />
-                
-                <TextField
-                  fullWidth
-                  label="รายละเอียดเพิ่มเติม"
-                  placeholder="ระบุรายละเอียดของหน่วยงาน (ถ้ามี)"
-                  value={unitDescription}
-                  onChange={(e) => setUnitDescription(e.target.value)}
-                  variant="outlined"
-                  size="small"
-                  multiline
-                  rows={2}
-                  sx={{ bgcolor: 'white' }}
-                />
-                
-                <Box sx={{ mt: 1, display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>{groupNumber || '-'}</Typography>
-                </Box>
-              </Box>
-
-              {/* Selected Personnel Count */}
-              <Box sx={{ 
-                p: 1.5,
-                bgcolor: 'success.50',
-                borderRadius: 1,
-                borderLeft: '3px solid',
-                borderColor: 'success.main',
-              }}>
-                <Typography variant="caption" color="success.main" sx={{ fontWeight: 600 }}>
-                  👥 บุคลากรที่เลือก
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 600, mt: 0.5 }}>
-                  {selectedPersonnel.length} คน
-                </Typography>
-                {selectedPersonnel.length > 0 && (
-                  <Typography variant="caption" color="text.secondary">
-                    จะเกิดตำแหน่งว่าง {selectedPersonnel.length} ตำแหน่ง
-                  </Typography>
-                )}
-              </Box>
             </Box>
-
             <Button
               variant="outlined"
               startIcon={<ArrowBackIcon />}
@@ -481,8 +648,66 @@ function CreatePromotionContent() {
             </Button>
           </Box>
 
+          {/* Destination Unit Info - Full Width */}
+          <Box sx={{ 
+            p: 2,
+            bgcolor: 'primary.50',
+            borderRadius: 1,
+            borderLeft: '3px solid',
+            borderColor: 'primary.main',
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+              <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                🏢 หน่วยงานปลายทาง
+              </Typography>
+              <Chip label={`${nodes.length} ขั้น`} size="small" color="primary" sx={{ height: 30, fontSize: '0.85rem' }} />
+            </Box>
+            
+            <Box sx={{ display: 'flex', gap: 2, mb: 1.5 }}>
+              <Autocomplete
+                fullWidth
+                freeSolo
+                options={unitOptions}
+                value={unitName}
+                onChange={(event, newValue) => {
+                  setUnitName(newValue || '');
+                }}
+                onInputChange={(event, newInputValue) => {
+                  setUnitName(newInputValue);
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="ชื่อหน่วยงานปลายทาง"
+                    placeholder="เลือกหรือพิมพ์ชื่อหน่วยงาน..."
+                    variant="outlined"
+                    size="small"
+                    required
+                  />
+                )}
+                sx={{ bgcolor: 'white', flex: 1 }}
+              />
+              
+              <TextField
+                label="รายละเอียดเพิ่มเติม"
+                placeholder="ระบุรายละเอียดของหน่วยงาน (ถ้ามี)"
+                value={unitDescription}
+                onChange={(e) => setUnitDescription(e.target.value)}
+                variant="outlined"
+                size="small"
+                sx={{ bgcolor: 'white', flex: 1 }}
+              />
+            </Box>
+            
+            {/* Group Number Display */}
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Chip label="เลขกลุ่ม" size="small" color="primary" sx={{ height: 22 }} />
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>{groupNumber || '-'}</Typography>
+            </Box>
+          </Box>
+
           {/* หมายเหตุกลุ่ม */}
-          {!loading && startingPersonnel && (
+          {nodes.length > 0 && (
             <Box sx={{ mt: 2 }}>
               <TextField
                 fullWidth
@@ -510,6 +735,9 @@ function CreatePromotionContent() {
                 onRemoveNode={handleRemoveNode}
                 onInsertNode={handleInsertNode}
                 onReorder={handleReorder}
+                onAddPlaceholder={handleAddPlaceholder}
+                onInsertPlaceholder={handleInsertPlaceholder}
+                destinationUnit={unitName}
               />
             </Box>
 

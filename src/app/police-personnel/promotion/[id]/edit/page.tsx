@@ -12,8 +12,14 @@ import {
   useMediaQuery,
   useTheme,
   Autocomplete,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Alert,
 } from "@mui/material";
-import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from "@mui/icons-material";
+import { ArrowBack as ArrowBackIcon, Save as SaveIcon, CheckCircle as CheckCircleIcon, Check as CheckIcon, Cancel as CancelIcon } from "@mui/icons-material";
 import Layout from "@/app/components/Layout";
 import PromotionTable from "@/app/police-personnel/promotion/create/components/PromotionTable";
 import { useToast } from "@/hooks/useToast";
@@ -128,6 +134,7 @@ interface TransactionApi {
   groupName?: string | null;
   groupNumber?: string | null;
   status: string;
+  isCompleted?: boolean;
   notes?: string | null;
   swapDetails: SwapDetailApi[];
 }
@@ -148,6 +155,8 @@ export default function EditPromotionPage() {
   const [unitName, setUnitName] = useState<string>('');
   const [unitDescription, setUnitDescription] = useState<string>('');
   const [unitOptions, setUnitOptions] = useState<string[]>([]);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   // Fetch unique units from police_personnel
   useEffect(() => {
@@ -772,6 +781,144 @@ export default function EditPromotionPage() {
     }
   };
 
+  const handleComplete = async () => {
+    if (!transaction) return;
+    setCompleting(true);
+    try {
+      // ตรวจสอบว่ามี placeholder หรือไม่
+      const hasPlaceholder = nodes.some(n => n.isPlaceholder);
+      if (hasPlaceholder) {
+        toast.error('ไม่สามารถทำเครื่องหมายเสร็จสิ้นได้ เนื่องจากยังมีตำแหน่งว่างที่ยังไม่ได้เลือกบุคลากร');
+        setCompleting(false);
+        setShowCompleteDialog(false);
+        return;
+      }
+
+      // กรองเฉพาะ node ที่ไม่ใช่ placeholder
+      const validNodes = nodes.filter(n => !n.isPlaceholder);
+      if (validNodes.length === 0) {
+        toast.error('ไม่สามารถทำเครื่องหมายเสร็จสิ้นได้ เนื่องจากยังไม่มีบุคลากรในรายการ');
+        setCompleting(false);
+        setShowCompleteDialog(false);
+        return;
+      }
+
+      const swapDetails = validNodes.map((node) => ({
+        sequence: node.nodeOrder,
+        personnelId: node.personnelId,
+        noId: node.noId,
+        nationalId: node.nationalId,
+        fullName: node.fullName,
+        rank: node.rank,
+        seniority: node.seniority,
+        posCodeId: node.fromPosCodeId,
+        toPosCodeId: node.toPosCodeId || null,
+        birthDate: node.birthDate,
+        age: node.age,
+        education: node.education,
+        lastAppointment: node.lastAppointment,
+        currentRankSince: node.currentRankSince,
+        enrollmentDate: node.enrollmentDate,
+        retirementDate: node.retirementDate,
+        yearsOfService: node.yearsOfService,
+        trainingLocation: node.trainingLocation,
+        trainingCourse: node.trainingCourse,
+        supportName: node.supporterName,
+        supportReason: node.supportReason,
+        fromPosition: node.fromPosition,
+        fromPositionNumber: node.fromPositionNumber,
+        fromUnit: node.fromUnit,
+        fromActingAs: node.fromActingAs,
+        toPosition: node.toPosition,
+        toPositionNumber: node.toPositionNumber,
+        toUnit: node.toUnit,
+        toActingAs: node.toActingAs,
+        notes: node.notes || null,
+      }));
+
+      const payload = {
+        year: transaction.year,
+        swapDate: transaction.swapDate,
+        swapType: transaction.swapType,
+        groupName: transaction.groupName,
+        groupNumber: transaction.groupNumber,
+        status: transaction.status,
+        isCompleted: true,
+        notes: groupNotes.trim() || null,
+        startingPersonnel: startingPersonnel ? {
+          id: startingPersonnel.id,
+          noId: startingPersonnel.noId,
+          fullName: startingPersonnel.fullName,
+          rank: startingPersonnel.rank,
+          nationalId: startingPersonnel.nationalId,
+          seniority: startingPersonnel.seniority,
+          posCodeId: startingPersonnel.posCodeId,
+          posCodeName: startingPersonnel.posCodeName,
+          position: startingPersonnel.position,
+          positionNumber: startingPersonnel.positionNumber,
+          unit: startingPersonnel.unit,
+          actingAs: startingPersonnel.actingAs,
+        } : null,
+        swapDetails,
+      };
+
+      const res = await fetch(`/api/swap-transactions/${transaction.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok || json?.success === false) throw new Error(json?.error || "ทำเครื่องหมายเสร็จสิ้นไม่สำเร็จ");
+
+      toast.success("ทำเครื่องหมายเสร็จสิ้นสำเร็จ");
+      setShowCompleteDialog(false);
+
+      // Reload data
+      const reloadRes = await fetch(`/api/swap-transactions/${transaction.id}`);
+      const reloadJson = await reloadRes.json();
+      if (reloadRes.ok && reloadJson?.data) {
+        const t: TransactionApi = reloadJson.data;
+        setTransaction(t);
+        setGroupNotes(t.notes || '');
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "เกิดข้อผิดพลาดในการทำเครื่องหมายเสร็จสิ้น");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleUncomplete = async () => {
+    if (!transaction) return;
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/swap-transactions/${transaction.id}/complete`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.error || 'ยกเลิกการทำเครื่องหมายไม่สำเร็จ');
+      }
+
+      toast.success('ยกเลิกการทำเครื่องหมายเสร็จสิ้นแล้ว');
+      
+      // Reload ข้อมูล
+      const reloadRes = await fetch(`/api/swap-transactions/${transaction.id}`);
+      const reloadJson = await reloadRes.json();
+      if (reloadRes.ok && reloadJson?.data) {
+        setTransaction(reloadJson.data);
+        setGroupNotes(reloadJson.data.notes || '');
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'เกิดข้อผิดพลาด');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   return (
     <Layout>
       <Box>
@@ -786,7 +933,7 @@ export default function EditPromotionPage() {
           }}>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-                แก้ไขรายการย้ายบุคลากร
+                แก้ไขรายการย้ายหน่วย
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 ปรับแก้ไขข้อมูลการย้ายบุคลากรไปหน่วยงานปลายทาง
@@ -820,7 +967,17 @@ export default function EditPromotionPage() {
                 <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                   🏢 หน่วยงานปลายทาง
                 </Typography>
-                <Chip label={`${nodes.length} ขั้น`} size="small" color="primary" sx={{ height: 30, fontSize: '0.85rem' }} />
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  {transaction?.isCompleted && (
+                    <Chip 
+                      label="✓ เสร็จสิ้น" 
+                      size="small" 
+                      color="success" 
+                      sx={{ height: 28, fontWeight: 600 }} 
+                    />
+                  )}
+                  <Chip label={`${nodes.length} ขั้น`} size="small" color="primary" sx={{ height: 30, fontSize: '0.85rem' }} />
+                </Box>
               </Box>
               
               <Box sx={{ display: 'flex', gap: 2, mb: 1.5 }}>
@@ -941,7 +1098,7 @@ export default function EditPromotionPage() {
                 <Button 
                   variant="outlined" 
                   onClick={() => router.push("/police-personnel/promotion")} 
-                  disabled={saving}
+                  disabled={saving || completing}
                   fullWidth={isMobile}
                   sx={{ 
                     minHeight: { xs: '44px', sm: 'auto' },
@@ -950,13 +1107,14 @@ export default function EditPromotionPage() {
                 >
                   ยกเลิก
                 </Button>
+                
                 <Button 
                   variant="contained" 
                   color="primary" 
                   size={isMobile ? 'medium' : 'large'}
                   startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />} 
                   onClick={handleSave} 
-                  disabled={!isChainValid || saving || nodes.length === 0}
+                  disabled={!isChainValid || saving || completing || nodes.length === 0}
                   fullWidth={isMobile}
                   sx={{ 
                     minHeight: { xs: '48px', sm: 'auto' },
@@ -965,10 +1123,156 @@ export default function EditPromotionPage() {
                 >
                   {saving ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
                 </Button>
+
+                {!nodes.some(n => n.isPlaceholder) && transaction?.isCompleted !== true && nodes.length > 0 && (
+                  <Button 
+                    variant="outlined" 
+                    color="success"
+                    size={isMobile ? 'medium' : 'large'}
+                    startIcon={<CheckIcon />} 
+                    onClick={() => setShowCompleteDialog(true)} 
+                    disabled={!isChainValid || saving || completing}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      minHeight: { xs: '44px', sm: 'auto' },
+                      fontSize: { xs: '0.875rem', md: '1rem' },
+                      fontWeight: 600
+                    }}
+                  >
+                    บันทึกและสิ้นสุด
+                  </Button>
+                )}
+
+                {/* ปุ่มยกเลิกการสิ้นสุด - แสดงเฉพาะเมื่อทำเครื่องหมายเสร็จสิ้นแล้ว */}
+                {transaction?.isCompleted && (
+                  <Button 
+                    variant="outlined" 
+                    color="warning"
+                    size={isMobile ? 'medium' : 'large'}
+                    startIcon={<CancelIcon />} 
+                    onClick={handleUncomplete} 
+                    disabled={saving || completing}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      minHeight: { xs: '44px', sm: 'auto' },
+                      fontSize: { xs: '0.875rem', md: '1rem' },
+                    }}
+                  >
+                    {completing ? 'กำลังยกเลิก...' : 'ยกเลิกการสิ้นสุด'}
+                  </Button>
+                )}
+
               </Box>
             </Paper>
           </>
         )}
+
+        {/* Complete confirmation dialog */}
+        <Dialog
+          open={showCompleteDialog}
+          onClose={() => !completing && setShowCompleteDialog(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            pb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            bgcolor: 'success.50',
+            borderBottom: '2px solid',
+            borderColor: 'success.main',
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              bgcolor: 'success.main',
+              color: 'white',
+            }}>
+              <CheckCircleIcon sx={{ fontSize: 28 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.dark' }}>
+                ยืนยันการสิ้นสุดรายการ
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 3, pb: 2 }}>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 2, fontWeight: 500, mt: 1 }}>
+                คุณต้องการสิ้นสุดรายการนี้ใช่หรือไม่?
+              </Typography>
+              <Paper sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="หน่วยปลายทาง" size="small" color="primary" />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {unitName || '-'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="จำนวนบุคลากร" size="small" color="success" />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {nodes.filter(n => !n.isPlaceholder).length} คน
+                    </Typography>
+                  </Box>
+                  {transaction?.groupNumber && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip label="เลขกลุ่ม" size="small" color="default" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {transaction.groupNumber}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Paper>
+            </Box>
+            <Box sx={{ 
+              p: 2, 
+              bgcolor: 'info.50', 
+              borderRadius: 1,
+              borderLeft: '4px solid',
+              borderColor: 'info.main',
+            }}>
+              <Typography variant="body2" sx={{ color: 'info.dark', fontWeight: 500 }}>
+                💡 เมื่อสิ้นสุดแล้ว รายการนี้จะถูกบันทึกและทำเครื่องหมายว่าเสร็จสมบูรณ์
+              </Typography>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+            <Button
+              onClick={() => setShowCompleteDialog(false)}
+              disabled={completing}
+              variant="outlined"
+              sx={{ minWidth: 100 }}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleComplete}
+              disabled={completing}
+              variant="contained"
+              color="success"
+              startIcon={completing ? <CircularProgress size={20} /> : <CheckCircleIcon />}
+              sx={{ minWidth: 120, fontWeight: 600 }}
+            >
+              {completing ? 'กำลังบันทึก...' : 'ยืนยันสิ้นสุด'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Layout>
   );

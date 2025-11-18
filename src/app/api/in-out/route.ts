@@ -118,6 +118,7 @@ export async function GET(request: NextRequest) {
             prisma.policePersonnel.findMany({
                 where: personnelWhere,
                 include: { posCodeMaster: true },
+                orderBy: { noId: 'asc' },
             }),
             prisma.swapTransactionDetail.findMany({
                 where: {
@@ -203,10 +204,19 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        // เรียงตาม noId เหมือนหน้า police_personnel (ไม่เรียงตาม hasSwapped)
         combinedData.sort((a, b) => {
-            if (a.hasSwapped !== b.hasSwapped) return b.hasSwapped ? 1 : -1;
-            if (a.transaction?.id !== b.transaction?.id) return (a.transaction?.id || '').localeCompare(b.transaction?.id || '');
-            if (a.sequence !== b.sequence) return (a.sequence ?? 999) - (b.sequence ?? 999);
+            const noIdA = a.noId || '';
+            const noIdB = b.noId || '';
+            
+            if (noIdA && noIdB) {
+                const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+                if (compareNum !== 0) return compareNum;
+            }
+            
+            if (noIdA && !noIdB) return -1;
+            if (!noIdA && noIdB) return 1;
+            
             return (a.fullName || '').localeCompare(b.fullName || '', 'th');
         });
 

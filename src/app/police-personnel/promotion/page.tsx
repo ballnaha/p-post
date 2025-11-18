@@ -118,6 +118,7 @@ interface TransactionChain {
   groupName?: string | null;
   groupNumber?: string | null;
   status: 'draft' | 'approved' | 'completed' | 'cancelled' | string;
+  isCompleted?: boolean;
   notes?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -617,7 +618,7 @@ export default function PromotionPage() {
                 size="medium"
                 onClick={() => handleCreateTransfer()}
               >
-                เพิ่มรายการย้ายบุคลากร
+                เพิ่มรายการย้ายหน่วย
               </Button>
             </Box>
           </Box>
@@ -692,7 +693,7 @@ export default function PromotionPage() {
               size="medium"
               onClick={() => handleCreateTransfer()}
             >
-              เพิ่มรายการย้ายบุคลากร
+              เพิ่มรายการย้ายหน่วย
             </Button>
           </Paper>
         ) : (
@@ -721,12 +722,22 @@ export default function PromotionPage() {
                               </IconButton>
                             </TableCell>
                             <TableCell>
-                              <Chip label={row.groupNumber || '-'} color="primary" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <Chip label={row.groupNumber || '-'} color="primary" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                                
+                              </Box>
                             </TableCell>
                             <TableCell>
-                              <Typography variant="body2" fontWeight={600}>
-                                {row.groupName || '-'}
-                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                {row.isCompleted && (
+                                  <Tooltip title="ย้ายหน่วยเสร็จสิ้นแล้ว">
+                                    <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                                  </Tooltip>
+                                )}
+                                <Typography variant="body2" fontWeight={600}>
+                                  {row.groupName || '-'}
+                                </Typography>
+                              </Box>
                             </TableCell>
                             <TableCell>
                               <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -806,7 +817,16 @@ export default function PromotionPage() {
                                               <DragIndicatorIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                                             </TableCell>
                                             <TableCell>{detail.sequence ?? '-'}</TableCell>
-                                            <TableCell><strong>{detail.rank ? `${detail.rank} ` : ''}{detail.fullName}</strong></TableCell>
+                                            <TableCell>
+                                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                {detail.toPosCodeId && detail.posCodeId && detail.toPosCodeId > 0 && detail.posCodeId > 0 && detail.toPosCodeId < detail.posCodeId && (
+                                                  <Tooltip title="เลื่อนตำแหน่ง">
+                                                    <TrendingUpIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                                                  </Tooltip>
+                                                )}
+                                                <strong>{detail.rank ? `${detail.rank} ` : ''}{detail.fullName}</strong>
+                                              </Box>
+                                            </TableCell>
                                             <TableCell>
                                               {detail.posCodeMaster ? (
                                                 <Chip label={`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`} size="small" color="primary" variant="outlined" sx={{ fontSize: '0.75rem' }} />
@@ -820,6 +840,12 @@ export default function PromotionPage() {
                                               {detail.toPosCodeMaster ? (
                                                 <>
                                                   <Chip label={`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`} size="small" color="success" variant="outlined" sx={{ fontSize: '0.75rem', mb: 0.5 }} />
+                                                  <br />
+                                                  <strong>{detail.toPosition || '-'}</strong>{detail.toPositionNumber ? ` (${detail.toPositionNumber})` : ''}
+                                                </>
+                                              ) : detail.toPosCodeId ? (
+                                                <>
+                                                  <Chip label={`${detail.toPosCodeId}`} size="small" color="success" variant="outlined" sx={{ fontSize: '0.75rem', mb: 0.5 }} />
                                                   <br />
                                                   <strong>{detail.toPosition || '-'}</strong>{detail.toPositionNumber ? ` (${detail.toPositionNumber})` : ''}
                                                 </>
@@ -893,15 +919,32 @@ export default function PromotionPage() {
                       {/* Card Header */}
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                         <Box sx={{ flex: 1 }}>
-                          <Chip
-                            label={chain.groupNumber || '-'}
-                            color="primary"
-                            size="medium"
-                            sx={{ fontWeight: 600, mb: 1, fontSize: '0.9rem' }}
-                          />
-                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '1.15rem' }}>
-                            {chain.groupName || 'ไม่ระบุชื่อกลุ่ม'}
-                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+                            <Chip
+                              label={chain.groupNumber || '-'}
+                              color="primary"
+                              size="medium"
+                              sx={{ fontWeight: 600, fontSize: '0.9rem' }}
+                            />
+                            {chain.isCompleted && (
+                              <Chip 
+                                label="✓ เสร็จสิ้น" 
+                                color="success" 
+                                size="small" 
+                                sx={{ fontWeight: 600 }} 
+                              />
+                            )}
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                            {chain.isCompleted && (
+                              <Tooltip title="ย้ายหน่วยเสร็จสิ้นแล้ว">
+                                <CheckCircleIcon sx={{ color: 'success.main', fontSize: 22 }} />
+                              </Tooltip>
+                            )}
+                            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.15rem' }}>
+                              {chain.groupName || 'ไม่ระบุชื่อกลุ่ม'}
+                            </Typography>
+                          </Box>
                           <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.9rem' }}>
                             <CalendarIcon sx={{ fontSize: 16 }} />
                             {formatDate(chain.swapDate)}
@@ -945,9 +988,16 @@ export default function PromotionPage() {
                             >
                               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                                 <Box>
-                                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem', mb: 0.5 }}>
-                                    {detail.sequence ?? index + 1}. {detail.rank ? `${detail.rank} ` : ''}{detail.fullName}
-                                  </Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                    {detail.toPosCodeId && detail.posCodeId && detail.toPosCodeId > 0 && detail.posCodeId > 0 && detail.toPosCodeId < detail.posCodeId && (
+                                      <Tooltip title="เลื่อนตำแหน่ง">
+                                        <TrendingUpIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                                      </Tooltip>
+                                    )}
+                                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                      {detail.sequence ?? index + 1}. {detail.rank ? `${detail.rank} ` : ''}{detail.fullName}
+                                    </Typography>
+                                  </Box>
                                   {detail.posCodeMaster && (
                                     <Chip 
                                       label={`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`}
@@ -976,7 +1026,7 @@ export default function PromotionPage() {
                                   {detail.fromUnit && ` • ${detail.fromUnit}`}
                                 </Typography>
                                 <Box>
-                                  {detail.toPosCodeMaster && (
+                                  {detail.toPosCodeMaster ? (
                                     <Chip 
                                       label={`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`} 
                                       size="small" 
@@ -984,7 +1034,15 @@ export default function PromotionPage() {
                                       variant="outlined" 
                                       sx={{ fontSize: '0.7rem', mb: 0.5 }} 
                                     />
-                                  )}
+                                  ) : detail.toPosCodeId ? (
+                                    <Chip 
+                                      label={`${detail.toPosCodeId}`} 
+                                      size="small" 
+                                      color="success" 
+                                      variant="outlined" 
+                                      sx={{ fontSize: '0.7rem', mb: 0.5 }} 
+                                    />
+                                  ) : null}
                                   <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 600, fontSize: '0.875rem' }}>
                                     <strong>→ ไป:</strong> {detail.toPosition || '-'}
                                     {detail.toPositionNumber && ` (${detail.toPositionNumber})`}

@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, useMediaQuery, useTheme, Autocomplete } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
+import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, useMediaQuery, useTheme, Autocomplete, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert } from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Save as SaveIcon, CheckCircle as CheckCircleIcon , Check as CheckIcon } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
 import PromotionTable from './components/PromotionTable';
@@ -98,6 +98,9 @@ function CreatePromotionContent() {
   const [saving, setSaving] = useState(false);
   const [groupNumber, setGroupNumber] = useState<string>('');
   const [groupNotes, setGroupNotes] = useState<string>('');
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [saveAndComplete, setSaveAndComplete] = useState(false);
   
   // Unit Information
   const [unitName, setUnitName] = useState<string>('');
@@ -516,7 +519,7 @@ function CreatePromotionContent() {
     toast.success('จัดเรียงใหม่สำเร็จ');
   };
 
-  const handleSave = async () => {
+  const handleSave = async (markAsComplete = false) => {
     setSaving(true);
     try {
       if (!unitName || unitName.trim() === '') {
@@ -534,6 +537,15 @@ function CreatePromotionContent() {
       if (validNodes.length === 0) {
         toast.error('กรุณาเลือกบุคลากรอย่างน้อย 1 คน (ไม่นับตำแหน่งว่าง)');
         return;
+      }
+
+      // ถ้าจะทำเครื่องหมายเสร็จสิ้น ต้องไม่มี placeholder
+      if (markAsComplete) {
+        const hasPlaceholder = nodes.some(n => n.isPlaceholder);
+        if (hasPlaceholder) {
+          toast.error('ไม่สามารถทำเครื่องหมายเสร็จสิ้นได้ เนื่องจากยังมีตำแหน่งว่างที่ยังไม่ได้เลือกบุคลากร');
+          return;
+        }
       }
 
       const year = new Date().getFullYear() + 543;
@@ -579,6 +591,7 @@ function CreatePromotionContent() {
         groupName: `ย้ายหน่วยงาน → ${unitName}`,
         groupNumber: groupNumber || null,
         status: 'completed',
+        isCompleted: markAsComplete,
         notes: groupNotes.trim() || null,
         swapDetails,
       };
@@ -594,26 +607,40 @@ function CreatePromotionContent() {
         throw new Error(result?.error || 'บันทึกข้อมูลไม่สำเร็จ');
       }
 
-      toast.success('บันทึกรายการสำเร็จ');
+      toast.success(markAsComplete ? 'บันทึกและทำเครื่องหมายเสร็จสิ้นสำเร็จ' : 'บันทึกรายการสำเร็จ');
       router.push('/police-personnel/promotion');
     } catch (error: any) {
       console.error('Error saving chain:', error);
       toast.error(error?.message || 'เกิดข้อผิดพลาดในการบันทึก');
     } finally {
       setSaving(false);
+      setCompleting(false);
+      setSaveAndComplete(false);
     }
   };
 
+  const handleCompleteClick = () => {
+    // ตรวจสอบว่ามี placeholder หรือไม่
+    const hasPlaceholder = nodes.some(n => n.isPlaceholder);
+    if (hasPlaceholder) {
+      toast.error('ไม่สามารถทำเครื่องหมายเสร็จสิ้นได้ เนื่องจากยังมีตำแหน่งว่างที่ยังไม่ได้เลือกบุคลากร');
+      return;
+    }
+    setShowCompleteDialog(true);
+  };
+
+  const handleComplete = async () => {
+    setCompleting(true);
+    setSaveAndComplete(true);
+    setShowCompleteDialog(false);
+    await handleSave(true);
+  };
+
   const validateChain = () => {
+    // ตรวจสอบแค่ว่ามีอย่างน้อย 1 node (ไม่นับ placeholder)
     if (nodes.length === 0) return false;
-    
-    // อนุญาตให้บันทึกได้แม้มี placeholder
-    // แต่ต้องมีโหนดที่ valid อย่างน้อย 1 โหนด
     const validNodes = nodes.filter(n => !n.isPlaceholder);
-    if (validNodes.length === 0) return false;
-    
-    // เช็คว่าโหนดที่ไม่ใช่ placeholder ทั้งหมด valid หรือไม่
-    return validNodes.every((node) => node.isPromotionValid);
+    return validNodes.length > 0;
   };
 
   const isChainValid = validateChain();
@@ -782,7 +809,7 @@ function CreatePromotionContent() {
                 <Button
                   variant="outlined"
                   onClick={() => router.push('/police-personnel/promotion')}
-                  disabled={saving}
+                  disabled={saving || completing}
                   fullWidth={isMobile}
                   sx={{ 
                     minHeight: { xs: '44px', sm: 'auto' },
@@ -791,13 +818,14 @@ function CreatePromotionContent() {
                 >
                   ยกเลิก
                 </Button>
+                
                 <Button
                   variant="contained"
                   color="primary"
                   size={isMobile ? 'medium' : 'large'}
                   startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
-                  onClick={handleSave}
-                  disabled={!isChainValid || saving || nodes.length === 0}
+                  onClick={() => handleSave(false)}
+                  disabled={!isChainValid || saving || completing || nodes.length === 0}
                   fullWidth={isMobile}
                   sx={{ 
                     minHeight: { xs: '48px', sm: 'auto' },
@@ -805,12 +833,139 @@ function CreatePromotionContent() {
                     fontWeight: 600
                   }}
                 >
-                  {saving ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
+                  {saving && !saveAndComplete ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
                 </Button>
+
+                
+                {!nodes.some(n => n.isPlaceholder) && nodes.length > 0 && (
+                  <Button
+                    variant="outlined"
+                    color="success"
+                    size={isMobile ? 'medium' : 'large'}
+                    startIcon={completing ? <CircularProgress size={20} /> : <CheckIcon />}
+                    onClick={handleCompleteClick}
+                    disabled={!isChainValid || saving || completing}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      minHeight: { xs: '44px', sm: 'auto' },
+                      fontSize: { xs: '0.875rem', md: '1rem' },
+                      fontWeight: 600
+                    }}
+                  >
+                    {completing ? 'กำลังบันทึก...' : 'บันทึกและสิ้นสุด'}
+                  </Button>
+                )}
+
+
               </Box>
             </Paper>
           </>
         )}
+
+        {/* Complete confirmation dialog */}
+        <Dialog
+          open={showCompleteDialog}
+          onClose={() => !completing && setShowCompleteDialog(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            pb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            bgcolor: 'success.50',
+            borderBottom: '2px solid',
+            borderColor: 'success.main',
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              bgcolor: 'success.main',
+              color: 'white',
+            }}>
+              <CheckCircleIcon sx={{ fontSize: 28 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.dark' }}>
+                ยืนยันการสิ้นสุดรายการ
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 3, pb: 2 }}>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 2, fontWeight: 500, mt: 1 }}>
+                คุณต้องการบันทึกและสิ้นสุดรายการนี้ใช่หรือไม่?
+              </Typography>
+              <Paper sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="หน่วยปลายทาง" size="small" color="primary" />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {unitName || '-'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="จำนวนบุคลากร" size="small" color="success" />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {nodes.filter(n => !n.isPlaceholder).length} คน
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip label="เลขกลุ่ม" size="small" color="default" />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {groupNumber || '-'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Box>
+            <Box sx={{ 
+              p: 2, 
+              bgcolor: 'info.50', 
+              borderRadius: 1,
+              borderLeft: '4px solid',
+              borderColor: 'info.main',
+            }}>
+              <Typography variant="body2" sx={{ color: 'info.dark', fontWeight: 500 }}>
+                💡 เมื่อสิ้นสุดแล้ว รายการนี้จะถูกบันทึกและทำเครื่องหมายว่าเสร็จสมบูรณ์
+              </Typography>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+            <Button
+              onClick={() => setShowCompleteDialog(false)}
+              disabled={completing}
+              variant="outlined"
+              sx={{ minWidth: 100 }}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleComplete}
+              disabled={completing}
+              variant="contained"
+              color="success"
+              startIcon={completing ? <CircularProgress size={20} /> : <CheckCircleIcon />}
+              sx={{ minWidth: 120, fontWeight: 600 }}
+            >
+              {completing ? 'กำลังบันทึก...' : 'ยืนยันสิ้นสุด'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Layout>
   );

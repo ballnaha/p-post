@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         groupName: true,
         groupNumber: true,
         status: true,
+        isCompleted: true,
         notes: true,
         createdAt: true,
         updatedAt: true,
@@ -43,6 +44,13 @@ export async function GET(request: NextRequest) {
             seniority: true,
             posCodeId: true,
             posCodeMaster: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            toPosCodeId: true,
+            toPosCodeMaster: {
               select: {
                 id: true,
                 name: true
@@ -109,14 +117,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { year, swapDate, swapType, groupName, groupNumber, notes, startingPersonnel, swapDetails } = body;
+    const { year, swapDate, swapType, groupName, groupNumber, status, isCompleted, notes, startingPersonnel, swapDetails } = body;
 
     // Validate
     const effectiveSwapType = swapType || 'two-way';
-    const minDetails = (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion') ? 1 : 2;
+    const minDetails = (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion' || effectiveSwapType === 'transfer') ? 1 : 2;
     if (!year || !swapDate || !swapDetails || swapDetails.length < minDetails) {
       return NextResponse.json(
-        { success: false, error: (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion') ? 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 1 ขั้นตอน' : 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 2 คนที่สลับตำแหน่ง' },
+        { success: false, error: (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion' || effectiveSwapType === 'transfer') ? 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 1 ขั้นตอน' : 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 2 คนที่สลับตำแหน่ง' },
         { status: 400 }
       );
     }
@@ -194,7 +202,8 @@ export async function POST(request: NextRequest) {
         swapType: swapType || 'two-way',
         groupName,
         groupNumber,
-        status: 'completed',
+        status: status || 'completed',
+        isCompleted: isCompleted || false,
         notes,
         swapDetails: {
           create: allDetails

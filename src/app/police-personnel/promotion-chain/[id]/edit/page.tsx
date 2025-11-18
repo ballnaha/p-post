@@ -22,6 +22,7 @@ import {
   Save as SaveIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
+  Check as CheckIcon,
 } from "@mui/icons-material";
 import Layout from "@/app/components/Layout";
 import PromotionChainTable from "@/app/police-personnel/promotion-chain/create/components/PromotionChainTable";
@@ -87,6 +88,7 @@ interface VacantPosition {
 interface SwapDetailApi {
   id: string;
   sequence?: number | null;
+  isPlaceholder?: boolean | null;
   personnelId?: string | null;
   noId?: string | null;
   nationalId?: string | null;
@@ -148,11 +150,12 @@ export default function EditPromotionChainPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showUncompleteDialog, setShowUncompleteDialog] = useState(false);
   const [transaction, setTransaction] = useState<TransactionApi | null>(null);
   const [groupNotes, setGroupNotes] = useState<string>(''); // หมายเหตุของกลุ่ม
   const [vacantPosition, setVacantPosition] = useState<VacantPosition | null>(null);
   const [nodes, setNodes] = useState<ChainNode[]>([]);
-  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
 
   const isChainValid = useMemo(() => {
     if (nodes.length === 0) return false;
@@ -183,8 +186,13 @@ export default function EditPromotionChainPage() {
         const mappedNodes: ChainNode[] = sorted.map((d, index, arr) => {
           const fromRank = d.posCodeId ?? 0;
           const prevFromRank = index > 0 ? (arr[index - 1].posCodeId ?? fromRank) : fromRank;
-          // ตรวจสอบว่าเป็น placeholder หรือไม่ (ไม่มี personnelId หรือ nationalId)
-          const isPlaceholder = !d.personnelId && !d.nationalId;
+          // ตรวจสอบว่าเป็น placeholder หรือไม่
+          // 1. ถ้ามี field isPlaceholder ให้ใช้ค่านั้น
+          // 2. ถ้าไม่มี ให้ตรวจสอบจาก personnelId และ nationalId
+          const isPlaceholder = d.isPlaceholder === true || 
+            (!d.personnelId || !d.nationalId || 
+             (typeof d.personnelId === 'string' && d.personnelId.trim() === '') || 
+             (typeof d.nationalId === 'string' && d.nationalId.trim() === ''));
           return {
             id: `node-${d.id}`,
             nodeOrder: d.sequence ?? index + 1,
@@ -551,30 +559,151 @@ export default function EditPromotionChainPage() {
   };
 
   const handleComplete = async () => {
-    if (!transaction) return;
+    setShowCompleteDialog(false);
     setCompleting(true);
     try {
-      const res = await fetch(`/api/swap-transactions/${transaction.id}/complete`, {
-        method: 'POST',
-      });
-      const json = await res.json();
-      
-      if (!res.ok || json?.success === false) {
-        throw new Error(json?.error || 'ทำเครื่องหมายเสร็จสิ้นไม่สำเร็จ');
+      if (!transaction) return;
+
+      // ตรวจสอบว่าไม่มี placeholder
+      const hasPlaceholder = nodes.some(n => n.isPlaceholder);
+      if (hasPlaceholder) {
+        toast.error('ไม่สามารถสิ้นสุดได้เนื่องจากมีตำแหน่งว่าง กรุณาเลือกบุคลากรให้ครบก่อน');
+        return;
       }
 
-      toast.success('✓ ทำเครื่องหมายเสร็จสิ้นแล้ว');
-      setShowCompleteDialog(false);
+      const validNodes = nodes.filter(n => !n.isPlaceholder);
+      if (validNodes.length === 0) {
+        toast.error('ต้องมีบุคลากรอย่างน้อย 1 คน');
+        return;
+      }
+
+      const swapDetails = nodes.map((node) => ({
+        sequence: node.nodeOrder,
+        isPlaceholder: node.isPlaceholder || false,
+        personnelId: node.personnelId,
+        noId: node.noId,
+        nationalId: node.nationalId,
+        fullName: node.fullName,
+        rank: node.rank,
+        seniority: node.seniority,
+        posCodeId: node.fromPosCodeId,
+        toPosCodeId: node.toPosCodeId || null,
+        birthDate: node.birthDate,
+        age: node.age,
+        education: node.education,
+        lastAppointment: node.lastAppointment,
+        currentRankSince: node.currentRankSince,
+        enrollmentDate: node.enrollmentDate,
+        retirementDate: node.retirementDate,
+        yearsOfService: node.yearsOfService,
+        trainingLocation: node.trainingLocation,
+        trainingCourse: node.trainingCourse,
+        supportName: node.supporterName,
+        supportReason: node.supportReason,
+        fromPosition: node.fromPosition,
+        fromPositionNumber: node.fromPositionNumber,
+        fromUnit: node.fromUnit,
+        fromActingAs: node.fromActingAs || node.actingAs,
+        toPosition: node.toPosition,
+        toPositionNumber: node.toPositionNumber,
+        toUnit: node.toUnit,
+        toActingAs: node.toActingAs,
+        notes: node.notes || null,
+      }));
+
+      const payload = {
+        year: transaction.year,
+        swapDate: transaction.swapDate,
+        swapType: transaction.swapType,
+        groupName: transaction.groupName,
+        groupNumber: transaction.groupNumber,
+        status: 'completed',
+        isCompleted: true, // สิ้นสุดแล้ว
+        notes: groupNotes.trim() || null,
+        swapDetails,
+      };
+
+      const res = await fetch(`/api/swap-transactions/${transaction.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok || json?.success === false) throw new Error(json?.error || "บันทึกไม่สำเร็จ");
+
+      toast.success("บันทึกและสิ้นสุดรายการสำเร็จ");
       
-      // Reload ข้อมูล
+      // Reload ข้อมูลแทนการ redirect
       const reloadRes = await fetch(`/api/swap-transactions/${transaction.id}`);
       const reloadJson = await reloadRes.json();
       if (reloadRes.ok && reloadJson?.data) {
-        setTransaction(reloadJson.data);
+        const t: TransactionApi = reloadJson.data;
+        setTransaction(t);
+        
+        // Map details → nodes อีกครั้ง
+        const sorted = [...(t.swapDetails || [])].sort((a, b) => {
+          const sa = a.sequence ?? 9999;
+          const sb = b.sequence ?? 9999;
+          if (sa !== sb) return sa - sb;
+          return (a.fullName || "").localeCompare(b.fullName || "");
+        });
+
+        const mappedNodes: ChainNode[] = sorted.map((d, index, arr) => {
+          const fromRank = d.posCodeId ?? 0;
+          const prevFromRank = index > 0 ? (arr[index - 1].posCodeId ?? fromRank) : fromRank;
+          const isPlaceholder = d.isPlaceholder === true || 
+            (!d.personnelId || !d.nationalId || 
+             (typeof d.personnelId === 'string' && d.personnelId.trim() === '') || 
+             (typeof d.nationalId === 'string' && d.nationalId.trim() === ''));
+          
+          return {
+            id: `node-${d.id}`,
+            nodeOrder: d.sequence ?? index + 1,
+            isPlaceholder,
+            personnelId: d.personnelId ?? undefined,
+            noId: d.noId ? parseInt(d.noId) : undefined,
+            nationalId: d.nationalId ?? undefined,
+            fullName: d.fullName,
+            rank: d.rank ?? undefined,
+            seniority: d.seniority ?? undefined,
+            birthDate: d.birthDate ?? undefined,
+            age: d.age ?? undefined,
+            education: d.education ?? undefined,
+            lastAppointment: d.lastAppointment ?? undefined,
+            currentRankSince: d.currentRankSince ?? undefined,
+            enrollmentDate: d.enrollmentDate ?? undefined,
+            retirementDate: d.retirementDate ?? undefined,
+            yearsOfService: d.yearsOfService ?? undefined,
+            trainingLocation: d.trainingLocation ?? undefined,
+            trainingCourse: d.trainingCourse ?? undefined,
+            supporterName: d.supportName ?? undefined,
+            supportReason: d.supportReason ?? undefined,
+            notes: d.notes ?? undefined,
+            fromPosCodeId: d.posCodeId ?? 0,
+            fromPosCodeName: d.posCodeMaster?.name ?? undefined,
+            fromPosition: d.fromPosition ?? "",
+            fromPositionNumber: d.fromPositionNumber ?? undefined,
+            fromUnit: d.fromUnit ?? "",
+            actingAs: d.fromActingAs ?? undefined,
+            fromActingAs: d.fromActingAs ?? undefined,
+            toPosCodeId: d.toPosCodeId ?? 0,
+            toPosCodeName: d.toPosCodeMaster?.name ?? undefined,
+            toPosition: d.toPosition ?? "",
+            toPositionNumber: d.toPositionNumber ?? undefined,
+            toUnit: d.toUnit ?? "",
+            toActingAs: d.toActingAs ?? undefined,
+            fromRankLevel: fromRank,
+            toRankLevel: prevFromRank,
+            isPromotionValid: true,
+          };
+        });
+
+        setNodes(mappedNodes);
+        setGroupNotes(t.notes || '');
       }
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || 'เกิดข้อผิดพลาด');
+      toast.error(e?.message || "เกิดข้อผิดพลาดในการบันทึก");
     } finally {
       setCompleting(false);
     }
@@ -704,14 +833,21 @@ export default function EditPromotionChainPage() {
         const mappedNodes: ChainNode[] = sorted.map((d, index, arr) => {
           const fromRank = d.posCodeId ?? 0;
           const prevFromRank = index > 0 ? (arr[index - 1].posCodeId ?? fromRank) : fromRank;
+          // ตรวจสอบว่าเป็น placeholder หรือไม่
+          const isPlaceholder = d.isPlaceholder === true || 
+            (!d.personnelId || !d.nationalId || 
+             (typeof d.personnelId === 'string' && d.personnelId.trim() === '') || 
+             (typeof d.nationalId === 'string' && d.nationalId.trim() === ''));
+          
           return {
             id: `node-${d.id}`,
             nodeOrder: d.sequence ?? index + 1,
+            isPlaceholder,
             personnelId: d.personnelId ?? undefined,
             noId: d.noId ? parseInt(d.noId) : undefined,
-            nationalId: d.nationalId ?? "",
+            nationalId: d.nationalId ?? undefined,
             fullName: d.fullName,
-            rank: d.rank ?? "",
+            rank: d.rank ?? undefined,
             seniority: d.seniority ?? undefined,
             birthDate: d.birthDate ?? undefined,
             age: d.age ?? undefined,
@@ -877,6 +1013,7 @@ export default function EditPromotionChainPage() {
                 onInsertNode={handleInsertNode}
                 onAddPlaceholder={handleAddPlaceholder}
                 onInsertPlaceholder={handleInsertPlaceholder}
+                isCompleted={transaction?.isCompleted || false}
                 onReorder={(reorderedNodes: ChainNode[]) => {
                   // อัปเดต nodeOrder และตำแหน่ง to ของแต่ละ node
                   // fromPosCodeId และ fromPosCodeName ไม่เปลี่ยนแปลง เพราะเป็นตำแหน่งปัจจุบันของบุคลากร
@@ -964,27 +1101,40 @@ export default function EditPromotionChainPage() {
                   ยกเลิก
                 </Button>
                 
-                {/* ปุ่มสิ้นสุด - แสดงเฉพาะเมื่อไม่มี placeholder */}
-                {!hasPlaceholder && !transaction?.isCompleted && (
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  size={isMobile ? 'medium' : 'large'}
+                  startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />} 
+                  onClick={handleSave} 
+                  disabled={!isChainValid || saving || completing || nodes.length === 0}
+                  fullWidth={isMobile}
+                  sx={{ 
+                    minHeight: { xs: '48px', sm: 'auto' },
+                    fontSize: { xs: '0.875rem', md: '1rem' },
+                    fontWeight: 600
+                  }}
+                >
+                  {saving ? "กำลังบันทึก..." : hasPlaceholder ? 'บันทึก' : "บันทึกการแก้ไข"}
+                </Button>
+
+                                {/* ปุ่มสิ้นสุด - แสดงเฉพาะเมื่อไม่มี placeholder */}
+                {!hasPlaceholder && !transaction?.isCompleted && nodes.length > 0 && (
                   <Button 
                     variant="outlined" 
                     color="success"
                     size={isMobile ? 'medium' : 'large'}
-                    startIcon={<CheckCircleIcon />} 
+                    startIcon={completing ? <CircularProgress size={20} /> : <CheckIcon />} 
                     onClick={() => setShowCompleteDialog(true)} 
                     disabled={!isChainValid || saving || completing || nodes.length === 0}
                     fullWidth={isMobile}
                     sx={{ 
-                      minHeight: { xs: '44px', sm: 'auto' },
+                      minHeight: { xs: '48px', sm: 'auto' },
                       fontSize: { xs: '0.875rem', md: '1rem' },
-                      fontWeight: 600,
-                      borderWidth: 2,
-                      '&:hover': {
-                        borderWidth: 2,
-                      }
+                      fontWeight: 600
                     }}
                   >
-                    สิ้นสุด
+                    {completing ? 'กำลังบันทึก...' : 'บันทึกและสิ้นสุด'}
                   </Button>
                 )}
 
@@ -1006,63 +1156,114 @@ export default function EditPromotionChainPage() {
                     {completing ? 'กำลังยกเลิก...' : 'ยกเลิกการสิ้นสุด'}
                   </Button>
                 )}
-                
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  size={isMobile ? 'medium' : 'large'}
-                  startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />} 
-                  onClick={handleSave} 
-                  disabled={!isChainValid || saving || completing || nodes.length === 0}
-                  fullWidth={isMobile}
-                  sx={{ 
-                    minHeight: { xs: '48px', sm: 'auto' },
-                    fontSize: { xs: '0.875rem', md: '1rem' },
-                    fontWeight: 600
-                  }}
-                >
-                  {saving ? "กำลังบันทึก..." : hasPlaceholder ? 'บันทึก' : "บันทึกการแก้ไข"}
-                </Button>
+
               </Box>
             </Paper>
 
-            {/* Dialog ยืนยันการสิ้นสุด */}
+            {/* Complete Confirmation Dialog */}
             <Dialog
               open={showCompleteDialog}
-              onClose={() => setShowCompleteDialog(false)}
+              onClose={() => !completing && setShowCompleteDialog(false)}
               maxWidth="sm"
               fullWidth
+              PaperProps={{
+                sx: {
+                  borderRadius: 2,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                }
+              }}
             >
-              <DialogTitle sx={{ fontWeight: 600 }}>
-                ยืนยันการทำเครื่องหมายเสร็จสิ้น
+              <DialogTitle sx={{ 
+                pb: 2,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                bgcolor: 'success.50',
+                borderBottom: '2px solid',
+                borderColor: 'success.main',
+              }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  bgcolor: 'success.main',
+                  color: 'white',
+                }}>
+                  <CheckCircleIcon sx={{ fontSize: 28 }} />
+                </Box>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.dark' }}>
+                    ยืนยันการสิ้นสุดรายการ
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+                  </Typography>
+                </Box>
               </DialogTitle>
-              <DialogContent>
-                <DialogContentText>
-                  คุณต้องการทำเครื่องหมายว่ากลุ่มนี้เสร็จสิ้นแล้วใช่หรือไม่?
-                  <br /><br />
-                  <strong>หมายเหตุ:</strong> การทำเครื่องหมายนี้แสดงว่าการจัดตำแหน่งว่างของกลุ่มนี้เสร็จสมบูรณ์แล้ว 
-                  ไม่มีตำแหน่งว่างที่เป็น placeholder อีกต่อไป
-                  <br /><br />
-                  คุณยังสามารถยกเลิกการทำเครื่องหมายนี้ได้ในภายหลัง หากต้องการแก้ไขเพิ่มเติม
-                </DialogContentText>
+              <DialogContent sx={{ pt: 3, pb: 2 }}>
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body1" sx={{ mb: 2, fontWeight: 500, mt: 1 }}>
+                    คุณต้องการสิ้นสุดรายการนี้ใช่หรือไม่?
+                  </Typography>
+                  <Paper sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip label="ตำแหน่งว่าง" size="small" color="primary" />
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {vacantPosition?.posCodeName || ''} • {vacantPosition?.position || ''}
+                          {vacantPosition?.positionNumber && ` (${vacantPosition.positionNumber})`}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip label="จำนวนบุคลากร" size="small" color="success" />
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {nodes.filter(n => !n.isPlaceholder).length} คน
+                        </Typography>
+                      </Box>
+                      {transaction?.groupNumber && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Chip label="เลขกลุ่ม" size="small" color="default" />
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {transaction.groupNumber}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Paper>
+                </Box>
+                <Box sx={{ 
+                  p: 2, 
+                  bgcolor: 'info.50', 
+                  borderRadius: 1,
+                  borderLeft: '4px solid',
+                  borderColor: 'info.main',
+                }}>
+                  <Typography variant="body2" sx={{ color: 'info.dark', fontWeight: 500 }}>
+                    💡 เมื่อสิ้นสุดแล้ว รายการนี้จะถูกบันทึกและทำเครื่องหมายว่าเสร็จสมบูรณ์
+                  </Typography>
+                </Box>
               </DialogContent>
-              <DialogActions sx={{ p: 2, gap: 1 }}>
-                <Button 
-                  onClick={() => setShowCompleteDialog(false)} 
+              <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+                <Button
+                  onClick={() => setShowCompleteDialog(false)}
                   disabled={completing}
                   variant="outlined"
+                  sx={{ minWidth: 100 }}
                 >
                   ยกเลิก
                 </Button>
-                <Button 
-                  onClick={handleComplete} 
+                <Button
+                  onClick={handleComplete}
                   disabled={completing}
                   variant="contained"
                   color="success"
                   startIcon={completing ? <CircularProgress size={20} /> : <CheckCircleIcon />}
-                  sx={{ fontWeight: 600 }}
+                  sx={{ minWidth: 120, fontWeight: 600 }}
                 >
-                  {completing ? 'กำลังดำเนินการ...' : 'ยืนยัน'}
+                  {completing ? 'กำลังบันทึก...' : 'ยืนยันสิ้นสุด'}
                 </Button>
               </DialogActions>
             </Dialog>

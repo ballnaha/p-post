@@ -27,6 +27,7 @@ import {
   DragIndicator as DragIndicatorIcon,
   CheckBox as CheckBoxIcon,
   CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
+  TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import CandidateSelector from './CandidateSelector';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
@@ -94,6 +95,7 @@ interface PromotionChainTableProps {
   onReorder?: (nodes: ChainNode[]) => void;
   onAddPlaceholder?: () => void; // สำหรับเพิ่มตำแหน่งว่างต่อท้าย
   onInsertPlaceholder?: (beforeNodeId: string) => void; // สำหรับแทรกตำแหน่งว่าง
+  isCompleted?: boolean; // ถ้า true จะไม่แสดงปุ่มเพิ่ม placeholder
 }
 
 export default function PromotionChainTable({
@@ -105,6 +107,7 @@ export default function PromotionChainTable({
   onReorder,
   onAddPlaceholder,
   onInsertPlaceholder,
+  isCompleted = false,
 }: PromotionChainTableProps) {
   const theme = useTheme();
   const toast = useToast();
@@ -555,14 +558,23 @@ export default function PromotionChainTable({
                       <Chip label={node.nodeOrder} color="primary" size="small" sx={{ fontWeight: 700, height: 22, fontSize: '0.75rem' }} />
                     </TableCell>
                     <TableCell sx={{ py: 1 }}>
-                      <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', lineHeight: 1.3 }}>
-                        {node.rank} {node.fullName}
-                      </Typography>
-                      {node.seniority && (
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                          อาวุโส {node.seniority}
-                        </Typography>
-                      )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        {node.toPosCodeId > 0 && node.fromPosCodeId > 0 && node.toPosCodeId < node.fromPosCodeId && (
+                          <Tooltip title="เลื่อนตำแหน่ง">
+                            <TrendingUpIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                          </Tooltip>
+                        )}
+                        <Box>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', lineHeight: 1.3 }}>
+                            {node.rank} {node.fullName}
+                          </Typography>
+                          {node.seniority && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                              อาวุโส {node.seniority}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
                     </TableCell>
                     <TableCell sx={{ py: 1 }}>
                       <Box>
@@ -609,7 +621,7 @@ export default function PromotionChainTable({
                             </IconButton>
                           </Tooltip>
                         )}
-                        {onInsertPlaceholder && (
+                        {onInsertPlaceholder && !isCompleted && (
                           <Tooltip title="แทรกตำแหน่งว่าง">
                             <IconButton 
                               size="small" 
@@ -663,7 +675,7 @@ export default function PromotionChainTable({
               >
                 {nodes.length === 0 ? 'เพิ่มบุคลากรคนแรก' : 'เพิ่มบุคลากรคนถัดไป'}
               </Button>
-              {onAddPlaceholder && (
+              {onAddPlaceholder && !isCompleted && (
                 <Button
                   variant="outlined"
                   startIcon={<AddIcon />}
@@ -749,9 +761,14 @@ export default function PromotionChainTable({
               const node = nodes.find(n => n.id === nodeToDelete);
               return node ? (
                 <Box sx={{ mt: 2, p: 1.5, bgcolor: 'error.50', borderRadius: 1, border: '1px solid', borderColor: 'error.main' }}>
-                  <Typography variant="body2" component="div" fontWeight={600} sx={{ color: 'error.dark' }}>
-                    {node.rank} {node.fullName}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {node.toPosCodeId > 0 && node.fromPosCodeId > 0 && node.toPosCodeId < node.fromPosCodeId && (
+                      <TrendingUpIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                    )}
+                    <Typography variant="body2" component="div" fontWeight={600} sx={{ color: 'error.dark' }}>
+                      {node.rank} {node.fullName}
+                    </Typography>
+                  </Box>
                   <Typography variant="caption" component="div" color="text.secondary">
                     ลำดับที่ {node.nodeOrder}
                   </Typography>

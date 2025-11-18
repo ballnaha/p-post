@@ -967,20 +967,20 @@ export default function PromotionChainPage() {
                           <TableCell>
                             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                               <Chip label={row.groupNumber || '-'} color="primary" size="small" variant="outlined" sx={{ fontWeight: 600 }} />
-                              {row.isCompleted && (
-                                <Chip 
-                                  label="✓ เสร็จสิ้น" 
-                                  color="success" 
-                                  size="small" 
-                                  sx={{ fontWeight: 600, height: 24 }} 
-                                />
-                              )}
+                              
                             </Box>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2" fontWeight={600}>
-                              {row.groupName || '-'}
-                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              {row.isCompleted && (
+                                <Tooltip title="จัดตำแหน่งเสร็จสิ้นแล้ว">
+                                  <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                                </Tooltip>
+                              )}
+                              <Typography variant="body2" fontWeight={600}>
+                                {row.groupName || '-'}
+                              </Typography>
+                            </Box>
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -1087,6 +1087,9 @@ export default function PromotionChainPage() {
                                           );
                                         }
                                         
+                                        // ตรวจสอบว่าเป็นการเลื่อนตำแหน่งหรือไม่ (toPosCodeId < posCodeId = เลื่อนขึ้น)
+                                        const isPromotion = d.toPosCodeId && d.posCodeId && d.toPosCodeId > 0 && d.posCodeId > 0 && d.toPosCodeId < d.posCodeId;
+                                        
                                         return (
                                         <TableRow 
                                           key={d.id} 
@@ -1102,7 +1105,16 @@ export default function PromotionChainPage() {
                                             <DragIndicatorIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                                           </TableCell>
                                           <TableCell>{d.sequence ?? '-'}</TableCell>
-                                          <TableCell><strong>{d.rank ? `${d.rank} ` : ''}{d.fullName}</strong></TableCell>
+                                          <TableCell>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                              {isPromotion && (
+                                                <Tooltip title="เลื่อนตำแหน่ง">
+                                                  <TrendingUpIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                                                </Tooltip>
+                                              )}
+                                              <strong>{d.rank ? `${d.rank} ` : ''}{d.fullName}</strong>
+                                            </Box>
+                                          </TableCell>
                                           <TableCell>
                                             {d.posCodeMaster ? (
                                               <Chip label={`${d.posCodeMaster.id} - ${d.posCodeMaster.name}`} size="small" color="primary" variant="outlined" sx={{ fontSize: '0.75rem' }} />
@@ -1205,9 +1217,16 @@ export default function PromotionChainPage() {
                             />
                           )}
                         </Box>
-                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '1.15rem' }}>
-                          {chain.groupName || 'ไม่ระบุชื่อกลุ่ม'}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                          {chain.isCompleted && (
+                            <Tooltip title="จัดตำแหน่งเสร็จสิ้นแล้ว">
+                              <CheckCircleIcon sx={{ color: 'success.main', fontSize: 22 }} />
+                            </Tooltip>
+                          )}
+                          <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.15rem' }}>
+                            {chain.groupName || 'ไม่ระบุชื่อกลุ่ม'}
+                          </Typography>
+                        </Box>
                         <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.9rem' }}>
                           <CalendarIcon sx={{ fontSize: 16 }} />
                           {formatDate(chain.swapDate)}
@@ -1240,6 +1259,8 @@ export default function PromotionChainPage() {
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {details.map((detail, index) => {
                           const isPlaceholder = detail.isPlaceholder || (!detail.personnelId && !detail.nationalId);
+                          // ตรวจสอบว่าเป็นการเลื่อนตำแหน่งหรือไม่ (toPosCodeId < posCodeId = เลื่อนขึ้น)
+                          const isPromotion = detail.toPosCodeId && detail.posCodeId && detail.toPosCodeId > 0 && detail.posCodeId > 0 && detail.toPosCodeId < detail.posCodeId;
                           
                           return (
                           <Box 
@@ -1269,7 +1290,7 @@ export default function PromotionChainPage() {
                                     />
                                   )}
                                   <Typography variant="body2" sx={{ color: 'warning.dark', fontWeight: 600, fontSize: '0.875rem' }}>
-                                    <strong>→ ไป:</strong> {detail.toPosition || '-'}
+                                    <strong>→ ไป:</strong> {detail.toPosition || '-'} 
                                     {detail.toPositionNumber && ` (${detail.toPositionNumber})`}
                                     {detail.toUnit && ` • ${detail.toUnit}`}
                                   </Typography>
@@ -1279,9 +1300,16 @@ export default function PromotionChainPage() {
                               <>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                                   <Box>
-                                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem', mb: 0.5 }}>
-                                      {detail.sequence ?? index + 1}. {detail.rank ? `${detail.rank} ` : ''}{detail.fullName}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                      {isPromotion && (
+                                        <Tooltip title="เลื่อนตำแหน่ง">
+                                          <TrendingUpIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                                        </Tooltip>
+                                      )}
+                                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                        {detail.sequence ?? index + 1}. {detail.rank ? `${detail.rank} ` : ''}{detail.fullName}
+                                      </Typography>
+                                    </Box>
                                     {detail.posCodeMaster && (
                                       <Chip 
                                         label={`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`}

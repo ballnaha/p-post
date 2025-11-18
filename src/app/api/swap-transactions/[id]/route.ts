@@ -66,7 +66,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { year, swapDate, swapType, groupName, groupNumber, status, notes, startingPersonnel, swapDetails } = body;
+    const { year, swapDate, swapType, groupName, groupNumber, status, isCompleted, notes, startingPersonnel, swapDetails } = body;
 
     // ตรวจสอบว่ามีข้อมูลอยู่หรือไม่
     const existingTransaction = await prisma.swapTransaction.findUnique({
@@ -88,6 +88,7 @@ export async function PUT(
     if (groupName !== undefined) updateData.groupName = groupName;
     if (groupNumber !== undefined) updateData.groupNumber = groupNumber;
     if (status !== undefined) updateData.status = status;
+    if (isCompleted !== undefined) updateData.isCompleted = isCompleted;
     if (notes !== undefined) updateData.notes = notes;
 
     // ถ้ามีการอัพเดท swapDetails

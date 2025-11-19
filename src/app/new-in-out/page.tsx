@@ -51,6 +51,7 @@ import {
   InfoOutline,
   ChangeHistory,
   LocationOn,
+  KeyboardArrowUp as KeyboardArrowUpIcon,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
 import DataTablePagination from '@/components/DataTablePagination';
@@ -292,6 +293,9 @@ export default function InOutPage() {
   const [personnelDetailModalOpen, setPersonnelDetailModalOpen] = useState(false);
   const [selectedPersonnelForDetail, setSelectedPersonnelForDetail] = useState<SwapDetail | null>(null);
   
+  // Back to top button state
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  
   // Store filter options (loaded once)
   const [filterOptions, setFilterOptions] = useState<{
     units: string[];
@@ -397,6 +401,9 @@ export default function InOutPage() {
       // Clear old data
       setData(null);
       
+      // ถ้า rowsPerPage = -1 (ทั้งหมด) ให้ส่ง pageSize เป็น 999999
+      const effectivePageSize = rowsPerPage === -1 ? 999999 : rowsPerPage;
+      
       const params = new URLSearchParams({
         unit: selectedUnit,
         posCodeId: selectedPosCode,
@@ -404,7 +411,7 @@ export default function InOutPage() {
         swapType: selectedSwapType,
         year: selectedYear.toString(),
         page: page.toString(),
-        pageSize: rowsPerPage.toString(),
+        pageSize: effectivePageSize.toString(),
       });
       
       console.log('[Frontend] Fetching with params:', {
@@ -414,7 +421,7 @@ export default function InOutPage() {
         swapType: selectedSwapType,
         year: selectedYear,
         page,
-        pageSize: rowsPerPage
+        pageSize: effectivePageSize
       });
       
       if (searchText.trim()) {
@@ -464,6 +471,31 @@ export default function InOutPage() {
   useEffect(() => {
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Scroll listener สำหรับ back to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      // หา main content container ที่มี scroll
+      const mainContent = document.querySelector('main');
+      if (mainContent) {
+        setShowBackToTop(mainContent.scrollTop > 300);
+      } else {
+        // fallback ถ้าไม่เจอ main element
+        setShowBackToTop(window.scrollY > 300);
+      }
+    };
+
+    // ฟัง scroll event จาก main content container
+    const mainContent = document.querySelector('main');
+    if (mainContent) {
+      mainContent.addEventListener('scroll', handleScroll);
+      return () => mainContent.removeEventListener('scroll', handleScroll);
+    } else {
+      // fallback
+      window.addEventListener('scroll', handleScroll);
+      return () => window.removeEventListener('scroll', handleScroll);
+    }
   }, []);
 
   // Load data when filters change (with debounce) - only after user interaction
@@ -734,6 +766,24 @@ export default function InOutPage() {
   const handleClosePersonnelDetailModal = () => {
     setPersonnelDetailModalOpen(false);
     setSelectedPersonnelForDetail(null);
+  };
+
+  // Scroll to top function
+  const scrollToTop = () => {
+    // หา main content container ที่มี scroll
+    const mainContent = document.querySelector('main');
+    if (mainContent) {
+      mainContent.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    } else {
+      // fallback ถ้าไม่เจอ main element
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
   };
 
   return (
@@ -1109,8 +1159,32 @@ export default function InOutPage() {
           <Paper elevation={2} sx={{ 
             p: 0,
             borderRadius: 1,
-            overflow: 'hidden'
+            overflow: 'hidden',
+            position: 'relative'
           }}>
+            {/* Loading Indicator สำหรับการโหลดข้อมูลจำนวนมาก */}
+            {loading && rowsPerPage === -1 && (
+              <Box sx={{ 
+                position: 'absolute', 
+                top: 0, 
+                left: 0, 
+                right: 0, 
+                bgcolor: alpha(theme.palette.primary.main, 0.95),
+                color: 'white',
+                py: 1.5,
+                px: 2,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                zIndex: 10,
+                boxShadow: 2
+              }}>
+                <CircularProgress size={20} sx={{ color: 'white' }} />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  กำลังโหลดข้อมูลทั้งหมด กรุณารอสักครู่...
+                </Typography>
+              </Box>
+            )}
             <TableContainer>
               <Table>
                 <TableHead>
@@ -1179,8 +1253,8 @@ export default function InOutPage() {
                 </TableHead>
                 <TableBody>
                   {loading ? (
-                    // Skeleton Loading Rows
-                    Array.from({ length: rowsPerPage }).map((_, index) => (
+                    // Skeleton Loading Rows - แสดงจำนวนที่เหมาะสม
+                    Array.from({ length: rowsPerPage === -1 ? 20 : Math.min(rowsPerPage, 20) }).map((_, index) => (
                       <TableRow key={`skeleton-${index}`}>
                         <TableCell sx={{ py: 0.75, px: 1.5 }}>
                           <Skeleton variant="text" width={20} height={18} />
@@ -1600,7 +1674,7 @@ export default function InOutPage() {
               rowsPerPage={rowsPerPage}
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
-              rowsPerPageOptions={[5, 10, 25, 50]}
+              rowsPerPageOptions={[5, 10, 25, 50, 100, -1]}
               variant="minimal"
               disabled={loading}
             />
@@ -1608,10 +1682,29 @@ export default function InOutPage() {
         ) : (
           /* Card View - Mobile */
           <Box>
+            {/* Loading Indicator สำหรับการโหลดข้อมูลจำนวนมาก - Mobile */}
+            {loading && rowsPerPage === -1 && (
+              <Paper sx={{ 
+                bgcolor: alpha(theme.palette.primary.main, 0.95),
+                color: 'white',
+                py: 2,
+                px: 2,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                mb: 2,
+                boxShadow: 2
+              }}>
+                <CircularProgress size={20} sx={{ color: 'white' }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                  กำลังโหลดข้อมูลทั้งหมด...
+                </Typography>
+              </Paper>
+            )}
             {loading ? (
-              // Skeleton Loading Cards
+              // Skeleton Loading Cards - แสดงจำนวนที่เหมาะสม
               <Stack spacing={2}>
-                {Array.from({ length: rowsPerPage }).map((_, index) => (
+                {Array.from({ length: rowsPerPage === -1 ? 15 : Math.min(rowsPerPage, 15) }).map((_, index) => (
                   <Card key={`skeleton-card-${index}`}>
                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                       {/* Header */}
@@ -1828,7 +1921,7 @@ export default function InOutPage() {
                     rowsPerPage={rowsPerPage}
                     onPageChange={handleChangePage}
                     onRowsPerPageChange={handleChangeRowsPerPage}
-                    rowsPerPageOptions={[5, 10, 25]}
+                    rowsPerPageOptions={[5, 10, 25, 50, -1]}
                     variant="minimal"
                     disabled={loading}
                   />
@@ -1880,6 +1973,33 @@ export default function InOutPage() {
           />
         )}
       </Box>
+
+      {/* Back to Top Button - แสดงตลอดเวลาเพื่อ debug */}
+      <Tooltip title="กลับไปด้านบน" placement="left">
+        <IconButton
+          onClick={scrollToTop}
+          sx={{
+            position: 'fixed',
+            bottom: { xs: 16, sm: 24 },
+            right: { xs: 16, sm: 24 },
+            bgcolor: 'primary.main',
+            color: 'white',
+            width: { xs: 48, sm: 56 },
+            height: { xs: 48, sm: 56 },
+            boxShadow: 4,
+            zIndex: 1300,
+            opacity: showBackToTop ? 1 : 0.3,
+            '&:hover': {
+              bgcolor: 'primary.dark',
+              boxShadow: 6,
+              transform: 'scale(1.1)',
+            },
+            transition: 'all 0.3s ease',
+          }}
+        >
+          <KeyboardArrowUpIcon sx={{ fontSize: { xs: 28, sm: 32 } }} />
+        </IconButton>
+      </Tooltip>
     </Layout>
   );
 }

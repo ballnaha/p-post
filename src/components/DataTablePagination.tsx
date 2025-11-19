@@ -57,13 +57,16 @@ export default function DataTablePagination({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const isSmallScreen = isMobile || isTablet;
-  const totalPages = Math.max(1, Math.ceil(count / rowsPerPage));
+  
+  // รองรับ rowsPerPage = -1 สำหรับแสดงทั้งหมด
+  const effectiveRowsPerPage = rowsPerPage === -1 ? count : rowsPerPage;
+  const totalPages = Math.max(1, Math.ceil(count / effectiveRowsPerPage));
   const isFirst = page <= 0;
   const isLast = page >= totalPages - 1;
 
   if (variant === 'minimal') {
-    const startItem = count === 0 ? 0 : page * rowsPerPage + 1;
-    const endItem = Math.min((page + 1) * rowsPerPage, count);
+    const startItem = count === 0 ? 0 : page * effectiveRowsPerPage + 1;
+    const endItem = Math.min((page + 1) * effectiveRowsPerPage, count);
 
     const baseMinimalSx = { 
         display: 'flex', 
@@ -120,7 +123,7 @@ export default function DataTablePagination({
                 >
                   {rowsPerPageOptions.map((opt) => (
                     <MenuItem key={opt} value={opt}>
-                      {opt}
+                      {opt === -1 ? 'ทั้งหมด' : opt}
                     </MenuItem>
                   ))}
                 </Select>
@@ -210,7 +213,7 @@ export default function DataTablePagination({
               >
                 {rowsPerPageOptions.map((opt) => (
                   <MenuItem key={opt} value={opt} sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}>
-                    {opt}
+                    {opt === -1 ? 'ทั้งหมด' : opt}
                   </MenuItem>
                 ))}
               </Select>

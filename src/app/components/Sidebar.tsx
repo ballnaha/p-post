@@ -111,9 +111,9 @@ const Sidebar: React.FC = () => {
         },
         { 
           label: 'In-Out', 
-          href: '/in-out', 
+          href: '/new-in-out', 
           icon: <TableViewIcon sx={{ fontSize: 20 }} />, 
-          key: 'in-out' 
+          key: 'new-in-out' 
         },
       ]
     },

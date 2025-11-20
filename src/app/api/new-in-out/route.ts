@@ -303,20 +303,33 @@ export async function GET(request: NextRequest) {
                 
                 let replaced = null;
                 
+                // ฟังก์ชันช่วยเช็คว่าเป็น placeholder หรือไม่
+                const isPlaceholder = (person: any) => {
+                    const fullName = person.fullName?.trim() || '';
+                    return ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)', ''].includes(fullName);
+                };
+                
                 if (detail.toPositionNumber) {
                     replaced = transactionPeople.find(d => 
-                        d.id !== detail.id && d.fromPositionNumber === detail.toPositionNumber
+                        d.id !== detail.id && 
+                        d.fromPositionNumber === detail.toPositionNumber &&
+                        !isPlaceholder(d)  // ไม่เอา placeholder
                     );
                 }
                 
                 if (!replaced && detail.toPosition) {
                     replaced = transactionPeople.find(d => 
-                        d.id !== detail.id && d.fromPosition === detail.toPosition
+                        d.id !== detail.id && 
+                        d.fromPosition === detail.toPosition &&
+                        !isPlaceholder(d)  // ไม่เอา placeholder
                     );
                 }
                 
                 if (!replaced && detail.transaction?.swapType === 'two-way' && transactionPeople.length === 2) {
-                    replaced = transactionPeople.find(d => d.id !== detail.id);
+                    replaced = transactionPeople.find(d => 
+                        d.id !== detail.id &&
+                        !isPlaceholder(d)  // ไม่เอา placeholder
+                    );
                 }
 
                 paginatedData[index].replacedPerson = replaced ? {

@@ -1568,27 +1568,33 @@ export default function InOutPage() {
                                     {joinInline(replaced.fromUnit, replaced.fromPositionNumber ? `#${replaced.fromPositionNumber}` : null)}
                                   </Typography>
                                 </>
-                              ) : detail.transaction ? (
-                                /* ถ้ามี transaction แต่ไม่มี replaced (ตำแหน่งว่าง) แสดงตำแหน่งที่จะไปรับ */
-                                <>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
-                                    {highlightText(detail.toPosition || detail.fromPosition || '-', highlightTerms)}
-                                  </Typography>
-                                  {(detail.toPosCodeMaster || detail.posCodeMaster) && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {detail.toPosCodeMaster ?
-                                        highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`) :
-                                        detail.posCodeMaster ? highlightPosCode(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`) : ''
-                                      }
+                              ) : detail.transaction && detail.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? (
+                                /* ถ้ามี transaction และมีคนจริง (ไม่ใช่ว่าง/placeholder) แสดงตำแหน่งที่จะไปรับ */
+                                detail.toPosition ? (
+                                  <>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                      {highlightText(detail.toPosition, highlightTerms)}
                                     </Typography>
-                                  )}
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
-                                    {detail.toUnit ?
-                                      renderNewPositionWithHighlight(null, detail.toUnit, detail.toPositionNumber || null) :
-                                      renderPositionWithHighlight(null, detail.fromUnit, detail.fromPositionNumber || null)
-                                    }
-                                  </Typography>
-                                </>
+                                    {detail.toPosCodeMaster && (
+                                      <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                        {highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`)}
+                                      </Typography>
+                                    )}
+                                    {detail.toUnit && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                        {renderNewPositionWithHighlight(null, detail.toUnit, detail.toPositionNumber || null)}
+                                      </Typography>
+                                    )}
+                                  </>
+                                ) : (
+                                  <Chip
+                                    label="กำลังรอพิจารณาตำแหน่ง"
+                                    size="small"
+                                    color="warning"
+                                    variant="outlined"
+                                    sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                  />
+                                )
                               ) : detail.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? (
                                 /* ถ้าไม่มี transaction และไม่ใช่ตำแหน่งว่าง แสดงตำแหน่งปัจจุบัน */
                                 <>
@@ -1605,20 +1611,14 @@ export default function InOutPage() {
                                   </Typography>
                                 </>
                               ) : (
-                                /* ตำแหน่งว่างและไม่มี transaction */
-                                <>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
-                                    {highlightText(detail.fromPosition || '-', highlightTerms)}
-                                  </Typography>
-                                  {detail.posCodeMaster && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
-                                    </Typography>
-                                  )}
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
-                                    {joinInlineWithHighlight(highlightTerms, detail.fromUnit, detail.fromPositionNumber ? `#${detail.fromPositionNumber}` : null)}
-                                  </Typography>
-                                </>
+                                /* ตำแหน่งว่าง/placeholder - ไม่แสดงอะไร */
+                                <Chip
+                                  label="-"
+                                  size="small"
+                                  color="default"
+                                  variant="outlined"
+                                  sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                />
                               )}
                             </Box>
                           </TableCell>
@@ -1716,13 +1716,7 @@ export default function InOutPage() {
 
                               </Box>
                             ) : (
-                              <Chip
-                                label="ยังไม่ได้จับคู่"
-                                size="small"
-                                color="error"
-                                variant="outlined"
-                                sx={{ fontWeight: 500, height: 20, fontSize: '0.75rem' }}
-                              />
+                              ''
                             )}
                           </TableCell>
 

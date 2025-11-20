@@ -813,7 +813,7 @@ export default function PromotionPage() {
                                 <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
                                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                     <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                      <CheckCircleIcon color="success" />
+                                      
                                       รายละเอียดขั้นตอน ({row.swapDetails.length})
                                     </Typography>
                                     {editingTransactionId === row.id && (

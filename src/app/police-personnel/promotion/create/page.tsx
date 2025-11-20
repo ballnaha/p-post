@@ -106,6 +106,7 @@ function CreatePromotionContent() {
   const [unitName, setUnitName] = useState<string>('');
   const [unitDescription, setUnitDescription] = useState<string>('');
   const [unitOptions, setUnitOptions] = useState<string[]>([]);
+  const [unitLoading, setUnitLoading] = useState(true);
   
   // อัพเดท toUnit ของ node แรกเมื่อเปลี่ยนหน่วยปลายทาง
   useEffect(() => {
@@ -166,6 +167,7 @@ function CreatePromotionContent() {
   // Fetch unique units from police_personnel
   useEffect(() => {
     const fetchUnits = async () => {
+      setUnitLoading(true);
       try {
         // ใช้ API in-out ที่มี filtersOnly เพื่อดึง unique units
         const response = await fetch('/api/in-out?filtersOnly=true');
@@ -182,6 +184,8 @@ function CreatePromotionContent() {
       } catch (e) {
         console.error('Failed to fetch units:', e);
         setUnitOptions([]);
+      } finally {
+        setUnitLoading(false);
       }
     };
     fetchUnits();
@@ -694,6 +698,8 @@ function CreatePromotionContent() {
               <Autocomplete
                 fullWidth
                 freeSolo
+                loading={unitLoading}
+                disabled={unitLoading}
                 options={unitOptions}
                 value={unitName}
                 onChange={(event, newValue) => {
@@ -706,7 +712,7 @@ function CreatePromotionContent() {
                   <TextField
                     {...params}
                     label="ชื่อหน่วยงานปลายทาง"
-                    placeholder="เลือกหรือพิมพ์ชื่อหน่วยงาน..."
+                    placeholder={unitLoading ? "กำลังโหลดข้อมูลหน่วยงาน..." : "เลือกหรือพิมพ์ชื่อหน่วยงาน..."}
                     variant="outlined"
                     size="small"
                     required

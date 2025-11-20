@@ -183,6 +183,7 @@ export default function PromotionPage() {
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
   
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
+  const [completedFilter, setCompletedFilter] = useState<string>('all'); // 'all' | 'completed' | 'not-completed'
   const [mainSearchText, setMainSearchText] = useState('');
   
   const getAvailableYears = () => {
@@ -546,6 +547,15 @@ export default function PromotionPage() {
   const filteredChains = useMemo(() => {
     let result = chains;
     
+    // Filter by completed status
+    if (completedFilter !== 'all') {
+      if (completedFilter === 'completed') {
+        result = result.filter(c => c.isCompleted === true);
+      } else if (completedFilter === 'not-completed') {
+        result = result.filter(c => c.isCompleted !== true);
+      }
+    }
+    
     if (mainSearchText.trim()) {
       const lower = mainSearchText.toLowerCase();
       result = result.filter(c => {
@@ -562,7 +572,7 @@ export default function PromotionPage() {
       const numB = b.groupNumber || '';
       return numB.localeCompare(numA, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [chains, mainSearchText]);
+  }, [chains, completedFilter, mainSearchText]);
 
   const paginatedChains = useMemo(() => {
     return filteredChains.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
@@ -628,7 +638,7 @@ export default function PromotionPage() {
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', md: '1fr 2fr' }, 
+            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 2fr' }, 
             gap: 2,
             alignItems: 'start'
           }}>
@@ -646,6 +656,21 @@ export default function PromotionPage() {
                     {year}
                   </MenuItem>
                 ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small">
+              <InputLabel id="completed-filter-label">สถานะ</InputLabel>
+              <Select
+                labelId="completed-filter-label"
+                id="completed-filter"
+                value={completedFilter}
+                label="สถานะ"
+                onChange={(e) => setCompletedFilter(e.target.value)}
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                <MenuItem value="completed">ทำเสร็จแล้ว</MenuItem>
+                <MenuItem value="not-completed">ยังไม่เสร็จ</MenuItem>
               </Select>
             </FormControl>
 
@@ -694,6 +719,26 @@ export default function PromotionPage() {
               onClick={() => handleCreateTransfer()}
             >
               เพิ่มรายการย้ายหน่วย
+            </Button>
+          </Paper>
+        ) : filteredChains.length === 0 ? (
+          <Paper sx={{ p: 5, textAlign: 'center' }}>
+            <FilterListIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              ไม่พบข้อมูลที่ค้นหา
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              ลองปรับเปลี่ยนเงื่อนไขการค้นหาหรือตัวกรอง
+            </Typography>
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={() => {
+                setMainSearchText('');
+                setCompletedFilter('all');
+              }}
+            >
+              ล้างตัวกรอง
             </Button>
           </Paper>
         ) : (

@@ -295,13 +295,19 @@ function CreatePromotionChainContent() {
       } else {
         const prevNode = newNodes[index - 1];
         
-        // ถ้า prevNode เป็น placeholder → ให้ข้ามไปหา node ก่อนหน้าที่ไม่ใช่ placeholder
-        // หรือถ้าไม่มีก็ใช้ค่าเดิมของ node นี้
+        // ถ้า prevNode เป็น placeholder → node นี้ควรมีตำแหน่งว่าง เพราะ placeholder ยังไม่มีบุคคลมารับตำแหน่ง
         if (prevNode.isPlaceholder) {
           return {
             ...node,
             nodeOrder: index + 1,
-            // คง toPosition เดิม (ไม่เปลี่ยน)
+            // ให้ตำแหน่งเป็นค่าว่าง
+            toPosCodeId: 0,
+            toPosCodeName: undefined,
+            toPosition: '',
+            toPositionNumber: undefined,
+            toUnit: '',
+            toActingAs: undefined,
+            toRankLevel: 0,
           };
         }
         

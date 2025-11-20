@@ -1350,8 +1350,14 @@ export default function InOutPage() {
                             '&:hover': {
                               bgcolor: 'action.hover'
                             },
-                            borderTop: isNewGroup && index > 0 ? 1 : 0,
-                            borderTopColor: 'divider'
+                            borderTop: isNewGroup && index > 0 ? '2px solid' : 0,
+                            borderTopColor: isNewGroup && index > 0 ? 'primary.main' : 'transparent',
+                            borderBottom: '2px solid',
+                            borderBottomColor: 'divider',
+                            bgcolor: index % 2 === 0 ? 'background.paper' : alpha(theme.palette.grey[50], 0.5),
+                            '& > td': {
+                              borderBottom: 'none'
+                            }
                           }}
                         >
                           {/* # */}
@@ -1442,7 +1448,7 @@ export default function InOutPage() {
 
                           {/* คนครอง - ชื่อคนเดิมที่ครองตำแหน่ง (replaced) หรือตำแหน่งว่าง */}
                           <TableCell sx={{ 
-                            bgcolor: 'grey.50',
+                            bgcolor: alpha(theme.palette.grey[100], 0.5),
                             py: 0.75, 
                             px: 1
                           }}>
@@ -1519,7 +1525,7 @@ export default function InOutPage() {
 
                           {/* ตำแหน่งคนครอง - ตำแหน่งของคนครอง */}
                           <TableCell sx={{ 
-                            bgcolor: 'grey.50',
+                            bgcolor: alpha(theme.palette.grey[100], 0.5),
                             py: 0.75, 
                             px: 1
                           }}>

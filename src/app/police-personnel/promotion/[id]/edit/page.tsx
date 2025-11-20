@@ -155,12 +155,14 @@ export default function EditPromotionPage() {
   const [unitName, setUnitName] = useState<string>('');
   const [unitDescription, setUnitDescription] = useState<string>('');
   const [unitOptions, setUnitOptions] = useState<string[]>([]);
+  const [unitLoading, setUnitLoading] = useState(true);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completing, setCompleting] = useState(false);
 
   // Fetch unique units from police_personnel
   useEffect(() => {
     const fetchUnits = async () => {
+      setUnitLoading(true);
       try {
         const response = await fetch('/api/in-out?filtersOnly=true');
         if (!response.ok) throw new Error('Failed to fetch filters');
@@ -175,6 +177,8 @@ export default function EditPromotionPage() {
       } catch (e) {
         console.error('Failed to fetch units:', e);
         setUnitOptions([]);
+      } finally {
+        setUnitLoading(false);
       }
     };
     fetchUnits();
@@ -984,6 +988,8 @@ export default function EditPromotionPage() {
                 <Autocomplete
                   fullWidth
                   freeSolo
+                  loading={unitLoading}
+                  disabled={unitLoading}
                   options={unitOptions}
                   value={unitName}
                   onChange={(event, newValue) => {
@@ -996,7 +1002,7 @@ export default function EditPromotionPage() {
                     <TextField
                       {...params}
                       label="ชื่อหน่วยงานปลายทาง"
-                      placeholder="เลือกหรือพิมพ์ชื่อหน่วยงาน..."
+                      placeholder={unitLoading ? "กำลังโหลดข้อมูลหน่วยงาน..." : "เลือกหรือพิมพ์ชื่อหน่วยงาน..."}
                       variant="outlined"
                       size="small"
                       required

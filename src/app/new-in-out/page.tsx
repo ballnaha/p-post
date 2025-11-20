@@ -47,6 +47,8 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingFlat as TrendingFlatIcon,
   Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+  Undo as UndoIcon,
   HelpOutline,
   InfoOutline,
   ChangeHistory,
@@ -285,6 +287,13 @@ export default function InOutPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Infinite scroll states
+  const [loadMode, setLoadMode] = useState<'pagination' | 'infinite'>('pagination');
+  const [allData, setAllData] = useState<SwapDetail[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
   // Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -298,6 +307,37 @@ export default function InOutPage() {
 
   // Back to top button state
   const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // Hidden rows state
+  const [hiddenRows, setHiddenRows] = useState<Set<string>>(() => {
+    // โหลด hidden rows จาก localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hiddenRows');
+      if (saved) {
+        try {
+          return new Set(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse hiddenRows from localStorage:', e);
+        }
+      }
+    }
+    return new Set();
+  });
+  const [hiddenRowsHistory, setHiddenRowsHistory] = useState<string[]>(() => {
+    // โหลด history จาก localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hiddenRowsHistory');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Failed to parse hiddenRowsHistory from localStorage:', e);
+        }
+      }
+    }
+    return [];
+  });
+  const [fadingRows, setFadingRows] = useState<Set<string>>(new Set()); // แถวที่กำลัง fade out
 
   // Store filter options (loaded once)
   const [filterOptions, setFilterOptions] = useState<{
@@ -318,6 +358,9 @@ export default function InOutPage() {
     timestamp: 0,
     filters: ''
   });
+
+  // Track current page for infinite scroll
+  const infiniteScrollPageRef = useRef(0);
 
   // Combined highlight terms - เฉพาะจากช่อง search เท่านั้น
   const highlightTerms = useMemo(() => {
@@ -394,7 +437,7 @@ export default function InOutPage() {
       const CACHE_DURATION = 30000; // 30 วินาที
 
       // ใช้ cache ถ้าข้อมูลยังไม่เก่าเกินไปและ filters เหมือนเดิม (และไม่ได้ force reload)
-      if (!forceReload && dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION) {
+      if (!forceReload && dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION && loadMode === 'pagination') {
         setData(dataCacheRef.current.data);
         setInitialLoad(false);
         setLoading(false);
@@ -470,11 +513,114 @@ export default function InOutPage() {
     }
   };
 
+  // Fetch more data for infinite scroll
+  const fetchMoreData = useCallback(async () => {
+    if (loadingMore || !hasMore || loadMode !== 'infinite') {
+      console.log('[Infinite Scroll] Skip - loadingMore:', loadingMore, 'hasMore:', hasMore, 'loadMode:', loadMode);
+      return;
+    }
+
+    try {
+      setLoadingMore(true);
+      
+      // ใช้ ref เพื่อเก็บค่า page ปัจจุบัน
+      const nextPage = infiniteScrollPageRef.current;
+      console.log('[Infinite Scroll] Fetching page:', nextPage, 'Current data length:', allData.length);
+
+      const params = new URLSearchParams({
+        unit: selectedUnit,
+        posCodeId: selectedPosCode,
+        status: selectedStatus,
+        swapType: selectedSwapType,
+        year: selectedYear.toString(),
+        page: nextPage.toString(),
+        pageSize: '50',
+      });
+
+      if (searchText.trim()) {
+        params.append('search', searchText.trim());
+      }
+
+      const response = await fetch(`/api/new-in-out?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch more data');
+
+      const result = await response.json();
+      if (result.success) {
+        const newData = result.data.swapDetails;
+        console.log('[Infinite Scroll] Loaded:', newData.length, 'items from API');
+        
+        if (newData.length === 0 || newData.length < 50) {
+          console.log('[Infinite Scroll] No more data, setting hasMore to false');
+          setHasMore(false);
+        } else {
+          // เพิ่ม page number สำหรับรอบถัดไป
+          infiniteScrollPageRef.current = nextPage + 1;
+          console.log('[Infinite Scroll] Next page will be:', infiniteScrollPageRef.current);
+        }
+        
+        setAllData(prev => {
+          // ป้องกันการเพิ่มข้อมูลซ้ำ
+          const existingIds = new Set(prev.map(d => d.id));
+          const uniqueNewData = newData.filter((d: SwapDetail) => !existingIds.has(d.id));
+          const combined = [...prev, ...uniqueNewData];
+          console.log('[Infinite Scroll] Total items after merge:', combined.length, 'Prev:', prev.length, 'New unique:', uniqueNewData.length);
+          return combined;
+        });
+      }
+      console.log('[Infinite Scroll] Fetch completed successfully');
+    } catch (error) {
+      console.error('[Infinite Scroll] Failed to fetch more data:', error);
+      setHasMore(false); // หยุดโหลดเมื่อเกิด error
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, loadMode, selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, searchText]);
+
+  // บันทึก hidden rows ไป localStorage ทุกครั้งที่เปลี่ยน
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hiddenRows', JSON.stringify(Array.from(hiddenRows)));
+    }
+  }, [hiddenRows]);
+
+  // บันทึก history ไป localStorage ทุกครั้งที่เปลี่ยน
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hiddenRowsHistory', JSON.stringify(hiddenRowsHistory));
+    }
+  }, [hiddenRowsHistory]);
+
   // โหลด filter options ตอน mount (แสดง filters ทันที)
   useEffect(() => {
     fetchFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (loadMode !== 'infinite' || !hasSearched) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          console.log('[Observer] Triggered - loading more data');
+          fetchMoreData();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [loadMode, hasSearched, hasMore, loadingMore, fetchMoreData]);
 
   // Scroll listener สำหรับ back to top button
   useEffect(() => {
@@ -513,7 +659,17 @@ export default function InOutPage() {
     const timer = setTimeout(() => {
       // โหลดข้อมูลทันทีเมื่อ filter เปลี่ยน
       setHasSearched(true);
-      fetchData(abortController.signal);
+      if (loadMode === 'pagination') {
+        fetchData(abortController.signal);
+      } else {
+        // Reset infinite scroll
+        console.log('[Filter Change] Resetting infinite scroll');
+        setAllData([]);
+        setHasMore(true);
+        infiniteScrollPageRef.current = 0; // Reset page counter
+        // เรียก fetchMoreData หลังจาก reset state
+        setTimeout(() => fetchMoreData(), 100);
+      }
     }, 150); // รอ 150ms หลังจาก filter เปลี่ยน
 
     return () => {
@@ -521,14 +677,53 @@ export default function InOutPage() {
       abortController.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, page, rowsPerPage, searchText]);
+  }, [selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, page, rowsPerPage, searchText, loadMode]);
 
   const filteredSwapDetails = useMemo(() => {
+    // ถ้าเป็น infinite scroll mode ใช้ allData
+    if (loadMode === 'infinite') {
+      // ถ้ายังไม่มีข้อมูลเลยและกำลังโหลด ให้ return [] เพื่อแสดง skeleton
+      if (allData.length === 0 && loadingMore) return [];
+      
+      // กรองแถวที่ซ่อนออก
+      const filtered = allData.filter(d => !hiddenRows.has(d.id));
+      console.log('[Infinite Scroll] Displaying:', filtered.length, 'items (hidden:', hiddenRows.size, ')');
+      
+      return [...filtered].sort((a, b) => {
+        const hasTransactionA = !!a.transaction;
+        const hasTransactionB = !!b.transaction;
+        if (hasTransactionA && !hasTransactionB) return -1;
+        if (!hasTransactionA && hasTransactionB) return 1;
+        if (hasTransactionA && hasTransactionB) {
+          const transactionIdA = a.transaction!.id;
+          const transactionIdB = b.transaction!.id;
+          if (transactionIdA !== transactionIdB) {
+            return transactionIdA.localeCompare(transactionIdB);
+          }
+          const sequenceA = a.sequence ?? 999999;
+          const sequenceB = b.sequence ?? 999999;
+          if (sequenceA !== sequenceB) {
+            return sequenceA - sequenceB;
+          }
+        }
+        const noIdA = a.noId || '';
+        const noIdB = b.noId || '';
+        if (noIdA && noIdB) {
+          const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+          if (compareNum !== 0) return compareNum;
+        }
+        if (noIdA && !noIdB) return -1;
+        if (!noIdA && noIdB) return 1;
+        return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+      });
+    }
+
     // ถ้ากำลังโหลด ให้ return [] เพื่อแสดง skeleton
     if (loading || !data?.swapDetails) return [];
 
     // ไม่ต้อง filter ประเภทที่ frontend เพราะ API filter ให้แล้ว
-    const filtered = data.swapDetails;
+    // กรองแถวที่ซ่อนออก
+    const filtered = data.swapDetails.filter(d => !hiddenRows.has(d.id));
 
     // Debug: ตรวจสอบ sequence ที่ได้จาก API
     if (filtered.length > 0 && filtered.some(d => d.transaction)) {
@@ -601,7 +796,7 @@ export default function InOutPage() {
     }
 
     return sorted;
-  }, [data?.swapDetails, loading]);
+  }, [data?.swapDetails, loading, loadMode, allData, loadingMore, hiddenRows]);
 
   const handleUnitChange = (event: SelectChangeEvent<string>) => {
     setInitialLoad(false); // Mark that user has interacted
@@ -649,6 +844,62 @@ export default function InOutPage() {
     setSelectedStatus('all');
     setSelectedSwapType('all');
     setPage(0);
+    setHiddenRows(new Set()); // Reset hidden rows
+    setHiddenRowsHistory([]); // Reset history
+  };
+
+  const handleToggleRowVisibility = (rowId: string) => {
+    const isCurrentlyHidden = hiddenRows.has(rowId);
+    
+    if (isCurrentlyHidden) {
+      // ถ้าแสดงแถวคืน ให้ลบออกจาก Set และ history
+      setHiddenRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(rowId);
+        return newSet;
+      });
+      setHiddenRowsHistory(prevHistory => prevHistory.filter(id => id !== rowId));
+    } else {
+      // ถ้าซ่อนแถว ให้เริ่ม fade out animation
+      setFadingRows(prev => new Set([...prev, rowId]));
+      
+      // หลังจาก animation เสร็จ (300ms) ถึงค่อยซ่อนจริง
+      setTimeout(() => {
+        setHiddenRows(prev => {
+          const newSet = new Set(prev);
+          newSet.add(rowId);
+          return newSet;
+        });
+        setHiddenRowsHistory(prevHistory => [...prevHistory, rowId]);
+        setFadingRows(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(rowId);
+          return newSet;
+        });
+      }, 300);
+    }
+  };
+
+  const handleUndoHideRow = () => {
+    if (hiddenRowsHistory.length === 0) return;
+    
+    // เอาแถวล่าสุดที่ซ่อนออกมา
+    const lastHiddenRowId = hiddenRowsHistory[hiddenRowsHistory.length - 1];
+    
+    // แสดงแถวกลับมาทันที (จะมี fade in animation)
+    setHiddenRows(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(lastHiddenRowId);
+      return newSet;
+    });
+    
+    setHiddenRowsHistory(prev => prev.slice(0, -1));
+  };
+
+  const handleShowAllRows = () => {
+    setHiddenRows(new Set());
+    setHiddenRowsHistory([]);
+    setFadingRows(new Set());
   };
 
   const handleSwapTypeChange = (event: SelectChangeEvent<string>) => {
@@ -664,15 +915,50 @@ export default function InOutPage() {
     setHasSearched(true);
     setInitialLoad(false);
 
-    // Clear cache และ force reload ข้อมูลใหม่
-    dataCacheRef.current = {
-      data: null,
-      timestamp: 0,
-      filters: ''
-    };
+    if (loadMode === 'infinite') {
+      // Reset infinite scroll และโหลดใหม่
+      console.log('[Load Data] Resetting infinite scroll');
+      setAllData([]);
+      setHasMore(true);
+      setLoadingMore(false); // Reset loading state
+      infiniteScrollPageRef.current = 0; // Reset page counter
+      setTimeout(() => fetchMoreData(), 100);
+    } else {
+      // Clear cache และ force reload ข้อมูลใหม่
+      dataCacheRef.current = {
+        data: null,
+        timestamp: 0,
+        filters: ''
+      };
+      // โหลดเฉพาะข้อมูล (filters โหลดแล้วตอน mount) - force reload
+      fetchData(undefined, true);
+    }
+  };
 
-    // โหลดเฉพาะข้อมูล (filters โหลดแล้วตอน mount) - force reload
-    fetchData(undefined, true);
+  const handleToggleLoadMode = () => {
+    const newMode = loadMode === 'pagination' ? 'infinite' : 'pagination';
+    console.log('[Toggle Mode] Switching to:', newMode);
+    setLoadMode(newMode);
+    setInitialLoad(false);
+    
+    if (newMode === 'infinite') {
+      // เปลี่ยนเป็น infinite scroll - reset และโหลดข้อมูลใหม่
+      setAllData([]);
+      setHasMore(true);
+      setLoadingMore(false);
+      setPage(0);
+      infiniteScrollPageRef.current = 0; // Reset page counter
+      if (hasSearched) {
+        setTimeout(() => fetchMoreData(), 100);
+      }
+    } else {
+      // เปลี่ยนกลับเป็น pagination - clear allData
+      setAllData([]);
+      setPage(0);
+      if (hasSearched) {
+        fetchData(undefined, true);
+      }
+    }
   };
 
   const handleStatusChange = (event: SelectChangeEvent<string>) => {
@@ -865,9 +1151,12 @@ export default function InOutPage() {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
               <Chip
-                label={`ทั้งหมด ${data?.totalCount || 0} รายการ`}
+                label={loadMode === 'infinite' 
+                  ? `แสดง ${allData.length} รายการ${hasMore ? '+' : ''}` 
+                  : `ทั้งหมด ${data?.totalCount || 0} รายการ`
+                }
                 color="primary"
                 sx={{
                   fontWeight: 600,
@@ -876,6 +1165,38 @@ export default function InOutPage() {
                   alignSelf: { xs: 'flex-start', sm: 'center' }
                 }}
               />
+              {hiddenRows.size > 0 && (
+                <>
+                  <Chip
+                    label={`ซ่อน ${hiddenRows.size} แถว`}
+                    color="warning"
+                    size="small"
+                    onDelete={handleShowAllRows}
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                    }}
+                  />
+                  {hiddenRowsHistory.length > 0 && (
+                    <Tooltip title="ยกเลิกการซ่อนแถวล่าสุด">
+                      <IconButton
+                        size="small"
+                        onClick={handleUndoHideRow}
+                        sx={{
+                          bgcolor: 'warning.light',
+                          color: 'warning.dark',
+                          '&:hover': {
+                            bgcolor: 'warning.main',
+                            color: 'white'
+                          }
+                        }}
+                      >
+                        <UndoIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </>
+              )}
               <Tooltip title={isFullscreen ? "ออกจากโหมดเต็มจอ" : "โหมดเต็มจอ (สำหรับ Present)"}>
                 <IconButton
                   onClick={() => setIsFullscreen(!isFullscreen)}
@@ -913,6 +1234,25 @@ export default function InOutPage() {
               </>
             ) : (
               <>
+                <FormControl size="small">
+                  <InputLabel>ปี</InputLabel>
+                  <Select 
+                    value={selectedYear} 
+                    label="ปี" 
+                    onChange={handleYearChange}
+                    MenuProps={{
+                      container: isFullscreen ? document.getElementById('fullscreen-container') : undefined,
+                      style: { zIndex: isFullscreen ? 1301 : undefined }
+                    }}
+                  >
+                    {availableYears.map((year) => (
+                      <MenuItem key={year} value={year}>
+                        {year}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
                 <FormControl size="small">
                   <InputLabel>หน่วย</InputLabel>
                   <Select 
@@ -983,7 +1323,8 @@ export default function InOutPage() {
                     }}
                   >
                     <MenuItem value="all">ทุกประเภท</MenuItem>
-                    <MenuItem value="none">ยังไม่มีประเภท (ยังไม่จับคู่)</MenuItem>
+                    <MenuItem value="paired">จับคู่ตำแหน่งใหม่แล้ว</MenuItem>
+                    <MenuItem value="none">ยังไม่จับคู่ตำแหน่ง</MenuItem>
                     <MenuItem value="two-way">สลับตำแหน่ง (2 คน)</MenuItem>
                     <MenuItem value="three-way">สลับสามเส้า (3 คน)</MenuItem>
                     <MenuItem value="promotion-chain">จัดคนเข้าตำแหน่งว่าง</MenuItem>
@@ -991,24 +1332,7 @@ export default function InOutPage() {
                   </Select>
                 </FormControl>
 
-                <FormControl size="small">
-                  <InputLabel>ปี</InputLabel>
-                  <Select 
-                    value={selectedYear} 
-                    label="ปี" 
-                    onChange={handleYearChange}
-                    MenuProps={{
-                      container: isFullscreen ? document.getElementById('fullscreen-container') : undefined,
-                      style: { zIndex: isFullscreen ? 1301 : undefined }
-                    }}
-                  >
-                    {availableYears.map((year) => (
-                      <MenuItem key={year} value={year}>
-                        {year}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+
               </>
             )}
           </Box>
@@ -1056,6 +1380,17 @@ export default function InOutPage() {
                   gap: 1,
                   flexShrink: 0
                 }}>
+                  <Tooltip title={loadMode === 'pagination' ? 'เปลี่ยนเป็นโหมด Scroll to Load' : 'เปลี่ยนเป็นโหมด Pagination'}>
+                    <Button
+                      variant={loadMode === 'infinite' ? "contained" : "outlined"}
+                      size="medium"
+                      onClick={handleToggleLoadMode}
+                      color={loadMode === 'infinite' ? "success" : "primary"}
+                      sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
+                    >
+                      {loadMode === 'infinite' ? '∞ Scroll' : '📄 Page'}
+                    </Button>
+                  </Tooltip>
                   <Button
                     variant={hasSearched ? "outlined" : "contained"}
                     size="medium"
@@ -1322,9 +1657,9 @@ export default function InOutPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {loading ? (
+                  {(loading || (loadMode === 'infinite' && loadingMore && allData.length === 0)) ? (
                     // Skeleton Loading Rows - แสดงจำนวนที่เหมาะสม
-                    Array.from({ length: rowsPerPage === -1 ? 20 : Math.min(rowsPerPage, 20) }).map((_, index) => (
+                    Array.from({ length: loadMode === 'infinite' ? 20 : (rowsPerPage === -1 ? 20 : Math.min(rowsPerPage, 20)) }).map((_, index) => (
                       <TableRow key={`skeleton-${index}`}>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
                           <Skeleton variant="text" width={20} height={16} />
@@ -1380,7 +1715,10 @@ export default function InOutPage() {
                             },
                             borderTop: isNewGroup && index > 0 ? 2 : 0,
                             borderTopColor: isNewGroup && index > 0 ? 'primary.main' : 'divider',
-                            borderTopStyle: 'solid'
+                            borderTopStyle: 'solid',
+                            opacity: fadingRows.has(detail.id) ? 0 : 1,
+                            transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
+                            transition: 'all 0.3s ease-out',
                           }}
                         >
                           {/* # */}
@@ -1752,25 +2090,44 @@ export default function InOutPage() {
                             py: 0.75, 
                             px: 1
                           }}>
-                            {detail.transaction && (
-                              <Tooltip title="ดูรายละเอียด">
+                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                              <Tooltip title="ซ่อนแถว">
                                 <IconButton
                                   size="small"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleViewDetail(detail);
+                                    handleToggleRowVisibility(detail.id);
                                   }}
                                   sx={{ 
                                     color: 'text.secondary',
                                     '&:hover': {
-                                      color: 'primary.main'
+                                      color: 'warning.main'
                                     }
                                   }}
                                 >
-                                  <InfoIcon sx={{ fontSize: '1rem' }} />
+                                  <VisibilityOffIcon sx={{ fontSize: '1rem' }} />
                                 </IconButton>
                               </Tooltip>
-                            )}
+                              {detail.transaction && (
+                                <Tooltip title="ดูรายละเอียด">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewDetail(detail);
+                                    }}
+                                    sx={{ 
+                                      color: 'text.secondary',
+                                      '&:hover': {
+                                        color: 'primary.main'
+                                      }
+                                    }}
+                                  >
+                                    <InfoIcon sx={{ fontSize: '1rem' }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Box>
                           </TableCell>
                         </TableRow>
                       );
@@ -1779,17 +2136,37 @@ export default function InOutPage() {
               </Table>
             </TableContainer>
 
-            {/* Pagination */}
-            <DataTablePagination
-              count={data?.totalCount || 0}
-              page={page}
-              rowsPerPage={rowsPerPage}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              rowsPerPageOptions={[5, 10, 25, 50, 100, -1]}
-              variant="minimal"
-              disabled={loading}
-            />
+            {/* Pagination - ซ่อนเมื่อเป็น infinite scroll mode */}
+            {loadMode === 'pagination' ? (
+              <DataTablePagination
+                count={data?.totalCount || 0}
+                page={page}
+                rowsPerPage={rowsPerPage}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                variant="minimal"
+                disabled={loading}
+              />
+            ) : (
+              /* Infinite Scroll Observer & Loading Indicator */
+              <Box sx={{ p: 2, textAlign: 'center' }}>
+                <div ref={observerTarget} style={{ height: '20px' }} />
+                {loadingMore && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, py: 2 }}>
+                    <CircularProgress size={24} />
+                    <Typography variant="body2" color="text.secondary">
+                      กำลังโหลดข้อมูลเพิ่มเติม...
+                    </Typography>
+                  </Box>
+                )}
+                {!hasMore && allData.length > 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                    ✓ แสดงข้อมูลครบทั้งหมดแล้ว ({allData.length} รายการ)
+                  </Typography>
+                )}
+              </Box>
+            )}
           </Paper>
         ) : (
           /* Card View - Mobile */
@@ -1813,10 +2190,10 @@ export default function InOutPage() {
                 </Typography>
               </Paper>
             )}
-            {loading ? (
+            {(loading || (loadMode === 'infinite' && loadingMore && allData.length === 0)) ? (
               // Skeleton Loading Cards - แสดงจำนวนที่เหมาะสม
               <Stack spacing={2}>
-                {Array.from({ length: rowsPerPage === -1 ? 15 : Math.min(rowsPerPage, 15) }).map((_, index) => (
+                {Array.from({ length: loadMode === 'infinite' ? 15 : (rowsPerPage === -1 ? 15 : Math.min(rowsPerPage, 15)) }).map((_, index) => (
                   <Card key={`skeleton-card-${index}`}>
                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                       {/* Header */}
@@ -1875,7 +2252,15 @@ export default function InOutPage() {
               <>
                 <Stack spacing={2}>
                   {filteredSwapDetails.map((detail, index) => (
-                    <Card key={detail.id} sx={{ position: 'relative' }}>
+                    <Card 
+                      key={detail.id} 
+                      sx={{ 
+                        position: 'relative',
+                        opacity: fadingRows.has(detail.id) ? 0 : 1,
+                        transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
+                        transition: 'all 0.3s ease-out',
+                      }}
+                    >
                       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                         {/* Header */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
@@ -2020,24 +2405,60 @@ export default function InOutPage() {
                             </Button>
                           )}
                         </Box>
+                        <Box sx={{ mt: 1 }}>
+                          <Button
+                            fullWidth
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            startIcon={<VisibilityOffIcon />}
+                            onClick={() => handleToggleRowVisibility(detail.id)}
+                          >
+                            ซ่อนแถวนี้
+                          </Button>
+                        </Box>
                       </CardContent>
                     </Card>
                   ))}
                 </Stack>
 
-                {/* Pagination for Mobile */}
-                <Paper sx={{ mt: 2 }}>
-                  <DataTablePagination
-                    count={data?.totalCount || 0}
-                    page={page}
-                    rowsPerPage={rowsPerPage}
-                    onPageChange={handleChangePage}
-                    onRowsPerPageChange={handleChangeRowsPerPage}
-                    rowsPerPageOptions={[5, 10, 25, 50, -1]}
-                    variant="minimal"
-                    disabled={loading}
-                  />
-                </Paper>
+                {/* Pagination for Mobile - ซ่อนเมื่อเป็น infinite scroll mode */}
+                {loadMode === 'pagination' ? (
+                  <Paper sx={{ mt: 2 }}>
+                    <DataTablePagination
+                      count={data?.totalCount || 0}
+                      page={page}
+                      rowsPerPage={rowsPerPage}
+                      onPageChange={handleChangePage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      rowsPerPageOptions={[5, 10, 25, 50 , 100]}
+                      variant="minimal"
+                      disabled={loading}
+                    />
+                  </Paper>
+                ) : (
+                  /* Infinite Scroll Observer & Loading Indicator for Mobile */
+                  <Box sx={{ mt: 2, textAlign: 'center' }}>
+                    <div ref={observerTarget} style={{ height: '20px' }} />
+                    {loadingMore && (
+                      <Paper sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                          <CircularProgress size={20} />
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                            กำลังโหลด...
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    )}
+                    {!hasMore && allData.length > 0 && (
+                      <Paper sx={{ p: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                          ✓ แสดงข้อมูลครบทั้งหมดแล้ว ({allData.length} รายการ)
+                        </Typography>
+                      </Paper>
+                    )}
+                  </Box>
+                )}
               </>
             )}
           </Box>

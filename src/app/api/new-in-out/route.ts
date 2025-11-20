@@ -231,6 +231,11 @@ export async function GET(request: NextRequest) {
         if (swapType !== 'all') {
             if (swapType === 'none') {
                 combinedData = combinedData.filter(d => !d.transaction);
+            } else if (swapType === 'paired') {
+                // แสดงเฉพาะคนที่จับคู่แล้วทั้งหมด (two-way, three-way, transfer, promotion-chain)
+                combinedData = combinedData.filter(d => 
+                    d.transaction && ['two-way', 'three-way', 'transfer', 'promotion-chain'].includes(d.transaction.swapType)
+                );
             } else {
                 combinedData = combinedData.filter(d => 
                     d.transaction && d.transaction.swapType === swapType

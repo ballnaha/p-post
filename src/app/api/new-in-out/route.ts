@@ -291,10 +291,11 @@ export async function GET(request: NextRequest) {
                 }
             });
 
-            paginatedData.forEach((detail, index) => {
+            for (let index = 0; index < paginatedData.length; index++) {
+                const detail = paginatedData[index];
                 if (!detail.toPosition && !detail.toPositionNumber) {
                     paginatedData[index].replacedPerson = null;
-                    return;
+                    continue;
                 }
 
                 const transactionPeople = allTransactionDetails.filter(d => 
@@ -331,6 +332,74 @@ export async function GET(request: NextRequest) {
                         !isPlaceholder(d)  // ไม่เอา placeholder
                     );
                 }
+                
+                // ถ้าไม่เจอคนครองและเป็น placeholder - หาข้อมูลตำแหน่งว่างจาก personnel
+                if (!replaced && isPlaceholder(detail) && (detail.toPositionNumber || detail.toPosition)) {
+                    let vacantPosition = null;
+                    try {
+                        // สร้าง where conditions ที่ยืดหยุ่น
+                        const andConditions: any[] = [
+                            { year: currentBuddhistYear },
+                            { isActive: true },
+                            {
+                                OR: [
+                                    { fullName: 'ว่าง' },
+                                    { fullName: 'ว่าง (กันตำแหน่ง)' },
+                                    { fullName: 'ว่าง(กันตำแหน่ง)' }
+                                ]
+                            }
+                        ];
+                        
+                        // เพิ่ม conditions ตามข้อมูลที่มี
+                        if (detail.toPositionNumber) andConditions.push({ positionNumber: detail.toPositionNumber });
+                        if (detail.toUnit) andConditions.push({ unit: detail.toUnit });
+                        if (detail.toPosition) andConditions.push({ position: detail.toPosition });
+                        
+                        vacantPosition = await prisma.policePersonnel.findFirst({
+                            where: { AND: andConditions },
+                            include: { posCodeMaster: true }
+                        });
+                    } catch (queryError) {
+                        console.error('[Vacant Position Query Error]:', queryError);
+                        // ถ้า query error ไม่ต้อง throw ให้ replaced = null
+                    }
+                    
+                    if (vacantPosition) {
+                        replaced = {
+                            id: vacantPosition.id,
+                            personnelId: vacantPosition.id,
+                            noId: vacantPosition.noId,
+                            fullName: vacantPosition.fullName,
+                            rank: vacantPosition.rank,
+                            nationalId: vacantPosition.nationalId,
+                            age: vacantPosition.age,
+                            seniority: vacantPosition.seniority,
+                            birthDate: vacantPosition.birthDate,
+                            education: vacantPosition.education,
+                            lastAppointment: vacantPosition.lastAppointment,
+                            currentRankSince: vacantPosition.currentRankSince,
+                            enrollmentDate: vacantPosition.enrollmentDate,
+                            retirementDate: vacantPosition.retirementDate,
+                            yearsOfService: vacantPosition.yearsOfService,
+                            trainingLocation: vacantPosition.trainingLocation,
+                            trainingCourse: vacantPosition.trainingCourse,
+                            posCodeId: vacantPosition.posCodeId,
+                            posCodeMaster: vacantPosition.posCodeMaster,
+                            fromPosition: vacantPosition.position,
+                            fromPositionNumber: vacantPosition.positionNumber,
+                            fromUnit: vacantPosition.unit,
+                            fromActingAs: vacantPosition.actingAs,
+                            toPosCodeId: null,
+                            toPosCodeMaster: null,
+                            toPosition: null,
+                            toPositionNumber: null,
+                            toUnit: null,
+                            toActingAs: null,
+                            transaction: null,
+                            sequence: null,
+                        } as any;
+                    }
+                }
 
                 paginatedData[index].replacedPerson = replaced ? {
                     id: replaced.id,
@@ -365,11 +434,54 @@ export async function GET(request: NextRequest) {
                     transaction: null,
                     sequence: replaced.sequence,
                 } : null;
-            });
+            }
         } else {
-            paginatedData.forEach((_, index) => {
-                paginatedData[index].replacedPerson = null;
-            });
+            // กรณีไม่มี transaction - ตรวจสอบว่าเป็นตำแหน่งว่างหรือไม่
+            for (let index = 0; index < paginatedData.length; index++) {
+                const detail = paginatedData[index];
+                
+                // ถ้าเป็นตำแหน่งว่างและยังไม่ได้จับคู่ - ให้แสดงข้อมูลตำแหน่งว่างตัวเอง
+                const isVacantPosition = ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName?.trim() || '');
+                
+                if (isVacantPosition) {
+                    // สร้าง replaced object จากตัวเองเพื่อแสดงข้อมูลตำแหน่งว่าง
+                    paginatedData[index].replacedPerson = {
+                        id: detail.id,
+                        personnelId: detail.personnelId,
+                        noId: detail.noId,
+                        fullName: detail.fullName,
+                        rank: detail.rank,
+                        nationalId: detail.nationalId,
+                        age: detail.age,
+                        seniority: detail.seniority,
+                        birthDate: detail.birthDate,
+                        education: detail.education,
+                        lastAppointment: detail.lastAppointment,
+                        currentRankSince: detail.currentRankSince,
+                        enrollmentDate: detail.enrollmentDate,
+                        retirementDate: detail.retirementDate,
+                        yearsOfService: detail.yearsOfService,
+                        trainingLocation: detail.trainingLocation,
+                        trainingCourse: detail.trainingCourse,
+                        posCodeId: detail.posCodeId,
+                        posCodeMaster: detail.posCodeMaster,
+                        fromPosition: detail.fromPosition,
+                        fromPositionNumber: detail.fromPositionNumber,
+                        fromUnit: detail.fromUnit,
+                        fromActingAs: detail.fromActingAs,
+                        toPosCodeId: null,
+                        toPosCodeMaster: null,
+                        toPosition: null,
+                        toPositionNumber: null,
+                        toUnit: null,
+                        toActingAs: null,
+                        transaction: null,
+                        sequence: null,
+                    } as any;
+                } else {
+                    paginatedData[index].replacedPerson = null;
+                }
+            }
         }
 
         const [units, positionCodes] = await Promise.all([

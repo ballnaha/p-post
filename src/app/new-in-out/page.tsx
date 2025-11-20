@@ -1393,80 +1393,83 @@ export default function InOutPage() {
                             </Typography>
                           </TableCell>
 
-                          {/* เข้า - คนที่มี transaction - แสดงเมื่อมี transaction */}
+                          {/* เข้า - คนที่มี transaction - แสดงเมื่อมี transaction และไม่ใช่ตำแหน่งว่าง */}
                           <TableCell sx={{ 
                             py: 0.75, 
                             px: 1
                           }}>
-                            {detail.transaction && detail.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? (
-                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                <Box sx={{ flex: 1 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'text.primary', lineHeight: 1.4 }}>
-                                    {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
-                                    {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
-                                  </Typography>
-                                  {detail.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
-                                      อาวุโส {detail.seniority}
+                            {/* ถ้าเป็นตำแหน่งว่าง ไม่แสดงอะไรเลย */}
+                            {detail.fullName && ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? null : (
+                              detail.transaction && detail.fullName ? (
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'text.primary', lineHeight: 1.4 }}>
+                                      {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
+                                      {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
                                     </Typography>
-                                  )}
-                                  {detail.posCodeMaster && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
+                                    {detail.seniority && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
+                                        อาวุโส {detail.seniority}
+                                      </Typography>
+                                    )}
+                                    {detail.posCodeMaster && (
+                                      <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                        {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
+                                      </Typography>
+                                    )}
+                                    <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
+                                      {renderPositionWithHighlight(detail.fromPosition, detail.fromUnit, detail.fromPositionNumber)}
                                     </Typography>
-                                  )}
-                                  <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
-                                    {renderPositionWithHighlight(detail.fromPosition, detail.fromUnit, detail.fromPositionNumber)}
-                                  </Typography>
+                                  </Box>
+                                  <Tooltip title="ดูข้อมูลบุคลากร">
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewPersonnelDetail(detail);
+                                      }}
+                                      sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                    >
+                                      <InfoOutline sx={{ fontSize: '1rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
                                 </Box>
-                                <Tooltip title="ดูข้อมูลบุคลากร">
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewPersonnelDetail(detail);
-                                    }}
-                                    sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                  >
-                                    <InfoOutline sx={{ fontSize: '1rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            ) : replaced ? (
-                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                <Box sx={{ flex: 1 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
-                                    {joinInline(replaced.rank, replaced.fullName)}
-                                    {replaced.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({replaced.age})</Typography>}
-                                  </Typography>
-                                  {replaced.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
-                                      อาวุโส {replaced.seniority}
+                              ) : replaced ? (
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                      {joinInline(replaced.rank, replaced.fullName)}
+                                      {replaced.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({replaced.age})</Typography>}
                                     </Typography>
-                                  )}
-                                  {replaced.posCodeMaster && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {replaced.posCodeMaster.id} - {replaced.posCodeMaster.name}
+                                    {replaced.seniority && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
+                                        อาวุโส {replaced.seniority}
+                                      </Typography>
+                                    )}
+                                    {replaced.posCodeMaster && (
+                                      <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                        {replaced.posCodeMaster.id} - {replaced.posCodeMaster.name}
+                                      </Typography>
+                                    )}
+                                    <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
+                                      {joinInline(replaced.fromPosition, replaced.fromUnit, replaced.fromPositionNumber ? `#${replaced.fromPositionNumber}` : null)}
                                     </Typography>
-                                  )}
-                                  <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
-                                    {joinInline(replaced.fromPosition, replaced.fromUnit, replaced.fromPositionNumber ? `#${replaced.fromPositionNumber}` : null)}
-                                  </Typography>
+                                  </Box>
+                                  <Tooltip title="ดูข้อมูลบุคลากร">
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewPersonnelDetail(replaced);
+                                      }}
+                                      sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                    >
+                                      <InfoOutline sx={{ fontSize: '1rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
                                 </Box>
-                                <Tooltip title="ดูข้อมูลบุคลากร">
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewPersonnelDetail(replaced);
-                                    }}
-                                    sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                  >
-                                    <InfoOutline sx={{ fontSize: '1rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            ) : null}
+                              ) : null
+                            )}
                           </TableCell>
 
                           {/* คนครอง - ชื่อคนเดิมที่ครองตำแหน่ง (replaced) หรือตำแหน่งว่าง */}
@@ -1475,7 +1478,7 @@ export default function InOutPage() {
                             py: 0.75, 
                             px: 1
                           }}>
-                            {replaced ? (
+                            {replaced && replaced.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(replaced.fullName.trim()) ? (
                               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                                 <Box sx={{ flex: 1 }}>
                                   <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'text.primary', lineHeight: 1.4 }}>
@@ -1501,11 +1504,15 @@ export default function InOutPage() {
                                   </IconButton>
                                 </Tooltip>
                               </Box>
-                            ) : detail.transaction ? (
+                            ) : (replaced && replaced.fullName && ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(replaced.fullName.trim())) || detail.transaction ? (
                               <Chip
-                                label="ตำแหน่งว่าง"
+                                label={
+                                  replaced && ['ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(replaced.fullName?.trim() || '') 
+                                    ? 'ว่าง (กันตำแหน่ง)' 
+                                    : 'ตำแหน่งว่าง'
+                                }
                                 size="small"
-                                color="error"
+                                color="warning"
                                 variant="outlined"
                                 sx={{ fontWeight: 600, fontSize: '0.75rem' }}
                               />
@@ -1553,7 +1560,7 @@ export default function InOutPage() {
                             px: 1
                           }}>
                             <Box>
-                              {/* ถ้ามี replaced แสดงตำแหน่งของ replaced */}
+                              {/* ถ้ามี replaced แสดงตำแหน่งของ replaced (รวมถึงตำแหน่งว่างด้วย) */}
                               {replaced ? (
                                 <>
                                   <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
@@ -1611,14 +1618,34 @@ export default function InOutPage() {
                                   </Typography>
                                 </>
                               ) : (
-                                /* ตำแหน่งว่าง/placeholder - ไม่แสดงอะไร */
-                                <Chip
-                                  label="-"
-                                  size="small"
-                                  color="default"
-                                  variant="outlined"
-                                  sx={{ fontWeight: 600, fontSize: '0.75rem' }}
-                                />
+                                /* ตำแหน่งว่าง/placeholder - แสดงข้อมูลตำแหน่งว่างถ้ามี */
+                                <>
+                                  {detail.toPosition ? (
+                                    <>
+                                      <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                        {highlightText(detail.toPosition, highlightTerms)}
+                                      </Typography>
+                                      {detail.toPosCodeMaster && (
+                                        <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                          {highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`)}
+                                        </Typography>
+                                      )}
+                                      {detail.toUnit && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                          {renderNewPositionWithHighlight(null, detail.toUnit, detail.toPositionNumber || null)}
+                                        </Typography>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <Chip
+                                      label="-"
+                                      size="small"
+                                      color="default"
+                                      variant="outlined"
+                                      sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                    />
+                                  )}
+                                </>
                               )}
                             </Box>
                           </TableCell>
@@ -1640,7 +1667,7 @@ export default function InOutPage() {
                                     color="info"
                                     sx={{ mb: 0.25, fontWeight: 500, height: 20, fontSize: '0.75rem', '& .MuiChip-icon': { fontSize: '1rem' } }}
                                   />
-                                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem' }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'success.dark' }}>
                                     {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
                                     {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
                                   </Typography>
@@ -1650,10 +1677,10 @@ export default function InOutPage() {
                                     </Typography>
                                   )}
                                   <Typography variant="body2" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem', fontWeight: 500 }}>
-                                    ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 600 }}>{highlightUnit(detail.fromUnit || '-')}</Box>
+                                    ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{highlightUnit(detail.fromUnit || '-')}</Box>
                                   </Typography>
                                   <Typography variant="body2" sx={{ display: 'block', fontSize: '0.75rem', fontWeight: 500 }}>
-                                    ไปหน่วย: <Box component="span" sx={{ color: 'success.main', fontWeight: 600 }}>{highlightGeneral(detail.toUnit || '-')}</Box>
+                                    ไปหน่วย: <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>{highlightGeneral(detail.toUnit || '-')}</Box>
                                   </Typography>
                                 </Box>
                               </Box>
@@ -1687,7 +1714,7 @@ export default function InOutPage() {
                                       sx={{ mb: 0.25, fontWeight: 500, height: 20, fontSize: '0.75rem', '& .MuiChip-icon': { fontSize: '1rem' } }}
                                     />
                                   )}
-                                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem' }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'success.dark' }}>
                                     {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
                                     {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
                                   </Typography>
@@ -1697,7 +1724,7 @@ export default function InOutPage() {
                                     </Typography>
                                   )}
                                   {(detail.toPosCodeMaster || replaced?.posCodeMaster) && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 700, mb: 0.2, fontSize: '0.75rem' }}>
                                       {highlightGeneral(
                                         detail.toPosCodeMaster ?
                                           `${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}` :
@@ -1705,7 +1732,7 @@ export default function InOutPage() {
                                       )}
                                     </Typography>
                                   )}
-                                  <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.8125rem' }}>
+                                  <Typography variant="body2" color="success.dark" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.8125rem' }}>
                                     {renderNewPositionWithHighlight(
                                       detail.toPosition || replaced?.fromPosition || null,
                                       detail.toUnit || replaced?.fromUnit || null,

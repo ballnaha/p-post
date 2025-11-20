@@ -101,6 +101,7 @@ interface PromotionTableProps {
   onAddPlaceholder?: () => void;
   onInsertPlaceholder?: (beforeNodeId: string) => void;
   destinationUnit?: string;
+  isCompleted?: boolean; // ถ้า true จะไม่แสดงปุ่มเพิ่ม placeholder
 }
 
 export default function PromotionTable({
@@ -113,6 +114,7 @@ export default function PromotionTable({
   onAddPlaceholder,
   onInsertPlaceholder,
   destinationUnit = '',
+  isCompleted = false,
 }: PromotionTableProps) {
   const theme = useTheme();
   const toast = useToast();
@@ -761,7 +763,7 @@ export default function PromotionTable({
                             </IconButton>
                           </Tooltip>
                         )}
-                        {onInsertPlaceholder && (
+                        {onInsertPlaceholder && !isCompleted && (
                           <Tooltip title="แทรกตำแหน่งว่าง">
                             <IconButton 
                               size="small" 
@@ -816,14 +818,20 @@ export default function PromotionTable({
             >
               {nodes.length === 0 ? 'เพิ่มบุคลากรคนแรก' : 'เพิ่มบุคลากรคนถัดไป'}
             </Button>
-            {onAddPlaceholder && (
+            {onAddPlaceholder && !isCompleted && (
               <Button
                 variant="outlined"
                 startIcon={<AddIcon />}
                 onClick={onAddPlaceholder}
                 disabled={!destinationUnit || destinationUnit.trim() === ''}
                 size="medium"
-                sx={{ fontWeight: 700, py: 0.75, minWidth: 180 }}
+                sx={{ 
+                  fontWeight: 700, 
+                  py: 0.75, 
+                  minWidth: '180px',
+                  borderStyle: 'dashed',
+                  borderWidth: 2,
+                }}
               >
                 เพิ่มตำแหน่งว่าง
               </Button>

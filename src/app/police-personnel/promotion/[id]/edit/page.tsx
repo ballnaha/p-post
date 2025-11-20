@@ -527,6 +527,12 @@ export default function EditPromotionPage() {
   };
 
   const handleAddPlaceholder = () => {
+    // ตรวจสอบว่า transaction ถูกทำเครื่องหมายเสร็จสิ้นแล้วหรือไม่
+    if (transaction?.isCompleted) {
+      toast.error('ไม่สามารถเพิ่มตำแหน่งว่างได้ เนื่องจากรายการนี้ทำเครื่องหมายเสร็จสิ้นแล้ว กรุณายกเลิกสิ้นสุดก่อน');
+      return;
+    }
+
     const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
     const isLastNodePlaceholder = lastNode?.isPlaceholder === true;
     
@@ -590,6 +596,12 @@ export default function EditPromotionPage() {
   };
 
   const handleInsertPlaceholder = (beforeNodeId: string) => {
+    // ตรวจสอบว่า transaction ถูกทำเครื่องหมายเสร็จสิ้นแล้วหรือไม่
+    if (transaction?.isCompleted) {
+      toast.error('ไม่สามารถเพิ่มตำแหน่งว่างได้ เนื่องจากรายการนี้ทำเครื่องหมายเสร็จสิ้นแล้ว กรุณายกเลิกสิ้นสุดก่อน');
+      return;
+    }
+
     const insertIndex = nodes.findIndex(n => n.id === beforeNodeId);
     if (insertIndex === -1) {
       toast.error('ไม่พบตำแหน่งที่ต้องการแทรก');
@@ -1062,6 +1074,7 @@ export default function EditPromotionPage() {
                 onAddPlaceholder={handleAddPlaceholder}
                 onInsertPlaceholder={handleInsertPlaceholder}
                 destinationUnit={unitName}
+                isCompleted={transaction?.isCompleted || false}
               />
             </Box>
 

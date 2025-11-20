@@ -545,9 +545,36 @@ export default function InOutPage() {
       });
     }
 
-    // เรียงข้อมูลตาม noId เหมือนหน้า police_personnel
+    // เรียงข้อมูลตาม transaction ID และ sequence เพื่อให้บุคลากรใน transaction เดียวกันอยู่ติดกัน
     const sorted = [...filtered].sort((a, b) => {
-      // 1. เรียงตาม noId เป็นหลัก
+      // 1. แยกกลุ่มตามว่ามี transaction หรือไม่
+      const hasTransactionA = !!a.transaction;
+      const hasTransactionB = !!b.transaction;
+
+      // ให้รายการที่มี transaction ขึ้นก่อน
+      if (hasTransactionA && !hasTransactionB) return -1;
+      if (!hasTransactionA && hasTransactionB) return 1;
+
+      // 2. ถ้าทั้งคู่มี transaction ให้เรียงตาม transaction ID และ sequence
+      if (hasTransactionA && hasTransactionB) {
+        const transactionIdA = a.transaction!.id;
+        const transactionIdB = b.transaction!.id;
+
+        // เรียงตาม transaction ID
+        if (transactionIdA !== transactionIdB) {
+          return transactionIdA.localeCompare(transactionIdB);
+        }
+
+        // ถ้า transaction ID เท่ากัน ให้เรียงตาม sequence
+        const sequenceA = a.sequence ?? 999999;
+        const sequenceB = b.sequence ?? 999999;
+
+        if (sequenceA !== sequenceB) {
+          return sequenceA - sequenceB;
+        }
+      }
+
+      // 3. ถ้าไม่มี transaction หรือ sequence เท่ากัน ให้เรียงตาม noId
       const noIdA = a.noId || '';
       const noIdB = b.noId || '';
 
@@ -559,7 +586,7 @@ export default function InOutPage() {
       if (noIdA && !noIdB) return -1;
       if (!noIdA && noIdB) return 1;
 
-      // 2. ถ้า noId เท่ากัน ให้เรียงตามชื่อ
+      // 4. สุดท้ายเรียงตามชื่อ
       return (a.fullName || '').localeCompare(b.fullName || '', 'th');
     });
 
@@ -568,7 +595,8 @@ export default function InOutPage() {
       console.log('[In-Out] Sorted data (first 5):', sorted.slice(0, 5).map(d => ({
         noId: d.noId,
         fullName: d.fullName,
-        positionNumber: d.fromPositionNumber
+        transactionId: d.transaction?.id,
+        sequence: d.sequence
       })));
     }
 
@@ -1350,8 +1378,9 @@ export default function InOutPage() {
                             '&:hover': {
                               bgcolor: 'action.hover'
                             },
-                            borderTop: isNewGroup && index > 0 ? 1 : 0,
-                            borderTopColor: 'divider'
+                            borderTop: isNewGroup && index > 0 ? 2 : 0,
+                            borderTopColor: isNewGroup && index > 0 ? 'primary.main' : 'divider',
+                            borderTopStyle: 'solid'
                           }}
                         >
                           {/* # */}

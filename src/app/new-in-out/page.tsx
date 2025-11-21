@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { Fragment, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -84,6 +84,7 @@ interface SwapDetail {
   yearsOfService: string | null;
   trainingLocation: string | null;
   trainingCourse: string | null;
+  avatarUrl?: string | null; // รูป avatar
 
   // ตำแหน่งเดิม (From)
   posCodeId: number | null;
@@ -114,6 +115,7 @@ interface SwapDetail {
     swapDate: string;
     swapType: string;
     groupNumber: string | null;
+    groupName?: string | null;
   } | null;
 
   // Sequence สำหรับเรียงลำดับ (จาก swap_transaction_detail.sequence)
@@ -279,7 +281,7 @@ export default function InOutPage() {
   const [initialLoad, setInitialLoad] = useState(true);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const [selectedUnit, setSelectedUnit] = useState<string>('all');
+  const [selectedUnit, setSelectedUnit] = useState<string>('น');
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
   const [selectedStatus, setSelectedStatus] = useState<string>('all'); // all, vacant, reserved, occupied
@@ -422,6 +424,17 @@ export default function InOutPage() {
           units: sortedUnits,
           positionCodes: sortedPositionCodes
         });
+
+        // ตรวจสอบว่ามี unit 'น' หรือไม่
+        const hasUnitNor = sortedUnits.includes('น');
+        
+        if (hasUnitNor) {
+          // ถ้ามี unit 'น' ให้ปิด initialLoad เพื่อ auto load
+          setInitialLoad(false);
+        } else {
+          // ถ้าไม่มี unit 'น' ให้เปลี่ยนไปใช้ 'all' และไม่ auto load (เก็บ initialLoad = true)
+          setSelectedUnit('all');
+        }
       }
     } catch (error) {
       console.error('Failed to fetch filters:', error);
@@ -597,7 +610,10 @@ export default function InOutPage() {
 
   // โหลด filter options ตอน mount (แสดง filters ทันที)
   useEffect(() => {
-    fetchFilters();
+    const loadFiltersAndCheckUnit = async () => {
+      await fetchFilters();
+    };
+    loadFiltersAndCheckUnit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -652,7 +668,7 @@ export default function InOutPage() {
     }
   }, []);
 
-  // Load data when filters change (with debounce) - only after user interaction
+  // Load data when filters change (with debounce)
   useEffect(() => {
     // Skip initial load - ไม่โหลดข้อมูลตอนเข้าหน้าครั้งแรก
     if (initialLoad) return;
@@ -681,8 +697,7 @@ export default function InOutPage() {
       clearTimeout(timer);
       abortController.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, page, rowsPerPage, searchText, loadMode]);
+  }, [initialLoad, selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, page, rowsPerPage, searchText, loadMode]);
 
   const filteredSwapDetails = useMemo(() => {
     // ถ้าเป็น infinite scroll mode ใช้ allData
@@ -1169,6 +1184,40 @@ export default function InOutPage() {
   const handleClosePersonnelDetailModal = () => {
     setPersonnelDetailModalOpen(false);
     setSelectedPersonnelForDetail(null);
+  };
+
+  const handleAvatarUpdate = (avatarUrl: string | null) => {
+    if (selectedPersonnelForDetail) {
+      // อัพเดท selectedPersonnelForDetail
+      const updatedPersonnel = {
+        ...selectedPersonnelForDetail,
+        avatarUrl
+      };
+      setSelectedPersonnelForDetail(updatedPersonnel);
+
+      // อัพเดทข้อมูลใน data array
+      if (data?.swapDetails) {
+        const updatedSwapDetails = data.swapDetails.map(detail => 
+          detail.personnelId === selectedPersonnelForDetail.personnelId
+            ? { ...detail, avatarUrl }
+            : detail
+        );
+        setData({
+          ...data,
+          swapDetails: updatedSwapDetails
+        });
+      }
+
+      // อัพเดทข้อมูลใน allData (สำหรับ infinite scroll mode)
+      if (loadMode === 'infinite' && allData.length > 0) {
+        const updatedAllData = allData.map(detail =>
+          detail.personnelId === selectedPersonnelForDetail.personnelId
+            ? { ...detail, avatarUrl }
+            : detail
+        );
+        setAllData(updatedAllData);
+      }
+    }
   };
 
   // Scroll to top function
@@ -1839,7 +1888,30 @@ export default function InOutPage() {
                       // ตรวจสอบว่า posCodeId ไม่เปลี่ยนแปลง (ย้ายแนวนอน)
                       const isSameLevel = detail.posCodeId && detail.toPosCodeId && detail.toPosCodeId === detail.posCodeId;
 
-                      return (
+                      return [
+                        isNewGroup && detail.transaction ? (
+                          <TableRow key={`group-${detail.transaction.id || 'nogroup'}`}>
+                            <TableCell colSpan={7} sx={{ py: 1, px: 2, bgcolor: alpha(theme.palette.primary.main, 0.06), borderBottom: 1, borderColor: 'divider' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                                    {detail.transaction.groupNumber ? `${detail.transaction.groupNumber}` : `#${detail.transaction.id}`}
+                                  </Typography>
+                                  {detail.transaction.groupName && (
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                      {`— ${detail.transaction.groupName}`}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <Box sx={{ ml: 'auto', textAlign: 'right' }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatDate(detail.transaction.swapDate)} • {getSwapTypeLabel(detail.transaction.swapType)}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ) : null,
                         <TableRow
                           key={detail.id}
                           hover
@@ -1848,9 +1920,6 @@ export default function InOutPage() {
                             '&:hover': {
                               bgcolor: 'action.hover'
                             },
-                            borderTop: isNewGroup && index > 0 ? 2 : 0,
-                            borderTopColor: isNewGroup && index > 0 ? 'primary.main' : 'divider',
-                            borderTopStyle: 'solid',
                             opacity: fadingRows.has(detail.id) ? 0 : 1,
                             transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
                             transition: 'all 0.3s ease-out',
@@ -2166,9 +2235,25 @@ export default function InOutPage() {
                                   <Typography variant="body2" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem', fontWeight: 500 }}>
                                     ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{highlightUnit(detail.fromUnit || '-')}</Box>
                                   </Typography>
-                                  <Typography variant="body2" sx={{ display: 'block', fontSize: '0.75rem', fontWeight: 500 }}>
+                                  <Typography variant="body2" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem', fontWeight: 500 }}>
                                     ไปหน่วย: <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>{highlightGeneral(detail.toUnit || '-')}</Box>
                                   </Typography>
+                                  {(detail.toPosition || detail.toPositionNumber) && (
+                                    <>
+                                      {detail.toPosCodeMaster && (
+                                        <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 700, mb: 0.2, fontSize: '0.75rem', mt: 0.5 }}>
+                                          {highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`)}
+                                        </Typography>
+                                      )}
+                                      <Typography variant="body2" color="success.dark" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.8125rem' }}>
+                                        ตำแหน่ง: {renderNewPositionWithHighlight(
+                                          detail.toPosition || null,
+                                          detail.toUnit || null,
+                                          detail.toPositionNumber || null
+                                        )}
+                                      </Typography>
+                                    </>
+                                  )}
                                 </Box>
                               </Box>
                             ) : (detail.toPosCodeMaster || detail.toPosition) ? (
@@ -2259,8 +2344,8 @@ export default function InOutPage() {
                               </Tooltip>
                             )}
                           </TableCell>
-                        </TableRow>
-                      );
+                            </TableRow>
+                          ];
                     }))}
                 </TableBody>
               </Table>
@@ -2381,17 +2466,41 @@ export default function InOutPage() {
             ) : (
               <>
                 <Stack spacing={2}>
-                  {filteredSwapDetails.map((detail, index) => (
-                    <Card 
-                      key={detail.id} 
-                      sx={{ 
-                        position: 'relative',
-                        opacity: fadingRows.has(detail.id) ? 0 : 1,
-                        transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
-                        transition: 'all 0.3s ease-out',
-                      }}
-                    >
-                      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  {filteredSwapDetails.map((detail, index) => {
+                    const prevDetail = index > 0 ? filteredSwapDetails[index - 1] : null;
+                    const isNewGroup = !prevDetail || prevDetail.transaction?.id !== detail.transaction?.id;
+                    return [
+                      isNewGroup && detail.transaction ? (
+                        <Paper key={`group-${detail.transaction.id || 'nogroup'}`} sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.primary.main, 0.06), border: 1, borderColor: 'divider' }} elevation={0}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                                {detail.transaction.groupNumber ? `${detail.transaction.groupNumber}` : `#${detail.transaction.id}`}
+                              </Typography>
+                              {detail.transaction.groupName && (
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                  {`— ${detail.transaction.groupName}`}
+                                </Typography>
+                              )}
+                            </Box>
+                            <Box sx={{ ml: 'auto', textAlign: 'right' }}>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatDate(detail.transaction.swapDate)} • {getSwapTypeLabel(detail.transaction.swapType)}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Paper>
+                      ) : null,
+                      <Card 
+                        key={detail.id} 
+                        sx={{ 
+                          position: 'relative',
+                          opacity: fadingRows.has(detail.id) ? 0 : 1,
+                          transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
+                          transition: 'all 0.3s ease-out',
+                        }}
+                      >
+                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                         {/* Header */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -2443,11 +2552,17 @@ export default function InOutPage() {
                         </Box>
 
                         {/* To Position - ย้ายไป */}
-                        {(detail.toPosCodeMaster || detail.toPosition) ? (
+                        {(detail.toPosCodeMaster || detail.toPosition || (detail.transaction?.swapType === 'transfer' && (detail.toPosition || detail.toPositionNumber))) ? (
                           <Box sx={{ p: 1.5, bgcolor: alpha('#4caf50', 0.1), borderRadius: 1, border: 2, borderColor: 'success.main' }}>
                             <Typography variant="caption" color="success.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.75, fontSize: '0.7rem' }}>
                               ➡️ ย้ายไป
                             </Typography>
+
+                            {detail.transaction?.swapType === 'transfer' && (
+                              <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.75rem', fontWeight: 500 }}>
+                                ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{detail.fromUnit || '-'}</Box>
+                              </Typography>
+                            )}
 
                             {detail.toPosCodeMaster && (
                               <Typography variant="caption" color="success.main" sx={{ fontSize: '0.75rem', display: 'block', fontWeight: 700, mb: 0.25 }}>
@@ -2455,9 +2570,11 @@ export default function InOutPage() {
                               </Typography>
                             )}
 
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.dark', fontSize: '0.875rem', mb: 0.25 }}>
-                              {detail.toPosition || '-'}
-                            </Typography>
+                            {detail.toPosition && (
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.dark', fontSize: '0.875rem', mb: 0.25 }}>
+                                {detail.toPosition}
+                              </Typography>
+                            )}
 
                             {detail.toUnit && (
                               <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.75rem', display: 'block', mb: 0.25 }}>
@@ -2549,7 +2666,8 @@ export default function InOutPage() {
                         </Box>
                       </CardContent>
                     </Card>
-                  ))}
+                      ];
+                  })}
                 </Stack>
 
                 {/* Pagination for Mobile - ซ่อนเมื่อเป็น infinite scroll mode */}
@@ -2609,6 +2727,7 @@ export default function InOutPage() {
           <PersonnelDetailModal
             open={personnelDetailModalOpen}
             onClose={handleClosePersonnelDetailModal}
+            onAvatarUpdate={handleAvatarUpdate}
             personnel={{
               id: selectedPersonnelForDetail.personnelId,
               noId: selectedPersonnelForDetail.noId,
@@ -2632,6 +2751,7 @@ export default function InOutPage() {
               yearsOfService: selectedPersonnelForDetail.yearsOfService,
               trainingLocation: selectedPersonnelForDetail.trainingLocation,
               trainingCourse: selectedPersonnelForDetail.trainingCourse,
+              avatarUrl: selectedPersonnelForDetail.avatarUrl,
             }}
           />
         )}

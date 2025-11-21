@@ -1,4 +1,5 @@
 'use client';
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -14,13 +15,21 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme,
+  Avatar,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   Person as PersonIcon,
   Badge as BadgeIcon,
   CalendarToday as CalendarIcon,
   School as EducationIcon,
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  PhotoCamera as PhotoCameraIcon,
 } from '@mui/icons-material';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 
 // Interface สำหรับข้อมูลบุคลากร (รองรับทั้ง police-personnel, swap-list, three-way-swap, vacant-position)
 interface PersonnelData {
@@ -52,6 +61,7 @@ interface PersonnelData {
   notes?: string | null;
   supporterName?: string | null; // ผู้สนับสนุน/ผู้เสนอชื่อ
   supportReason?: string | null; // เหตุผลในการสนับสนุน
+  avatarUrl?: string | null; // URL ของรูป avatar
 }
 
 interface PersonnelDetailModalProps {
@@ -61,6 +71,7 @@ interface PersonnelDetailModalProps {
   loading?: boolean;
   title?: string; // Custom title (default: "รายละเอียดบุคลากร")
   onClearData?: () => void; // Optional callback to clear personnel data after animation
+  onAvatarUpdate?: (avatarUrl: string | null) => void; // Callback เมื่อ avatar เปลี่ยนแปลง
 }
 
 // Utility function สำหรับ format วันที่
@@ -115,10 +126,27 @@ export default function PersonnelDetailModal({
   personnel,
   loading = false,
   title = 'รายละเอียดบุคลากร',
-  onClearData
+  onClearData,
+  onAvatarUpdate
 }: PersonnelDetailModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { showSnackbar } = useSnackbar();
+  
+  // Avatar state
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Set avatar URL from personnel data
+  useEffect(() => {
+    if (personnel?.avatarUrl) {
+      setAvatarUrl(personnel.avatarUrl);
+    } else {
+      setAvatarUrl(null);
+    }
+  }, [personnel?.avatarUrl, personnel]);
 
   const handleClose = () => {
     onClose();
@@ -130,7 +158,99 @@ export default function PersonnelDetailModal({
     }
   };
 
+  // Avatar handlers
+  const handleAddAvatar = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !personnel?.id) return;
+
+    // ตรวจสอบชนิดไฟล์
+    if (!file.type.startsWith('image/')) {
+      showSnackbar('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'warning');
+      return;
+    }
+    
+    // ตรวจสอบขนาดไฟล์ (จำกัดที่ 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showSnackbar('ขนาดไฟล์ต้องไม่เกิน 5MB', 'warning');
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      // สร้าง FormData สำหรับส่งไฟล์
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      // เรียก API upload
+      const response = await fetch(`/api/personnel/${personnel.id}/avatar`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'เกิดข้อผิดพลาดในการอัพโหลด');
+      }
+
+      const data = await response.json();
+      setAvatarUrl(data.avatarUrl);
+      onAvatarUpdate?.(data.avatarUrl);
+      showSnackbar('อัพโหลดรูปภาพสำเร็จ', 'success');
+    } catch (error) {
+      console.error('Upload error:', error);
+      showSnackbar(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการอัพโหลด', 'error');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleEditAvatar = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleDeleteAvatar = () => {
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeleteConfirmOpen(false);
+    
+    if (!personnel?.id) return;
+
+    try {
+      setUploading(true);
+
+      // เรียก API delete
+      const response = await fetch(`/api/personnel/${personnel.id}/avatar`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'เกิดข้อผิดพลาดในการลบ');
+      }
+
+      setAvatarUrl(null);
+      onAvatarUpdate?.(null);
+      showSnackbar('ลบรูปภาพสำเร็จ', 'success');
+    } catch (error) {
+      console.error('Delete error:', error);
+      showSnackbar(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการลบ', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
+    <>
     <Dialog 
       key={`${open}-${isMobile}`} // Force re-render when mobile state changes
       open={open} 
@@ -220,6 +340,142 @@ export default function PersonnelDetailModal({
           </Box>
         ) : personnel ? (
           <Box>
+            {/* Avatar Section */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+              <Box sx={{ position: 'relative', display: 'inline-block' }}>
+                <Avatar
+                  src={avatarUrl || undefined}
+                  alt={personnel.fullName || 'Avatar'}
+                  sx={{
+                    width: 120,
+                    height: 120,
+                    border: 3,
+                    borderColor: 'primary.main',
+                    boxShadow: 3,
+                    opacity: uploading ? 0.5 : 1,
+                    transition: 'opacity 0.3s',
+                  }}
+                >
+                  {!avatarUrl && <PersonIcon sx={{ fontSize: 60 }} />}
+                </Avatar>
+                
+                {/* Loading Overlay */}
+                {uploading && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '50%',
+                    }}
+                  >
+                    <CircularProgress size={40} />
+                  </Box>
+                )}
+                
+                {/* Avatar Action Buttons */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: -8,
+                    right: -8,
+                    display: 'flex',
+                    gap: 0.5,
+                  }}
+                >
+                  {!avatarUrl ? (
+                    <Tooltip title="เพิ่มรูปภาพ">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={handleAddAvatar}
+                          disabled={uploading || !personnel.id}
+                          sx={{
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            boxShadow: 2,
+                            '&:hover': {
+                              bgcolor: 'primary.dark',
+                            },
+                            '&:disabled': {
+                              bgcolor: 'grey.400',
+                              color: 'grey.200',
+                            },
+                          }}
+                        >
+                          <AddIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <>
+                      <Tooltip title="แก้ไขรูปภาพ">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={handleEditAvatar}
+                            disabled={uploading || !personnel.id}
+                            sx={{
+                              bgcolor: 'warning.main',
+                              color: 'white',
+                              boxShadow: 2,
+                              '&:hover': {
+                                bgcolor: 'warning.dark',
+                              },
+                              '&:disabled': {
+                                bgcolor: 'grey.400',
+                                color: 'grey.200',
+                              },
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="ลบรูปภาพ">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={handleDeleteAvatar}
+                            disabled={uploading || !personnel.id}
+                            sx={{
+                              bgcolor: 'error.main',
+                              color: 'white',
+                              boxShadow: 2,
+                              '&:hover': {
+                                bgcolor: 'error.dark',
+                              },
+                              '&:disabled': {
+                                bgcolor: 'grey.400',
+                                color: 'grey.200',
+                              },
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </>
+                  )}
+                </Box>
+
+                {/* Hidden File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  style={{ display: 'none' }}
+                  disabled={uploading || !personnel.id}
+                />
+              </Box>
+            </Box>
+
             {/* Header Section - ชื่อและตำแหน่ง */}
             <Box sx={{ p: 2, mb: 2, bgcolor: 'primary.main', color: 'white', borderRadius: 1 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.25, fontSize: '1.125rem' }}>
@@ -441,6 +697,49 @@ export default function PersonnelDetailModal({
           ปิด
         </Button>
       </DialogActions>
+
     </Dialog>
+
+    {/* Confirm Delete Dialog - Separate from main dialog */}
+    <Dialog
+      open={deleteConfirmOpen}
+      onClose={() => setDeleteConfirmOpen(false)}
+      maxWidth="xs"
+      fullWidth
+      TransitionProps={{
+        timeout: 0
+      }}
+      slotProps={{
+        backdrop: {
+          sx: {
+            zIndex: 20001,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        }
+      }}
+      sx={{ 
+        zIndex: 20002,
+        '& .MuiDialog-container': {
+          zIndex: 20002
+        },
+        '& .MuiDialog-paper': {
+          zIndex: 20002
+        }
+      }}
+    >
+      <DialogTitle>ยืนยันการลบรูปภาพ</DialogTitle>
+      <DialogContent>
+        <Typography>คุณต้องการลบรูปภาพหรือไม่?</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setDeleteConfirmOpen(false)} color="inherit">
+          ยกเลิก
+        </Button>
+        <Button onClick={handleConfirmDelete} variant="contained" color="error" autoFocus>
+          ลบ
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }

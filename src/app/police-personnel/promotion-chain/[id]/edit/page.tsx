@@ -1144,7 +1144,7 @@ export default function EditPromotionChainPage() {
                   </Button>
                 )}
 
-                {/* ปุ่มยกเลิกการสิ้นสุด - แสดงเฉพาะเมื่อทำเครื่องหมายเสร็จสิ้นแล้ว */}
+                {/* ปุ่มยกเลิกการเสร็จสิ้น - แสดงเฉพาะเมื่อทำเครื่องหมายเสร็จสิ้นแล้ว */}
                 {transaction?.isCompleted && (
                   <Button 
                     variant="outlined" 
@@ -1159,7 +1159,7 @@ export default function EditPromotionChainPage() {
                       fontSize: { xs: '0.875rem', md: '1rem' },
                     }}
                   >
-                    {completing ? 'กำลังยกเลิก...' : 'ยกเลิกการสิ้นสุด'}
+                    {completing ? 'กำลังยกเลิก...' : 'ยกเลิกการเสร็จสิ้น'}
                   </Button>
                 )}
 

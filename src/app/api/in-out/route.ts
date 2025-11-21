@@ -165,6 +165,7 @@ export async function GET(request: NextRequest) {
                 yearsOfService: person.yearsOfService,
                 trainingLocation: person.trainingLocation,
                 trainingCourse: person.trainingCourse,
+                avatarUrl: person.avatarUrl,
                 
                 posCodeId: swapInfo?.posCodeId || person.posCodeId,
                 posCodeMaster: swapInfo?.posCodeMaster || person.posCodeMaster,
@@ -280,6 +281,7 @@ export async function GET(request: NextRequest) {
                     yearsOfService: replaced.yearsOfService,
                     trainingLocation: replaced.trainingLocation,
                     trainingCourse: replaced.trainingCourse,
+                    avatarUrl: replaced.avatarUrl,
                     posCodeId: replaced.posCodeId,
                     posCodeMaster: replaced.posCodeMaster,
                     fromPosition: replaced.fromPosition,

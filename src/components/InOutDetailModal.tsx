@@ -44,6 +44,7 @@ interface SwapDetail {
   yearsOfService: string | null;
   trainingLocation: string | null;
   trainingCourse: string | null;
+  avatarUrl?: string | null;
   posCodeId: number | null;
   posCodeMaster: {
     id: number;

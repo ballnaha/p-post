@@ -87,6 +87,9 @@ model PolicePersonnel {
   supporterName String? @map("supporter_name") // ผู้สนับสนุน/ผู้เสนอชื่อ
   supportReason String? @map("support_reason") @db.Text // เหตุผลในการสนับสนุน
 
+  // รูปภาพ Avatar
+  avatarUrl String? @map("avatar_url") // URL ของรูป avatar
+
   // Metadata
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

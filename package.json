@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:seed": "node prisma/seed.cjs",
     "seed:poscode": "node prisma/seeds/seed-pos-code.cjs",
+    "migrate:avatars": "tsx scripts/migrate-avatar-urls.ts",
     "clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\""
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "react": "19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "19.1.0",
+    "sharp": "^0.34.5",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -48,6 +50,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.0",
     "prisma": "^6.16.2",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

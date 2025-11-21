@@ -63,6 +63,7 @@ import DataTablePagination from '@/components/DataTablePagination';
 import { EmptyState } from '@/app/components/EmptyState';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import InOutDetailModal from '@/components/InOutDetailModal';
+import { useSearchParams } from 'next/navigation';
 
 interface SwapDetail {
   id: string;
@@ -1250,6 +1251,17 @@ export default function InOutPage() {
     }
   };
 
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const search = searchParams.get('search');
+    if (search) {
+      setSearchText(search);
+      setHasSearched(true);
+      setInitialLoad(false);
+    }
+  }, [searchParams]);
+
   return (
     <Layout>
       <Box 
@@ -1854,7 +1866,8 @@ export default function InOutPage() {
                           <Skeleton variant="text" width="75%" height={16} />
                         </TableCell>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
-                          <Skeleton variant="text" width="80%" height={16} />
+                          <Skeleton variant="text" width="80%" height={14} sx={{ mt: 0.25 }} />
+                          <Skeleton variant="text" width="50%" height={14} sx={{ mt: 0.25 }} />
                         </TableCell>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
                           <Skeleton variant="text" width="90%" height={16} />
@@ -2042,7 +2055,7 @@ export default function InOutPage() {
                                     {replaced.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({replaced.age})</Typography>}
                                   </Typography>
                                   {replaced.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
                                       อาวุโส {replaced.seniority}
                                     </Typography>
                                   )}
@@ -2080,7 +2093,7 @@ export default function InOutPage() {
                                     {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
                                   </Typography>
                                   {detail.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
                                       อาวุโส {detail.seniority}
                                     </Typography>
                                   )}
@@ -2223,20 +2236,11 @@ export default function InOutPage() {
                                     color="info"
                                     sx={{ mb: 0.25, fontWeight: 500, height: 20, fontSize: '0.75rem', '& .MuiChip-icon': { fontSize: '1rem' } }}
                                   />
-                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'success.dark' }}>
-                                    {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
-                                    {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
+                                  <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.75rem', fontWeight: 500 }}>
+                                    ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{detail.fromUnit || '-'}</Box>
                                   </Typography>
-                                  {detail.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
-                                      อาวุโส {detail.seniority}
-                                    </Typography>
-                                  )}
-                                  <Typography variant="body2" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem', fontWeight: 500 }}>
-                                    ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{highlightUnit(detail.fromUnit || '-')}</Box>
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem', fontWeight: 500 }}>
-                                    ไปหน่วย: <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>{highlightGeneral(detail.toUnit || '-')}</Box>
+                                  <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.75rem', fontWeight: 500 }}>
+                                    ไปหน่วย: <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>{detail.toUnit || '-'}</Box>
                                   </Typography>
                                   {(detail.toPosition || detail.toPositionNumber) && (
                                     <>

@@ -108,6 +108,49 @@ export async function GET(request: NextRequest) {
       where: threeWayDetailWhereClause
     });
 
+    // นับจำนวนย้ายหน่วย transfer ทั้งหมด (จาก SwapTransactionDetail)
+    const transferDetailWhereClause: any = {
+      transaction: {
+        year: yearNumber,
+        swapType: 'transfer'
+      }
+    };
+    if (unit && unit !== 'all') {
+      transferDetailWhereClause.OR = [
+        { fromUnit: unit },
+        { toUnit: unit }
+      ];
+    }
+    const totalTransfer = await prisma.swapTransactionDetail.count({
+      where: transferDetailWhereClause
+    });
+
+    // แยกประเภทการย้ายหน่วย (Cross-Unit vs Same-Unit)
+    // ดึงข้อมูลรายละเอียดการย้ายหน่วยทั้งหมดเพื่อมาคำนวณแยกประเภท
+    const transferDetails = await prisma.swapTransactionDetail.findMany({
+      where: transferDetailWhereClause,
+      select: { fromUnit: true, toUnit: true }
+    });
+
+    let transferCrossUnit = 0;
+    let transferSameUnit = 0;
+
+    transferDetails.forEach(detail => {
+      if (detail.fromUnit && detail.toUnit) {
+        if (detail.fromUnit !== detail.toUnit) {
+          transferCrossUnit++;
+        } else {
+          transferSameUnit++;
+        }
+      } else {
+        // กรณีข้อมูลไม่ครบ ถือว่าเป็น Cross Unit ไว้ก่อน (หรืออาจจะไม่นับ)
+        // แต่ในบริบทนี้ ถ้าย้ายหน่วย ควรจะมี from/to unit
+        // ถ้าไม่มี toUnit อาจจะเป็นการย้ายไปตำแหน่งว่างที่ยังไม่ระบุหน่วย?
+        // นับเป็น Cross Unit ไปก่อน
+        transferCrossUnit++;
+      }
+    });
+
     // นับจำนวนคนที่สลับสำเร็จแล้วแบบ two-way (จาก SwapTransactionDetail)
     // กรองตาม fromUnit หรือ toUnit
     const completedSwapDetailWhereClause: any = {
@@ -143,6 +186,23 @@ export async function GET(request: NextRequest) {
       where: completedThreeWayDetailWhereClause
     });
 
+    // นับจำนวนคนที่ย้ายหน่วยสำเร็จแล้ว (จาก SwapTransactionDetail)
+    const completedTransferDetailWhereClause: any = {
+      transaction: {
+        year: yearNumber,
+        swapType: 'transfer'
+      }
+    };
+    if (unit && unit !== 'all') {
+      completedTransferDetailWhereClause.OR = [
+        { fromUnit: unit },
+        { toUnit: unit }
+      ];
+    }
+    const completedTransferCount = await prisma.swapTransactionDetail.count({
+      where: completedTransferDetailWhereClause
+    });
+
     // นับจำนวนประเภทตำแหน่งที่มีในระบบ (จาก vacant_position)
     const uniquePositions = await prisma.vacantPosition.findMany({
       where: { year: yearNumber },
@@ -156,40 +216,85 @@ export async function GET(request: NextRequest) {
       ? (matchedVacantPositions * 100 / totalApplicants)
       : 0;
 
-    // ตำแหน่งที่ได้รับความนิยมสูงสุด (Top 5) - จาก toPosition ใน swap_transaction_detail
-    const topRequestedWhere: any = {
-      transaction: {
-        year: yearNumber
-      },
-      toPosition: { not: null }
+    // สถานะการจับคู่ (Completed vs Incomplete)
+    const transactionStatusWhere: any = {
+      year: yearNumber,
+      swapType: { in: ['transfer', 'promotion-chain'] }
     };
+    
+    // ถ้ามีการกรองหน่วย ต้องเช็คว่า transaction นั้นมี detail ที่เกี่ยวข้องกับหน่วยนั้นหรือไม่
     if (unit && unit !== 'all') {
-      topRequestedWhere.toUnit = unit;
+      transactionStatusWhere.swapDetails = {
+        some: {
+          OR: [
+            { fromUnit: unit },
+            { toUnit: unit }
+          ]
+        }
+      };
     }
 
-    const topRequestedPositionsData = await prisma.swapTransactionDetail.groupBy({
-      by: ['toPosition'],
-      where: topRequestedWhere,
-      _count: {
-        id: true
-      },
-      orderBy: {
-        _count: {
-          id: 'desc'
-        }
-      },
-      take: 5
+    const completedTransactionsCount = await prisma.swapTransaction.count({
+      where: {
+        ...transactionStatusWhere,
+        isCompleted: true
+      }
     });
 
-    // แปลงข้อมูลตำแหน่งที่ได้รับความนิยม
-    const topRequestedPositions = topRequestedPositionsData.map((item) => {
-      return {
-        posCodeId: 0, // ไม่มี posCodeId เพราะ toPosition เป็น string
-        posCodeName: item.toPosition || 'ไม่ระบุ',
-        count: item._count.id,
-        availableSlots: 0 // ไม่สามารถนับได้เพราะไม่มี relation กับ vacant_position
-      };
+    const incompleteTransactionsCount = await prisma.swapTransaction.count({
+      where: {
+        ...transactionStatusWhere,
+        isCompleted: false
+      }
     });
+
+    // Fetch transactions for drilldown
+    const completedTransactions = await prisma.swapTransaction.findMany({
+      where: {
+        ...transactionStatusWhere,
+        isCompleted: true
+      },
+      select: {
+        id: true,
+        groupName: true,
+        groupNumber: true,
+        swapType: true,
+        updatedAt: true
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 100
+    });
+
+    const incompleteTransactions = await prisma.swapTransaction.findMany({
+      where: {
+        ...transactionStatusWhere,
+        isCompleted: false
+      },
+      select: {
+        id: true,
+        groupName: true,
+        groupNumber: true,
+        swapType: true,
+        updatedAt: true
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 100
+    });
+
+    const transactionStatusSummary = [
+      {
+        label: 'การจับคู่ที่สิ้นสุดแล้ว',
+        count: completedTransactionsCount,
+        type: 'completed',
+        transactions: completedTransactions
+      },
+      {
+        label: 'ยังไม่สิ้นสุด',
+        count: incompleteTransactionsCount,
+        type: 'incomplete',
+        transactions: incompleteTransactions
+      }
+    ];
 
     // สถิติแยกตามตำแหน่ง (Position Details) - ใช้ PolicePersonnel
     const personnelGroupWhere: any = {};
@@ -381,6 +486,74 @@ export async function GET(request: NextRequest) {
 
     const availableUnits = Array.from(allUnitsSet).sort();
 
+    // ดึงข้อมูล PolicePersonnel ที่มีผู้สนับสนุน (supporterName ไม่เป็น null และไม่ว่าง) หรือมีเหตุผล (supportReason ไม่เป็น null และไม่ว่าง)
+    const supportedPersonnelWhere: any = {
+      year: yearNumber,
+      OR: [
+        {
+          AND: [
+            { supporterName: { not: null } },
+            { supporterName: { not: '' } }
+          ]
+        },
+        {
+          AND: [
+            { supportReason: { not: null } },
+            { supportReason: { not: '' } }
+          ]
+        }
+      ]
+    };
+
+    if (unit && unit !== 'all') {
+      supportedPersonnelWhere.unit = unit;
+    }
+
+    const supportedPersonnel = await prisma.policePersonnel.findMany({
+      where: supportedPersonnelWhere,
+      select: {
+        id: true,
+        nationalId: true,
+        rank: true,
+        fullName: true,
+        age: true,
+        position: true,
+        posCodeId: true,
+        posCodeMaster: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        unit: true,
+        supporterName: true,
+        supportReason: true,
+      },
+      orderBy: [
+        { posCodeId: 'asc' },
+        { fullName: 'asc' }
+      ],
+    });
+
+    // Check which personnel are matched (have toPosition in swap_transaction_detail)
+    const matchedNationalIds = await prisma.swapTransactionDetail.findMany({
+      where: {
+        nationalId: {
+          in: supportedPersonnel.map(p => p.nationalId).filter(Boolean) as string[]
+        },
+        OR: [
+          { toPosCodeId: { not: null } },
+          { toPosition: { not: null } }
+        ]
+      },
+      select: {
+        nationalId: true
+      },
+      distinct: ['nationalId']
+    });
+
+    const matchedSet = new Set(matchedNationalIds.map(m => m.nationalId));
+
     const dashboardStats = {
       totalVacantPositions,
       assignedPositions,
@@ -390,20 +563,64 @@ export async function GET(request: NextRequest) {
       totalSwapTransactions,
       totalSwapList, // เพิ่มจำนวนสลับตำแหน่งทั้งหมด
       totalThreeWaySwap, // เพิ่มจำนวนสามเส้าทั้งหมด
+      totalTransfer, // เพิ่ม
+      transferCrossUnit, // เพิ่ม
+      transferSameUnit, // เพิ่ม
       completedSwapCount, // จำนวนคนที่สลับสำเร็จแล้วทั้งหมด
       completedThreeWaySwapCount, // จำนวนคนที่สลับสำเร็จแล้วแบบสามเส้า
+      completedTransferCount, // เพิ่ม
       totalPositionTypes,
       assignmentRate,
       positionDetails,
-      topRequestedPositions,
+      transactionStatusSummary, // เปลี่ยนจาก topRequestedPositions
       vacantSlotsSummary,
       chartData: sortedChartData, // ข้อมูลกราฟใหม่
-      availableUnits // รายการหน่วยสำหรับ filter
+      availableUnits, // รายการหน่วยสำหรับ filter
+      supportedPersonnel: supportedPersonnel.map(person => ({
+        id: person.id,
+        rank: person.rank,
+        fullName: person.fullName,
+        age: person.age,
+        position: person.position,
+        posCode: person.posCodeId?.toString() || null,
+        posCodeName: person.posCodeMaster?.name || null,
+        unit: person.unit,
+        supporterName: person.supporterName,
+        supportReason: person.supportReason,
+        isMatched: person.nationalId ? matchedSet.has(person.nationalId) : false,
+      })) // เพิ่มข้อมูลผู้ได้รับการสนับสนุน (mapped fields)
     };
 
     return NextResponse.json({
       success: true,
-      data: dashboardStats
+      data: {
+        totalVacantPositions,
+        assignedPositions,
+        pendingPositions,
+        totalApplicants,
+        matchedVacantPositions,
+        totalSwapTransactions,
+        totalSwapList,
+        totalThreeWaySwap,
+        totalTransfer,
+        transferCrossUnit,
+        transferSameUnit,
+        completedSwapCount,
+        completedThreeWaySwapCount,
+        completedTransferCount,
+        totalPositionTypes,
+        assignmentRate,
+        positionDetails,
+        transactionStatusSummary, // เปลี่ยนจาก topRequestedPositions
+        vacantSlotsSummary: {
+          totalVacantSlots: totalVacantPositions,
+          filledSlots: matchedVacantPositions,
+          remainingSlots: pendingPositions
+        },
+        chartData: sortedChartData,
+        availableUnits,
+        supportedPersonnel: dashboardStats.supportedPersonnel // Use mapped data from dashboardStats
+      }
     });
   } catch (error) {
     console.error('Dashboard API Error:', error);

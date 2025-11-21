@@ -2680,7 +2680,7 @@ export default function HomePage() {
           )}
 
           {/* Supported Personnel Card */}
-          {stats.supportedPersonnel && stats.supportedPersonnel.length > 0 && (
+          {stats.supportedPersonnel && (
             <Card sx={{ 
               borderRadius: 2, 
               boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
@@ -2751,50 +2751,58 @@ export default function HomePage() {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                      {stats.supportedPersonnel
-                        .slice(supportPage * supportRowsPerPage, supportPage * supportRowsPerPage + supportRowsPerPage)
-                        .map((person, index) => (
-                        <TableRow key={person.id} hover>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, flexWrap: 'nowrap', minWidth: 0 }}>
-                              {person.isMatched && (
-                                <Tooltip title="จับคู่ตำแหน่งใหม่แล้ว" arrow>
-                                  <CheckCircle sx={{ fontSize: 16, color: 'success.main', flexShrink: 0, mt: '2px' }} />
-                                </Tooltip>
-                              )}
-                              <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                                <Box component="span" sx={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                                  {person.rank ? `${person.rank} ` : ''}{person.fullName || '-'}
+                      {stats.supportedPersonnel.length > 0 ? (
+                        stats.supportedPersonnel
+                          .slice(supportPage * supportRowsPerPage, supportPage * supportRowsPerPage + supportRowsPerPage)
+                          .map((person) => (
+                            <TableRow key={person.id} hover>
+                              <TableCell sx={{ fontSize: '0.85rem', py: 0.75, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, flexWrap: 'nowrap', minWidth: 0 }}>
+                                  {person.isMatched && (
+                                    <Tooltip title="จับคู่ตำแหน่งใหม่แล้ว" arrow>
+                                      <CheckCircle sx={{ fontSize: 16, color: 'success.main', flexShrink: 0, mt: '2px' }} />
+                                    </Tooltip>
+                                  )}
+                                  <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                    <Box component="span" sx={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                      {person.rank ? `${person.rank} ` : ''}{person.fullName || '-'}
+                                    </Box>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.25 }}>
+                                      ({person.age || '-'})
+                                    </Typography>
+                                  </Box>
                                 </Box>
-                                <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.25 }}>
-                                  ({person.age || '-'})
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>
+                                <Box>
+                                  <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                                    {person.position || '-'}
+                                  </Typography>
+                                  {(person.posCode || person.posCodeName || person.unit) && (
+                                    <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                                      {[person.posCode, person.posCodeName, person.unit].filter(Boolean).join(' • ')}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>{person.supporterName || '-'}</TableCell>
+                              <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>
+                                <Typography variant="caption" sx={{ 
+                                  fontSize: '0.8rem',
+                                  whiteSpace: 'normal'
+                                }}>
+                                  {person.supportReason || '-'}
                                 </Typography>
-                              </Box>
-                            </Box>
-                          </TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>
-                            <Box>
-                              <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 500 }}>
-                                {person.position || '-'}
-                              </Typography>
-                              {(person.posCode || person.posCodeName || person.unit) && (
-                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                                  {[person.posCode, person.posCodeName, person.unit].filter(Boolean).join(' • ')}
-                                </Typography>
-                              )}
-                            </Box>
-                          </TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>{person.supporterName || '-'}</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>
-                            <Typography variant="caption" sx={{ 
-                              fontSize: '0.8rem',
-                              whiteSpace: 'normal'
-                            }}>
-                              {person.supportReason || '-'}
-                            </Typography>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary', fontStyle: 'italic' }}>
+                            ไม่มีข้อมูล
                           </TableCell>
                         </TableRow>
-                      ))}
+                      )}
                     </TableBody>
                   </Table>
                 </TableContainer>

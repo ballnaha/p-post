@@ -22,6 +22,7 @@ import {
   IconButton,
   Button,
   Chip,
+  Checkbox,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -323,6 +324,9 @@ export default function InOutPage() {
     }
     return new Set();
   });
+  
+  // Selected rows state for checkbox selection
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [hiddenRowsHistory, setHiddenRowsHistory] = useState<string[]>(() => {
     // โหลด history จาก localStorage
     if (typeof window !== 'undefined') {
@@ -338,6 +342,7 @@ export default function InOutPage() {
     return [];
   });
   const [fadingRows, setFadingRows] = useState<Set<string>>(new Set()); // แถวที่กำลัง fade out
+  const [highlightedRows, setHighlightedRows] = useState<Set<string>>(new Set()); // แถวที่กำลังแสดง highlight effect
 
   // Store filter options (loaded once)
   const [filterOptions, setFilterOptions] = useState<{
@@ -846,6 +851,7 @@ export default function InOutPage() {
     setPage(0);
     setHiddenRows(new Set()); // Reset hidden rows
     setHiddenRowsHistory([]); // Reset history
+    setSelectedRows(new Set()); // Clear selection when resetting
   };
 
   const handleToggleRowVisibility = (rowId: string) => {
@@ -894,13 +900,93 @@ export default function InOutPage() {
     });
     
     setHiddenRowsHistory(prev => prev.slice(0, -1));
+    
+    // เพิ่ม highlight effect แบบ minimal
+    setHighlightedRows(prev => new Set([...prev, lastHiddenRowId]));
+    
+    // ลบ highlight หลังจาก 1.5 วินาที
+    setTimeout(() => {
+      setHighlightedRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(lastHiddenRowId);
+        return newSet;
+      });
+    }, 1500);
   };
 
   const handleShowAllRows = () => {
+    // Capture current hidden rows so we can highlight them after showing
+    const prevHidden = Array.from(hiddenRows);
+
+    // Nothing to do
+    if (prevHidden.length === 0) {
+      setHiddenRows(new Set());
+      setSelectedRows(new Set());
+      return;
+    }
+
+    // Show all and clear selection
     setHiddenRows(new Set());
-    setHiddenRowsHistory([]);
-    setFadingRows(new Set());
+    setSelectedRows(new Set()); // Clear selection when showing all
+
+    // Add minimal highlight effect for those rows (like undo)
+    setHighlightedRows(prev => {
+      const newSet = new Set(prev);
+      prevHidden.forEach(id => newSet.add(id));
+      return newSet;
+    });
+
+    // Remove highlight after 1.5s
+    setTimeout(() => {
+      setHighlightedRows(prev => {
+        const newSet = new Set(prev);
+        prevHidden.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    }, 1500);
   };
+
+  const handleSelectAllRows = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      const allIds = new Set(filteredSwapDetails.map(detail => detail.id));
+      setSelectedRows(allIds);
+    } else {
+      setSelectedRows(new Set());
+    }
+  };
+
+  const handleSelectRow = (rowId: string) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(rowId)) {
+        newSet.delete(rowId);
+      } else {
+        newSet.add(rowId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleHideSelectedRows = () => {
+    if (selectedRows.size === 0) return;
+    
+    // เริ่ม fade out animation สำหรับแถวที่เลือก
+    setFadingRows(new Set(selectedRows));
+    
+    // หลังจาก animation เสร็จ (300ms) ถึงค่อยซ่อนจริง
+    setTimeout(() => {
+      setHiddenRows(prev => {
+        const newSet = new Set(prev);
+        selectedRows.forEach(rowId => newSet.add(rowId));
+        return newSet;
+      });
+      setHiddenRowsHistory(prevHistory => [...prevHistory, ...Array.from(selectedRows)]);
+      setFadingRows(new Set());
+      setSelectedRows(new Set()); // Clear selection after hiding
+    }, 300);
+  };
+
+
 
   const handleSwapTypeChange = (event: SelectChangeEvent<string>) => {
     console.log('[Frontend] SwapType changed to:', event.target.value);
@@ -1165,6 +1251,38 @@ export default function InOutPage() {
                   alignSelf: { xs: 'flex-start', sm: 'center' }
                 }}
               />
+              {selectedRows.size > 0 && (
+                <Tooltip title={`ซ่อนแถวที่เลือก (${selectedRows.size} รายการ)`}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleHideSelectedRows}
+                    startIcon={<VisibilityOffIcon />}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      px: { xs: 2, sm: 2.5 },
+                      color: '#FF6B6B',
+                      borderColor: '#FF6B6B',
+                      borderWidth: 2,
+                      '&:hover': {
+                        borderWidth: 2,
+                        borderColor: '#EE5A5A',
+                        bgcolor: 'rgba(255, 107, 107, 0.08)',
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 2px 8px rgba(255, 107, 107, 0.2)'
+                      },
+                      '&:active': {
+                        transform: 'translateY(0)'
+                      },
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    ซ่อนที่เลือก ({selectedRows.size})
+                  </Button>
+                </Tooltip>
+              )}
               {hiddenRows.size > 0 && (
                 <>
                   <Chip
@@ -1636,6 +1754,19 @@ export default function InOutPage() {
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', width: 60, fontWeight: 600, py: 2, px: 1 }}>
+                      <Checkbox
+                        checked={filteredSwapDetails.length > 0 && selectedRows.size === filteredSwapDetails.length}
+                        indeterminate={selectedRows.size > 0 && selectedRows.size < filteredSwapDetails.length}
+                        onChange={handleSelectAllRows}
+                        sx={{
+                          color: 'rgba(255, 255, 255, 0.7)',
+                          '&.Mui-checked': { color: 'white' },
+                          '&.MuiCheckbox-indeterminate': { color: 'white' },
+                          p: 0
+                        }}
+                      />
+                    </TableCell>
                     <TableCell sx={{ color: 'white', width: 50, fontWeight: 600, py: 2 }}>
                       #
                     </TableCell>
@@ -1662,6 +1793,9 @@ export default function InOutPage() {
                     Array.from({ length: loadMode === 'infinite' ? 20 : (rowsPerPage === -1 ? 20 : Math.min(rowsPerPage, 20)) }).map((_, index) => (
                       <TableRow key={`skeleton-${index}`}>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
+                          <Skeleton variant="rectangular" width={18} height={18} />
+                        </TableCell>
+                        <TableCell sx={{ py: 0.5, px: 1 }}>
                           <Skeleton variant="text" width={20} height={16} />
                         </TableCell>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
@@ -1683,7 +1817,7 @@ export default function InOutPage() {
                     ))
                   ) : filteredSwapDetails.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} sx={{ p: 0, border: 'none' }}>
+                      <TableCell colSpan={7} sx={{ p: 0, border: 'none' }}>
                         <EmptyState
                           icon={PersonIcon}
                           title={!hasSearched ? 'เลือก Filter แล้วจะแสดงข้อมูล' : (searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล')}
@@ -1709,6 +1843,7 @@ export default function InOutPage() {
                         <TableRow
                           key={detail.id}
                           hover
+                          selected={selectedRows.has(detail.id)}
                           sx={{
                             '&:hover': {
                               bgcolor: 'action.hover'
@@ -1719,8 +1854,22 @@ export default function InOutPage() {
                             opacity: fadingRows.has(detail.id) ? 0 : 1,
                             transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
                             transition: 'all 0.3s ease-out',
+                            bgcolor: highlightedRows.has(detail.id) ? 'rgba(0, 191, 165, 0.08)' : undefined,
+                            boxShadow: highlightedRows.has(detail.id) ? 'inset 3px 0 0 #00BFA5' : undefined,
                           }}
                         >
+                          {/* Checkbox */}
+                          <TableCell sx={{ 
+                            py: 0.75, 
+                            px: 1
+                          }}>
+                            <Checkbox
+                              checked={selectedRows.has(detail.id)}
+                              onChange={() => handleSelectRow(detail.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              sx={{ p: 0 }}
+                            />
+                          </TableCell>
                           {/* # */}
                           <TableCell sx={{ 
                             py: 0.75, 
@@ -2090,44 +2239,25 @@ export default function InOutPage() {
                             py: 0.75, 
                             px: 1
                           }}>
-                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                              <Tooltip title="ซ่อนแถว">
+                            {detail.transaction && (
+                              <Tooltip title="ดูรายละเอียด">
                                 <IconButton
                                   size="small"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleToggleRowVisibility(detail.id);
+                                    handleViewDetail(detail);
                                   }}
                                   sx={{ 
                                     color: 'text.secondary',
                                     '&:hover': {
-                                      color: 'warning.main'
+                                      color: 'primary.main'
                                     }
                                   }}
                                 >
-                                  <VisibilityOffIcon sx={{ fontSize: '1rem' }} />
+                                  <InfoIcon sx={{ fontSize: '1rem' }} />
                                 </IconButton>
                               </Tooltip>
-                              {detail.transaction && (
-                                <Tooltip title="ดูรายละเอียด">
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewDetail(detail);
-                                    }}
-                                    sx={{ 
-                                      color: 'text.secondary',
-                                      '&:hover': {
-                                        color: 'primary.main'
-                                      }
-                                    }}
-                                  >
-                                    <InfoIcon sx={{ fontSize: '1rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Box>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

@@ -50,11 +50,18 @@ export async function POST(
       );
     }
 
-    // ลบรูปเดิมถ้ามี
+    // *** ลบรูปเก่าออกก่อน (ถ้ามีอยู่) ***
     if (personnel.avatarUrl) {
-      const oldFilePath = path.join(process.cwd(), 'public', personnel.avatarUrl);
+      const filename = personnel.avatarUrl.replace('/api/avatars/', '');
+      const oldFilePath = path.join(process.cwd(), 'public', 'avatars', filename);
       if (existsSync(oldFilePath)) {
-        await unlink(oldFilePath);
+        try {
+          await unlink(oldFilePath);
+          console.log('Deleted old avatar:', oldFilePath);
+        } catch (error) {
+          console.error('Error deleting old avatar:', error);
+          // ดำเนินการต่อแม้ว่าลบไม่สำเร็จ เพราะอาจเป็นไฟล์ที่ไม่มีอยู่จริง
+        }
       }
     }
 

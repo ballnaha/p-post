@@ -2016,6 +2016,15 @@ export default function HomePage() {
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
                     }}>
+                      POSCODE
+                    </TableCell>
+                    <TableCell sx={{ 
+                      fontWeight: 600, 
+                      py: 1, 
+                      fontSize: '0.75rem', 
+                      color: '#424242',
+                      borderBottom: '1px solid #E0E0E0',
+                    }}>
                       ชื่อตำแหน่ง
                     </TableCell>
                     <TableCell align="center" sx={{ 
@@ -2731,34 +2740,39 @@ export default function HomePage() {
                 </Box>
               </Box>
               <CardContent sx={{ p: 0, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
-                  <Table stickyHeader size="small">
+                <TableContainer sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+                  <Table stickyHeader size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', minWidth: 200 }}>ชื่อ-สกุล</TableCell>
-                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: 60 }}>อายุ</TableCell>
-                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', minWidth: 250 }}>ตำแหน่ง</TableCell>
-                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', minWidth: 150 }}>ผู้สนับสนุน</TableCell>
-                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', minWidth: 200 }}>เหตุผล</TableCell>
-                      </TableRow>
+                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '25%' }}>ชื่อ-สกุล</TableCell>
+                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '20%' }}>ตำแหน่ง</TableCell>
+                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '20%' }}>ผู้สนับสนุน</TableCell>
+                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '35%' }}>เหตุผล</TableCell>
+                        </TableRow>
                     </TableHead>
                     <TableBody>
                       {stats.supportedPersonnel
                         .slice(supportPage * supportRowsPerPage, supportPage * supportRowsPerPage + supportRowsPerPage)
                         .map((person, index) => (
                         <TableRow key={person.id} hover>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, flexWrap: 'nowrap', minWidth: 0 }}>
                               {person.isMatched && (
                                 <Tooltip title="จับคู่ตำแหน่งใหม่แล้ว" arrow>
-                                  <CheckCircle sx={{ fontSize: 16, color: 'success.main' }} />
+                                  <CheckCircle sx={{ fontSize: 16, color: 'success.main', flexShrink: 0, mt: '2px' }} />
                                 </Tooltip>
                               )}
-                              <span>{person.rank ? `${person.rank} ` : ''}{person.fullName || '-'}</span>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                <Box component="span" sx={{ display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                  {person.rank ? `${person.rank} ` : ''}{person.fullName || '-'}
+                                </Box>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.25 }}>
+                                  ({person.age || '-'})
+                                </Typography>
+                              </Box>
                             </Box>
                           </TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, textAlign: 'center' }}>{person.age || '-'}</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75 }}>
+                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>
                             <Box>
                               <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 500 }}>
                                 {person.position || '-'}
@@ -2770,21 +2784,14 @@ export default function HomePage() {
                               )}
                             </Box>
                           </TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75 }}>{person.supporterName || '-'}</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75 }}>
-                            <Tooltip title={person.supportReason || ''}>
-                              <Typography variant="caption" sx={{ 
-                                display: '-webkit-box',
-                                overflow: 'hidden',
-                                WebkitBoxOrient: 'vertical',
-                                WebkitLineClamp: 2,
-                                maxWidth: 200,
-                                fontSize: '0.8rem'
-                              }}>
-                                {person.supportReason || '-'
-}
-                              </Typography>
-                            </Tooltip>
+                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>{person.supporterName || '-'}</TableCell>
+                          <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>
+                            <Typography variant="caption" sx={{ 
+                              fontSize: '0.8rem',
+                              whiteSpace: 'normal'
+                            }}>
+                              {person.supportReason || '-'}
+                            </Typography>
                           </TableCell>
                         </TableRow>
                       ))}

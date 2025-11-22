@@ -2745,9 +2745,9 @@ export default function HomePage() {
                     <TableHead>
                       <TableRow>
                           <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '25%' }}>ชื่อ-สกุล</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '20%' }}>ตำแหน่ง</TableCell>
+                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '25%' }}>ตำแหน่ง</TableCell>
                           <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '20%' }}>ผู้สนับสนุน</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '35%' }}>เหตุผล</TableCell>
+                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '30%' }}>เหตุผล</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>

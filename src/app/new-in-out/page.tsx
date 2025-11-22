@@ -298,6 +298,7 @@ export default function InOutPage() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -705,38 +706,105 @@ export default function InOutPage() {
     if (loadMode === 'infinite') {
       // ถ้ายังไม่มีข้อมูลเลยและกำลังโหลด ให้ return [] เพื่อแสดง skeleton
       if (allData.length === 0 && loadingMore) return [];
-      
+
       // กรองแถวที่ซ่อนออก
       const filtered = allData.filter(d => !hiddenRows.has(d.id));
       console.log('[Infinite Scroll] Displaying:', filtered.length, 'items (hidden:', hiddenRows.size, ')');
-      
-      return [...filtered].sort((a, b) => {
-        const hasTransactionA = !!a.transaction;
-        const hasTransactionB = !!b.transaction;
-        if (hasTransactionA && !hasTransactionB) return -1;
-        if (!hasTransactionA && hasTransactionB) return 1;
-        if (hasTransactionA && hasTransactionB) {
-          const transactionIdA = a.transaction!.id;
-          const transactionIdB = b.transaction!.id;
-          if (transactionIdA !== transactionIdB) {
-            return transactionIdA.localeCompare(transactionIdB);
+
+      const sortedInfinite = [...filtered].sort((a, b) => {
+        // ถ้า filter ประเภท (selectedSwapType !== 'all') ให้เรียงตาม transaction group + sequence
+        // ถ้าไม่ filter (selectedSwapType === 'all') ให้เรียงตาม fromPositionNumber
+        if (selectedSwapType !== 'all') {
+          // มี filter ประเภท: แสดง row group, เรียงตาม groupNumber → transaction.id → sequence
+          const hasTransactionA = !!a.transaction;
+          const hasTransactionB = !!b.transaction;
+          
+          // ให้รายการที่มี transaction ขึ้นก่อน
+          if (hasTransactionA && !hasTransactionB) return -1;
+          if (!hasTransactionA && hasTransactionB) return 1;
+          
+          if (hasTransactionA && hasTransactionB) {
+            // เรียงตาม groupNumber ก่อน (numeric)
+            const groupA = a.transaction!.groupNumber || '';
+            const groupB = b.transaction!.groupNumber || '';
+            if (groupA && groupB) {
+              const cmp = String(groupA).localeCompare(String(groupB), undefined, { numeric: true });
+              if (cmp !== 0) return cmp;
+            } else if (groupA && !groupB) {
+              return -1;
+            } else if (!groupA && groupB) {
+              return 1;
+            }
+            
+            // ถ้า groupNumber เท่ากัน ให้เรียงตาม transaction.id
+            const transactionIdA = a.transaction!.id;
+            const transactionIdB = b.transaction!.id;
+            if (transactionIdA !== transactionIdB) return transactionIdA.localeCompare(transactionIdB);
+            
+            // ภายใน transaction เดียวกัน เรียงตาม sequence
+            const sequenceA = a.sequence ?? 999999;
+            const sequenceB = b.sequence ?? 999999;
+            if (sequenceA !== sequenceB) return sequenceA - sequenceB;
           }
-          const sequenceA = a.sequence ?? 999999;
-          const sequenceB = b.sequence ?? 999999;
-          if (sequenceA !== sequenceB) {
-            return sequenceA - sequenceB;
+          
+          // Fallback: noId then fullName
+          const noIdA = a.noId || '';
+          const noIdB = b.noId || '';
+          if (noIdA && noIdB) {
+            const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+            if (compareNum !== 0) return compareNum;
           }
+          if (noIdA && !noIdB) return -1;
+          if (!noIdA && noIdB) return 1;
+          return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+        } else {
+          // ไม่มี filter ประเภท (all): เรียงตาม fromPositionNumber เท่านั้น
+          const posA = a.fromPositionNumber ?? '';
+          const posB = b.fromPositionNumber ?? '';
+          const digitsA = (posA || '').replace(/\D/g, '');
+          const digitsB = (posB || '').replace(/\D/g, '');
+          const numA = digitsA ? BigInt(digitsA) : null;
+          const numB = digitsB ? BigInt(digitsB) : null;
+          if (numA !== null && numB !== null) {
+            if (numA < numB) return -1;
+            if (numA > numB) return 1;
+          } else if (numA !== null) {
+            return -1;
+          } else if (numB !== null) {
+            return 1;
+          }
+          
+          // Fallback: noId then fullName
+          const noIdA = a.noId || '';
+          const noIdB = b.noId || '';
+          if (noIdA && noIdB) {
+            const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+            if (compareNum !== 0) return compareNum;
+          }
+          if (noIdA && !noIdB) return -1;
+          if (!noIdA && noIdB) return 1;
+          return (a.fullName || '').localeCompare(b.fullName || '', 'th');
         }
-        const noIdA = a.noId || '';
-        const noIdB = b.noId || '';
-        if (noIdA && noIdB) {
-          const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
-          if (compareNum !== 0) return compareNum;
-        }
-        if (noIdA && !noIdB) return -1;
-        if (!noIdA && noIdB) return 1;
-        return (a.fullName || '').localeCompare(b.fullName || '', 'th');
       });
+
+      // Debug: แสดงจากตำแหน่งคนครองของรายการแรก ๆ พร้อมตัวเลขที่สกัด
+      if (sortedInfinite.length > 0) {
+        console.log('[Infinite Scroll] Sorted sample (first 10):', sortedInfinite.slice(0, 10).map(d => {
+          const pos = d.fromPositionNumber ?? '';
+          const digits = (pos || '').replace(/\D/g, '');
+          return {
+            id: d.id,
+            fullName: d.fullName,
+            transactionId: d.transaction?.id,
+            fromPositionNumber: pos,
+            digits: digits,
+            numeric: digits ? digits : null,
+            sequence: d.sequence
+          };
+        }));
+      }
+
+      return sortedInfinite;
     }
 
     // ถ้ากำลังโหลด ให้ return [] เพื่อแสดง skeleton
@@ -761,59 +829,97 @@ export default function InOutPage() {
       });
     }
 
-    // เรียงข้อมูลตาม transaction ID และ sequence เพื่อให้บุคลากรใน transaction เดียวกันอยู่ติดกัน
+    // เรียงข้อมูล:
+    // - ถ้า filter ประเภท (selectedSwapType !== 'all'): เรียงตาม transaction + sequence
+    // - ถ้าไม่ filter (selectedSwapType === 'all'): เรียงตาม fromPositionNumber
     const sorted = [...filtered].sort((a, b) => {
-      // 1. แยกกลุ่มตามว่ามี transaction หรือไม่
-      const hasTransactionA = !!a.transaction;
-      const hasTransactionB = !!b.transaction;
-
-      // ให้รายการที่มี transaction ขึ้นก่อน
-      if (hasTransactionA && !hasTransactionB) return -1;
-      if (!hasTransactionA && hasTransactionB) return 1;
-
-      // 2. ถ้าทั้งคู่มี transaction ให้เรียงตาม transaction ID และ sequence
-      if (hasTransactionA && hasTransactionB) {
-        const transactionIdA = a.transaction!.id;
-        const transactionIdB = b.transaction!.id;
-
-        // เรียงตาม transaction ID
-        if (transactionIdA !== transactionIdB) {
-          return transactionIdA.localeCompare(transactionIdB);
+      if (selectedSwapType !== 'all') {
+        // มี filter ประเภท: แสดง row group, เรียงตาม groupNumber → transaction.id → sequence
+        const hasTransactionA = !!a.transaction;
+        const hasTransactionB = !!b.transaction;
+        
+        if (hasTransactionA && !hasTransactionB) return -1;
+        if (!hasTransactionA && hasTransactionB) return 1;
+        
+        if (hasTransactionA && hasTransactionB) {
+          // เรียงตาม groupNumber ก่อน (numeric)
+          const groupA = a.transaction!.groupNumber || '';
+          const groupB = b.transaction!.groupNumber || '';
+          if (groupA && groupB) {
+            const cmp = String(groupA).localeCompare(String(groupB), undefined, { numeric: true });
+            if (cmp !== 0) return cmp;
+          } else if (groupA && !groupB) {
+            return -1;
+          } else if (!groupA && groupB) {
+            return 1;
+          }
+          
+          // ถ้า groupNumber เท่ากัน ให้เรียงตาม transaction.id
+          const transactionIdA = a.transaction!.id;
+          const transactionIdB = b.transaction!.id;
+          if (transactionIdA !== transactionIdB) return transactionIdA.localeCompare(transactionIdB);
+          
+          // ภายใน transaction เดียวกัน เรียงตาม sequence
+          const sequenceA = a.sequence ?? 999999;
+          const sequenceB = b.sequence ?? 999999;
+          if (sequenceA !== sequenceB) return sequenceA - sequenceB;
         }
-
-        // ถ้า transaction ID เท่ากัน ให้เรียงตาม sequence
-        const sequenceA = a.sequence ?? 999999;
-        const sequenceB = b.sequence ?? 999999;
-
-        if (sequenceA !== sequenceB) {
-          return sequenceA - sequenceB;
+        
+        // Fallback: noId then fullName
+        const noIdA = a.noId || '';
+        const noIdB = b.noId || '';
+        if (noIdA && noIdB) {
+          const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+          if (compareNum !== 0) return compareNum;
         }
+        if (noIdA && !noIdB) return -1;
+        if (!noIdA && noIdB) return 1;
+        return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+      } else {
+        // ไม่มี filter ประเภท (all): เรียงตาม fromPositionNumber เท่านั้น
+        const posA = a.fromPositionNumber ?? '';
+        const posB = b.fromPositionNumber ?? '';
+        const digitsA = (posA || '').replace(/\D/g, '');
+        const digitsB = (posB || '').replace(/\D/g, '');
+        const numA = digitsA ? BigInt(digitsA) : null;
+        const numB = digitsB ? BigInt(digitsB) : null;
+        if (numA !== null && numB !== null) {
+          if (numA < numB) return -1;
+          if (numA > numB) return 1;
+        } else if (numA !== null) {
+          return -1;
+        } else if (numB !== null) {
+          return 1;
+        }
+        
+        // Fallback: noId then fullName
+        const noIdA = a.noId || '';
+        const noIdB = b.noId || '';
+        if (noIdA && noIdB) {
+          const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+          if (compareNum !== 0) return compareNum;
+        }
+        if (noIdA && !noIdB) return -1;
+        if (!noIdA && noIdB) return 1;
+        return (a.fullName || '').localeCompare(b.fullName || '', 'th');
       }
-
-      // 3. ถ้าไม่มี transaction หรือ sequence เท่ากัน ให้เรียงตาม noId
-      const noIdA = a.noId || '';
-      const noIdB = b.noId || '';
-
-      if (noIdA && noIdB) {
-        const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
-        if (compareNum !== 0) return compareNum;
-      }
-
-      if (noIdA && !noIdB) return -1;
-      if (!noIdA && noIdB) return 1;
-
-      // 4. สุดท้ายเรียงตามชื่อ
-      return (a.fullName || '').localeCompare(b.fullName || '', 'th');
     });
 
-    // Debug: แสดง 5 รายการแรกเพื่อตรวจสอบการเรียง
+    // Debug: แสดง 10 รายการแรกเพื่อตรวจสอบการเรียง (รวมตำแหน่งคนครอง + ตัวเลขที่สกัด)
     if (sorted.length > 0) {
-      console.log('[In-Out] Sorted data (first 5):', sorted.slice(0, 5).map(d => ({
-        noId: d.noId,
-        fullName: d.fullName,
-        transactionId: d.transaction?.id,
-        sequence: d.sequence
-      })));
+      console.log('[In-Out] Sorted data (first 10):', sorted.slice(0, 10).map(d => {
+        const pos = d.fromPositionNumber ?? '';
+        const digits = (pos || '').replace(/\D/g, '');
+        return {
+          noId: d.noId,
+          fullName: d.fullName,
+          transactionId: d.transaction?.id,
+          fromPositionNumber: pos,
+          digits: digits,
+          numeric: digits ? digits : null,
+          sequence: d.sequence
+        };
+      }));
     }
 
     return sorted;
@@ -846,6 +952,16 @@ export default function InOutPage() {
   const handleChangePage = (newPage: number) => {
     setInitialLoad(false); // Mark that user has interacted
     setPage(newPage);
+    // Scroll table container into view so first row is visible after pagination
+    // Use a small timeout to wait for DOM update
+    setTimeout(() => {
+      const el = tableContainerRef.current;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 80);
   };
 
   const handleChangeRowsPerPage = (newRowsPerPage: number) => {
@@ -1811,7 +1927,7 @@ export default function InOutPage() {
                 </Typography>
               </Box>
             )}
-            <TableContainer>
+            <TableContainer ref={tableContainerRef}>
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
@@ -1890,9 +2006,11 @@ export default function InOutPage() {
                     </TableRow>
                   ) : (
                     filteredSwapDetails.map((detail, index) => {
-                      // ตรวจสอบว่าเป็นคนแรกของกลุ่มใหม่หรือไม่
+                      // ตรวจสอบว่าเป็นคนแรก/คนสุดท้ายของกลุ่มใหม่หรือไม่
                       const prevDetail = index > 0 ? filteredSwapDetails[index - 1] : null;
+                      const nextDetail = index < filteredSwapDetails.length - 1 ? filteredSwapDetails[index + 1] : null;
                       const isNewGroup = !prevDetail || prevDetail.transaction?.id !== detail.transaction?.id;
+                      const isEndOfGroup = !nextDetail || nextDetail.transaction?.id !== detail.transaction?.id;
                       const replaced = detail.replacedPerson;
                       const isVacant = !replaced;
 
@@ -1902,7 +2020,8 @@ export default function InOutPage() {
                       const isSameLevel = detail.posCodeId && detail.toPosCodeId && detail.toPosCodeId === detail.posCodeId;
 
                       return [
-                        isNewGroup && detail.transaction ? (
+                        // แสดง row group header เฉพาะเมื่อมี filter ประเภท (selectedSwapType !== 'all')
+                        isNewGroup && detail.transaction && selectedSwapType !== 'all' ? (
                           <TableRow key={`group-${detail.transaction.id || 'nogroup'}`}>
                             <TableCell colSpan={7} sx={{ py: 1, px: 2, bgcolor: alpha(theme.palette.primary.main, 0.06), borderBottom: 1, borderColor: 'divider' }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
@@ -1938,6 +2057,10 @@ export default function InOutPage() {
                             transition: 'all 0.3s ease-out',
                             bgcolor: highlightedRows.has(detail.id) ? 'rgba(0, 191, 165, 0.08)' : undefined,
                             boxShadow: highlightedRows.has(detail.id) ? 'inset 3px 0 0 #00BFA5' : undefined,
+                            '& > *': {
+                              // แสดง border ปิดกลุ่มเฉพาะเมื่อมี filter ประเภท
+                              borderBottom: isEndOfGroup && detail.transaction && selectedSwapType !== 'all' ? `2px solid ${theme.palette.secondary.main}` : undefined
+                            }
                           }}
                         >
                           {/* Checkbox */}
@@ -2206,13 +2329,30 @@ export default function InOutPage() {
                                       )}
                                     </>
                                   ) : (
-                                    <Chip
-                                      label="-"
-                                      size="small"
-                                      color="default"
-                                      variant="outlined"
-                                      sx={{ fontWeight: 600, fontSize: '0.75rem' }}
-                                    />
+                                    /* ถ้าไม่มี toPosition ให้แสดง fromPosition (ตำแหน่งของช่องว่าง) ถ้ามี */
+                                    (detail.fromPosition || detail.fromPositionNumber) ? (
+                                      <>
+                                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                          {highlightText(detail.fromPosition || '-', highlightTerms)}
+                                        </Typography>
+                                        {detail.posCodeMaster && (
+                                          <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                            {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
+                                          </Typography>
+                                        )}
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                          {joinInlineWithHighlight(highlightTerms, detail.fromUnit, detail.fromPositionNumber ? `#${detail.fromPositionNumber}` : null)}
+                                        </Typography>
+                                      </>
+                                    ) : (
+                                      <Chip
+                                        label="-"
+                                        size="small"
+                                        color="default"
+                                        variant="outlined"
+                                        sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                      />
+                                    )
                                   )}
                                 </>
                               )}
@@ -2474,7 +2614,8 @@ export default function InOutPage() {
                     const prevDetail = index > 0 ? filteredSwapDetails[index - 1] : null;
                     const isNewGroup = !prevDetail || prevDetail.transaction?.id !== detail.transaction?.id;
                     return [
-                      isNewGroup && detail.transaction ? (
+                      // แสดง row group header เฉพาะเมื่อมี filter ประเภท (selectedSwapType !== 'all')
+                      isNewGroup && detail.transaction && selectedSwapType !== 'all' ? (
                         <Paper key={`group-${detail.transaction.id || 'nogroup'}`} sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.primary.main, 0.06), border: 1, borderColor: 'divider' }} elevation={0}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
                             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>

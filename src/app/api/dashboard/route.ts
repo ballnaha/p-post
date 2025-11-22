@@ -39,7 +39,9 @@ export async function GET(request: NextRequest) {
       transaction: {
         year: yearNumber,
         swapType: 'promotion-chain'
-      }
+      },
+      // นับเฉพาะรายการที่มี posCodeId (เพื่อให้สอดคล้องกับกราฟที่แยกตาม posCode)
+      posCodeId: { not: null }
     };
     if (unit && unit !== 'all') {
       promotionChainBaseWhere.OR = [

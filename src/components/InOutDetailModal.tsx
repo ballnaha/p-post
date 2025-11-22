@@ -177,7 +177,7 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <SwapHorizIcon color="primary" />
           <Typography variant="h6" fontWeight={600} sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-            รายละเอียดการสลับตำแหน่ง
+            รายละเอียดตำแหน่ง
           </Typography>
         </Box>
         <IconButton onClick={onClose} size="small">
@@ -301,11 +301,11 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
             </Box>
           </Paper>
 
-          {/* สรุปการสลับตำแหน่ง */}
+          {/* สรุปตำแหน่ง */}
           <Paper sx={{ p: { xs: 2, sm: 3 }, bgcolor: alpha('#2196f3', 0.05), border: 2, borderColor: 'primary.main' }}>
             <Typography variant="h6" fontWeight={600} color="primary.main" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
               <SwapHorizIcon />
-              สรุปการสลับตำแหน่ง
+              สรุปตำแหน่ง
             </Typography>
             <Divider sx={{ my: 2 }} />
             

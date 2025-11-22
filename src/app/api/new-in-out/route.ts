@@ -144,37 +144,20 @@ export async function GET(request: NextRequest) {
         console.log('[API] Filled positions count:', filledPositions.size);
         console.log('[API] Filled positions:', Array.from(filledPositions).slice(0, 10));
 
-        let filteredOutCount = 0;
+        // สร้าง Map เก็บตำแหน่งว่างทั้งหมด (unit|positionNumber -> person)
+        const vacantPositionsMap = new Map();
+        personnel.forEach(person => {
+            const isVacant = !person.fullName || 
+                            person.fullName.trim() === '' ||
+                            ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
+            if (isVacant && person.unit && person.positionNumber) {
+                const posKey = `${person.unit}|${person.positionNumber}`;
+                vacantPositionsMap.set(posKey, person);
+            }
+        });
+
+        // ไม่กรองตำแหน่งว่างที่มีคนมาแทนแล้วออก เพื่อให้เห็นว่าตำแหน่งว่างมีใครเข้ามาแทนบ้าง
         let combinedData = personnel
-            .filter(person => {
-                // ตรวจสอบว่าเป็นตำแหน่งว่างหรือไม่
-                const isVacant = !person.fullName || 
-                                person.fullName.trim() === '' ||
-                                ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
-                
-                if (!isVacant) return true; // ถ้าไม่ใช่ตำแหน่งว่าง แสดงปกติ
-                
-                // ถ้าเป็นตำแหน่งว่าง ตรวจสอบว่ามีคนเข้ามาแทนหรือไม่
-                // 1. ตรวจสอบจาก personnelId หรือ nationalId
-                const swapInfo = swapByPersonnelId.get(person.id) || 
-                                (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
-                if (swapInfo) {
-                    filteredOutCount++;
-                    console.log('[API] Filtered out (has swap):', person.position, person.positionNumber);
-                    return false;
-                }
-                
-                // 2. ตรวจสอบว่ามีคนเข้ามาแทนตำแหน่งนี้หรือไม่ (ใช้ positionNumber เท่านั้น)
-                const posKey = person.unit && person.positionNumber ? `${person.unit}|${person.positionNumber}` : null;
-                
-                if (posKey && filledPositions.has(posKey)) {
-                    filteredOutCount++;
-                    console.log('[API] Filtered out (position filled):', posKey);
-                    return false;
-                }
-                
-                return true; // ตำแหน่งว่างที่ยังไม่มีคนเข้ามาแทน แสดง
-            })
             .map(person => {
                 const swapInfo = swapByPersonnelId.get(person.id) || 
                                 (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
@@ -228,7 +211,126 @@ export async function GET(request: NextRequest) {
                 };
             });
 
-        console.log('[API] After filter - Total:', combinedData.length, 'Filtered out:', filteredOutCount);
+        // ถ้า filter สถานะ = "ว่าง" ให้เพิ่มคนที่เข้ามาแทนตำแหน่งว่างด้วย
+        if (status === 'vacant') {
+            console.log('[API] Filtering vacant - checking for people moving into vacant positions');
+            
+            // หาคนที่มี toPosition ชี้มาที่ตำแหน่งว่าง
+            const peopleMovingIntoVacant = swapDetails.filter(detail => {
+                if (!detail.toUnit || !detail.toPositionNumber) return false;
+                
+                // ตรวจสอบว่าเป็นการเข้าตำแหน่งว่างหรือไม่
+                const posKey = `${detail.toUnit}|${detail.toPositionNumber}`;
+                return vacantPositionsMap.has(posKey);
+            });
+
+            console.log('[API] Found people moving into vacant positions:', peopleMovingIntoVacant.length);
+
+            // สร้าง Set เก็บตำแหน่งว่างที่มีคนเข้ามาแทนแล้ว (เพื่อใช้กรอง)
+            const filledVacantPositions = new Set<string>();
+            peopleMovingIntoVacant.forEach(detail => {
+                if (detail.toUnit && detail.toPositionNumber) {
+                    const posKey = `${detail.toUnit}|${detail.toPositionNumber}`;
+                    filledVacantPositions.add(posKey);
+                }
+            });
+
+            // กรองตำแหน่งว่างที่มีคนครองแล้วออกจาก combinedData
+            // เก็บเฉพาะตำแหน่งว่างที่ยังไม่มีคนครอง
+            combinedData = combinedData.filter(person => {
+                // ตรวจสอบว่าเป็นตำแหน่งว่างหรือไม่
+                const isVacant = !person.fullName || 
+                                person.fullName.trim() === '' ||
+                                ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
+                
+                if (!isVacant) return true; // ถ้าไม่ใช่ตำแหน่งว่าง ให้แสดง
+                
+                // ถ้าเป็นตำแหน่งว่าง ตรวจสอบว่ามีคนครองหรือไม่
+                const posKey = person.fromUnit && person.fromPositionNumber ? 
+                              `${person.fromUnit}|${person.fromPositionNumber}` : null;
+                
+                if (posKey && filledVacantPositions.has(posKey)) {
+                    // ตำแหน่งว่างนี้มีคนครองแล้ว ไม่ต้องแสดง (จะแสดงคนที่ครองแทน)
+                    console.log('[API] Hiding vacant position (filled):', posKey);
+                    return false;
+                }
+                
+                return true; // แสดงตำแหน่งว่างที่ยังไม่มีคนครอง
+            });
+
+            // เพิ่มคนเหล่านี้เข้าไปใน combinedData
+            for (const swapInfo of peopleMovingIntoVacant) {
+                // ตรวจสอบว่าคนนี้มีอยู่ใน combinedData แล้วหรือไม่ (เช็คจาก personnelId)
+                const exists = combinedData.some(d => d.personnelId === swapInfo.personnelId);
+                if (exists) {
+                    console.log('[API] Person already in data:', swapInfo.fullName);
+                    continue; // ถ้ามีอยู่แล้ว ไม่ต้องเพิ่มซ้ำ
+                }
+
+                // ดึงข้อมูลเต็มของคนนี้จาก personnel (ถ้ามี)
+                const fullPersonnel = await prisma.policePersonnel.findFirst({
+                    where: {
+                        OR: [
+                            { id: swapInfo.personnelId || '' },
+                            { nationalId: swapInfo.nationalId || '' }
+                        ],
+                        year: currentBuddhistYear,
+                        isActive: true
+                    },
+                    include: { posCodeMaster: true }
+                });
+
+                combinedData.push({
+                    id: swapInfo.personnelId || swapInfo.id,
+                    personnelId: swapInfo.personnelId || swapInfo.id,
+                    noId: swapInfo.noId || fullPersonnel?.noId || null,
+                    fullName: swapInfo.fullName,
+                    rank: swapInfo.rank,
+                    nationalId: swapInfo.nationalId,
+                    age: swapInfo.age,
+                    seniority: swapInfo.seniority,
+                    birthDate: swapInfo.birthDate,
+                    education: swapInfo.education,
+                    lastAppointment: swapInfo.lastAppointment,
+                    currentRankSince: swapInfo.currentRankSince,
+                    enrollmentDate: swapInfo.enrollmentDate,
+                    retirementDate: swapInfo.retirementDate,
+                    yearsOfService: swapInfo.yearsOfService,
+                    trainingLocation: swapInfo.trainingLocation,
+                    trainingCourse: swapInfo.trainingCourse,
+                    avatarUrl: swapInfo.avatarUrl || fullPersonnel?.avatarUrl || null,
+                    
+                    posCodeId: swapInfo.posCodeId,
+                    posCodeMaster: swapInfo.posCodeMaster,
+                    fromPosition: swapInfo.fromPosition,
+                    fromPositionNumber: swapInfo.fromPositionNumber,
+                    fromUnit: swapInfo.fromUnit,
+                    fromActingAs: swapInfo.fromActingAs,
+                    
+                    toPosCodeId: swapInfo.toPosCodeId,
+                    toPosCodeMaster: swapInfo.toPosCodeMaster,
+                    toPosition: swapInfo.toPosition,
+                    toPositionNumber: swapInfo.toPositionNumber,
+                    toUnit: swapInfo.toUnit,
+                    toActingAs: swapInfo.toActingAs,
+                    
+                    transaction: {
+                        id: swapInfo.transaction.id,
+                        year: swapInfo.transaction.year,
+                        swapDate: swapInfo.transaction.swapDate,
+                        swapType: swapInfo.transaction.swapType,
+                        groupNumber: swapInfo.transaction.groupNumber,
+                        groupName: swapInfo.transaction.groupName,
+                    },
+                    
+                    sequence: swapInfo.sequence ?? null,
+                    hasSwapped: true,
+                    replacedPerson: null as any,
+                });
+            }
+        }
+
+        console.log('[API] Combined data total:', combinedData.length);
 
         if (swapType !== 'all') {
             if (swapType === 'none') {

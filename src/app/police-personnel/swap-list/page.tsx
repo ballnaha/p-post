@@ -743,7 +743,7 @@ export default function SwapListPage() {
                           <Box sx={{ p: 3, bgcolor: 'grey.50' }}>
                             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <CheckIcon color="success" />
-                              รายละเอียดการสลับตำแหน่ง
+                              รายละเอียดตำแหน่ง
                             </Typography>
                             
                             {row.notes && (

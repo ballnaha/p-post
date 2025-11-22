@@ -231,6 +231,8 @@ export default function HomePage() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
   const [selectedUnit, setSelectedUnit] = useState<string>('all'); // filter ทั้งหน้า dashboard
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [isFirstLoad, setIsFirstLoad] = useState(true); // ตรวจสอบว่าเป็นการโหลดครั้งแรกหรือไม่
+  const [defaultUnitSet, setDefaultUnitSet] = useState(false); // ตรวจสอบว่าตั้งค่า default unit แล้วหรือยัง
   
   // Drilldown state
   const [drilldownOpen, setDrilldownOpen] = useState(false);
@@ -368,37 +370,78 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchDashboardData() {
       try {
-        // ใช้ filter loading เมื่อไม่ใช่ครั้งแรก
-        if (stats !== null) {
-          setFilterLoading(true);
-        } else {
-          setInitialLoading(true);
-        }
-        setError(null);
-        const url = `/api/dashboard?year=${selectedYear}&unit=${selectedUnit}`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch dashboard data');
-        }
-        
-        const result = await response.json();
-        
-        if (result.success) {
-          // Debug: Check supportedPersonnel data
-          const matchedPerson = result.data.supportedPersonnel?.find((p: any) => p.fullName?.includes('อภิสัณห์'));
-          if (matchedPerson) {
-            console.log('อภิสัณห์ หว้าจีน data:', matchedPerson);
+        // กรณีโหลดครั้งแรก: โหลดเพื่อเอา availableUnits ก่อน
+        if (isFirstLoad && !defaultUnitSet) {
+          setInitialLoading(true); // เริ่มโหลด - จะไม่ปิดจนกว่าจะโหลดข้อมูลจริงเสร็จ
+          setError(null);
+          const url = `/api/dashboard?year=${selectedYear}&unit=all`;
+          const response = await fetch(url);
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch dashboard data');
           }
-          setStats(result.data);
-        } else {
-          throw new Error(result.error || 'Failed to load data');
+          
+          const result = await response.json();
+          
+          if (result.success && result.data.availableUnits) {
+            // ตั้งค่า unit เป็น 'น' ถ้ามี ไม่งั้นใช้ 'all'
+            const defaultUnit = result.data.availableUnits.includes('น') ? 'น' : 'all';
+            setSelectedUnit(defaultUnit);
+            setDefaultUnitSet(true);
+            
+            // ถ้า default unit คือ 'all' ให้ใช้ข้อมูลที่โหลดมาเลย
+            if (defaultUnit === 'all') {
+              setStats(result.data);
+              setIsFirstLoad(false);
+              setInitialLoading(false);
+            }
+            // ถ้าไม่ใช่ 'all' ไม่ต้องปิด initialLoading เพราะจะไปโหลดต่อ
+          }
+          return;
+        }
+        
+        // กรณีปกติ: โหลดข้อมูลตาม filter ที่เลือก
+        if (defaultUnitSet) {
+          // ใช้ filter loading เมื่อไม่ใช่ครั้งแรก
+          if (!isFirstLoad) {
+            setFilterLoading(true);
+          }
+          // ถ้ายังเป็น firstLoad ไม่ต้อง set loading อีกเพราะ initialLoading ยังเป็น true อยู่แล้ว
+          
+          setError(null);
+          const url = `/api/dashboard?year=${selectedYear}&unit=${selectedUnit}`;
+          const response = await fetch(url);
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch dashboard data');
+          }
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            // Debug: Check supportedPersonnel data
+            const matchedPerson = result.data.supportedPersonnel?.find((p: any) => p.fullName?.includes('อภิสัณห์'));
+            if (matchedPerson) {
+              console.log('อภิสัณห์ หว้าจีน data:', matchedPerson);
+            }
+            setStats(result.data);
+            
+            // ปิด loading หลังจากโหลดข้อมูลจริงเสร็จแล้ว
+            if (isFirstLoad) {
+              setIsFirstLoad(false);
+              setInitialLoading(false);
+            }
+          } else {
+            throw new Error(result.error || 'Failed to load data');
+          }
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
         setError(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
-      } finally {
+        setIsFirstLoad(false);
         setInitialLoading(false);
+      } finally {
+        // ปิด filterLoading เสมอ แต่ initialLoading จะปิดเฉพาะเมื่อโหลดเสร็จจริง
         setFilterLoading(false);
       }
     }
@@ -406,7 +449,7 @@ export default function HomePage() {
     if (selectedYear) {
       fetchDashboardData();
     }
-  }, [selectedYear, selectedUnit]); // ขึ้นกับทั้ง year และ unit
+  }, [selectedYear, selectedUnit, isFirstLoad, defaultUnitSet]); // ขึ้นกับทั้ง year, unit และ state flags
 
   const handleYearChange = (event: SelectChangeEvent<number>) => {
     setSelectedYear(Number(event.target.value));
@@ -774,36 +817,72 @@ export default function HomePage() {
     );
   }
 
+  // ถ้ากำลังโหลดและยังไม่มีข้อมูล ให้รอจนกว่าจะโหลดเสร็จ
   if (!stats) {
+    // ถ้าไม่ได้กำลังโหลด แสดง empty state
+    if (!initialLoading && !filterLoading) {
+      return (
+        <Layout>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            minHeight: 'calc(100vh - 120px)',
+            p: 3,
+            overflow: 'hidden',
+          }}>
+            <Alert 
+              severity="info"
+              sx={{ 
+                maxWidth: 600,
+                width: '100%',
+                borderRadius: 2,
+                boxShadow: '0 4px 12px rgba(33, 150, 243, 0.15)',
+                '& .MuiAlert-icon': {
+                  fontSize: 28
+                }
+              }}
+            >
+              <Typography variant="subtitle1" fontWeight={600} mb={0.5}>
+                ไม่พบข้อมูล
+              </Typography>
+              <Typography variant="body2">
+                กรุณาตรวจสอบการตั้งค่าหรือลองใหม่อีกครั้ง
+              </Typography>
+            </Alert>
+          </Box>
+        </Layout>
+      );
+    }
+    // ถ้ากำลังโหลด ให้แสดง loading skeleton
     return (
       <Layout>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          minHeight: 'calc(100vh - 120px)',
-          p: 3,
-          overflow: 'hidden',
-        }}>
-          <Alert 
-            severity="info"
-            sx={{ 
-              maxWidth: 600,
-              width: '100%',
-              borderRadius: 2,
-              boxShadow: '0 4px 12px rgba(33, 150, 243, 0.15)',
-              '& .MuiAlert-icon': {
-                fontSize: 28
-              }
-            }}
-          >
-            <Typography variant="subtitle1" fontWeight={600} mb={0.5}>
-              ไม่พบข้อมูล
-            </Typography>
-            <Typography variant="body2">
-              กรุณาตรวจสอบการตั้งค่าหรือลองใหม่อีกครั้ง
-            </Typography>
-          </Alert>
+        <Box sx={{ p: 3 }}>
+          <Skeleton variant="text" width="30%" height={50} sx={{ mb: 2 }} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} variant="rectangular" height={150} sx={{ borderRadius: 2 }} />
+            ))}
+          </Box>
+          <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} />
+        </Box>
+      </Layout>
+    );
+  }
+
+  // ถ้ากำลังโหลด (ไม่ว่าจะ initial หรือ filter) ให้แสดง skeleton
+  if (initialLoading || filterLoading) {
+    return (
+      <Layout>
+        <Box sx={{ p: 3 }}>
+          <Skeleton variant="text" width="30%" height={50} sx={{ mb: 2 }} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} variant="rectangular" height={150} sx={{ borderRadius: 2 }} />
+            ))}
+          </Box>
+          <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2, mb: 3 }} />
+          <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
         </Box>
       </Layout>
     );
@@ -959,8 +1038,8 @@ export default function HomePage() {
             '100%': { opacity: 1, transform: 'translateY(0)' }
           }
         }}>
-          {/* Filter Loading Overlay for Stats Cards */}
-          {filterLoading && (
+          {/* Loading Overlay removed - using full page skeleton instead */}
+          {false && (
             <Box sx={{ 
               position: 'absolute',
               top: 0,
@@ -1177,7 +1256,7 @@ export default function HomePage() {
                     fontSize="0.9rem"
                     sx={{ color: 'rgba(255,255,255,0.95)' }}
                   >
-                    จับคู่ตำแหน่งกับบุคลากร
+                    จับคู่ตำแหน่งว่างกับบุคลากร
                   </Typography>
                   <Typography variant="caption" fontSize="0.65rem" sx={{ color: 'rgba(255,255,255,0.75)' }}>
                     ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
@@ -1688,8 +1767,8 @@ export default function HomePage() {
             height: { xs: 300, sm: 340, md: 380 }, 
             position: 'relative' 
           }}>
-            {/* Enhanced Filter Loading Overlay */}
-            {filterLoading && (
+            {/* Enhanced Filter Loading Overlay removed - using full page skeleton instead */}
+            {false && (
               <Box sx={{ 
                 position: 'absolute',
                 top: 0,
@@ -1845,7 +1924,7 @@ export default function HomePage() {
             {/* Chart Content */}
             {chartData ? (
               <Bar data={chartData} options={chartOptions} />
-            ) : (
+            ) : !initialLoading && !filterLoading && (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
                 <Box
                   sx={{
@@ -1888,8 +1967,8 @@ export default function HomePage() {
               boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
             }
           }}>
-            {/* Enhanced Filter Loading Overlay for Table */}
-            {filterLoading && (
+            {/* Enhanced Filter Loading Overlay for Table removed - using full page skeleton instead */}
+            {false && (
               <Box sx={{ 
                 position: 'absolute',
                 top: 0,
@@ -2293,8 +2372,8 @@ export default function HomePage() {
           position: 'relative',
           animation: 'fadeInUp 0.8s ease-out 0.8s backwards',
         }}>
-          {/* Enhanced Filter Loading Overlay for Summary Cards */}
-          {filterLoading && (
+          {/* Enhanced Filter Loading Overlay for Summary Cards removed - using full page skeleton instead */}
+          {false && (
             <Box sx={{ 
               position: 'absolute',
               top: 0,
@@ -2903,7 +2982,7 @@ export default function HomePage() {
                               </TableCell>
                             </TableRow>
                           ))
-                      ) : (
+                      ) : !initialLoading && !filterLoading && (
                         <TableRow>
                           <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary', fontStyle: 'italic' }}>
                             ไม่มีข้อมูล

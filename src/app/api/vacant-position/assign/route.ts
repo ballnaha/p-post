@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
           fromUnit: applicant.unit,
           toPosition: vacantPosition.position,
           toPositionNumber: vacantPosition.positionNumber,
+          toPosCodeId: vacantPosition.posCodeId,
           toUnit: vacantPosition.unit,
           notes: null,
         },

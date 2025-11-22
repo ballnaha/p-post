@@ -533,14 +533,15 @@ export default function PersonnelDetailModal({
                     </Typography>
                     <Divider sx={{ mb: 1 }} />
                     <Stack spacing={0.75} divider={<Divider />}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ยศ</Typography>
+                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.rank || '-'}</Typography>
+                      </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ชื่อ-สกุล</Typography>
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.fullName || '-'}</Typography>
                       </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ยศ</Typography>
-                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.rank || '-'}</Typography>
-                      </Box>
+                      
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อาวุโส</Typography>
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.seniority || '-'}</Typography>

@@ -46,7 +46,10 @@ import {
   ChangeHistory,
   TrendingFlat as TrendingFlatIcon,
   Close as CloseIcon,
-  East as EastIcon
+  East as EastIcon,
+  Badge as BadgeIcon,
+  CalendarToday,
+  School
 } from '@mui/icons-material';
 import Layout from './components/Layout';
 import StatsCard from '@/components/dashboard/StatsCard';
@@ -155,6 +158,28 @@ interface SupportedPersonnel {
   supporterName: string | null;
   supportReason: string | null;
   isMatched: boolean; // ถูกจับคู่ตำแหน่งใหม่แล้ว
+  newPosition?: string | null; // ตำแหน่งใหม่
+  newPositionNumber?: string | null; // เลขตำแหน่งใหม่
+  newPosCode?: string | null; // รหัสตำแหน่งใหม่
+  newPosCodeName?: string | null; // ชื่อรหัสตำแหน่งใหม่
+  newUnit?: string | null; // หน่วยใหม่
+  transactionId?: string | null; // ID ของธุรกรรม
+  // เพิ่มข้อมูลเพิ่มเติม
+  noId?: number | string | null;
+  positionNumber?: string | null;
+  nationalId?: string | null;
+  seniority?: string | null;
+  education?: string | null;
+  birthDate?: string | null;
+  lastAppointment?: string | null;
+  currentRankSince?: string | null;
+  enrollmentDate?: string | null;
+  retirementDate?: string | null;
+  yearsOfService?: string | null;
+  actingAs?: string | null;
+  trainingLocation?: string | null;
+  trainingCourse?: string | null;
+  notes?: string | null;
 }
 
 interface DashboardStats {
@@ -211,6 +236,53 @@ export default function HomePage() {
   const [drilldownOpen, setDrilldownOpen] = useState(false);
   const [drilldownTitle, setDrilldownTitle] = useState('');
   const [drilldownData, setDrilldownData] = useState<any[]>([]);
+  const [drilldownFilterType, setDrilldownFilterType] = useState<string>('all');
+  
+  // Supported Personnel Drawer state
+  const [supportDrawerOpen, setSupportDrawerOpen] = useState(false);
+  const [selectedSupportPerson, setSelectedSupportPerson] = useState<SupportedPersonnel | null>(null);
+
+  // Utility function สำหรับ format วันที่
+  const formatDate = (dateString?: string | null): string => {
+    if (!dateString) return '-';
+    
+    // ถ้าเป็นรูปแบบวันที่ไทยอยู่แล้ว (DD/MM/YYYY) ให้ return เลย
+    if (typeof dateString === 'string' && dateString.includes('/')) {
+      const parts = dateString.split('/');
+      if (parts.length === 3) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        
+        // ถ้าปีเป็น พ.ศ. (มากกว่า 2500) ให้ return เลย
+        if (parseInt(year) > 2500) {
+          return `${day}/${month}/${year}`;
+        }
+        
+        // ถ้าปีเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
+        if (parseInt(year) > 1900 && parseInt(year) < 2100) {
+          const thaiYear = parseInt(year) + 543;
+          return `${day}/${month}/${thaiYear}`;
+        }
+      }
+      return dateString;
+    }
+    
+    // ถ้าเป็น ISO date string หรือ timestamp
+    try {
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear() + 543;
+        return `${day}/${month}/${year}`;
+      }
+    } catch (error) {
+      return dateString;
+    }
+    
+    return dateString;
+  };
 
   // Pagination state for Supported Personnel
   const [supportPage, setSupportPage] = useState(0);
@@ -225,9 +297,18 @@ export default function HomePage() {
       
       setDrilldownTitle(status.label);
       setDrilldownData(filteredTransactions);
+      setDrilldownFilterType('all');
       setDrilldownOpen(true);
     }
   };
+
+  // Filter drilldown data based on selected type
+  const filteredDrilldownData = useMemo(() => {
+    if (drilldownFilterType === 'all') {
+      return drilldownData;
+    }
+    return drilldownData.filter((tx) => tx.swapType === drilldownFilterType);
+  }, [drilldownData, drilldownFilterType]);
 
   // Pagination handlers for Supported Personnel
   const handleSupportChangePage = (event: unknown, newPage: number) => {
@@ -237,6 +318,12 @@ export default function HomePage() {
   const handleSupportChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSupportRowsPerPage(parseInt(event.target.value, 10));
     setSupportPage(0);
+  };
+
+  // Handler for opening supported personnel drawer
+  const handleSupportPersonClick = (person: SupportedPersonnel) => {
+    setSelectedSupportPerson(person);
+    setSupportDrawerOpen(true);
   };
 
   // Prevent scroll when loading on mobile (เฉพาะครั้งแรก)
@@ -2736,6 +2823,9 @@ export default function HomePage() {
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2, fontSize: '0.7rem' }}>
                       ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                     </Typography>
+                    <Typography variant="caption" color="primary.main" display="block" sx={{ mt: 0.15, fontSize: '0.65rem', fontWeight: 600 }}>
+                      คลิกชื่อบุคลากรเพื่อดูรายละเอียด
+                    </Typography>
                   </Box>
                 </Box>
               </Box>
@@ -2756,11 +2846,28 @@ export default function HomePage() {
                           .slice(supportPage * supportRowsPerPage, supportPage * supportRowsPerPage + supportRowsPerPage)
                           .map((person) => (
                             <TableRow key={person.id} hover>
-                              <TableCell sx={{ fontSize: '0.85rem', py: 0.75, whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset' }}>
+                              <TableCell 
+                                sx={{ 
+                                  fontSize: '0.85rem', 
+                                  py: 0.75, 
+                                  whiteSpace: 'normal', 
+                                  overflow: 'visible', 
+                                  textOverflow: 'unset',
+                                  cursor: 'pointer',
+                                  '&:hover': {
+                                    bgcolor: 'action.hover'
+                                  }
+                                }}
+                                onClick={() => handleSupportPersonClick(person)}
+                              >
                                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, flexWrap: 'nowrap', minWidth: 0 }}>
-                                  {person.isMatched && (
-                                    <Tooltip title="จับคู่ตำแหน่งใหม่แล้ว" arrow>
+                                  {person.isMatched ? (
+                                    <Tooltip title="จับคู่ตำแหน่งใหม่แล้ว - คลิกเพื่อดูรายละเอียด" arrow>
                                       <CheckCircle sx={{ fontSize: 16, color: 'success.main', flexShrink: 0, mt: '2px' }} />
+                                    </Tooltip>
+                                  ) : (
+                                    <Tooltip title="คลิกเพื่อดูรายละเอียด" arrow>
+                                      <Person sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, mt: '2px' }} />
                                     </Tooltip>
                                   )}
                                   <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -2850,7 +2957,22 @@ export default function HomePage() {
 
             <Divider sx={{ mb: 3 }} />
 
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 'calc(100vh - 150px)', border: 'none' }}>
+            {/* Filter Type */}
+            <FormControl fullWidth size="small" sx={{ mb: 3 }}>
+              <InputLabel id="drilldown-filter-type-label">กรองตามประเภท</InputLabel>
+              <Select
+                labelId="drilldown-filter-type-label"
+                value={drilldownFilterType}
+                label="กรองตามประเภท"
+                onChange={(e) => setDrilldownFilterType(e.target.value)}
+              >
+                <MenuItem value="all">ทั้งหมด</MenuItem>
+                <MenuItem value="transfer">ย้ายหน่วย</MenuItem>
+                <MenuItem value="promotion-chain">จัดคนเข้าตำแหน่งว่าง</MenuItem>
+              </Select>
+            </FormControl>
+
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 'calc(100vh - 200px)', border: 'none' }}>
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
@@ -2861,7 +2983,7 @@ export default function HomePage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {drilldownData.map((tx) => (
+                  {filteredDrilldownData.map((tx) => (
                     <TableRow key={tx.id} hover>
                       <TableCell sx={{ fontWeight: 600, color: 'primary.main', whiteSpace: 'nowrap' , overflow: 'hidden', textOverflow: 'ellipsis', maxWidth:180 }}>
                         {tx.groupNumber || `#${tx.id.substring(0, 6)}...`}
@@ -2899,7 +3021,7 @@ export default function HomePage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {drilldownData.length === 0 && (
+                  {filteredDrilldownData.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                         ไม่พบข้อมูล
@@ -2909,6 +3031,336 @@ export default function HomePage() {
                 </TableBody>
               </Table>
             </TableContainer>
+          </Box>
+        </Drawer>
+
+        {/* Supported Personnel Detail Drawer */}
+        <Drawer
+          anchor="right"
+          open={supportDrawerOpen}
+          onClose={() => setSupportDrawerOpen(false)}
+          sx={{ zIndex: 1300 }}
+          PaperProps={{
+            sx: { width: { xs: '100%', sm: 600, md: 800 } }
+          }}
+        >
+          <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={800} color="primary.main">
+                  รายละเอียดบุคลากร
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ข้อมูลการจับคู่ตำแหน่ง
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setSupportDrawerOpen(false)} size="small">
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            <Divider sx={{ mb: 2 }} />
+
+            <Box sx={{ flex: 1, overflow: 'auto' }}>
+              {selectedSupportPerson && (
+                <Box>
+                  {/* Header Section - ชื่อและตำแหน่งเดิม */}
+                  <Box sx={{ p: 2, mb: 2, bgcolor: 'success.main', color: 'white', borderRadius: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      {selectedSupportPerson.rank || ''} {selectedSupportPerson.fullName || '-'}
+                    </Typography>
+                    
+                  </Box>
+
+                  {/* New Position Section - แสดงก่อน */}
+                  {selectedSupportPerson.isMatched ? (
+                    <Paper 
+                      elevation={0}
+                      sx={{ 
+                        p: 2.5,
+                        mb: 3,
+                        bgcolor: 'success.50',
+                        borderRadius: 1,
+                        border: '2px solid',
+                        borderColor: 'success.main'
+                      }}
+                    >
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.main', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CheckCircle fontSize="small" />
+                        ข้อมูลตำแหน่งใหม่
+                      </Typography>
+                      <Stack spacing={1.5} divider={<Divider />}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ตำแหน่ง</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                            {selectedSupportPerson.newPosition || '-'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                            {selectedSupportPerson.newPositionNumber || '-'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>รหัสตำแหน่ง</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                            {selectedSupportPerson.newPosCode || '-'}
+                          </Typography>
+                        </Box>
+                        {selectedSupportPerson.newPosCodeName && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ชื่อรหัสตำแหน่ง</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                              {selectedSupportPerson.newPosCodeName}
+                            </Typography>
+                          </Box>
+                        )}
+                        {selectedSupportPerson.newUnit && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หน่วย</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                              {selectedSupportPerson.newUnit}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Stack>
+                    </Paper>
+                  ) : (
+                    <Box sx={{ 
+                      mb: 3,
+                      p: 3, 
+                      bgcolor: 'grey.100', 
+                      borderRadius: 1,
+                      textAlign: 'center',
+                      border: '1px dashed',
+                      borderColor: 'grey.400'
+                    }}>
+                      <HelpOutline sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                        ยังไม่ได้จับคู่ตำแหน่งใหม่
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Divider */}
+                  <Divider sx={{ my: 3 }}>
+                    <Chip label="ข้อมูลเดิม" size="small" />
+                  </Divider>
+
+                  {/* Content Grid */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+                    
+                    {/* Left Column */}
+                    <Box>
+                      {/* ข้อมูลตำแหน่งเดิม */}
+                      <Paper elevation={0} sx={{ p: 2, mb: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <BadgeIcon fontSize="small" />
+                          ข้อมูลตำแหน่งเดิม
+                        </Typography>
+                        <Divider sx={{ mb: 1.5 }} />
+                        <Stack spacing={1} divider={<Divider />}>
+                          {selectedSupportPerson.noId && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ID</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.noId}</Typography>
+                            </Box>
+                          )}
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>POSCODE</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                              {selectedSupportPerson.posCode && selectedSupportPerson.posCodeName 
+                                ? `${selectedSupportPerson.posCode} - ${selectedSupportPerson.posCodeName}` 
+                                : selectedSupportPerson.posCode || '-'}
+                            </Typography>
+                          </Box>
+                          {selectedSupportPerson.positionNumber && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.positionNumber}</Typography>
+                            </Box>
+                          )}
+                          {selectedSupportPerson.actingAs && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ทำหน้าที่</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.actingAs}</Typography>
+                            </Box>
+                          )}
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หน่วย</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.unit || '-'}</Typography>
+                          </Box>
+                        </Stack>
+                      </Paper>
+
+                      {/* ข้อมูลบุคคล */}
+                      <Paper elevation={0} sx={{ p: 2, mb: 2, bgcolor: 'success.50', borderRadius: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'success.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Person fontSize="small" />
+                          ข้อมูลบุคคล
+                        </Typography>
+                        <Divider sx={{ mb: 1.5 }} />
+                        <Stack spacing={1} divider={<Divider />}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ยศ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.rank || '-'}</Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ชื่อ-สกุล</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.fullName || '-'}</Typography>
+                          </Box>
+                          
+                          {selectedSupportPerson.seniority && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อาวุโส</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.seniority}</Typography>
+                            </Box>
+                          )}
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อายุ</Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.age || '-'}</Typography>
+                          </Box>
+                          {selectedSupportPerson.birthDate && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>วันเกิด</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedSupportPerson.birthDate)}</Typography>
+                            </Box>
+                          )}
+                          {selectedSupportPerson.nationalId && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขบัตรประชาชน</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>{selectedSupportPerson.nationalId}</Typography>
+                            </Box>
+                          )}
+                          {selectedSupportPerson.education && (
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>คุณวุฒิ</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.education}</Typography>
+                            </Box>
+                          )}
+                        </Stack>
+                      </Paper>
+                    </Box>
+
+                    {/* Right Column */}
+                    <Box>
+                      {/* ข้อมูลการแต่งตั้ง */}
+                      {(selectedSupportPerson.lastAppointment || selectedSupportPerson.currentRankSince || selectedSupportPerson.enrollmentDate || selectedSupportPerson.retirementDate || selectedSupportPerson.yearsOfService) && (
+                        <Paper elevation={0} sx={{ p: 2, mb: 2, bgcolor: 'info.50', borderRadius: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'info.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <CalendarToday fontSize="small" />
+                            ข้อมูลการแต่งตั้ง
+                          </Typography>
+                          <Divider sx={{ mb: 1.5 }} />
+                          <Stack spacing={1} divider={<Divider />}>
+                            {selectedSupportPerson.lastAppointment && (
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>แต่งตั้งครั้งสุดท้าย</Typography>
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedSupportPerson.lastAppointment)}</Typography>
+                              </Box>
+                            )}
+                            {selectedSupportPerson.currentRankSince && (
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ระดับนี้เมื่อ</Typography>
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedSupportPerson.currentRankSince)}</Typography>
+                              </Box>
+                            )}
+                            {selectedSupportPerson.enrollmentDate && (
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>บรรจุ</Typography>
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedSupportPerson.enrollmentDate)}</Typography>
+                              </Box>
+                            )}
+                            {selectedSupportPerson.retirementDate && (
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เกษียณ</Typography>
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.retirementDate}</Typography>
+                              </Box>
+                            )}
+                            {selectedSupportPerson.yearsOfService && (
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>จำนวนปี</Typography>
+                                <Typography variant="body2" fontWeight={600} color="info.main" sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.yearsOfService} ปี</Typography>
+                              </Box>
+                            )}
+                          </Stack>
+                        </Paper>
+                      )}
+
+                      {/* ข้อมูลการฝึกอบรม */}
+                      {(selectedSupportPerson.trainingLocation || selectedSupportPerson.trainingCourse) && (
+                        <Paper elevation={0} sx={{ p: 2, mb: 2, bgcolor: 'warning.50', borderRadius: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <School fontSize="small" />
+                            ข้อมูลการฝึกอบรม
+                          </Typography>
+                          <Divider sx={{ mb: 1.5 }} />
+                          <Stack spacing={1} divider={<Divider />}>
+                            {selectedSupportPerson.trainingLocation && (
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>สถานที่ฝึกอบรม</Typography>
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.trainingLocation}</Typography>
+                              </Box>
+                            )}
+                            {selectedSupportPerson.trainingCourse && (
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>นรต.</Typography>
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.trainingCourse}</Typography>
+                              </Box>
+                            )}
+                          </Stack>
+                        </Paper>
+                      )}
+                    </Box>
+                  </Box>
+
+                  {/* ข้อมูลการเสนอชื่อ - Full Width */}
+                  {(selectedSupportPerson.supporterName || selectedSupportPerson.supportReason) && (
+                    <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'primary.50', borderRadius: 1, border: 1, borderColor: 'primary.200' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Person sx={{ fontSize: 16 }} />
+                        ข้อมูลการเสนอชื่อ
+                      </Typography>
+                      
+                      {selectedSupportPerson.supporterName && (
+                        <Box sx={{ mb: 1.5 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.5 }}>
+                            ผู้สนับสนุน/ผู้เสนอชื่อ:
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+                            {selectedSupportPerson.supporterName}
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {selectedSupportPerson.supportReason && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.5 }}>
+                            เหตุผลในการสนับสนุน:
+                          </Typography>
+                          <Typography variant="body2" sx={{ lineHeight: 1.6, color: 'text.secondary', fontSize: '0.875rem' }}>
+                            {selectedSupportPerson.supportReason}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Paper>
+                  )}
+
+                  {/* หมายเหตุ */}
+                  {selectedSupportPerson.notes && (
+                    <Paper elevation={0} sx={{ p: 2, mt: 2, bgcolor: 'grey.100', borderRadius: 1, border: 1, borderColor: 'grey.300' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
+                        หมายเหตุ
+                      </Typography>
+                      <Typography variant="body2" sx={{ lineHeight: 1.6, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {selectedSupportPerson.notes}
+                      </Typography>
+                    </Paper>
+                  )}
+                </Box>
+              )}
+            </Box>
           </Box>
         </Drawer>
       </Box>

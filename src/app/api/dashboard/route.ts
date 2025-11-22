@@ -515,11 +515,13 @@ export async function GET(request: NextRequest) {
       where: supportedPersonnelWhere,
       select: {
         id: true,
+        noId: true,
         nationalId: true,
         rank: true,
         fullName: true,
         age: true,
         position: true,
+        positionNumber: true,
         posCodeId: true,
         posCodeMaster: {
           select: {
@@ -530,6 +532,18 @@ export async function GET(request: NextRequest) {
         unit: true,
         supporterName: true,
         supportReason: true,
+        seniority: true,
+        education: true,
+        birthDate: true,
+        lastAppointment: true,
+        currentRankSince: true,
+        enrollmentDate: true,
+        retirementDate: true,
+        yearsOfService: true,
+        actingAs: true,
+        trainingLocation: true,
+        trainingCourse: true,
+        notes: true,
       },
       orderBy: [
         { posCodeId: 'asc' },
@@ -538,7 +552,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Check which personnel are matched (have toPosition in swap_transaction_detail)
-    const matchedNationalIds = await prisma.swapTransactionDetail.findMany({
+    const matchedPersonnelDetails = await prisma.swapTransactionDetail.findMany({
       where: {
         nationalId: {
           in: supportedPersonnel.map(p => p.nationalId).filter(Boolean) as string[]
@@ -549,12 +563,33 @@ export async function GET(request: NextRequest) {
         ]
       },
       select: {
-        nationalId: true
+        nationalId: true,
+        transactionId: true,
+        toPosition: true,
+        toPositionNumber: true,
+        toPosCodeId: true,
+        toPosCodeMaster: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        toUnit: true
       },
-      distinct: ['nationalId']
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
 
-    const matchedSet = new Set(matchedNationalIds.map(m => m.nationalId));
+    // Create a map of nationalId to their latest matched position details
+    const matchedDetailsMap = new Map();
+    matchedPersonnelDetails.forEach(detail => {
+      if (!matchedDetailsMap.has(detail.nationalId)) {
+        matchedDetailsMap.set(detail.nationalId, detail);
+      }
+    });
+
+    const matchedSet = new Set(matchedPersonnelDetails.map(m => m.nationalId));
 
     const dashboardStats = {
       totalVacantPositions,
@@ -578,19 +613,43 @@ export async function GET(request: NextRequest) {
       vacantSlotsSummary,
       chartData: sortedChartData, // ข้อมูลกราฟใหม่
       availableUnits, // รายการหน่วยสำหรับ filter
-      supportedPersonnel: supportedPersonnel.map(person => ({
-        id: person.id,
-        rank: person.rank,
-        fullName: person.fullName,
-        age: person.age,
-        position: person.position,
-        posCode: person.posCodeId?.toString() || null,
-        posCodeName: person.posCodeMaster?.name || null,
-        unit: person.unit,
-        supporterName: person.supporterName,
-        supportReason: person.supportReason,
-        isMatched: person.nationalId ? matchedSet.has(person.nationalId) : false,
-      })) // เพิ่มข้อมูลผู้ได้รับการสนับสนุน (mapped fields)
+      supportedPersonnel: supportedPersonnel.map(person => {
+        const matchedDetails = person.nationalId ? matchedDetailsMap.get(person.nationalId) : null;
+        return {
+          id: person.id,
+          noId: person.noId,
+          rank: person.rank,
+          fullName: person.fullName,
+          age: person.age,
+          position: person.position,
+          positionNumber: person.positionNumber,
+          posCode: person.posCodeId?.toString() || null,
+          posCodeName: person.posCodeMaster?.name || null,
+          unit: person.unit,
+          supporterName: person.supporterName,
+          supportReason: person.supportReason,
+          isMatched: person.nationalId ? matchedSet.has(person.nationalId) : false,
+          newPosition: matchedDetails?.toPosition || null,
+          newPositionNumber: matchedDetails?.toPositionNumber || null,
+          newPosCode: matchedDetails?.toPosCodeId?.toString() || null,
+          newPosCodeName: matchedDetails?.toPosCodeMaster?.name || null,
+          newUnit: matchedDetails?.toUnit || null,
+          transactionId: matchedDetails?.transactionId || null,
+          nationalId: person.nationalId,
+          seniority: person.seniority,
+          education: person.education,
+          birthDate: person.birthDate,
+          lastAppointment: person.lastAppointment,
+          currentRankSince: person.currentRankSince,
+          enrollmentDate: person.enrollmentDate,
+          retirementDate: person.retirementDate,
+          yearsOfService: person.yearsOfService,
+          actingAs: person.actingAs,
+          trainingLocation: person.trainingLocation,
+          trainingCourse: person.trainingCourse,
+          notes: person.notes,
+        };
+      }) // เพิ่มข้อมูลผู้ได้รับการสนับสนุน (mapped fields)
     };
 
     return NextResponse.json({

@@ -16,36 +16,23 @@ export async function GET() {
       return NextResponse.json({ success: true, total: cached.length, data: cached, cached: true });
     }
 
-    const rows = await prisma.policePersonnel.findMany({
-      where: {
-        rank: { not: null },
-        posCodeId: { not: null },
-      },
+    // Fetch all pos codes from PosCodeMaster
+    const posCodes = await prisma.posCodeMaster.findMany({
       select: {
-        posCodeId: true,
-        posCodeMaster: { select: { id: true, name: true } },
+        id: true,
+        name: true,
       },
-      orderBy: [{ posCodeId: 'asc' }],
+      orderBy: {
+        id: 'asc',
+      },
     });
 
-    // Deduplicate by posCodeId and map to { id, name }
-    const map = new Map<number, string>();
-    for (const r of rows) {
-      if (r.posCodeId) {
-        const name = r.posCodeMaster?.name ?? `PosCode ${r.posCodeId}`;
-        if (!map.has(r.posCodeId)) map.set(r.posCodeId, name);
-      }
-    }
-    const data = Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.id - b.id);
-
     // Cache the result
-    dataCache.set(CACHE_KEYS.POS_CODES, data);
+    dataCache.set(CACHE_KEYS.POS_CODES, posCodes);
 
-    return NextResponse.json({ success: true, total: data.length, data });
+    return NextResponse.json({ success: true, total: posCodes.length, data: posCodes });
   } catch (error: any) {
-    console.error('Fetch pos codes (from police_personnel) error:', error);
+    console.error('Fetch pos codes error:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลรหัสตำแหน่ง' },
       { status: 500 }

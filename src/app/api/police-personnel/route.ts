@@ -318,3 +318,94 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    // ตรวจสอบว่าเป็น admin
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.authorized) {
+      return authCheck.response;
+    }
+
+    const body = await request.json();
+    const currentYear = new Date().getFullYear() + 543;
+    const username = authCheck.session?.user?.username || 'system';
+
+    // ตรวจสอบข้อมูลที่จำเป็น
+    if (!body.fullName) {
+      return NextResponse.json(
+        { success: false, error: 'กรุณาระบุชื่อ-สกุล' },
+        { status: 400 }
+      );
+    }
+
+    // ดึงค่า noId สุดท้าย และ +1
+    const lastPersonnel = await prisma.policePersonnel.findFirst({
+      where: {
+        year: currentYear,
+        noId: { not: null }
+      },
+      orderBy: {
+        noId: 'desc'
+      },
+      select: {
+        noId: true
+      }
+    });
+
+    const nextNoId = lastPersonnel?.noId ? lastPersonnel.noId + 1 : 1;
+
+    // สร้างข้อมูลใหม่
+    const newPersonnel = await prisma.policePersonnel.create({
+      data: {
+        year: currentYear,
+        isActive: true,
+        noId: nextNoId,
+        posCodeId: body.posCodeId,
+        position: body.position,
+        positionNumber: body.positionNumber,
+        unit: body.unit,
+        rank: body.rank,
+        fullName: body.fullName,
+        nationalId: body.nationalId,
+        birthDate: body.birthDate,
+        age: body.age,
+        seniority: body.seniority,
+        education: body.education,
+        lastAppointment: body.lastAppointment,
+        currentRankSince: body.currentRankSince,
+        enrollmentDate: body.enrollmentDate,
+        retirementDate: body.retirementDate,
+        yearsOfService: body.yearsOfService,
+        trainingLocation: body.trainingLocation,
+        trainingCourse: body.trainingCourse,
+        notes: body.notes,
+        actingAs: body.actingAs,
+        supporterName: body.supporterName,
+        supportReason: body.supportReason,
+        createdBy: username,
+        updatedBy: username,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: newPersonnel,
+    });
+  } catch (error: any) {
+    console.error('Create error:', error);
+    
+    // Check for unique constraint violation
+    if (error.code === 'P2002') {
+      return NextResponse.json(
+        { success: false, error: 'มีข้อมูลบุคลากรนี้ในปีปัจจุบันแล้ว (เลขบัตรประชาชนซ้ำ)' },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: error.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' },
+      { status: 500 }
+    );
+  }
+}

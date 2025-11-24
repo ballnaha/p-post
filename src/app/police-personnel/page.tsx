@@ -71,6 +71,7 @@ import DataTablePagination from '@/components/DataTablePagination';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import PersonnelCreateModal from '@/components/PersonnelCreateModal';
 import { EmptyState } from '@/app/components/EmptyState';
 
 interface PolicePersonnel {
@@ -216,6 +217,9 @@ export default function PolicePersonnelPage() {
   const [supporterName, setSupporterName] = useState('');
   const [supportReason, setSupportReason] = useState('');
   const [isAddingSupporter, setIsAddingSupporter] = useState(false);
+
+  // Create Modal state
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, personnel: PolicePersonnel) => {
     setAnchorEl(event.currentTarget);
@@ -436,6 +440,8 @@ export default function PolicePersonnelPage() {
     fetchAllListsForCurrentYear();
   }, [fetchPosCodes, fetchUnits, fetchAllListsForCurrentYear]);
 
+
+
   const fetchData = async (abortSignal?: AbortSignal) => {
     setLoading(true);
     setError('');
@@ -486,6 +492,10 @@ export default function PolicePersonnelPage() {
       abortController.abort();
     };
   }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter, transactionTypeFilter]);
+
+  const handleCreateSuccess = () => {
+    fetchData();
+  };
 
   const handleReset = () => {
     setSearch('');
@@ -1635,6 +1645,20 @@ export default function PolicePersonnelPage() {
 
               <Button
                 variant="contained"
+                color="success"
+                startIcon={<PersonAddIcon />}
+                onClick={() => setCreateModalOpen(true)}
+                sx={{ 
+                  minWidth: { xs: 'auto', sm: 140 },
+                  fontSize: { xs: '0.875rem', sm: '0.9375rem' },
+                  mr: 1
+                }}
+              >
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>เพิ่มข้อมูล</Box>
+                <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>เพิ่ม</Box>
+              </Button>
+              <Button
+                variant="contained"
                 startIcon={<ImportIcon />}
                 onClick={() => router.push('/police-personnel/import')}
                 sx={{ 
@@ -2692,11 +2716,12 @@ export default function PolicePersonnelPage() {
                 borderRadius: 1,
                 border: 1,
                 borderColor: 'grey.200'
+                
               }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                   บุคลากรที่เลือก
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'primary.main' }}>
                   {selectedSupporterPersonnel?.rank} {selectedSupporterPersonnel?.fullName}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -2861,7 +2886,6 @@ export default function PolicePersonnelPage() {
                 multiline
                 rows={3}
                 label="หมายเหตุ (ถ้ามี)"
-                placeholder="เช่น เหตุผลในการพิจารณาสลับตำแหน่ง, ข้อมูลเพิ่มเติม..."
                 value={swapNotes}
                 onChange={(e) => setSwapNotes(e.target.value)}
               />
@@ -2955,7 +2979,6 @@ export default function PolicePersonnelPage() {
                 multiline
                 rows={3}
                 label="หมายเหตุ (ถ้ามี)"
-                placeholder="เช่น เหตุผลในการเลือก, ข้อมูลเพิ่มเติม..."
                 value={threeWayNotes}
                 onChange={(e) => setThreeWayNotes(e.target.value)}
               />
@@ -3158,6 +3181,13 @@ export default function PolicePersonnelPage() {
             <ListItemText>ลบ</ListItemText>
           </MenuItem>
         </Menu>
+
+        {/* Create Modal */}
+        <PersonnelCreateModal
+          open={createModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+          onSuccess={handleCreateSuccess}
+        />
       </Box>
     </Layout>
   );

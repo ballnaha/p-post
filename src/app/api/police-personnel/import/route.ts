@@ -210,6 +210,8 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               rank: row['ยศ'] ? String(row['ยศ']) : null,
               fullName: row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']) : null,
               noId: row['ID'] ? parseInt(String(row['ID'])) : null,
+              createdBy: username,
+              updatedBy: username,
               posCodeId: (row['POSCODE'] || row['ID/POSCODE']) ? parseInt(String(row['POSCODE'] || row['ID/POSCODE'])) : null,
               position: row['ตำแหน่ง'] ? String(row['ตำแหน่ง']) : null,
               positionNumber: row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']) : null,
@@ -387,10 +389,14 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
         for (let i = 0; i < batchData.length; i++) {
           const row: any = batchData[i];
           try {
-            const personnelData: any = {         
+            const personnelData: any = {
+              year: importYear,
+              isActive: true,
               seniority: row['อาวุโส'] ? String(row['อาวุโส']) : null,
               rank: row['ยศ'] ? String(row['ยศ']) : null,
               fullName: row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']) : null,
+              createdBy: username,
+              updatedBy: username,
               noId: row['ID'] ? parseInt(String(row['ID'])) : null,
               posCodeId: row['ID/POSCODE'] ? parseInt(String(row['ID/POSCODE'])) : null,
               position: row['ตำแหน่ง'] ? String(row['ตำแหน่ง']) : null,

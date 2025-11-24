@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { Fragment, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -22,6 +22,7 @@ import {
   IconButton,
   Button,
   Chip,
+  Checkbox,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -35,6 +36,10 @@ import {
   Card,
   CardContent,
   Skeleton,
+  ButtonGroup,
+  Menu,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import {
   Clear as ClearIcon,
@@ -47,6 +52,8 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingFlat as TrendingFlatIcon,
   Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+  Undo as UndoIcon,
   HelpOutline,
   InfoOutline,
   ChangeHistory,
@@ -54,12 +61,19 @@ import {
   KeyboardArrowUp as KeyboardArrowUpIcon,
   Fullscreen as FullscreenIcon,
   FullscreenExit as FullscreenExitIcon,
+  Add as AddIcon,
+  List as ListIcon,
+  ArrowDropDown as ArrowDropDownIcon,
 } from '@mui/icons-material';
+import PromotionChainVacantSelector from './components/PromotionChainVacantSelector';
+import PromotionChainDrawer from './components/PromotionChainDrawer';
+import PromotionChainListDrawer from './components/PromotionChainListDrawer';
 import Layout from '../components/Layout';
 import DataTablePagination from '@/components/DataTablePagination';
 import { EmptyState } from '@/app/components/EmptyState';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import InOutDetailModal from '@/components/InOutDetailModal';
+import { useSearchParams } from 'next/navigation';
 
 interface SwapDetail {
   id: string;
@@ -81,6 +95,7 @@ interface SwapDetail {
   yearsOfService: string | null;
   trainingLocation: string | null;
   trainingCourse: string | null;
+  avatarUrl?: string | null; // รูป avatar
 
   // ตำแหน่งเดิม (From)
   posCodeId: number | null;
@@ -111,6 +126,7 @@ interface SwapDetail {
     swapDate: string;
     swapType: string;
     groupNumber: string | null;
+    groupName?: string | null;
   } | null;
 
   // Sequence สำหรับเรียงลำดับ (จาก swap_transaction_detail.sequence)
@@ -123,6 +139,16 @@ interface SwapDetail {
 interface PositionCode {
   id: number;
   name: string;
+}
+
+interface VacantPosition {
+  id: string;
+  posCodeId: number;
+  position: string;
+  unit: string;
+  positionNumber?: string;
+  requestedPositionId?: number;
+  requestedPosition?: string;
 }
 
 interface InOutData {
@@ -276,7 +302,7 @@ export default function InOutPage() {
   const [initialLoad, setInitialLoad] = useState(true);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const [selectedUnit, setSelectedUnit] = useState<string>('all');
+  const [selectedUnit, setSelectedUnit] = useState<string>('น');
   const [selectedPosCode, setSelectedPosCode] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
   const [selectedStatus, setSelectedStatus] = useState<string>('all'); // all, vacant, reserved, occupied
@@ -285,6 +311,14 @@ export default function InOutPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Infinite scroll states
+  const [loadMode, setLoadMode] = useState<'pagination' | 'infinite'>('pagination');
+  const [allData, setAllData] = useState<SwapDetail[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -298,6 +332,54 @@ export default function InOutPage() {
 
   // Back to top button state
   const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // Drawer สำหรับ assign ตำแหน่งว่างจาก chip ในคอลัมน์คนครอง
+  const [promotionChainDrawerOpen, setPromotionChainDrawerOpen] = useState(false);
+  const [vacantPositionForChain, setVacantPositionForChain] = useState<{ posCodeId: number; posCodeName?: string; position: string; unit: string; positionNumber?: string; actingAs?: string } | null>(null);
+  
+  // Drawer สำหรับแสดงรายการ promotion chain
+  const [promotionChainListOpen, setPromotionChainListOpen] = useState(false);
+  
+  // Menu สำหรับปุ่มโปรโมชั่น
+  const [promotionMenuAnchor, setPromotionMenuAnchor] = useState<null | HTMLElement>(null);
+  const [vacantSelectorOpen, setVacantSelectorOpen] = useState(false);
+
+  // (Drawer states for promotion-chain moved to PromotionChainVacantSelector component)
+
+  // Hidden rows state
+  const [hiddenRows, setHiddenRows] = useState<Set<string>>(() => {
+    // โหลด hidden rows จาก localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hiddenRows');
+      if (saved) {
+        try {
+          return new Set(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse hiddenRows from localStorage:', e);
+        }
+      }
+    }
+    return new Set();
+  });
+  
+  // Selected rows state for checkbox selection
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [hiddenRowsHistory, setHiddenRowsHistory] = useState<string[]>(() => {
+    // โหลด history จาก localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hiddenRowsHistory');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Failed to parse hiddenRowsHistory from localStorage:', e);
+        }
+      }
+    }
+    return [];
+  });
+  const [fadingRows, setFadingRows] = useState<Set<string>>(new Set()); // แถวที่กำลัง fade out
+  const [highlightedRows, setHighlightedRows] = useState<Set<string>>(new Set()); // แถวที่กำลังแสดง highlight effect
 
   // Store filter options (loaded once)
   const [filterOptions, setFilterOptions] = useState<{
@@ -318,6 +400,9 @@ export default function InOutPage() {
     timestamp: 0,
     filters: ''
   });
+
+  // Track current page for infinite scroll
+  const infiniteScrollPageRef = useRef(0);
 
   // Combined highlight terms - เฉพาะจากช่อง search เท่านั้น
   const highlightTerms = useMemo(() => {
@@ -374,6 +459,17 @@ export default function InOutPage() {
           units: sortedUnits,
           positionCodes: sortedPositionCodes
         });
+
+        // ตรวจสอบว่ามี unit 'น' หรือไม่
+        const hasUnitNor = sortedUnits.includes('น');
+        
+        if (hasUnitNor) {
+          // ถ้ามี unit 'น' ให้ปิด initialLoad เพื่อ auto load
+          setInitialLoad(false);
+        } else {
+          // ถ้าไม่มี unit 'น' ให้เปลี่ยนไปใช้ 'all' และไม่ auto load (เก็บ initialLoad = true)
+          setSelectedUnit('all');
+        }
       }
     } catch (error) {
       console.error('Failed to fetch filters:', error);
@@ -394,7 +490,7 @@ export default function InOutPage() {
       const CACHE_DURATION = 30000; // 30 วินาที
 
       // ใช้ cache ถ้าข้อมูลยังไม่เก่าเกินไปและ filters เหมือนเดิม (และไม่ได้ force reload)
-      if (!forceReload && dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION) {
+      if (!forceReload && dataCacheRef.current.filters === cacheKey && cacheAge < CACHE_DURATION && loadMode === 'pagination') {
         setData(dataCacheRef.current.data);
         setInitialLoad(false);
         setLoading(false);
@@ -470,11 +566,120 @@ export default function InOutPage() {
     }
   };
 
+  // Fetch more data for infinite scroll
+  const fetchMoreData = useCallback(async () => {
+    if (loadingMore || !hasMore || loadMode !== 'infinite') {
+      console.log('[Infinite Scroll] Skip - loadingMore:', loadingMore, 'hasMore:', hasMore, 'loadMode:', loadMode);
+      return;
+    }
+
+    try {
+      setLoadingMore(true);
+      
+      // ใช้ ref เพื่อเก็บค่า page ปัจจุบัน
+      const nextPage = infiniteScrollPageRef.current;
+      console.log('[Infinite Scroll] Fetching page:', nextPage, 'Current data length:', allData.length);
+
+      const params = new URLSearchParams({
+        unit: selectedUnit,
+        posCodeId: selectedPosCode,
+        status: selectedStatus,
+        swapType: selectedSwapType,
+        year: selectedYear.toString(),
+        page: nextPage.toString(),
+        pageSize: '50',
+      });
+
+      if (searchText.trim()) {
+        params.append('search', searchText.trim());
+      }
+
+      const response = await fetch(`/api/new-in-out?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch more data');
+
+      const result = await response.json();
+      if (result.success) {
+        const newData = result.data.swapDetails;
+        console.log('[Infinite Scroll] Loaded:', newData.length, 'items from API');
+        
+        if (newData.length === 0 || newData.length < 50) {
+          console.log('[Infinite Scroll] No more data, setting hasMore to false');
+          setHasMore(false);
+        } else {
+          // เพิ่ม page number สำหรับรอบถัดไป
+          infiniteScrollPageRef.current = nextPage + 1;
+          console.log('[Infinite Scroll] Next page will be:', infiniteScrollPageRef.current);
+        }
+        
+        setAllData(prev => {
+          // ป้องกันการเพิ่มข้อมูลซ้ำ
+          const existingIds = new Set(prev.map(d => d.id));
+          const uniqueNewData = newData.filter((d: SwapDetail) => !existingIds.has(d.id));
+          const combined = [...prev, ...uniqueNewData];
+          console.log('[Infinite Scroll] Total items after merge:', combined.length, 'Prev:', prev.length, 'New unique:', uniqueNewData.length);
+          return combined;
+        });
+      }
+      console.log('[Infinite Scroll] Fetch completed successfully');
+    } catch (error) {
+      console.error('[Infinite Scroll] Failed to fetch more data:', error);
+      setHasMore(false); // หยุดโหลดเมื่อเกิด error
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, loadMode, selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, searchText]);
+
+
+  // บันทึก hidden rows ไป localStorage ทุกครั้งที่เปลี่ยน
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hiddenRows', JSON.stringify(Array.from(hiddenRows)));
+    }
+  }, [hiddenRows]);
+
+  // บันทึก history ไป localStorage ทุกครั้งที่เปลี่ยน
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hiddenRowsHistory', JSON.stringify(hiddenRowsHistory));
+    }
+  }, [hiddenRowsHistory]);
+
   // โหลด filter options ตอน mount (แสดง filters ทันที)
   useEffect(() => {
-    fetchFilters();
+    const loadFiltersAndCheckUnit = async () => {
+      await fetchFilters();
+    };
+    loadFiltersAndCheckUnit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // (Vacant positions loading moved inside PromotionChainVacantSelector)
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (loadMode !== 'infinite' || !hasSearched) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          console.log('[Observer] Triggered - loading more data');
+          fetchMoreData();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [loadMode, hasSearched, hasMore, loadingMore, fetchMoreData]);
 
   // Scroll listener สำหรับ back to top button
   useEffect(() => {
@@ -501,7 +706,7 @@ export default function InOutPage() {
     }
   }, []);
 
-  // Load data when filters change (with debounce) - only after user interaction
+  // Load data when filters change (with debounce)
   useEffect(() => {
     // Skip initial load - ไม่โหลดข้อมูลตอนเข้าหน้าครั้งแรก
     if (initialLoad) return;
@@ -513,22 +718,147 @@ export default function InOutPage() {
     const timer = setTimeout(() => {
       // โหลดข้อมูลทันทีเมื่อ filter เปลี่ยน
       setHasSearched(true);
-      fetchData(abortController.signal);
+      if (loadMode === 'pagination') {
+        fetchData(abortController.signal);
+      } else {
+        // Reset infinite scroll
+        console.log('[Filter Change] Resetting infinite scroll');
+        setAllData([]);
+        setHasMore(true);
+        infiniteScrollPageRef.current = 0; // Reset page counter
+        // เรียก fetchMoreData หลังจาก reset state
+        setTimeout(() => fetchMoreData(), 100);
+      }
     }, 150); // รอ 150ms หลังจาก filter เปลี่ยน
 
     return () => {
       clearTimeout(timer);
       abortController.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, page, rowsPerPage, searchText]);
+  }, [initialLoad, selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, page, rowsPerPage, searchText, loadMode]);
 
   const filteredSwapDetails = useMemo(() => {
+    // ถ้าเป็น infinite scroll mode ใช้ allData
+    if (loadMode === 'infinite') {
+      // ถ้ายังไม่มีข้อมูลเลยและกำลังโหลด ให้ return [] เพื่อแสดง skeleton
+      if (allData.length === 0 && loadingMore) return [];
+
+      // กรองแถวที่ซ่อนออก
+      const filtered = allData.filter(d => !hiddenRows.has(d.id));
+      const searchLower = searchText.trim().toLowerCase();
+      const isGroupSearch = !!searchLower && filtered.some(d => d.transaction && (
+        d.transaction.groupNumber?.toLowerCase().includes(searchLower) ||
+        d.transaction.groupName?.toLowerCase().includes(searchLower)
+      ));
+      console.log('[Infinite Scroll] Displaying:', filtered.length, 'items (hidden:', hiddenRows.size, ')');
+
+      const sortedInfinite = [...filtered].sort((a, b) => {
+        // ใช้ sequence sort เมื่อมีการ filter ประเภท หรือเป็นการค้นหาด้วย groupNumber / groupName
+        const useSequenceSort = selectedSwapType !== 'all' || isGroupSearch;
+        if (useSequenceSort) {
+          // มี filter ประเภท: แสดง row group, เรียงตาม groupNumber → transaction.id → sequence
+          const hasTransactionA = !!a.transaction;
+          const hasTransactionB = !!b.transaction;
+          
+          // ให้รายการที่มี transaction ขึ้นก่อน
+          if (hasTransactionA && !hasTransactionB) return -1;
+          if (!hasTransactionA && hasTransactionB) return 1;
+          
+          if (hasTransactionA && hasTransactionB) {
+            // เรียงตาม groupNumber ก่อน (numeric)
+            const groupA = a.transaction!.groupNumber || '';
+            const groupB = b.transaction!.groupNumber || '';
+            if (groupA && groupB) {
+              const cmp = String(groupA).localeCompare(String(groupB), undefined, { numeric: true });
+              if (cmp !== 0) return cmp;
+            } else if (groupA && !groupB) {
+              return -1;
+            } else if (!groupA && groupB) {
+              return 1;
+            }
+            
+            // ถ้า groupNumber เท่ากัน ให้เรียงตาม transaction.id
+            const transactionIdA = a.transaction!.id;
+            const transactionIdB = b.transaction!.id;
+            if (transactionIdA !== transactionIdB) return transactionIdA.localeCompare(transactionIdB);
+            
+            // ภายใน transaction เดียวกัน เรียงตาม sequence
+            const sequenceA = a.sequence ?? 999999;
+            const sequenceB = b.sequence ?? 999999;
+            if (sequenceA !== sequenceB) return sequenceA - sequenceB;
+          }
+          
+          // Fallback: noId then fullName
+          const noIdA = a.noId || '';
+          const noIdB = b.noId || '';
+          if (noIdA && noIdB) {
+            const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+            if (compareNum !== 0) return compareNum;
+          }
+          if (noIdA && !noIdB) return -1;
+          if (!noIdA && noIdB) return 1;
+          return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+        } else {
+          // ไม่มี filter ประเภท (all): เรียงตาม fromPositionNumber เท่านั้น
+          const posA = a.fromPositionNumber ?? '';
+          const posB = b.fromPositionNumber ?? '';
+          const digitsA = (posA || '').replace(/\D/g, '');
+          const digitsB = (posB || '').replace(/\D/g, '');
+          const numA = digitsA ? BigInt(digitsA) : null;
+          const numB = digitsB ? BigInt(digitsB) : null;
+          if (numA !== null && numB !== null) {
+            if (numA < numB) return -1;
+            if (numA > numB) return 1;
+          } else if (numA !== null) {
+            return -1;
+          } else if (numB !== null) {
+            return 1;
+          }
+          
+          // Fallback: noId then fullName
+          const noIdA = a.noId || '';
+          const noIdB = b.noId || '';
+          if (noIdA && noIdB) {
+            const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+            if (compareNum !== 0) return compareNum;
+          }
+          if (noIdA && !noIdB) return -1;
+          if (!noIdA && noIdB) return 1;
+          return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+        }
+      });
+
+      // Debug: แสดงจากตำแหน่งคนครองของรายการแรก ๆ พร้อมตัวเลขที่สกัด
+      if (sortedInfinite.length > 0) {
+        console.log('[Infinite Scroll] Sorted sample (first 10):', sortedInfinite.slice(0, 10).map(d => {
+          const pos = d.fromPositionNumber ?? '';
+          const digits = (pos || '').replace(/\D/g, '');
+          return {
+            id: d.id,
+            fullName: d.fullName,
+            transactionId: d.transaction?.id,
+            fromPositionNumber: pos,
+            digits: digits,
+            numeric: digits ? digits : null,
+            sequence: d.sequence
+          };
+        }));
+      }
+
+      return sortedInfinite;
+    }
+
     // ถ้ากำลังโหลด ให้ return [] เพื่อแสดง skeleton
     if (loading || !data?.swapDetails) return [];
 
     // ไม่ต้อง filter ประเภทที่ frontend เพราะ API filter ให้แล้ว
-    const filtered = data.swapDetails;
+    // กรองแถวที่ซ่อนออก
+    const filtered = data.swapDetails.filter(d => !hiddenRows.has(d.id));
+    const searchLower = searchText.trim().toLowerCase();
+    const isGroupSearch = !!searchLower && filtered.some(d => d.transaction && (
+      d.transaction.groupNumber?.toLowerCase().includes(searchLower) ||
+      d.transaction.groupName?.toLowerCase().includes(searchLower)
+    ));
 
     // Debug: ตรวจสอบ sequence ที่ได้จาก API
     if (filtered.length > 0 && filtered.some(d => d.transaction)) {
@@ -545,35 +875,102 @@ export default function InOutPage() {
       });
     }
 
-    // เรียงข้อมูลตาม noId เหมือนหน้า police_personnel
+    // เรียงข้อมูล:
+    // - ถ้า filter ประเภท (selectedSwapType !== 'all'): เรียงตาม transaction + sequence
+    // - ถ้าไม่ filter (selectedSwapType === 'all'): เรียงตาม fromPositionNumber
     const sorted = [...filtered].sort((a, b) => {
-      // 1. เรียงตาม noId เป็นหลัก
-      const noIdA = a.noId || '';
-      const noIdB = b.noId || '';
-
-      if (noIdA && noIdB) {
-        const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
-        if (compareNum !== 0) return compareNum;
+      const useSequenceSort = selectedSwapType !== 'all' || isGroupSearch;
+      if (useSequenceSort) {
+        // มี filter ประเภท: แสดง row group, เรียงตาม groupNumber → transaction.id → sequence
+        const hasTransactionA = !!a.transaction;
+        const hasTransactionB = !!b.transaction;
+        
+        if (hasTransactionA && !hasTransactionB) return -1;
+        if (!hasTransactionA && hasTransactionB) return 1;
+        
+        if (hasTransactionA && hasTransactionB) {
+          // เรียงตาม groupNumber ก่อน (numeric)
+          const groupA = a.transaction!.groupNumber || '';
+          const groupB = b.transaction!.groupNumber || '';
+          if (groupA && groupB) {
+            const cmp = String(groupA).localeCompare(String(groupB), undefined, { numeric: true });
+            if (cmp !== 0) return cmp;
+          } else if (groupA && !groupB) {
+            return -1;
+          } else if (!groupA && groupB) {
+            return 1;
+          }
+          
+          // ถ้า groupNumber เท่ากัน ให้เรียงตาม transaction.id
+          const transactionIdA = a.transaction!.id;
+          const transactionIdB = b.transaction!.id;
+          if (transactionIdA !== transactionIdB) return transactionIdA.localeCompare(transactionIdB);
+          
+          // ภายใน transaction เดียวกัน เรียงตาม sequence
+          const sequenceA = a.sequence ?? 999999;
+          const sequenceB = b.sequence ?? 999999;
+          if (sequenceA !== sequenceB) return sequenceA - sequenceB;
+        }
+        
+        // Fallback: noId then fullName
+        const noIdA = a.noId || '';
+        const noIdB = b.noId || '';
+        if (noIdA && noIdB) {
+          const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+          if (compareNum !== 0) return compareNum;
+        }
+        if (noIdA && !noIdB) return -1;
+        if (!noIdA && noIdB) return 1;
+        return (a.fullName || '').localeCompare(b.fullName || '', 'th');
+      } else {
+        // ไม่มี filter ประเภท (all): เรียงตาม fromPositionNumber เท่านั้น
+        const posA = a.fromPositionNumber ?? '';
+        const posB = b.fromPositionNumber ?? '';
+        const digitsA = (posA || '').replace(/\D/g, '');
+        const digitsB = (posB || '').replace(/\D/g, '');
+        const numA = digitsA ? BigInt(digitsA) : null;
+        const numB = digitsB ? BigInt(digitsB) : null;
+        if (numA !== null && numB !== null) {
+          if (numA < numB) return -1;
+          if (numA > numB) return 1;
+        } else if (numA !== null) {
+          return -1;
+        } else if (numB !== null) {
+          return 1;
+        }
+        
+        // Fallback: noId then fullName
+        const noIdA = a.noId || '';
+        const noIdB = b.noId || '';
+        if (noIdA && noIdB) {
+          const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
+          if (compareNum !== 0) return compareNum;
+        }
+        if (noIdA && !noIdB) return -1;
+        if (!noIdA && noIdB) return 1;
+        return (a.fullName || '').localeCompare(b.fullName || '', 'th');
       }
-
-      if (noIdA && !noIdB) return -1;
-      if (!noIdA && noIdB) return 1;
-
-      // 2. ถ้า noId เท่ากัน ให้เรียงตามชื่อ
-      return (a.fullName || '').localeCompare(b.fullName || '', 'th');
     });
 
-    // Debug: แสดง 5 รายการแรกเพื่อตรวจสอบการเรียง
+    // Debug: แสดง 10 รายการแรกเพื่อตรวจสอบการเรียง (รวมตำแหน่งคนครอง + ตัวเลขที่สกัด)
     if (sorted.length > 0) {
-      console.log('[In-Out] Sorted data (first 5):', sorted.slice(0, 5).map(d => ({
-        noId: d.noId,
-        fullName: d.fullName,
-        positionNumber: d.fromPositionNumber
-      })));
+      console.log('[In-Out] Sorted data (first 10):', sorted.slice(0, 10).map(d => {
+        const pos = d.fromPositionNumber ?? '';
+        const digits = (pos || '').replace(/\D/g, '');
+        return {
+          noId: d.noId,
+          fullName: d.fullName,
+          transactionId: d.transaction?.id,
+          fromPositionNumber: pos,
+          digits: digits,
+          numeric: digits ? digits : null,
+          sequence: d.sequence
+        };
+      }));
     }
 
     return sorted;
-  }, [data?.swapDetails, loading]);
+  }, [data?.swapDetails, loading, loadMode, allData, loadingMore, hiddenRows]);
 
   const handleUnitChange = (event: SelectChangeEvent<string>) => {
     setInitialLoad(false); // Mark that user has interacted
@@ -602,6 +999,16 @@ export default function InOutPage() {
   const handleChangePage = (newPage: number) => {
     setInitialLoad(false); // Mark that user has interacted
     setPage(newPage);
+    // Scroll table container into view so first row is visible after pagination
+    // Use a small timeout to wait for DOM update
+    setTimeout(() => {
+      const el = tableContainerRef.current;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 80);
   };
 
   const handleChangeRowsPerPage = (newRowsPerPage: number) => {
@@ -621,7 +1028,144 @@ export default function InOutPage() {
     setSelectedStatus('all');
     setSelectedSwapType('all');
     setPage(0);
+    setHiddenRows(new Set()); // Reset hidden rows
+    setHiddenRowsHistory([]); // Reset history
+    setSelectedRows(new Set()); // Clear selection when resetting
   };
+
+  const handleToggleRowVisibility = (rowId: string) => {
+    const isCurrentlyHidden = hiddenRows.has(rowId);
+    
+    if (isCurrentlyHidden) {
+      // ถ้าแสดงแถวคืน ให้ลบออกจาก Set และ history
+      setHiddenRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(rowId);
+        return newSet;
+      });
+      setHiddenRowsHistory(prevHistory => prevHistory.filter(id => id !== rowId));
+    } else {
+      // ถ้าซ่อนแถว ให้เริ่ม fade out animation
+      setFadingRows(prev => new Set([...prev, rowId]));
+      
+      // หลังจาก animation เสร็จ (300ms) ถึงค่อยซ่อนจริง
+      setTimeout(() => {
+        setHiddenRows(prev => {
+          const newSet = new Set(prev);
+          newSet.add(rowId);
+          return newSet;
+        });
+        setHiddenRowsHistory(prevHistory => [...prevHistory, rowId]);
+        setFadingRows(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(rowId);
+          return newSet;
+        });
+      }, 300);
+    }
+  };
+
+  const handleUndoHideRow = () => {
+    if (hiddenRowsHistory.length === 0) return;
+    
+    // เอาแถวล่าสุดที่ซ่อนออกมา
+    const lastHiddenRowId = hiddenRowsHistory[hiddenRowsHistory.length - 1];
+    
+    // แสดงแถวกลับมาทันที (จะมี fade in animation)
+    setHiddenRows(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(lastHiddenRowId);
+      return newSet;
+    });
+    
+    setHiddenRowsHistory(prev => prev.slice(0, -1));
+    
+    // เพิ่ม highlight effect แบบ minimal
+    setHighlightedRows(prev => new Set([...prev, lastHiddenRowId]));
+    
+    // ลบ highlight หลังจาก 1.5 วินาที
+    setTimeout(() => {
+      setHighlightedRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(lastHiddenRowId);
+        return newSet;
+      });
+    }, 1500);
+  };
+
+  const handleShowAllRows = () => {
+    // Capture current hidden rows so we can highlight them after showing
+    const prevHidden = Array.from(hiddenRows);
+
+    // Nothing to do
+    if (prevHidden.length === 0) {
+      setHiddenRows(new Set());
+      setSelectedRows(new Set());
+      return;
+    }
+
+    // Show all and clear selection
+    setHiddenRows(new Set());
+    setSelectedRows(new Set()); // Clear selection when showing all
+
+    // Add minimal highlight effect for those rows (like undo)
+    setHighlightedRows(prev => {
+      const newSet = new Set(prev);
+      prevHidden.forEach(id => newSet.add(id));
+      return newSet;
+    });
+
+    // Remove highlight after 1.5s
+    setTimeout(() => {
+      setHighlightedRows(prev => {
+        const newSet = new Set(prev);
+        prevHidden.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    }, 1500);
+  };
+
+  const handleSelectAllRows = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      const allIds = new Set(filteredSwapDetails.map(detail => detail.id));
+      setSelectedRows(allIds);
+    } else {
+      setSelectedRows(new Set());
+    }
+  };
+
+  const handleSelectRow = (rowId: string) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(rowId)) {
+        newSet.delete(rowId);
+      } else {
+        newSet.add(rowId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleHideSelectedRows = () => {
+    if (selectedRows.size === 0) return;
+    
+    // เริ่ม fade out animation สำหรับแถวที่เลือก
+    setFadingRows(new Set(selectedRows));
+    
+    // หลังจาก animation เสร็จ (300ms) ถึงค่อยซ่อนจริง
+    setTimeout(() => {
+      setHiddenRows(prev => {
+        const newSet = new Set(prev);
+        selectedRows.forEach(rowId => newSet.add(rowId));
+        return newSet;
+      });
+      setHiddenRowsHistory(prevHistory => [...prevHistory, ...Array.from(selectedRows)]);
+      setFadingRows(new Set());
+      setSelectedRows(new Set()); // Clear selection after hiding
+    }, 300);
+  };
+
+
 
   const handleSwapTypeChange = (event: SelectChangeEvent<string>) => {
     console.log('[Frontend] SwapType changed to:', event.target.value);
@@ -636,15 +1180,50 @@ export default function InOutPage() {
     setHasSearched(true);
     setInitialLoad(false);
 
-    // Clear cache และ force reload ข้อมูลใหม่
-    dataCacheRef.current = {
-      data: null,
-      timestamp: 0,
-      filters: ''
-    };
+    if (loadMode === 'infinite') {
+      // Reset infinite scroll และโหลดใหม่
+      console.log('[Load Data] Resetting infinite scroll');
+      setAllData([]);
+      setHasMore(true);
+      setLoadingMore(false); // Reset loading state
+      infiniteScrollPageRef.current = 0; // Reset page counter
+      setTimeout(() => fetchMoreData(), 100);
+    } else {
+      // Clear cache และ force reload ข้อมูลใหม่
+      dataCacheRef.current = {
+        data: null,
+        timestamp: 0,
+        filters: ''
+      };
+      // โหลดเฉพาะข้อมูล (filters โหลดแล้วตอน mount) - force reload
+      fetchData(undefined, true);
+    }
+  };
 
-    // โหลดเฉพาะข้อมูล (filters โหลดแล้วตอน mount) - force reload
-    fetchData(undefined, true);
+  const handleToggleLoadMode = () => {
+    const newMode = loadMode === 'pagination' ? 'infinite' : 'pagination';
+    console.log('[Toggle Mode] Switching to:', newMode);
+    setLoadMode(newMode);
+    setInitialLoad(false);
+    
+    if (newMode === 'infinite') {
+      // เปลี่ยนเป็น infinite scroll - reset และโหลดข้อมูลใหม่
+      setAllData([]);
+      setHasMore(true);
+      setLoadingMore(false);
+      setPage(0);
+      infiniteScrollPageRef.current = 0; // Reset page counter
+      if (hasSearched) {
+        setTimeout(() => fetchMoreData(), 100);
+      }
+    } else {
+      // เปลี่ยนกลับเป็น pagination - clear allData
+      setAllData([]);
+      setPage(0);
+      if (hasSearched) {
+        fetchData(undefined, true);
+      }
+    }
   };
 
   const handleStatusChange = (event: SelectChangeEvent<string>) => {
@@ -771,6 +1350,40 @@ export default function InOutPage() {
     setSelectedPersonnelForDetail(null);
   };
 
+  const handleAvatarUpdate = (avatarUrl: string | null) => {
+    if (selectedPersonnelForDetail) {
+      // อัพเดท selectedPersonnelForDetail
+      const updatedPersonnel = {
+        ...selectedPersonnelForDetail,
+        avatarUrl
+      };
+      setSelectedPersonnelForDetail(updatedPersonnel);
+
+      // อัพเดทข้อมูลใน data array
+      if (data?.swapDetails) {
+        const updatedSwapDetails = data.swapDetails.map(detail => 
+          detail.personnelId === selectedPersonnelForDetail.personnelId
+            ? { ...detail, avatarUrl }
+            : detail
+        );
+        setData({
+          ...data,
+          swapDetails: updatedSwapDetails
+        });
+      }
+
+      // อัพเดทข้อมูลใน allData (สำหรับ infinite scroll mode)
+      if (loadMode === 'infinite' && allData.length > 0) {
+        const updatedAllData = allData.map(detail =>
+          detail.personnelId === selectedPersonnelForDetail.personnelId
+            ? { ...detail, avatarUrl }
+            : detail
+        );
+        setAllData(updatedAllData);
+      }
+    }
+  };
+
   // Scroll to top function
   const scrollToTop = () => {
     if (isFullscreen) {
@@ -800,6 +1413,17 @@ export default function InOutPage() {
       });
     }
   };
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const search = searchParams.get('search');
+    if (search) {
+      setSearchText(search);
+      setHasSearched(true);
+      setInitialLoad(false);
+    }
+  }, [searchParams]);
 
   return (
     <Layout>
@@ -837,9 +1461,105 @@ export default function InOutPage() {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Promotion Management Button Group */}
+              <ButtonGroup 
+                variant="contained"
+                size={isMobile ? 'small' : 'medium'}
+                disableElevation
+                sx={{
+                  '& .MuiButton-root': {
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    '&:not(:last-child)': {
+                      borderRight: '1px solid rgba(255, 255, 255, 0.3)',
+                    },
+                  },
+                }}
+              >
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={() => setVacantSelectorOpen(true)}
+                  sx={{ px: 2 }}
+                >
+                  สร้างโปรโมชั่น
+                </Button>
+                <Button
+                  onClick={(e) => setPromotionMenuAnchor(e.currentTarget)}
+                  sx={{ 
+                    px: 1,
+                    minWidth: 'auto',
+                  }}
+                >
+                  <ArrowDropDownIcon />
+                </Button>
+              </ButtonGroup>
+
+              {/* Menu for promotion actions */}
+              <Menu
+                anchorEl={promotionMenuAnchor}
+                open={Boolean(promotionMenuAnchor)}
+                onClose={() => setPromotionMenuAnchor(null)}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+              >
+                <MenuItem 
+                  onClick={() => {
+                    setVacantSelectorOpen(true);
+                    setPromotionMenuAnchor(null);
+                  }}
+                >
+                  <ListItemIcon>
+                    <AddIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>สร้างสายโปรโมชั่นใหม่</ListItemText>
+                </MenuItem>
+                <MenuItem 
+                  onClick={() => {
+                    setPromotionChainListOpen(true);
+                    setPromotionMenuAnchor(null);
+                  }}
+                >
+                  <ListItemIcon>
+                    <ListIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>ดูรายการโปรโมชั่น</ListItemText>
+                </MenuItem>
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem 
+                  onClick={() => {
+                    setPromotionMenuAnchor(null);
+                    // TODO: Add view vacant positions functionality
+                  }}
+                >
+                  <ListItemIcon>
+                    <VisibilityIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>ดูตำแหน่งว่าง</ListItemText>
+                </MenuItem>
+              </Menu>
+
+              {/* Vacant Selector Dialog */}
+              {vacantSelectorOpen && (
+                <PromotionChainVacantSelector 
+                  selectedYear={selectedYear} 
+                  isMobile={isMobile}
+                  open={vacantSelectorOpen}
+                  onClose={() => setVacantSelectorOpen(false)}
+                />
+              )}
+
               <Chip
-                label={`ทั้งหมด ${data?.totalCount || 0} รายการ`}
+                label={loadMode === 'infinite' 
+                  ? `แสดง ${allData.length} รายการ${hasMore ? '+' : ''}` 
+                  : `ทั้งหมด ${data?.totalCount || 0} รายการ`
+                }
                 color="primary"
                 sx={{
                   fontWeight: 600,
@@ -848,6 +1568,70 @@ export default function InOutPage() {
                   alignSelf: { xs: 'flex-start', sm: 'center' }
                 }}
               />
+              {selectedRows.size > 0 && (
+                <Tooltip title={`ซ่อนแถวที่เลือก (${selectedRows.size} รายการ)`}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleHideSelectedRows}
+                    startIcon={<VisibilityOffIcon />}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      px: { xs: 2, sm: 2.5 },
+                      color: '#FF6B6B',
+                      borderColor: '#FF6B6B',
+                      borderWidth: 2,
+                      '&:hover': {
+                        borderWidth: 2,
+                        borderColor: '#EE5A5A',
+                        bgcolor: 'rgba(255, 107, 107, 0.08)',
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 2px 8px rgba(255, 107, 107, 0.2)'
+                      },
+                      '&:active': {
+                        transform: 'translateY(0)'
+                      },
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    ซ่อนที่เลือก ({selectedRows.size})
+                  </Button>
+                </Tooltip>
+              )}
+              {hiddenRows.size > 0 && (
+                <>
+                  <Chip
+                    label={`ซ่อน ${hiddenRows.size} แถว`}
+                    color="warning"
+                    size="small"
+                    onDelete={handleShowAllRows}
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                    }}
+                  />
+                  {hiddenRowsHistory.length > 0 && (
+                    <Tooltip title="ยกเลิกการซ่อนแถวล่าสุด">
+                      <IconButton
+                        size="small"
+                        onClick={handleUndoHideRow}
+                        sx={{
+                          bgcolor: 'warning.light',
+                          color: 'warning.dark',
+                          '&:hover': {
+                            bgcolor: 'warning.main',
+                            color: 'white'
+                          }
+                        }}
+                      >
+                        <UndoIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </>
+              )}
               <Tooltip title={isFullscreen ? "ออกจากโหมดเต็มจอ" : "โหมดเต็มจอ (สำหรับ Present)"}>
                 <IconButton
                   onClick={() => setIsFullscreen(!isFullscreen)}
@@ -885,6 +1669,25 @@ export default function InOutPage() {
               </>
             ) : (
               <>
+                <FormControl size="small">
+                  <InputLabel>ปี</InputLabel>
+                  <Select 
+                    value={selectedYear} 
+                    label="ปี" 
+                    onChange={handleYearChange}
+                    MenuProps={{
+                      container: isFullscreen ? document.getElementById('fullscreen-container') : undefined,
+                      style: { zIndex: isFullscreen ? 1301 : undefined }
+                    }}
+                  >
+                    {availableYears.map((year) => (
+                      <MenuItem key={year} value={year}>
+                        {year}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
                 <FormControl size="small">
                   <InputLabel>หน่วย</InputLabel>
                   <Select 
@@ -955,7 +1758,8 @@ export default function InOutPage() {
                     }}
                   >
                     <MenuItem value="all">ทุกประเภท</MenuItem>
-                    <MenuItem value="none">ยังไม่มีประเภท (ยังไม่จับคู่)</MenuItem>
+                    <MenuItem value="paired">จับคู่ตำแหน่งใหม่แล้ว</MenuItem>
+                    <MenuItem value="none">ยังไม่จับคู่ตำแหน่ง</MenuItem>
                     <MenuItem value="two-way">สลับตำแหน่ง (2 คน)</MenuItem>
                     <MenuItem value="three-way">สลับสามเส้า (3 คน)</MenuItem>
                     <MenuItem value="promotion-chain">จัดคนเข้าตำแหน่งว่าง</MenuItem>
@@ -963,24 +1767,7 @@ export default function InOutPage() {
                   </Select>
                 </FormControl>
 
-                <FormControl size="small">
-                  <InputLabel>ปี</InputLabel>
-                  <Select 
-                    value={selectedYear} 
-                    label="ปี" 
-                    onChange={handleYearChange}
-                    MenuProps={{
-                      container: isFullscreen ? document.getElementById('fullscreen-container') : undefined,
-                      style: { zIndex: isFullscreen ? 1301 : undefined }
-                    }}
-                  >
-                    {availableYears.map((year) => (
-                      <MenuItem key={year} value={year}>
-                        {year}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+
               </>
             )}
           </Box>
@@ -1028,6 +1815,17 @@ export default function InOutPage() {
                   gap: 1,
                   flexShrink: 0
                 }}>
+                  <Tooltip title={loadMode === 'pagination' ? 'เปลี่ยนเป็นโหมด Scroll to Load' : 'เปลี่ยนเป็นโหมด Pagination'}>
+                    <Button
+                      variant={loadMode === 'infinite' ? "contained" : "outlined"}
+                      size="medium"
+                      onClick={handleToggleLoadMode}
+                      color={loadMode === 'infinite' ? "success" : "primary"}
+                      sx={{ whiteSpace: 'nowrap', minWidth: isMobile ? 'auto' : undefined }}
+                    >
+                      {loadMode === 'infinite' ? '∞ Scroll' : '📄 Page'}
+                    </Button>
+                  </Tooltip>
                   <Button
                     variant={hasSearched ? "outlined" : "contained"}
                     size="medium"
@@ -1269,10 +2067,23 @@ export default function InOutPage() {
                 </Typography>
               </Box>
             )}
-            <TableContainer>
+            <TableContainer ref={tableContainerRef}>
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', width: 60, fontWeight: 600, py: 2, px: 1 }}>
+                      <Checkbox
+                        checked={filteredSwapDetails.length > 0 && selectedRows.size === filteredSwapDetails.length}
+                        indeterminate={selectedRows.size > 0 && selectedRows.size < filteredSwapDetails.length}
+                        onChange={handleSelectAllRows}
+                        sx={{
+                          color: 'rgba(255, 255, 255, 0.7)',
+                          '&.Mui-checked': { color: 'white' },
+                          '&.MuiCheckbox-indeterminate': { color: 'white' },
+                          p: 0
+                        }}
+                      />
+                    </TableCell>
                     <TableCell sx={{ color: 'white', width: 50, fontWeight: 600, py: 2 }}>
                       #
                     </TableCell>
@@ -1294,10 +2105,13 @@ export default function InOutPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {loading ? (
+                  {(loading || (loadMode === 'infinite' && loadingMore && allData.length === 0)) ? (
                     // Skeleton Loading Rows - แสดงจำนวนที่เหมาะสม
-                    Array.from({ length: rowsPerPage === -1 ? 20 : Math.min(rowsPerPage, 20) }).map((_, index) => (
+                    Array.from({ length: loadMode === 'infinite' ? 20 : (rowsPerPage === -1 ? 20 : Math.min(rowsPerPage, 20)) }).map((_, index) => (
                       <TableRow key={`skeleton-${index}`}>
+                        <TableCell sx={{ py: 0.5, px: 1 }}>
+                          <Skeleton variant="rectangular" width={18} height={18} />
+                        </TableCell>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
                           <Skeleton variant="text" width={20} height={16} />
                         </TableCell>
@@ -1308,7 +2122,8 @@ export default function InOutPage() {
                           <Skeleton variant="text" width="75%" height={16} />
                         </TableCell>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
-                          <Skeleton variant="text" width="80%" height={16} />
+                          <Skeleton variant="text" width="80%" height={14} sx={{ mt: 0.25 }} />
+                          <Skeleton variant="text" width="50%" height={14} sx={{ mt: 0.25 }} />
                         </TableCell>
                         <TableCell sx={{ py: 0.5, px: 1 }}>
                           <Skeleton variant="text" width="90%" height={16} />
@@ -1320,7 +2135,7 @@ export default function InOutPage() {
                     ))
                   ) : filteredSwapDetails.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} sx={{ p: 0, border: 'none' }}>
+                      <TableCell colSpan={7} sx={{ p: 0, border: 'none' }}>
                         <EmptyState
                           icon={PersonIcon}
                           title={!hasSearched ? 'เลือก Filter แล้วจะแสดงข้อมูล' : (searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล')}
@@ -1331,9 +2146,11 @@ export default function InOutPage() {
                     </TableRow>
                   ) : (
                     filteredSwapDetails.map((detail, index) => {
-                      // ตรวจสอบว่าเป็นคนแรกของกลุ่มใหม่หรือไม่
+                      // ตรวจสอบว่าเป็นคนแรก/คนสุดท้ายของกลุ่มใหม่หรือไม่
                       const prevDetail = index > 0 ? filteredSwapDetails[index - 1] : null;
+                      const nextDetail = index < filteredSwapDetails.length - 1 ? filteredSwapDetails[index + 1] : null;
                       const isNewGroup = !prevDetail || prevDetail.transaction?.id !== detail.transaction?.id;
+                      const isEndOfGroup = !nextDetail || nextDetail.transaction?.id !== detail.transaction?.id;
                       const replaced = detail.replacedPerson;
                       const isVacant = !replaced;
 
@@ -1342,24 +2159,62 @@ export default function InOutPage() {
                       // ตรวจสอบว่า posCodeId ไม่เปลี่ยนแปลง (ย้ายแนวนอน)
                       const isSameLevel = detail.posCodeId && detail.toPosCodeId && detail.toPosCodeId === detail.posCodeId;
 
-                      return (
+                      return [
+                        // แสดง row group header เฉพาะเมื่อมี filter ประเภท (selectedSwapType !== 'all')
+                        isNewGroup && detail.transaction && selectedSwapType !== 'all' ? (
+                          <TableRow key={`group-${detail.transaction.id || 'nogroup'}`}>
+                            <TableCell colSpan={7} sx={{ py: 1, px: 2, bgcolor: alpha(theme.palette.primary.main, 0.06), borderBottom: 1, borderColor: 'divider' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                                    {detail.transaction.groupNumber ? `${detail.transaction.groupNumber}` : `#${detail.transaction.id}`}
+                                  </Typography>
+                                  {detail.transaction.groupName && (
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                      {`— ${detail.transaction.groupName}`}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <Box sx={{ ml: 'auto', textAlign: 'right' }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatDate(detail.transaction.swapDate)} • {getSwapTypeLabel(detail.transaction.swapType)}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ) : null,
                         <TableRow
                           key={detail.id}
                           hover
+                          selected={selectedRows.has(detail.id)}
                           sx={{
                             '&:hover': {
                               bgcolor: 'action.hover'
                             },
-                            borderTop: isNewGroup && index > 0 ? '2px solid' : 0,
-                            borderTopColor: isNewGroup && index > 0 ? 'primary.main' : 'transparent',
-                            borderBottom: '2px solid',
-                            borderBottomColor: 'divider',
-                            bgcolor: index % 2 === 0 ? 'background.paper' : alpha(theme.palette.grey[50], 0.5),
-                            '& > td': {
-                              borderBottom: 'none'
+                            opacity: fadingRows.has(detail.id) ? 0 : 1,
+                            transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
+                            transition: 'all 0.3s ease-out',
+                            bgcolor: highlightedRows.has(detail.id) ? 'rgba(0, 191, 165, 0.08)' : undefined,
+                            boxShadow: highlightedRows.has(detail.id) ? 'inset 3px 0 0 #00BFA5' : undefined,
+                            '& > *': {
+                              // แสดง border ปิดกลุ่มเฉพาะเมื่อมี filter ประเภท
+                              borderBottom: isEndOfGroup && detail.transaction && selectedSwapType !== 'all' ? `2px solid ${theme.palette.secondary.main}` : undefined
                             }
                           }}
                         >
+                          {/* Checkbox */}
+                          <TableCell sx={{ 
+                            py: 0.75, 
+                            px: 1
+                          }}>
+                            <Checkbox
+                              checked={selectedRows.has(detail.id)}
+                              onChange={() => handleSelectRow(detail.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              sx={{ p: 0 }}
+                            />
+                          </TableCell>
                           {/* # */}
                           <TableCell sx={{ 
                             py: 0.75, 
@@ -1370,89 +2225,92 @@ export default function InOutPage() {
                             </Typography>
                           </TableCell>
 
-                          {/* เข้า - คนที่มี transaction - แสดงเมื่อมี transaction */}
+                          {/* เข้า - คนที่มี transaction - แสดงเมื่อมี transaction และไม่ใช่ตำแหน่งว่าง */}
                           <TableCell sx={{ 
                             py: 0.75, 
                             px: 1
                           }}>
-                            {detail.transaction && detail.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? (
-                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                <Box sx={{ flex: 1 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'text.primary', lineHeight: 1.4 }}>
-                                    {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
-                                    {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
-                                  </Typography>
-                                  {detail.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
-                                      อาวุโส {detail.seniority}
+                            {/* ถ้าเป็นตำแหน่งว่าง ไม่แสดงอะไรเลย */}
+                            {detail.fullName && ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? null : (
+                              detail.transaction && detail.fullName ? (
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'text.primary', lineHeight: 1.4 }}>
+                                      {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
+                                      {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
                                     </Typography>
-                                  )}
-                                  {detail.posCodeMaster && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
+                                    {detail.seniority && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
+                                        อาวุโส {detail.seniority}
+                                      </Typography>
+                                    )}
+                                    {detail.posCodeMaster && (
+                                      <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                        {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
+                                      </Typography>
+                                    )}
+                                    <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
+                                      {renderPositionWithHighlight(detail.fromPosition, detail.fromUnit, detail.fromPositionNumber)}
                                     </Typography>
-                                  )}
-                                  <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
-                                    {renderPositionWithHighlight(detail.fromPosition, detail.fromUnit, detail.fromPositionNumber)}
-                                  </Typography>
+                                  </Box>
+                                  <Tooltip title="ดูข้อมูลบุคลากร">
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewPersonnelDetail(detail);
+                                      }}
+                                      sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                    >
+                                      <InfoOutline sx={{ fontSize: '1rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
                                 </Box>
-                                <Tooltip title="ดูข้อมูลบุคลากร">
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewPersonnelDetail(detail);
-                                    }}
-                                    sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                  >
-                                    <InfoOutline sx={{ fontSize: '1rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            ) : replaced ? (
-                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                                <Box sx={{ flex: 1 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
-                                    {joinInline(replaced.rank, replaced.fullName)}
-                                    {replaced.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({replaced.age})</Typography>}
-                                  </Typography>
-                                  {replaced.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
-                                      อาวุโส {replaced.seniority}
+                              ) : replaced ? (
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                      {joinInline(replaced.rank, replaced.fullName)}
+                                      {replaced.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({replaced.age})</Typography>}
                                     </Typography>
-                                  )}
-                                  {replaced.posCodeMaster && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {replaced.posCodeMaster.id} - {replaced.posCodeMaster.name}
+                                    {replaced.seniority && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
+                                        อาวุโส {replaced.seniority}
+                                      </Typography>
+                                    )}
+                                    {replaced.posCodeMaster && (
+                                      <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                        {replaced.posCodeMaster.id} - {replaced.posCodeMaster.name}
+                                      </Typography>
+                                    )}
+                                    <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
+                                      {joinInline(replaced.fromPosition, replaced.fromUnit, replaced.fromPositionNumber ? `#${replaced.fromPositionNumber}` : null)}
                                     </Typography>
-                                  )}
-                                  <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600 }}>
-                                    {joinInline(replaced.fromPosition, replaced.fromUnit, replaced.fromPositionNumber ? `#${replaced.fromPositionNumber}` : null)}
-                                  </Typography>
+                                  </Box>
+                                  <Tooltip title="ดูข้อมูลบุคลากร">
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewPersonnelDetail(replaced);
+                                      }}
+                                      sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                                    >
+                                      <InfoOutline sx={{ fontSize: '1rem' }} />
+                                    </IconButton>
+                                  </Tooltip>
                                 </Box>
-                                <Tooltip title="ดูข้อมูลบุคลากร">
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewPersonnelDetail(replaced);
-                                    }}
-                                    sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
-                                  >
-                                    <InfoOutline sx={{ fontSize: '1rem' }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            ) : null}
+                              ) : null
+                            )}
                           </TableCell>
 
                           {/* คนครอง - ชื่อคนเดิมที่ครองตำแหน่ง (replaced) หรือตำแหน่งว่าง */}
                           <TableCell sx={{ 
-                            bgcolor: alpha(theme.palette.grey[100], 0.5),
+                            bgcolor: 'grey.50',
                             py: 0.75, 
                             px: 1
                           }}>
-                            {replaced ? (
+                            {replaced && replaced.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(replaced.fullName.trim()) ? (
                               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                                 <Box sx={{ flex: 1 }}>
                                   <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'text.primary', lineHeight: 1.4 }}>
@@ -1460,7 +2318,7 @@ export default function InOutPage() {
                                     {replaced.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({replaced.age})</Typography>}
                                   </Typography>
                                   {replaced.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
                                       อาวุโส {replaced.seniority}
                                     </Typography>
                                   )}
@@ -1478,13 +2336,30 @@ export default function InOutPage() {
                                   </IconButton>
                                 </Tooltip>
                               </Box>
-                            ) : detail.transaction ? (
+                            ) : (replaced && replaced.fullName && ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(replaced.fullName.trim())) || detail.transaction ? (
                               <Chip
-                                label="ตำแหน่งว่าง"
+                                label={
+                                  replaced && ['ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(replaced.fullName?.trim() || '') 
+                                    ? 'ว่าง (กันตำแหน่ง)' 
+                                    : 'ตำแหน่งว่าง'
+                                }
                                 size="small"
-                                color="error"
+                                color="warning"
                                 variant="outlined"
-                                sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const vacantPos = {
+                                    posCodeId: detail.toPosCodeId || replaced?.toPosCodeId || replaced?.posCodeId || detail.posCodeId || 0,
+                                    posCodeName: detail.toPosCodeMaster?.name || replaced?.toPosCodeMaster?.name || replaced?.posCodeMaster?.name || detail.posCodeMaster?.name,
+                                    position: detail.toPosition || replaced?.toPosition || replaced?.fromPosition || detail.fromPosition || '',
+                                    unit: detail.toUnit || replaced?.toUnit || replaced?.fromUnit || detail.fromUnit || '',
+                                    positionNumber: detail.toPositionNumber || replaced?.toPositionNumber || replaced?.fromPositionNumber || detail.fromPositionNumber || undefined,
+                                    actingAs: detail.toActingAs || replaced?.toActingAs || replaced?.fromActingAs || detail.fromActingAs || undefined,
+                                  };
+                                  setVacantPositionForChain(vacantPos);
+                                  setPromotionChainDrawerOpen(true);
+                                }}
+                                sx={{ fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', '&:hover': { bgcolor: 'warning.light' } }}
                               />
                             ) : detail.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? (
                               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
@@ -1494,7 +2369,7 @@ export default function InOutPage() {
                                     {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
                                   </Typography>
                                   {detail.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
                                       อาวุโส {detail.seniority}
                                     </Typography>
                                   )}
@@ -1518,19 +2393,32 @@ export default function InOutPage() {
                                 size="small"
                                 color="warning"
                                 variant="outlined"
-                                sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const vacantPos = {
+                                    posCodeId: detail.toPosCodeId || detail.posCodeId || 0,
+                                    posCodeName: detail.toPosCodeMaster?.name || detail.posCodeMaster?.name,
+                                    position: detail.toPosition || detail.fromPosition || '',
+                                    unit: detail.toUnit || detail.fromUnit || '',
+                                    positionNumber: detail.toPositionNumber || detail.fromPositionNumber || undefined,
+                                    actingAs: detail.toActingAs || detail.fromActingAs || undefined,
+                                  };
+                                  setVacantPositionForChain(vacantPos);
+                                  setPromotionChainDrawerOpen(true);
+                                }}
+                                sx={{ fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', '&:hover': { bgcolor: 'warning.light' } }}
                               />
                             )}
                           </TableCell>
 
                           {/* ตำแหน่งคนครอง - ตำแหน่งของคนครอง */}
                           <TableCell sx={{ 
-                            bgcolor: alpha(theme.palette.grey[100], 0.5),
+                            bgcolor: 'grey.50',
                             py: 0.75, 
                             px: 1
                           }}>
                             <Box>
-                              {/* ถ้ามี replaced แสดงตำแหน่งของ replaced */}
+                              {/* ถ้ามี replaced แสดงตำแหน่งของ replaced (รวมถึงตำแหน่งว่างด้วย) */}
                               {replaced ? (
                                 <>
                                   <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
@@ -1545,27 +2433,33 @@ export default function InOutPage() {
                                     {joinInline(replaced.fromUnit, replaced.fromPositionNumber ? `#${replaced.fromPositionNumber}` : null)}
                                   </Typography>
                                 </>
-                              ) : detail.transaction ? (
-                                /* ถ้ามี transaction แต่ไม่มี replaced (ตำแหน่งว่าง) แสดงตำแหน่งที่จะไปรับ */
-                                <>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
-                                    {highlightText(detail.toPosition || detail.fromPosition || '-', highlightTerms)}
-                                  </Typography>
-                                  {(detail.toPosCodeMaster || detail.posCodeMaster) && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {detail.toPosCodeMaster ?
-                                        highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`) :
-                                        detail.posCodeMaster ? highlightPosCode(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`) : ''
-                                      }
+                              ) : detail.transaction && detail.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? (
+                                /* ถ้ามี transaction และมีคนจริง (ไม่ใช่ว่าง/placeholder) แสดงตำแหน่งที่จะไปรับ */
+                                detail.toPosition ? (
+                                  <>
+                                    <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                      {highlightText(detail.toPosition, highlightTerms)}
                                     </Typography>
-                                  )}
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
-                                    {detail.toUnit ?
-                                      renderNewPositionWithHighlight(null, detail.toUnit, detail.toPositionNumber || null) :
-                                      renderPositionWithHighlight(null, detail.fromUnit, detail.fromPositionNumber || null)
-                                    }
-                                  </Typography>
-                                </>
+                                    {detail.toPosCodeMaster && (
+                                      <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                        {highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`)}
+                                      </Typography>
+                                    )}
+                                    {detail.toUnit && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                        {renderNewPositionWithHighlight(null, detail.toUnit, detail.toPositionNumber || null)}
+                                      </Typography>
+                                    )}
+                                  </>
+                                ) : (
+                                  <Chip
+                                    label="กำลังรอพิจารณาตำแหน่ง"
+                                    size="small"
+                                    color="warning"
+                                    variant="outlined"
+                                    sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                  />
+                                )
                               ) : detail.fullName && !['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName.trim()) ? (
                                 /* ถ้าไม่มี transaction และไม่ใช่ตำแหน่งว่าง แสดงตำแหน่งปัจจุบัน */
                                 <>
@@ -1582,19 +2476,50 @@ export default function InOutPage() {
                                   </Typography>
                                 </>
                               ) : (
-                                /* ตำแหน่งว่างและไม่มี transaction */
+                                /* ตำแหน่งว่าง/placeholder - แสดงข้อมูลตำแหน่งว่างถ้ามี */
                                 <>
-                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
-                                    {highlightText(detail.fromPosition || '-', highlightTerms)}
-                                  </Typography>
-                                  {detail.posCodeMaster && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
-                                      {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
-                                    </Typography>
+                                  {detail.toPosition ? (
+                                    <>
+                                      <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                        {highlightText(detail.toPosition, highlightTerms)}
+                                      </Typography>
+                                      {detail.toPosCodeMaster && (
+                                        <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                          {highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`)}
+                                        </Typography>
+                                      )}
+                                      {detail.toUnit && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                          {renderNewPositionWithHighlight(null, detail.toUnit, detail.toPositionNumber || null)}
+                                        </Typography>
+                                      )}
+                                    </>
+                                  ) : (
+                                    /* ถ้าไม่มี toPosition ให้แสดง fromPosition (ตำแหน่งของช่องว่าง) ถ้ามี */
+                                    (detail.fromPosition || detail.fromPositionNumber) ? (
+                                      <>
+                                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', lineHeight: 1.4 }}>
+                                          {highlightText(detail.fromPosition || '-', highlightTerms)}
+                                        </Typography>
+                                        {detail.posCodeMaster && (
+                                          <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                            {highlightText(`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`, highlightTerms)}
+                                          </Typography>
+                                        )}
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
+                                          {joinInlineWithHighlight(highlightTerms, detail.fromUnit, detail.fromPositionNumber ? `#${detail.fromPositionNumber}` : null)}
+                                        </Typography>
+                                      </>
+                                    ) : (
+                                      <Chip
+                                        label="-"
+                                        size="small"
+                                        color="default"
+                                        variant="outlined"
+                                        sx={{ fontWeight: 600, fontSize: '0.75rem' }}
+                                      />
+                                    )
                                   )}
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.75rem' }}>
-                                    {joinInlineWithHighlight(highlightTerms, detail.fromUnit, detail.fromPositionNumber ? `#${detail.fromPositionNumber}` : null)}
-                                  </Typography>
                                 </>
                               )}
                             </Box>
@@ -1617,21 +2542,28 @@ export default function InOutPage() {
                                     color="info"
                                     sx={{ mb: 0.25, fontWeight: 500, height: 20, fontSize: '0.75rem', '& .MuiChip-icon': { fontSize: '1rem' } }}
                                   />
-                                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem' }}>
-                                    {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
-                                    {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
+                                  <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.75rem', fontWeight: 500 }}>
+                                    ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{detail.fromUnit || '-'}</Box>
                                   </Typography>
-                                  {detail.seniority && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem' }}>
-                                      อาวุโส {detail.seniority}
-                                    </Typography>
+                                  <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.75rem', fontWeight: 500 }}>
+                                    ไปหน่วย: <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>{detail.toUnit || '-'}</Box>
+                                  </Typography>
+                                  {(detail.toPosition || detail.toPositionNumber) && (
+                                    <>
+                                      {detail.toPosCodeMaster && (
+                                        <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 700, mb: 0.2, fontSize: '0.75rem', mt: 0.5 }}>
+                                          {highlightGeneral(`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`)}
+                                        </Typography>
+                                      )}
+                                      <Typography variant="body2" color="success.dark" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.8125rem' }}>
+                                        ตำแหน่ง: {renderNewPositionWithHighlight(
+                                          detail.toPosition || null,
+                                          detail.toUnit || null,
+                                          detail.toPositionNumber || null
+                                        )}
+                                      </Typography>
+                                    </>
                                   )}
-                                  <Typography variant="body2" sx={{ display: 'block', mb: 0.2, fontSize: '0.75rem', fontWeight: 500 }}>
-                                    ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 600 }}>{highlightUnit(detail.fromUnit || '-')}</Box>
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ display: 'block', fontSize: '0.75rem', fontWeight: 500 }}>
-                                    ไปหน่วย: <Box component="span" sx={{ color: 'success.main', fontWeight: 600 }}>{highlightGeneral(detail.toUnit || '-')}</Box>
-                                  </Typography>
                                 </Box>
                               </Box>
                             ) : (detail.toPosCodeMaster || detail.toPosition) ? (
@@ -1664,7 +2596,7 @@ export default function InOutPage() {
                                       sx={{ mb: 0.25, fontWeight: 500, height: 20, fontSize: '0.75rem', '& .MuiChip-icon': { fontSize: '1rem' } }}
                                     />
                                   )}
-                                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.2, fontSize: '0.875rem' }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.2, fontSize: '0.875rem', color: 'success.dark' }}>
                                     {joinInlineWithHighlight(highlightTerms, detail.rank, detail.fullName)}
                                     {detail.age && <Typography component="span" color="text.secondary" sx={{ fontSize: '0.8rem', ml: 0.5 }}>({detail.age})</Typography>}
                                   </Typography>
@@ -1674,7 +2606,7 @@ export default function InOutPage() {
                                     </Typography>
                                   )}
                                   {(detail.toPosCodeMaster || replaced?.posCodeMaster) && (
-                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 600, mb: 0.2, fontSize: '0.75rem' }}>
+                                    <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 700, mb: 0.2, fontSize: '0.75rem' }}>
                                       {highlightGeneral(
                                         detail.toPosCodeMaster ?
                                           `${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}` :
@@ -1682,7 +2614,7 @@ export default function InOutPage() {
                                       )}
                                     </Typography>
                                   )}
-                                  <Typography variant="body2" color="text.primary" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.8125rem' }}>
+                                  <Typography variant="body2" color="success.dark" sx={{ display: 'block', fontWeight: 'bold', fontSize: '0.8125rem' }}>
                                     {renderNewPositionWithHighlight(
                                       detail.toPosition || replaced?.fromPosition || null,
                                       detail.toUnit || replaced?.fromUnit || null,
@@ -1693,13 +2625,7 @@ export default function InOutPage() {
 
                               </Box>
                             ) : (
-                              <Chip
-                                label="ยังไม่ได้จับคู่"
-                                size="small"
-                                color="error"
-                                variant="outlined"
-                                sx={{ fontWeight: 500, height: 20, fontSize: '0.75rem' }}
-                              />
+                              ''
                             )}
                           </TableCell>
 
@@ -1728,24 +2654,44 @@ export default function InOutPage() {
                               </Tooltip>
                             )}
                           </TableCell>
-                        </TableRow>
-                      );
+                            </TableRow>
+                          ];
                     }))}
                 </TableBody>
               </Table>
             </TableContainer>
 
-            {/* Pagination */}
-            <DataTablePagination
-              count={data?.totalCount || 0}
-              page={page}
-              rowsPerPage={rowsPerPage}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              rowsPerPageOptions={[5, 10, 25, 50, 100, -1]}
-              variant="minimal"
-              disabled={loading}
-            />
+            {/* Pagination - ซ่อนเมื่อเป็น infinite scroll mode */}
+            {loadMode === 'pagination' ? (
+              <DataTablePagination
+                count={data?.totalCount || 0}
+                page={page}
+                rowsPerPage={rowsPerPage}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                variant="minimal"
+                disabled={loading}
+              />
+            ) : (
+              /* Infinite Scroll Observer & Loading Indicator */
+              <Box sx={{ p: 2, textAlign: 'center' }}>
+                <div ref={observerTarget} style={{ height: '20px' }} />
+                {loadingMore && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, py: 2 }}>
+                    <CircularProgress size={24} />
+                    <Typography variant="body2" color="text.secondary">
+                      กำลังโหลดข้อมูลเพิ่มเติม...
+                    </Typography>
+                  </Box>
+                )}
+                {!hasMore && allData.length > 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                    ✓ แสดงข้อมูลครบทั้งหมดแล้ว ({allData.length} รายการ)
+                  </Typography>
+                )}
+              </Box>
+            )}
           </Paper>
         ) : (
           /* Card View - Mobile */
@@ -1769,10 +2715,10 @@ export default function InOutPage() {
                 </Typography>
               </Paper>
             )}
-            {loading ? (
+            {(loading || (loadMode === 'infinite' && loadingMore && allData.length === 0)) ? (
               // Skeleton Loading Cards - แสดงจำนวนที่เหมาะสม
               <Stack spacing={2}>
-                {Array.from({ length: rowsPerPage === -1 ? 15 : Math.min(rowsPerPage, 15) }).map((_, index) => (
+                {Array.from({ length: loadMode === 'infinite' ? 15 : (rowsPerPage === -1 ? 15 : Math.min(rowsPerPage, 15)) }).map((_, index) => (
                   <Card key={`skeleton-card-${index}`}>
                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                       {/* Header */}
@@ -1830,9 +2776,42 @@ export default function InOutPage() {
             ) : (
               <>
                 <Stack spacing={2}>
-                  {filteredSwapDetails.map((detail, index) => (
-                    <Card key={detail.id} sx={{ position: 'relative' }}>
-                      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  {filteredSwapDetails.map((detail, index) => {
+                    const prevDetail = index > 0 ? filteredSwapDetails[index - 1] : null;
+                    const isNewGroup = !prevDetail || prevDetail.transaction?.id !== detail.transaction?.id;
+                    return [
+                      // แสดง row group header เฉพาะเมื่อมี filter ประเภท (selectedSwapType !== 'all')
+                      isNewGroup && detail.transaction && selectedSwapType !== 'all' ? (
+                        <Paper key={`group-${detail.transaction.id || 'nogroup'}`} sx={{ p: 1, mb: 1, bgcolor: alpha(theme.palette.primary.main, 0.06), border: 1, borderColor: 'divider' }} elevation={0}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                                {detail.transaction.groupNumber ? `${detail.transaction.groupNumber}` : `#${detail.transaction.id}`}
+                              </Typography>
+                              {detail.transaction.groupName && (
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                  {`— ${detail.transaction.groupName}`}
+                                </Typography>
+                              )}
+                            </Box>
+                            <Box sx={{ ml: 'auto', textAlign: 'right' }}>
+                              <Typography variant="caption" color="text.secondary">
+                                {formatDate(detail.transaction.swapDate)} • {getSwapTypeLabel(detail.transaction.swapType)}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Paper>
+                      ) : null,
+                      <Card 
+                        key={detail.id} 
+                        sx={{ 
+                          position: 'relative',
+                          opacity: fadingRows.has(detail.id) ? 0 : 1,
+                          transform: fadingRows.has(detail.id) ? 'scale(0.8)' : 'scale(1)',
+                          transition: 'all 0.3s ease-out',
+                        }}
+                      >
+                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                         {/* Header */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -1884,11 +2863,17 @@ export default function InOutPage() {
                         </Box>
 
                         {/* To Position - ย้ายไป */}
-                        {(detail.toPosCodeMaster || detail.toPosition) ? (
+                        {(detail.toPosCodeMaster || detail.toPosition || (detail.transaction?.swapType === 'transfer' && (detail.toPosition || detail.toPositionNumber))) ? (
                           <Box sx={{ p: 1.5, bgcolor: alpha('#4caf50', 0.1), borderRadius: 1, border: 2, borderColor: 'success.main' }}>
                             <Typography variant="caption" color="success.dark" sx={{ fontWeight: 700, display: 'block', mb: 0.75, fontSize: '0.7rem' }}>
                               ➡️ ย้ายไป
                             </Typography>
+
+                            {detail.transaction?.swapType === 'transfer' && (
+                              <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.75rem', fontWeight: 500 }}>
+                                ย้ายจากหน่วย: <Box component="span" sx={{ color: 'error.main', fontWeight: 700 }}>{detail.fromUnit || '-'}</Box>
+                              </Typography>
+                            )}
 
                             {detail.toPosCodeMaster && (
                               <Typography variant="caption" color="success.main" sx={{ fontSize: '0.75rem', display: 'block', fontWeight: 700, mb: 0.25 }}>
@@ -1896,9 +2881,11 @@ export default function InOutPage() {
                               </Typography>
                             )}
 
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.dark', fontSize: '0.875rem', mb: 0.25 }}>
-                              {detail.toPosition || '-'}
-                            </Typography>
+                            {detail.toPosition && (
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.dark', fontSize: '0.875rem', mb: 0.25 }}>
+                                {detail.toPosition}
+                              </Typography>
+                            )}
 
                             {detail.toUnit && (
                               <Typography variant="caption" color="success.dark" sx={{ fontSize: '0.75rem', display: 'block', mb: 0.25 }}>
@@ -1976,24 +2963,61 @@ export default function InOutPage() {
                             </Button>
                           )}
                         </Box>
+                        <Box sx={{ mt: 1 }}>
+                          <Button
+                            fullWidth
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            startIcon={<VisibilityOffIcon />}
+                            onClick={() => handleToggleRowVisibility(detail.id)}
+                          >
+                            ซ่อนแถวนี้
+                          </Button>
+                        </Box>
                       </CardContent>
                     </Card>
-                  ))}
+                      ];
+                  })}
                 </Stack>
 
-                {/* Pagination for Mobile */}
-                <Paper sx={{ mt: 2 }}>
-                  <DataTablePagination
-                    count={data?.totalCount || 0}
-                    page={page}
-                    rowsPerPage={rowsPerPage}
-                    onPageChange={handleChangePage}
-                    onRowsPerPageChange={handleChangeRowsPerPage}
-                    rowsPerPageOptions={[5, 10, 25, 50, -1]}
-                    variant="minimal"
-                    disabled={loading}
-                  />
-                </Paper>
+                {/* Pagination for Mobile - ซ่อนเมื่อเป็น infinite scroll mode */}
+                {loadMode === 'pagination' ? (
+                  <Paper sx={{ mt: 2 }}>
+                    <DataTablePagination
+                      count={data?.totalCount || 0}
+                      page={page}
+                      rowsPerPage={rowsPerPage}
+                      onPageChange={handleChangePage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      rowsPerPageOptions={[5, 10, 25, 50 , 100]}
+                      variant="minimal"
+                      disabled={loading}
+                    />
+                  </Paper>
+                ) : (
+                  /* Infinite Scroll Observer & Loading Indicator for Mobile */
+                  <Box sx={{ mt: 2, textAlign: 'center' }}>
+                    <div ref={observerTarget} style={{ height: '20px' }} />
+                    {loadingMore && (
+                      <Paper sx={{ p: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                          <CircularProgress size={20} />
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                            กำลังโหลด...
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    )}
+                    {!hasMore && allData.length > 0 && (
+                      <Paper sx={{ p: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                          ✓ แสดงข้อมูลครบทั้งหมดแล้ว ({allData.length} รายการ)
+                        </Typography>
+                      </Paper>
+                    )}
+                  </Box>
+                )}
               </>
             )}
           </Box>
@@ -2014,6 +3038,7 @@ export default function InOutPage() {
           <PersonnelDetailModal
             open={personnelDetailModalOpen}
             onClose={handleClosePersonnelDetailModal}
+            onAvatarUpdate={handleAvatarUpdate}
             personnel={{
               id: selectedPersonnelForDetail.personnelId,
               noId: selectedPersonnelForDetail.noId,
@@ -2037,10 +3062,42 @@ export default function InOutPage() {
               yearsOfService: selectedPersonnelForDetail.yearsOfService,
               trainingLocation: selectedPersonnelForDetail.trainingLocation,
               trainingCourse: selectedPersonnelForDetail.trainingCourse,
+              avatarUrl: selectedPersonnelForDetail.avatarUrl,
             }}
           />
         )}
       </Box>
+
+      {/* Promotion Chain Drawer - Create chain directly in page */}
+      <PromotionChainDrawer
+        open={promotionChainDrawerOpen}
+        onClose={() => setPromotionChainDrawerOpen(false)}
+        vacantPosition={vacantPositionForChain}
+        year={selectedYear}
+        onSaveSuccess={() => {
+          // Reload data after saving
+          handleSearchChange(searchText);
+        }}
+      />
+
+      {/* Promotion Chain List Drawer */}
+      <PromotionChainListDrawer
+        open={promotionChainListOpen}
+        onClose={() => setPromotionChainListOpen(false)}
+        year={selectedYear}
+        onEdit={(chainId) => {
+          // TODO: Implement edit functionality
+          console.log('Edit chain:', chainId);
+          setPromotionChainListOpen(false);
+        }}
+        onDelete={(chainId) => {
+          // Delete is handled internally in the drawer
+        }}
+        onRefresh={() => {
+          // Reload main table after delete
+          handleSearchChange(searchText);
+        }}
+      />
 
       {/* Back to Top Button - แสดงตลอดเวลาเพื่อ debug */}
       <Tooltip title="กลับไปด้านบน" placement="left">

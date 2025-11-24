@@ -211,6 +211,21 @@ export async function GET(request: NextRequest) {
                 };
             });
 
+        // กรองตำแหน่งว่างที่มีคนครองแล้วออกจาก combinedData (ใช้ filledPositions ที่สร้างไว้ก่อนหน้า)
+        combinedData = combinedData.filter(person => {
+            const isVacant = !person.fullName || 
+                           person.fullName.trim() === '' ||
+                           ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
+            
+            if (isVacant && person.fromUnit && person.fromPositionNumber) {
+                const posKey = `${person.fromUnit}|${person.fromPositionNumber}`;
+                if (filledPositions.has(posKey)) {
+                    return false; 
+                }
+            }
+            return true;
+        });
+
         // ถ้า filter สถานะ = "ว่าง" ให้เพิ่มคนที่เข้ามาแทนตำแหน่งว่างด้วย
         if (status === 'vacant') {
             console.log('[API] Filtering vacant - checking for people moving into vacant positions');

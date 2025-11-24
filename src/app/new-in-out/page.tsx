@@ -709,12 +709,17 @@ export default function InOutPage() {
 
       // กรองแถวที่ซ่อนออก
       const filtered = allData.filter(d => !hiddenRows.has(d.id));
+      const searchLower = searchText.trim().toLowerCase();
+      const isGroupSearch = !!searchLower && filtered.some(d => d.transaction && (
+        d.transaction.groupNumber?.toLowerCase().includes(searchLower) ||
+        d.transaction.groupName?.toLowerCase().includes(searchLower)
+      ));
       console.log('[Infinite Scroll] Displaying:', filtered.length, 'items (hidden:', hiddenRows.size, ')');
 
       const sortedInfinite = [...filtered].sort((a, b) => {
-        // ถ้า filter ประเภท (selectedSwapType !== 'all') ให้เรียงตาม transaction group + sequence
-        // ถ้าไม่ filter (selectedSwapType === 'all') ให้เรียงตาม fromPositionNumber
-        if (selectedSwapType !== 'all') {
+        // ใช้ sequence sort เมื่อมีการ filter ประเภท หรือเป็นการค้นหาด้วย groupNumber / groupName
+        const useSequenceSort = selectedSwapType !== 'all' || isGroupSearch;
+        if (useSequenceSort) {
           // มี filter ประเภท: แสดง row group, เรียงตาม groupNumber → transaction.id → sequence
           const hasTransactionA = !!a.transaction;
           const hasTransactionB = !!b.transaction;
@@ -813,6 +818,11 @@ export default function InOutPage() {
     // ไม่ต้อง filter ประเภทที่ frontend เพราะ API filter ให้แล้ว
     // กรองแถวที่ซ่อนออก
     const filtered = data.swapDetails.filter(d => !hiddenRows.has(d.id));
+    const searchLower = searchText.trim().toLowerCase();
+    const isGroupSearch = !!searchLower && filtered.some(d => d.transaction && (
+      d.transaction.groupNumber?.toLowerCase().includes(searchLower) ||
+      d.transaction.groupName?.toLowerCase().includes(searchLower)
+    ));
 
     // Debug: ตรวจสอบ sequence ที่ได้จาก API
     if (filtered.length > 0 && filtered.some(d => d.transaction)) {
@@ -833,7 +843,8 @@ export default function InOutPage() {
     // - ถ้า filter ประเภท (selectedSwapType !== 'all'): เรียงตาม transaction + sequence
     // - ถ้าไม่ filter (selectedSwapType === 'all'): เรียงตาม fromPositionNumber
     const sorted = [...filtered].sort((a, b) => {
-      if (selectedSwapType !== 'all') {
+      const useSequenceSort = selectedSwapType !== 'all' || isGroupSearch;
+      if (useSequenceSort) {
         // มี filter ประเภท: แสดง row group, เรียงตาม groupNumber → transaction.id → sequence
         const hasTransactionA = !!a.transaction;
         const hasTransactionB = !!b.transaction;

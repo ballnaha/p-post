@@ -347,26 +347,31 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // Filter search - ค้นหาทั้งข้อมูล personnel และ swap transaction detail
+        // Filter search - ค้นหาทั้งข้อมูล personnel และ swap transaction detail รวมถึง groupNumber / groupName
         if (search) {
             const searchLower = search.toLowerCase();
             combinedData = combinedData.filter(d => {
                 // ค้นหาในข้อมูลปัจจุบัน (คนครอง)
-                const matchCurrent = 
+                const matchCurrent =
                     d.fullName?.toLowerCase().includes(searchLower) ||
                     d.nationalId?.toLowerCase().includes(searchLower) ||
                     d.rank?.toLowerCase().includes(searchLower) ||
                     d.fromUnit?.toLowerCase().includes(searchLower) ||
                     d.fromPosition?.toLowerCase().includes(searchLower) ||
                     d.fromPositionNumber?.toLowerCase().includes(searchLower);
-                
+
                 // ค้นหาในข้อมูลตำแหน่งใหม่ (ที่จะไป)
-                const matchNew = 
+                const matchNew =
                     d.toUnit?.toLowerCase().includes(searchLower) ||
                     d.toPosition?.toLowerCase().includes(searchLower) ||
                     d.toPositionNumber?.toLowerCase().includes(searchLower);
-                
-                return matchCurrent || matchNew;
+
+                // ค้นหาในข้อมูล transaction (groupNumber / groupName)
+                const matchTransaction =
+                    d.transaction?.groupNumber?.toLowerCase().includes(searchLower) ||
+                    d.transaction?.groupName?.toLowerCase().includes(searchLower);
+
+                return matchCurrent || matchNew || matchTransaction;
             });
         }
 

@@ -98,6 +98,7 @@ interface SwapDetailApi {
   posCodeMaster?: { id: number; name: string } | null;
   toPosCodeId?: number | null;
   toPosCodeMaster?: { id: number; name: string } | null;
+  isPlaceholder?: boolean | null; // เพิ่มรองรับข้อมูล placeholder จาก backend
   // Personal information
   birthDate?: string | null;
   age?: string | null;
@@ -242,9 +243,14 @@ export default function EditPromotionPage() {
         const mappedNodes: ChainNode[] = chainDetails.map((d, index) => {
           const fromRank = d.posCodeId ?? 0;
           const toRank = d.toPosCodeId ?? 0;
+          const isPlaceholder = d.isPlaceholder === true ||
+            (!d.personnelId || !d.nationalId ||
+              (typeof d.personnelId === 'string' && d.personnelId.trim() === '') ||
+              (typeof d.nationalId === 'string' && d.nationalId.trim() === ''));
           return {
             id: `node-${d.id}`,
             nodeOrder: d.sequence ?? index + 1,
+            isPlaceholder,
             personnelId: d.personnelId ?? undefined,
             noId: d.noId ?? undefined,
             nationalId: d.nationalId ?? "",
@@ -278,7 +284,7 @@ export default function EditPromotionPage() {
             toActingAs: d.toActingAs ?? undefined,
             fromRankLevel: fromRank,
             toRankLevel: toRank,
-            isPromotionValid: true,
+            isPromotionValid: !isPlaceholder,
           };
         });
 
@@ -704,16 +710,17 @@ export default function EditPromotionPage() {
         return;
       }
 
-      // กรองเฉพาะ node ที่ไม่ใช่ placeholder
-      const validNodes = nodes.filter(n => !n.isPlaceholder);
-      if (validNodes.length === 0) {
+      // ต้องมีอย่างน้อย 1 โหนดที่ไม่ใช่ placeholder
+      const validNodesForValidation = nodes.filter(n => !n.isPlaceholder);
+      if (validNodesForValidation.length === 0) {
         toast.error('กรุณาเลือกบุคลากรอย่างน้อย 1 คน (ไม่นับตำแหน่งว่าง)');
         setSaving(false);
         return;
       }
-
-      const swapDetails = validNodes.map((node) => ({
+      // ส่งทั้ง placeholder และ non-placeholder เพื่อให้ยังคงอยู่หลัง refresh
+      const swapDetails = nodes.map((node) => ({
         sequence: node.nodeOrder,
+        isPlaceholder: node.isPlaceholder || false,
         personnelId: node.personnelId,
         noId: node.noId,
         nationalId: node.nationalId,
@@ -788,6 +795,81 @@ export default function EditPromotionPage() {
         const t: TransactionApi = reloadJson.data;
         setTransaction(t);
         setGroupNotes(t.notes || '');
+
+        // Map details → nodes ใหม่หลังบันทึก (รวม placeholder)
+        const sorted = [...(t.swapDetails || [])].sort((a, b) => {
+          const sa = a.sequence ?? 9999;
+          const sb = b.sequence ?? 9999;
+          if (sa !== sb) return sa - sb;
+          return (a.fullName || '').localeCompare(b.fullName || '');
+        });
+        const startingDetail = sorted.find(d => d.sequence === 0);
+        const chainDetails = sorted.filter(d => d.sequence !== 0);
+        const remapped: ChainNode[] = chainDetails.map((d, index) => {
+          const fromRank = d.posCodeId ?? 0;
+          const toRank = d.toPosCodeId ?? 0;
+          const isPlaceholder = (d as any).isPlaceholder === true ||
+            (!d.personnelId || !d.nationalId ||
+              (typeof d.personnelId === 'string' && d.personnelId.trim() === '') ||
+              (typeof d.nationalId === 'string' && d.nationalId.trim() === ''));
+          return {
+            id: `node-${d.id}`,
+            nodeOrder: d.sequence ?? index + 1,
+            isPlaceholder,
+            personnelId: d.personnelId ?? undefined,
+            noId: d.noId ?? undefined,
+            nationalId: d.nationalId ?? '',
+            fullName: d.fullName,
+            rank: d.rank ?? '',
+            seniority: d.seniority ?? undefined,
+            birthDate: d.birthDate ?? undefined,
+            age: d.age ?? undefined,
+            education: d.education ?? undefined,
+            lastAppointment: d.lastAppointment ?? undefined,
+            currentRankSince: d.currentRankSince ?? undefined,
+            enrollmentDate: d.enrollmentDate ?? undefined,
+            retirementDate: d.retirementDate ?? undefined,
+            yearsOfService: d.yearsOfService ?? undefined,
+            trainingLocation: d.trainingLocation ?? undefined,
+            trainingCourse: d.trainingCourse ?? undefined,
+            supporterName: d.supportName ?? undefined,
+            supportReason: d.supportReason ?? undefined,
+            notes: d.notes ?? undefined,
+            fromPosCodeId: d.posCodeId ?? 0,
+            fromPosCodeName: (d as any).posCodeMaster?.name ?? undefined,
+            fromPosition: d.fromPosition ?? '',
+            fromPositionNumber: d.fromPositionNumber ?? undefined,
+            fromUnit: d.fromUnit ?? '',
+            fromActingAs: d.fromActingAs ?? undefined,
+            toPosCodeId: d.toPosCodeId ?? 0,
+            toPosCodeName: (d as any).toPosCodeMaster?.name ?? undefined,
+            toPosition: d.toPosition ?? '',
+            toPositionNumber: d.toPositionNumber ?? undefined,
+            toUnit: d.toUnit ?? '',
+            toActingAs: d.toActingAs ?? undefined,
+            fromRankLevel: fromRank,
+            toRankLevel: toRank,
+            isPromotionValid: !isPlaceholder,
+          };
+        });
+        setNodes(remapped);
+
+        if (startingDetail) {
+          setStartingPersonnel({
+            id: startingDetail.personnelId || 'from-transaction',
+            noId: startingDetail.noId || undefined,
+            posCodeId: startingDetail.posCodeId || 0,
+            posCodeName: (startingDetail as any).posCodeMaster?.name || undefined,
+            position: startingDetail.fromPosition || '',
+            unit: startingDetail.fromUnit || '',
+            positionNumber: startingDetail.fromPositionNumber || undefined,
+            actingAs: startingDetail.fromActingAs || undefined,
+            fullName: startingDetail.fullName || '',
+            rank: startingDetail.rank || '',
+            nationalId: startingDetail.nationalId || '',
+            seniority: startingDetail.seniority || undefined,
+          });
+        }
       }
     } catch (e: any) {
       console.error(e);

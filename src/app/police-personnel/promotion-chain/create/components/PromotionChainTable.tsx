@@ -384,6 +384,11 @@ export default function PromotionChainTable({
     toast.success('เปลี่ยนลำดับสำเร็จ');
   };
 
+  const formatPosCode = (id?: number, name?: string) => {
+    if (!name) return id && id > 0 ? `${id}` : '';
+    return id && id > 0 ? `${id}-${name}` : name;
+  };
+
   return (
     <Box>
       <Paper elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
@@ -495,7 +500,7 @@ export default function PromotionChainTable({
                         <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
                           <Box>
                             {node.toPosCodeName && (
-                              <Chip label={node.toPosCodeName} size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                              <Chip label={formatPosCode(node.toPosCodeId, node.toPosCodeName)} size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                             )}
                             <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                               {node.toPosition}
@@ -579,7 +584,7 @@ export default function PromotionChainTable({
                     <TableCell sx={{ py: 1 }}>
                       <Box>
                         {node.fromPosCodeName && (
-                          <Chip label={node.fromPosCodeName} size="small" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                          <Chip label={formatPosCode(node.fromPosCodeId, node.fromPosCodeName)} size="small" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                         )}
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                           {node.fromPosition}
@@ -597,7 +602,7 @@ export default function PromotionChainTable({
                     <TableCell sx={{ bgcolor: 'success.50', py: 1 }}>
                       <Box>
                         {node.toPosCodeName && (
-                          <Chip label={node.toPosCodeName} size="small" color="success" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                          <Chip label={formatPosCode(node.toPosCodeId, node.toPosCodeName)} size="small" color="success" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                         )}
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                           {node.toPosition}

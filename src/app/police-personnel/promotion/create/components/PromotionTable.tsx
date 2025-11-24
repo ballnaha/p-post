@@ -130,6 +130,11 @@ export default function PromotionTable({
   // ใช้ drag drop highlight hook
   const dragDropHighlight = useDragDropHighlight(2000);
 
+  const formatPosCode = (id?: number, name?: string) => {
+    if (!name) return id && id > 0 ? `${id}` : '';
+    return id && id > 0 ? `${id}-${name}` : name;
+  };
+
   const getRankLevelByPosCode = (posCodeId: number): number => {
     return posCodeId;
   };
@@ -637,7 +642,7 @@ export default function PromotionTable({
                         <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
                           <Box>
                             {node.toPosCodeName && (
-                              <Chip label={node.toPosCodeName} size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                              <Chip label={formatPosCode(node.toPosCodeId, node.toPosCodeName)} size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                             )}
                             <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                               {node.toPosition}
@@ -721,7 +726,7 @@ export default function PromotionTable({
                     <TableCell sx={{ py: 1 }}>
                       <Box>
                         {node.fromPosCodeName && (
-                          <Chip label={node.fromPosCodeName} size="small" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                          <Chip label={formatPosCode(node.fromPosCodeId, node.fromPosCodeName)} size="small" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                         )}
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                           {node.fromPosition}
@@ -739,7 +744,7 @@ export default function PromotionTable({
                     <TableCell sx={{ bgcolor: 'success.50', py: 1 }}>
                       <Box>
                         {node.toPosCodeName && (
-                          <Chip label={node.toPosCodeName} size="small" color="success" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                          <Chip label={formatPosCode(node.toPosCodeId, node.toPosCodeName)} size="small" color="success" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
                         )}
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                           {node.toPosition}

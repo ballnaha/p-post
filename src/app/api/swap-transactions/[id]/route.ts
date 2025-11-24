@@ -137,8 +137,10 @@ export async function PUT(
           fullName: detail.fullName || 'ตำแหน่งว่าง',
           rank: detail.rank || null,
           seniority: detail.seniority || null,
-          posCodeId: isPlaceholder ? null : (detail.posCodeId || null),
-          toPosCodeId: isPlaceholder ? null : (detail.toPosCodeId || null),
+          // เดิมเคยล้าง posCodeId/toPosCodeId เมื่อเป็น placeholder ทำให้ข้อมูลตำแหน่งหาย
+          // ปรับให้เก็บไว้ถ้ามีค่า (>0) เพื่อให้ยังเห็น posCodeName ใน chain
+          posCodeId: (typeof detail.posCodeId === 'number' && detail.posCodeId > 0) ? detail.posCodeId : null,
+          toPosCodeId: (typeof detail.toPosCodeId === 'number' && detail.toPosCodeId > 0) ? detail.toPosCodeId : null,
           // ข้อมูลส่วนตัว
           birthDate: detail.birthDate || null,
           age: detail.age || null,

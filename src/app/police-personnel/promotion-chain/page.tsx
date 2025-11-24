@@ -930,6 +930,18 @@ export default function PromotionChainPage() {
         </Box>
       </Paper>
 
+      {/* Legend (compact) */}
+      <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, color: 'text.secondary' }}>
+        <Typography variant="caption" sx={{ fontWeight: 600 }}>สัญลักษณ์:</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box component="span" sx={{ width: 8, height: 8, bgcolor: 'warning.main', borderRadius: '50%' }} />
+          <Typography variant="caption">ตำแหน่งว่างรอเลือก</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <CheckCircleIcon sx={{ color: 'success.main', fontSize: 16 }} />
+          <Typography variant="caption">ครบถ้วน / เสร็จสิ้น</Typography>
+        </Box>
+      </Box>
 
       {/* Chains List */}
       {loading ? (
@@ -1021,6 +1033,9 @@ export default function PromotionChainPage() {
                                 <Tooltip title="จัดตำแหน่งเสร็จสิ้นแล้ว">
                                   <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
                                 </Tooltip>
+                              )}
+                              {row.swapDetails?.some((d:any)=>d.isPlaceholder) && (
+                                <Box component="span" sx={{ width:8, height:8, bgcolor:'warning.main', borderRadius:'50%', display:'inline-block' }} />
                               )}
                               <Typography variant="body2" fontWeight={600}>
                                 {row.groupName || '-'}
@@ -1264,8 +1279,13 @@ export default function PromotionChainPage() {
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                           {chain.isCompleted && (
-                            <Tooltip title="จัดตำแหน่งเสร็จสิ้นแล้ว">
+                            <Tooltip title="ย้ายหน่วยเสร็จสิ้นแล้ว">
                               <CheckCircleIcon sx={{ color: 'success.main', fontSize: 22 }} />
+                            </Tooltip>
+                          )}
+                          {chain.swapDetails?.some((d:any) => d.isPlaceholder) && (
+                            <Tooltip title="มีตำแหน่งว่างค้างอยู่">
+                              <Box component="span" sx={{ width: 10, height: 10, bgcolor: 'warning.main', borderRadius: '50%', display: 'inline-block' }} />
                             </Tooltip>
                           )}
                           <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.15rem' }}>
@@ -1298,110 +1318,125 @@ export default function PromotionChainPage() {
                     <Box sx={{ mt: 2 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.95rem' }}>
                         <TrendingUpIcon fontSize="small" color="primary" />
-                        ลูกโซ่ตำแหน่ง ({details.length} คน)
+                        รายการเลื่อนตำแหน่ง ({details.length} คน)
                       </Typography>
                       
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {details.map((detail, index) => {
                           const isPlaceholder = detail.isPlaceholder || (!detail.personnelId && !detail.nationalId);
-                          // ตรวจสอบว่าเป็นการเลื่อนตำแหน่งหรือไม่ (toPosCodeId < posCodeId = เลื่อนขึ้น)
                           const isPromotion = detail.toPosCodeId && detail.posCodeId && detail.toPosCodeId > 0 && detail.posCodeId > 0 && detail.toPosCodeId < detail.posCodeId;
-                          
-                          return (
-                          <Box 
-                            key={detail.id}
-                            sx={{ 
-                              p: 2, 
-                              bgcolor: isPlaceholder ? 'warning.50' : 'grey.50', 
-                              borderRadius: 1,
-                              borderLeft: '3px solid',
-                              borderLeftColor: isPlaceholder ? 'warning.main' : 'primary.main',
-                              borderStyle: isPlaceholder ? 'dashed' : 'solid',
-                            }}
-                          >
-                            {isPlaceholder ? (
-                              <Box>
+
+                          if (isPlaceholder) {
+                            return (
+                              <Box
+                                key={detail.id}
+                                sx={{
+                                  p: 2,
+                                  bgcolor: 'warning.50',
+                                  borderRadius: 1,
+                                  borderLeft: '3px dashed',
+                                  borderLeftColor: 'warning.main',
+                                }}
+                              >
                                 <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem', mb: 0.5, fontStyle: 'italic', color: 'text.secondary' }}>
                                   {detail.sequence ?? index + 1}. 📋 ตำแหน่งว่าง - รอการเลือกบุคลากร
                                 </Typography>
                                 <Box sx={{ mt: 1 }}>
                                   {detail.toPosCodeMaster && (
-                                    <Chip 
-                                      label={`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`} 
-                                      size="small" 
-                                      color="warning" 
-                                      variant="outlined" 
-                                      sx={{ fontSize: '0.7rem', mb: 0.5 }} 
+                                    <Chip
+                                      label={`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`}
+                                      size="small"
+                                      color="warning"
+                                      variant="outlined"
+                                      sx={{ fontSize: '0.7rem', mb: 0.5 }}
                                     />
                                   )}
                                   <Typography variant="body2" sx={{ color: 'warning.dark', fontWeight: 600, fontSize: '0.875rem' }}>
-                                    <strong>→ ไป:</strong> {detail.toPosition || '-'} 
+                                    <strong>→ ไป:</strong> {detail.toPosition || '-'}
                                     {detail.toPositionNumber && ` (${detail.toPositionNumber})`}
                                     {detail.toUnit && ` • ${detail.toUnit}`}
                                   </Typography>
                                 </Box>
                               </Box>
-                            ) : (
-                              <>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                                  <Box>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                      {isPromotion && (
-                                        <Tooltip title="เลื่อนตำแหน่ง">
-                                          <TrendingUpIcon sx={{ color: 'success.main', fontSize: 18 }} />
-                                        </Tooltip>
-                                      )}
-                                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                                        {detail.sequence ?? index + 1}. {detail.rank ? `${detail.rank} ` : ''}{detail.fullName}
-                                      </Typography>
-                                    </Box>
-                                    {detail.posCodeMaster && (
-                                      <Chip 
-                                        label={`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`}
-                                        size="small"
-                                        color="primary"
-                                        variant="outlined"
-                                        sx={{ fontSize: '0.7rem', height: 20 }}
-                                      />
+                            );
+                          }
+
+                          return (
+                            <Box
+                              key={detail.id}
+                              sx={{
+                                p: 2,
+                                bgcolor: 'grey.50',
+                                borderRadius: 1,
+                                borderLeft: '3px solid',
+                                borderLeftColor: 'primary.main',
+                              }}
+                            >
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                                <Box>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                    {isPromotion && (
+                                      <Tooltip title="เลื่อนตำแหน่ง">
+                                        <TrendingUpIcon sx={{ color: 'success.main', fontSize: 18 }} />
+                                      </Tooltip>
                                     )}
-                                  </Box>
-                                  <Tooltip title="ดูรายละเอียดบุคลากร">
-                                    <IconButton
-                                      size="small"
-                                      color="primary"
-                                      onClick={() => handleViewPersonnelDetail(detail.personnelId || undefined)}
-                                      sx={{ ml: 1 }}
-                                    >
-                                      <VisibilityIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Box>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                                    <strong>จาก:</strong> {detail.fromPosition || '-'}
-                                    {detail.fromPositionNumber && ` (${detail.fromPositionNumber})`}
-                                    {detail.fromUnit && ` • ${detail.fromUnit}`}
-                                  </Typography>
-                                  <Box>
-                                    {detail.toPosCodeMaster && (
-                                      <Chip 
-                                        label={`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`} 
-                                        size="small" 
-                                        color="success" 
-                                        variant="outlined" 
-                                        sx={{ fontSize: '0.7rem', mb: 0.5 }} 
-                                      />
-                                    )}
-                                    <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 600, fontSize: '0.875rem' }}>
-                                      <strong>→ ไป:</strong> {detail.toPosition || '-'}
-                                      {detail.toPositionNumber && ` (${detail.toPositionNumber})`}
-                                      {detail.toUnit && ` • ${detail.toUnit}`}
+                                    <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                                      {detail.sequence ?? index + 1}. {detail.rank ? `${detail.rank} ` : ''}{detail.fullName}
                                     </Typography>
                                   </Box>
+                                  {detail.posCodeMaster && (
+                                    <Chip
+                                      label={`${detail.posCodeMaster.id} - ${detail.posCodeMaster.name}`}
+                                      size="small"
+                                      color="primary"
+                                      variant="outlined"
+                                      sx={{ fontSize: '0.7rem', height: 20 }}
+                                    />
+                                  )}
                                 </Box>
-                              </>
-                            )}
-                          </Box>
+                                <Tooltip title="ดูรายละเอียดบุคลากร">
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => handleViewPersonnelDetail(detail.personnelId || undefined)}
+                                    sx={{ ml: 1 }}
+                                  >
+                                    <VisibilityIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                                  <strong>จาก:</strong> {detail.fromPosition || '-'}
+                                  {detail.fromPositionNumber && ` (${detail.fromPositionNumber})`}
+                                  {detail.fromUnit && ` • ${detail.fromUnit}`}
+                                </Typography>
+                                <Box>
+                                  {detail.toPosCodeMaster ? (
+                                    <Chip
+                                      label={`${detail.toPosCodeMaster.id} - ${detail.toPosCodeMaster.name}`}
+                                      size="small"
+                                      color="success"
+                                      variant="outlined"
+                                      sx={{ fontSize: '0.7rem', mb: 0.5 }}
+                                    />
+                                  ) : detail.toPosCodeId ? (
+                                    <Chip
+                                      label={`${detail.toPosCodeId}`}
+                                      size="small"
+                                      color="success"
+                                      variant="outlined"
+                                      sx={{ fontSize: '0.7rem', mb: 0.5 }}
+                                    />
+                                  ) : null}
+                                  <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 600, fontSize: '0.875rem' }}>
+                                    <strong>→ ไป:</strong> {detail.toPosition || '-'}
+                                    {detail.toPositionNumber && ` (${detail.toPositionNumber})`}
+                                    {detail.toUnit && ` • ${detail.toUnit}`}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </Box>
                           );
                         })}
                       </Box>

@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
             fullName: true,
             rank: true,
             seniority: true,
+            isPlaceholder: true,
             posCodeId: true,
             posCodeMaster: {
               select: {
@@ -168,8 +169,9 @@ export async function POST(request: NextRequest) {
         fullName: detail.fullName || 'ตำแหน่งว่าง',
         rank: detail.rank || null,
         seniority: detail.seniority || null,
-        posCodeId: isPlaceholder ? null : (detail.posCodeId || null),
-        toPosCodeId: isPlaceholder ? null : (detail.toPosCodeId || null),
+        // Preserve posCodeId / toPosCodeId even for placeholders (if >0) so chain keeps position context
+        posCodeId: (typeof detail.posCodeId === 'number' && detail.posCodeId > 0) ? detail.posCodeId : null,
+        toPosCodeId: (typeof detail.toPosCodeId === 'number' && detail.toPosCodeId > 0) ? detail.toPosCodeId : null,
         birthDate: detail.birthDate || null,
         age: detail.age || null,
         education: detail.education || null,

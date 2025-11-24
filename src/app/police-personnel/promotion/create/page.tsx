@@ -554,9 +554,10 @@ function CreatePromotionContent() {
 
       const year = new Date().getFullYear() + 543;
       
-      // กรองเฉพาะ node ที่ไม่ใช่ placeholder
-      const swapDetails = validNodes.map((node) => ({
+      // ส่งทุก node รวม placeholder เพื่อให้ยังคงอยู่หลัง reload
+      const swapDetails = nodes.map((node) => ({
         sequence: node.nodeOrder,
+        isPlaceholder: node.isPlaceholder || false,
         personnelId: node.personnelId,
         noId: node.noId,
         nationalId: node.nationalId,
@@ -591,7 +592,7 @@ function CreatePromotionContent() {
       const payload = {
         year,
         swapDate: new Date().toISOString(),
-        swapType: 'transfer', // เปลี่ยนเป็น transfer เพราะเป็นการย้ายหน่วยงาน
+        swapType: 'transfer', // ยังคงเป็นการย้ายหน่วยงาน
         groupName: `ย้ายหน่วยงาน → ${unitName}`,
         groupNumber: groupNumber || null,
         status: 'completed',

@@ -499,21 +499,39 @@ export default function PromotionChainTable({
                         </TableCell>
                         <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
                           <Box>
-                            {node.toPosCodeName && (
-                              <Chip label={formatPosCode(node.toPosCodeId, node.toPosCodeName)} size="small" color="warning" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                            {(index === 0 && vacantPosition ? vacantPosition.posCodeName : node.toPosCodeName) && (
+                              <Chip 
+                                label={formatPosCode(
+                                  index === 0 && vacantPosition ? vacantPosition.posCodeId : node.toPosCodeId, 
+                                  index === 0 && vacantPosition ? vacantPosition.posCodeName : node.toPosCodeName
+                                )} 
+                                size="small" 
+                                color="warning" 
+                                sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} 
+                              />
                             )}
                             <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
-                              {node.toPosition}
+                              {index === 0 && vacantPosition ? vacantPosition.position : node.toPosition}
                             </Typography>
-                            {node.toPositionNumber && (
-                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                                ({node.toPositionNumber})
-                              </Typography>
-                            )}
+                            {(() => {
+                              const posNum = index === 0 && vacantPosition ? vacantPosition.positionNumber : node.toPositionNumber;
+                              const posName = index === 0 && vacantPosition ? vacantPosition.position : node.toPosition;
+                              
+                              if (posNum && (!posName || !posName.includes(posNum))) {
+                                return (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                    ({posNum})
+                                  </Typography>
+                                );
+                              }
+                              return null;
+                            })()}
                           </Box>
                         </TableCell>
                         <TableCell sx={{ bgcolor: 'warning.50', py: 1 }}>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>
+                            {index === 0 && vacantPosition ? vacantPosition.unit : node.toUnit}
+                          </Typography>
                         </TableCell>
                         <TableCell align="center" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
                           <Tooltip title="ลบ">
@@ -589,7 +607,7 @@ export default function PromotionChainTable({
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
                           {node.fromPosition}
                         </Typography>
-                        {node.fromPositionNumber && (
+                        {node.fromPositionNumber && (!node.fromPosition || !node.fromPosition.includes(node.fromPositionNumber)) && (
                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                             ({node.fromPositionNumber})
                           </Typography>
@@ -601,21 +619,39 @@ export default function PromotionChainTable({
                     </TableCell>
                     <TableCell sx={{ bgcolor: 'success.50', py: 1 }}>
                       <Box>
-                        {node.toPosCodeName && (
-                          <Chip label={formatPosCode(node.toPosCodeId, node.toPosCodeName)} size="small" color="success" sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} />
+                        {(index === 0 && vacantPosition ? vacantPosition.posCodeName : node.toPosCodeName) && (
+                          <Chip 
+                            label={formatPosCode(
+                              index === 0 && vacantPosition ? vacantPosition.posCodeId : node.toPosCodeId, 
+                              index === 0 && vacantPosition ? vacantPosition.posCodeName : node.toPosCodeName
+                            )} 
+                            size="small" 
+                            color="success" 
+                            sx={{ fontSize: '0.65rem', height: 18, mb: 0.25 }} 
+                          />
                         )}
                         <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem', lineHeight: 1.2 }}>
-                          {node.toPosition}
+                          {index === 0 && vacantPosition ? vacantPosition.position : node.toPosition}
                         </Typography>
-                        {node.toPositionNumber && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                            ({node.toPositionNumber})
-                          </Typography>
-                        )}
+                        {(() => {
+                          const posNum = index === 0 && vacantPosition ? vacantPosition.positionNumber : node.toPositionNumber;
+                          const posName = index === 0 && vacantPosition ? vacantPosition.position : node.toPosition;
+                          
+                          if (posNum && (!posName || !posName.includes(posNum))) {
+                            return (
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                ({posNum})
+                              </Typography>
+                            );
+                          }
+                          return null;
+                        })()}
                       </Box>
                     </TableCell>
                     <TableCell sx={{ bgcolor: 'success.50', py: 1 }}>
-                      <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>{node.toUnit}</Typography>
+                      <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.8rem' }}>
+                        {index === 0 && vacantPosition ? vacantPosition.unit : node.toUnit}
+                      </Typography>
                     </TableCell>
                     <TableCell align="center" sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
                       <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center', flexWrap: 'wrap' }}>

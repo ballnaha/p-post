@@ -132,6 +132,9 @@ interface SwapDetail {
   // Sequence สำหรับเรียงลำดับ (จาก swap_transaction_detail.sequence)
   sequence?: number | null;
 
+  // targetNoId - noId ของตำแหน่งว่างที่ถูกจับคู่ (สำหรับ promotion-chain)
+  targetNoId?: string | null;
+
   // Replaced person (คนที่เดิมอยู่ในตำแหน่งใหม่) - มาจาก API แล้ว
   replacedPerson?: SwapDetail | null;
 }
@@ -336,6 +339,7 @@ export default function InOutPage() {
   // Drawer สำหรับ assign ตำแหน่งว่างจาก chip ในคอลัมน์คนครอง
   const [promotionChainDrawerOpen, setPromotionChainDrawerOpen] = useState(false);
   const [vacantPositionForChain, setVacantPositionForChain] = useState<{ posCodeId: number; posCodeName?: string; position: string; unit: string; positionNumber?: string; actingAs?: string } | null>(null);
+  const [editingChainId, setEditingChainId] = useState<string | null>(null); // สำหรับโหลด chain ที่มีอยู่
   
   // Drawer สำหรับแสดงรายการ promotion chain
   const [promotionChainListOpen, setPromotionChainListOpen] = useState(false);
@@ -744,13 +748,103 @@ export default function InOutPage() {
       if (allData.length === 0 && loadingMore) return [];
 
       // กรองแถวที่ซ่อนออก
-      const filtered = allData.filter(d => !hiddenRows.has(d.id));
+      const filteredRaw = allData.filter(d => !hiddenRows.has(d.id));
+      
+      // กรองข้อมูล promotion-chain: ถ้า position_number เดียวกันมีหลาย rows (placeholder + คนจริง)
+      // ให้แสดงเฉพาะคนจริง (non-placeholder) หรือถ้าทั้งหมดเป็น placeholder ให้แสดงแค่ตัวเดียว
+      const promotionChainGroups = new Map<string, SwapDetail[]>();
+      const otherDetails: SwapDetail[] = [];
+      
+      // Debug: แสดงข้อมูล promotion-chain ทั้งหมด
+      const promotionChainDetails = filteredRaw.filter(d => d.transaction?.swapType === 'promotion-chain');
+      if (promotionChainDetails.length > 0) {
+        console.log('[Dedup] All promotion-chain details:', promotionChainDetails.map(d => ({
+          id: d.id,
+          fullName: d.fullName,
+          fromPositionNumber: d.fromPositionNumber,
+          toPositionNumber: d.toPositionNumber,
+          sequence: d.sequence,
+          isPlaceholder: ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)', '[รอการเลือกบุคลากร]', 'ตำแหน่งว่าง'].includes(d.fullName?.trim() || ''),
+        })));
+      }
+      
+      // สร้าง Map เก็บ placeholder ทั้งหมดเพื่อให้คนจริงหา toPositionNumber ได้
+      // key: transactionId-sequence, value: placeholder detail
+      const placeholdersBySequence = new Map<string, SwapDetail>();
+      promotionChainDetails.forEach(d => {
+        const isPlaceholder = !d.fullName || ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)', '[รอการเลือกบุคลากร]'].includes(d.fullName.trim());
+        if (isPlaceholder && d.sequence != null) {
+          const seqKey = `${d.transaction!.id}-${d.sequence}`;
+          placeholdersBySequence.set(seqKey, d);
+        }
+      });
+      
+      filteredRaw.forEach(detail => {
+        // เฉพาะ promotion-chain
+        if (detail.transaction?.swapType === 'promotion-chain') {
+          // ดึง toPositionNumber ที่จะใช้ในการ group
+          let effectiveToPositionNumber = detail.toPositionNumber;
+          
+          // ถ้าไม่มี toPositionNumber ให้ลองหาจาก placeholder ที่มี sequence เดียวกัน
+          if (!effectiveToPositionNumber && detail.sequence != null) {
+            const seqKey = `${detail.transaction.id}-${detail.sequence}`;
+            const matchingPlaceholder = placeholdersBySequence.get(seqKey);
+            if (matchingPlaceholder?.toPositionNumber) {
+              effectiveToPositionNumber = matchingPlaceholder.toPositionNumber;
+            }
+          }
+          
+          if (effectiveToPositionNumber) {
+            const key = `${detail.transaction.id}-${effectiveToPositionNumber}`;
+            if (!promotionChainGroups.has(key)) {
+              promotionChainGroups.set(key, []);
+            }
+            promotionChainGroups.get(key)!.push(detail);
+          } else {
+            // ถ้าหา toPositionNumber ไม่ได้เลย ให้แสดงแยก
+            otherDetails.push(detail);
+          }
+        } else {
+          otherDetails.push(detail);
+        }
+      });
+      
+      // สำหรับแต่ละ group ของ promotion-chain
+      // แสดงทุก item แยกกัน (ไม่ deduplicate) เพราะแต่ละ item เป็นคนละ sequence/node
+      const promotionChainFiltered: SwapDetail[] = [];
+      promotionChainGroups.forEach((group, key) => {
+        // เพิ่มทุก item ใน group (ทั้ง placeholder และ non-placeholder)
+        group.forEach(detail => {
+          promotionChainFiltered.push(detail);
+        });
+      });
+      
+      // รวมข้อมูล promotion-chain ที่กรองแล้วกับข้อมูลอื่นๆ
+      const filtered = [...promotionChainFiltered, ...otherDetails];
+
       const searchLower = searchText.trim().toLowerCase();
       const isGroupSearch = !!searchLower && filtered.some(d => d.transaction && (
         d.transaction.groupNumber?.toLowerCase().includes(searchLower) ||
         d.transaction.groupName?.toLowerCase().includes(searchLower)
       ));
       console.log('[Infinite Scroll] Displaying:', filtered.length, 'items (hidden:', hiddenRows.size, ')');
+
+      // Helper function: ใช้ noId ที่น้อยกว่าระหว่าง noId กับ targetNoId (สำหรับ promotion-chain)
+      const getEffectiveNoId = (d: SwapDetail): string => {
+        if (d.transaction?.swapType === 'promotion-chain' && d.targetNoId) {
+          const noIdNum = Number(d.noId) || Infinity;
+          const targetNoIdNum = Number(d.targetNoId) || Infinity;
+          const minNoId = Math.min(noIdNum, targetNoIdNum);
+          console.log('[Sort] getEffectiveNoId for promotion-chain:', {
+            fullName: d.fullName,
+            noId: d.noId,
+            targetNoId: d.targetNoId,
+            effectiveNoId: minNoId === Infinity ? '' : String(minNoId)
+          });
+          return minNoId === Infinity ? '' : String(minNoId);
+        }
+        return d.noId || '';
+      };
 
       const sortedInfinite = [...filtered].sort((a, b) => {
         // ใช้ sequence sort เมื่อมีการ filter ประเภท หรือเป็นการค้นหาด้วย groupNumber / groupName
@@ -788,9 +882,9 @@ export default function InOutPage() {
             if (sequenceA !== sequenceB) return sequenceA - sequenceB;
           }
           
-          // Fallback: noId then fullName
-          const noIdA = a.noId || '';
-          const noIdB = b.noId || '';
+          // Fallback: noId then fullName (ใช้ min(noId, targetNoId) สำหรับ promotion-chain)
+          const noIdA = getEffectiveNoId(a);
+          const noIdB = getEffectiveNoId(b);
           if (noIdA && noIdB) {
             const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
             if (compareNum !== 0) return compareNum;
@@ -799,25 +893,9 @@ export default function InOutPage() {
           if (!noIdA && noIdB) return 1;
           return (a.fullName || '').localeCompare(b.fullName || '', 'th');
         } else {
-          // ไม่มี filter ประเภท (all): เรียงตาม fromPositionNumber เท่านั้น
-          const posA = a.fromPositionNumber ?? '';
-          const posB = b.fromPositionNumber ?? '';
-          const digitsA = (posA || '').replace(/\D/g, '');
-          const digitsB = (posB || '').replace(/\D/g, '');
-          const numA = digitsA ? BigInt(digitsA) : null;
-          const numB = digitsB ? BigInt(digitsB) : null;
-          if (numA !== null && numB !== null) {
-            if (numA < numB) return -1;
-            if (numA > numB) return 1;
-          } else if (numA !== null) {
-            return -1;
-          } else if (numB !== null) {
-            return 1;
-          }
-          
-          // Fallback: noId then fullName
-          const noIdA = a.noId || '';
-          const noIdB = b.noId || '';
+          // ไม่มี filter ประเภท (all): เรียงตาม noId (ใช้ min(noId, targetNoId) สำหรับ promotion-chain)
+          const noIdA = getEffectiveNoId(a);
+          const noIdB = getEffectiveNoId(b);
           if (noIdA && noIdB) {
             const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
             if (compareNum !== 0) return compareNum;
@@ -828,19 +906,15 @@ export default function InOutPage() {
         }
       });
 
-      // Debug: แสดงจากตำแหน่งคนครองของรายการแรก ๆ พร้อมตัวเลขที่สกัด
+      // Debug: แสดง noId ของรายการแรก ๆ
       if (sortedInfinite.length > 0) {
         console.log('[Infinite Scroll] Sorted sample (first 10):', sortedInfinite.slice(0, 10).map(d => {
-          const pos = d.fromPositionNumber ?? '';
-          const digits = (pos || '').replace(/\D/g, '');
           return {
-            id: d.id,
+            noId: d.noId,
+            targetNoId: d.targetNoId,
+            effectiveNoId: getEffectiveNoId(d),
             fullName: d.fullName,
-            transactionId: d.transaction?.id,
-            fromPositionNumber: pos,
-            digits: digits,
-            numeric: digits ? digits : null,
-            sequence: d.sequence
+            swapType: d.transaction?.swapType
           };
         }));
       }
@@ -853,7 +927,66 @@ export default function InOutPage() {
 
     // ไม่ต้อง filter ประเภทที่ frontend เพราะ API filter ให้แล้ว
     // กรองแถวที่ซ่อนออก
-    const filtered = data.swapDetails.filter(d => !hiddenRows.has(d.id));
+    let filtered = data.swapDetails.filter(d => !hiddenRows.has(d.id));
+    
+    // กรองข้อมูล promotion-chain: ถ้า position_number เดียวกันมีหลาย rows (placeholder + คนจริง)
+    // ให้แสดงเฉพาะคนจริง (non-placeholder) หรือถ้าทั้งหมดเป็น placeholder ให้แสดงแค่ตัวเดียว
+    const promotionChainGroups = new Map<string, SwapDetail[]>();
+    const otherDetails: SwapDetail[] = [];
+    
+    // สร้าง Map เก็บ placeholder ทั้งหมดเพื่อให้คนจริงหา toPositionNumber ได้
+    const promotionChainDetails = filtered.filter(d => d.transaction?.swapType === 'promotion-chain');
+    const placeholdersBySequence = new Map<string, SwapDetail>();
+    promotionChainDetails.forEach(d => {
+      const isPlaceholder = !d.fullName || ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)', '[รอการเลือกบุคลากร]', 'ตำแหน่งว่าง'].includes(d.fullName.trim());
+      if (isPlaceholder && d.sequence != null) {
+        const seqKey = `${d.transaction!.id}-${d.sequence}`;
+        placeholdersBySequence.set(seqKey, d);
+      }
+    });
+    
+    filtered.forEach(detail => {
+      // เฉพาะ promotion-chain
+      if (detail.transaction?.swapType === 'promotion-chain') {
+        // ดึง toPositionNumber ที่จะใช้ในการ group
+        let effectiveToPositionNumber = detail.toPositionNumber;
+        
+        // ถ้าไม่มี toPositionNumber ให้ลองหาจาก placeholder ที่มี sequence เดียวกัน
+        if (!effectiveToPositionNumber && detail.sequence != null) {
+          const seqKey = `${detail.transaction.id}-${detail.sequence}`;
+          const matchingPlaceholder = placeholdersBySequence.get(seqKey);
+          if (matchingPlaceholder?.toPositionNumber) {
+            effectiveToPositionNumber = matchingPlaceholder.toPositionNumber;
+          }
+        }
+        
+        if (effectiveToPositionNumber) {
+          const key = `${detail.transaction.id}-${effectiveToPositionNumber}`;
+          if (!promotionChainGroups.has(key)) {
+            promotionChainGroups.set(key, []);
+          }
+          promotionChainGroups.get(key)!.push(detail);
+        } else {
+          // ถ้าหา toPositionNumber ไม่ได้เลย ให้แสดงแยก
+          otherDetails.push(detail);
+        }
+      } else {
+        otherDetails.push(detail);
+      }
+    });
+    
+    // สำหรับแต่ละ group ของ promotion-chain
+    // แสดงทุก item แยกกัน (ไม่ deduplicate) เพราะแต่ละ item เป็นคนละ sequence/node
+    const promotionChainFiltered: SwapDetail[] = [];
+    promotionChainGroups.forEach((group, key) => {
+      // เพิ่มทุก item ใน group (ทั้ง placeholder และ non-placeholder)
+      group.forEach(detail => {
+        promotionChainFiltered.push(detail);
+      });
+    });
+    
+    // รวมข้อมูล promotion-chain ที่กรองแล้วกับข้อมูลอื่นๆ
+    filtered = [...promotionChainFiltered, ...otherDetails];
     const searchLower = searchText.trim().toLowerCase();
     const isGroupSearch = !!searchLower && filtered.some(d => d.transaction && (
       d.transaction.groupNumber?.toLowerCase().includes(searchLower) ||
@@ -878,6 +1011,17 @@ export default function InOutPage() {
     // เรียงข้อมูล:
     // - ถ้า filter ประเภท (selectedSwapType !== 'all'): เรียงตาม transaction + sequence
     // - ถ้าไม่ filter (selectedSwapType === 'all'): เรียงตาม fromPositionNumber
+    // Helper function: ใช้ noId ที่น้อยกว่าระหว่าง noId กับ targetNoId (สำหรับ promotion-chain)
+    const getEffectiveNoId = (d: SwapDetail): string => {
+      if (d.transaction?.swapType === 'promotion-chain' && d.targetNoId) {
+        const noIdNum = Number(d.noId) || Infinity;
+        const targetNoIdNum = Number(d.targetNoId) || Infinity;
+        const minNoId = Math.min(noIdNum, targetNoIdNum);
+        return minNoId === Infinity ? '' : String(minNoId);
+      }
+      return d.noId || '';
+    };
+
     const sorted = [...filtered].sort((a, b) => {
       const useSequenceSort = selectedSwapType !== 'all' || isGroupSearch;
       if (useSequenceSort) {
@@ -912,9 +1056,9 @@ export default function InOutPage() {
           if (sequenceA !== sequenceB) return sequenceA - sequenceB;
         }
         
-        // Fallback: noId then fullName
-        const noIdA = a.noId || '';
-        const noIdB = b.noId || '';
+        // Fallback: noId then fullName (ใช้ min(noId, targetNoId) สำหรับ promotion-chain)
+        const noIdA = getEffectiveNoId(a);
+        const noIdB = getEffectiveNoId(b);
         if (noIdA && noIdB) {
           const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
           if (compareNum !== 0) return compareNum;
@@ -923,25 +1067,9 @@ export default function InOutPage() {
         if (!noIdA && noIdB) return 1;
         return (a.fullName || '').localeCompare(b.fullName || '', 'th');
       } else {
-        // ไม่มี filter ประเภท (all): เรียงตาม fromPositionNumber เท่านั้น
-        const posA = a.fromPositionNumber ?? '';
-        const posB = b.fromPositionNumber ?? '';
-        const digitsA = (posA || '').replace(/\D/g, '');
-        const digitsB = (posB || '').replace(/\D/g, '');
-        const numA = digitsA ? BigInt(digitsA) : null;
-        const numB = digitsB ? BigInt(digitsB) : null;
-        if (numA !== null && numB !== null) {
-          if (numA < numB) return -1;
-          if (numA > numB) return 1;
-        } else if (numA !== null) {
-          return -1;
-        } else if (numB !== null) {
-          return 1;
-        }
-        
-        // Fallback: noId then fullName
-        const noIdA = a.noId || '';
-        const noIdB = b.noId || '';
+        // ไม่มี filter ประเภท (all): เรียงตาม noId (ใช้ min(noId, targetNoId) สำหรับ promotion-chain)
+        const noIdA = getEffectiveNoId(a);
+        const noIdB = getEffectiveNoId(b);
         if (noIdA && noIdB) {
           const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
           if (compareNum !== 0) return compareNum;
@@ -952,25 +1080,32 @@ export default function InOutPage() {
       }
     });
 
-    // Debug: แสดง 10 รายการแรกเพื่อตรวจสอบการเรียง (รวมตำแหน่งคนครอง + ตัวเลขที่สกัด)
+    // Debug: แสดง noId ของรายการแรก ๆ
     if (sorted.length > 0) {
-      console.log('[In-Out] Sorted data (first 10):', sorted.slice(0, 10).map(d => {
-        const pos = d.fromPositionNumber ?? '';
-        const digits = (pos || '').replace(/\D/g, '');
+      console.log('[In-Out Pagination] Sorted data (first 10):', sorted.slice(0, 10).map(d => {
         return {
           noId: d.noId,
+          targetNoId: d.targetNoId,
+          effectiveNoId: getEffectiveNoId(d),
           fullName: d.fullName,
-          transactionId: d.transaction?.id,
-          fromPositionNumber: pos,
-          digits: digits,
-          numeric: digits ? digits : null,
-          sequence: d.sequence
+          swapType: d.transaction?.swapType
         };
       }));
+      
+      // แสดงข้อมูล promotion-chain โดยเฉพาะ
+      const promoChain = sorted.filter(d => d.transaction?.swapType === 'promotion-chain');
+      if (promoChain.length > 0) {
+        console.log('[In-Out Pagination] Promotion-chain items:', promoChain.map(d => ({
+          noId: d.noId,
+          targetNoId: d.targetNoId,
+          effectiveNoId: getEffectiveNoId(d),
+          fullName: d.fullName
+        })));
+      }
     }
 
     return sorted;
-  }, [data?.swapDetails, loading, loadMode, allData, loadingMore, hiddenRows]);
+  }, [data?.swapDetails, loading, loadMode, allData, loadingMore, hiddenRows, selectedSwapType, searchText]);
 
   const handleUnitChange = (event: SelectChangeEvent<string>) => {
     setInitialLoad(false); // Mark that user has interacted
@@ -1343,6 +1478,66 @@ export default function InOutPage() {
   const handleViewPersonnelDetail = (personnel: SwapDetail) => {
     setSelectedPersonnelForDetail(personnel);
     setPersonnelDetailModalOpen(true);
+  };
+
+  // Handler สำหรับ click ที่ตำแหน่งว่าง - ตรวจสอบว่ามีการจับคู่แล้วหรือไม่
+  const handleVacantPositionClick = async (vacantPos: {
+    posCodeId: number;
+    posCodeName?: string;
+    position: string;
+    unit: string;
+    positionNumber?: string;
+    actingAs?: string;
+  }) => {
+    // ตรวจสอบว่ามี chain ที่จับคู่ไปแล้วหรือไม่
+    try {
+      // ค้นหา chain ทั้งหมดในปีนี้
+      const response = await fetch(
+        `/api/swap-transactions?year=${selectedYear}&swapType=promotion-chain`
+      );
+      if (response.ok) {
+        const result = await response.json();
+        const chains = result.data || [];
+        
+        // หา chain ที่ตรงกับตำแหน่งว่างนี้โดยเช็คจาก:
+        // 1. groupName (เก็บข้อมูลตำแหน่งว่างเป้าหมาย)
+        // 2. positionNumber ใน swapDetails (ทั้ง toPositionNumber และ fromPositionNumber)
+        const matchedChain = chains.find((chain: any) => {
+          // เช็คจาก groupName ก่อน (เป็น primary check)
+          if (chain.groupName && vacantPos.positionNumber) {
+            const groupNameHasPosition = chain.groupName.includes(`(${vacantPos.positionNumber})`);
+            if (groupNameHasPosition) return true;
+          }
+          
+          // เช็คจาก swapDetails (สำหรับ chain ที่ไม่มี groupName หรือ backup check)
+          if (vacantPos.positionNumber && chain.swapDetails) {
+            return chain.swapDetails.some((detail: any) => 
+              detail.toPositionNumber === vacantPos.positionNumber ||
+              detail.fromPositionNumber === vacantPos.positionNumber
+            );
+          }
+          
+          return false;
+        });
+        
+        if (matchedChain) {
+          console.log('Found matched chain:', matchedChain.id, matchedChain.groupNumber);
+          // ถ้าเจอ chain ที่จับคู่แล้ว ให้เปิดในโหลด edit mode
+          setEditingChainId(matchedChain.id);
+          setVacantPositionForChain(vacantPos);
+          setPromotionChainDrawerOpen(true);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking matched chain:', error);
+    }
+    
+    // ถ้าไม่มีการจับคู่ ให้เปิดในโหมดสร้างใหม่
+    console.log('No matched chain found, creating new');
+    setEditingChainId(null);
+    setVacantPositionForChain(vacantPos);
+    setPromotionChainDrawerOpen(true);
   };
 
   const handleClosePersonnelDetailModal = () => {
@@ -2356,8 +2551,7 @@ export default function InOutPage() {
                                     positionNumber: detail.toPositionNumber || replaced?.toPositionNumber || replaced?.fromPositionNumber || detail.fromPositionNumber || undefined,
                                     actingAs: detail.toActingAs || replaced?.toActingAs || replaced?.fromActingAs || detail.fromActingAs || undefined,
                                   };
-                                  setVacantPositionForChain(vacantPos);
-                                  setPromotionChainDrawerOpen(true);
+                                  handleVacantPositionClick(vacantPos);
                                 }}
                                 sx={{ fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', '&:hover': { bgcolor: 'warning.light' } }}
                               />
@@ -2403,8 +2597,7 @@ export default function InOutPage() {
                                     positionNumber: detail.toPositionNumber || detail.fromPositionNumber || undefined,
                                     actingAs: detail.toActingAs || detail.fromActingAs || undefined,
                                   };
-                                  setVacantPositionForChain(vacantPos);
-                                  setPromotionChainDrawerOpen(true);
+                                  handleVacantPositionClick(vacantPos);
                                 }}
                                 sx={{ fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', '&:hover': { bgcolor: 'warning.light' } }}
                               />
@@ -3071,12 +3264,17 @@ export default function InOutPage() {
       {/* Promotion Chain Drawer - Create chain directly in page */}
       <PromotionChainDrawer
         open={promotionChainDrawerOpen}
-        onClose={() => setPromotionChainDrawerOpen(false)}
+        onClose={() => {
+          setPromotionChainDrawerOpen(false);
+          setEditingChainId(null); // Reset editing chain ID when closing
+        }}
         vacantPosition={vacantPositionForChain}
         year={selectedYear}
+        chainId={editingChainId}
         onSaveSuccess={() => {
-          // Reload data after saving
-          handleSearchChange(searchText);
+          // Reload data after saving - force reload without cache
+          // Don't reset editingChainId here because drawer stays open
+          fetchData(undefined, true); // Force reload data
         }}
       />
 

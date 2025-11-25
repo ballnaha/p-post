@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  turbopack: {
+    root: process.cwd(),
+  },
   eslint: {
     // ปิดการตรวจสอบ ESLint เมื่อ build
     ignoreDuringBuilds: true,

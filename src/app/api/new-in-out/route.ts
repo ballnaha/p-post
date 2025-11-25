@@ -138,6 +138,16 @@ export async function GET(request: NextRequest) {
             if (detail.toUnit && detail.toPositionNumber) {
                 filledPositions.add(`${detail.toUnit}|${detail.toPositionNumber}`);
             }
+            
+            // Debug: Log promotion-chain details to verify toPositionNumber
+            if (detail.transaction?.swapType === 'promotion-chain' && !detail.isPlaceholder) {
+                console.log('[API] Promotion-chain real person:', {
+                    fullName: detail.fullName,
+                    fromPositionNumber: detail.fromPositionNumber,
+                    toPositionNumber: detail.toPositionNumber,
+                    transactionId: detail.transactionId,
+                });
+            }
         });
 
         console.log('[API] Total personnel before filter:', personnel.length);
@@ -162,10 +172,32 @@ export async function GET(request: NextRequest) {
                 const swapInfo = swapByPersonnelId.get(person.id) || 
                                 (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
                 
+                // หา noId ของตำแหน่งว่างที่จับคู่ (สำหรับ promotion-chain)
+                let targetNoId: string | null = null;
+                if (swapInfo?.transaction?.swapType === 'promotion-chain' && swapInfo.toUnit && swapInfo.toPositionNumber) {
+                    const targetPosKey = `${swapInfo.toUnit}|${swapInfo.toPositionNumber}`;
+                    const targetVacant = vacantPositionsMap.get(targetPosKey);
+                    if (targetVacant) {
+                        targetNoId = targetVacant.noId != null ? String(targetVacant.noId) : null;
+                        console.log('[API] Found targetNoId for promotion-chain:', {
+                            fullName: person.fullName,
+                            noId: person.noId,
+                            targetNoId: targetNoId,
+                            targetPosKey: targetPosKey
+                        });
+                    } else {
+                        console.log('[API] NOT found targetNoId for promotion-chain:', {
+                            fullName: person.fullName,
+                            targetPosKey: targetPosKey,
+                            vacantMapSize: vacantPositionsMap.size
+                        });
+                    }
+                }
+                
                 return {
                     id: person.id,
                     personnelId: person.id,
-                    noId: person.noId,
+                    noId: person.noId != null ? String(person.noId) : null,
                     fullName: person.fullName,
                     rank: person.rank,
                     nationalId: person.nationalId,
@@ -208,8 +240,95 @@ export async function GET(request: NextRequest) {
                     sequence: swapInfo?.sequence ?? null,
                     hasSwapped: !!swapInfo,
                     replacedPerson: null as any,
+                    targetNoId: targetNoId, // noId ของตำแหน่งว่างที่จับคู่ (สำหรับ promotion-chain)
                 };
             });
+
+        // เพิ่ม swapDetails ที่ไม่มี match กับ personnel (เช่น placeholder "ตำแหน่งว่าง")
+        // เพราะ placeholder ไม่มี personnelId/nationalId ที่ตรงกับ policePersonnel
+        const matchedPersonnelIds = new Set(personnel.map(p => p.id));
+        const matchedNationalIds = new Set(personnel.filter(p => p.nationalId).map(p => p.nationalId));
+        
+        const unmatchedSwapDetails = swapDetails.filter(detail => {
+            // ถ้ามี personnelId และ match แล้ว ไม่ต้องเพิ่ม
+            if (detail.personnelId && matchedPersonnelIds.has(detail.personnelId)) {
+                return false;
+            }
+            // ถ้ามี nationalId และ match แล้ว ไม่ต้องเพิ่ม
+            if (detail.nationalId && matchedNationalIds.has(detail.nationalId)) {
+                return false;
+            }
+            // ไม่มี match - เป็น placeholder หรือ data ที่ไม่ได้ link กับ policePersonnel
+            return true;
+        });
+
+        console.log('[API] Unmatched swap details (placeholders):', unmatchedSwapDetails.length);
+
+        // แปลง unmatched swapDetails เป็น format เดียวกับ combinedData
+        const placeholderData = unmatchedSwapDetails.map(detail => {
+            // หา noId จากตำแหน่งว่างที่ match กับ toPositionNumber
+            let effectiveNoId: string | null = null;
+            if (detail.toUnit && detail.toPositionNumber) {
+                const posKey = `${detail.toUnit}|${detail.toPositionNumber}`;
+                const vacantPos = vacantPositionsMap.get(posKey);
+                if (vacantPos) {
+                    effectiveNoId = vacantPos.noId != null ? String(vacantPos.noId) : null;
+                }
+            }
+            
+            return {
+                id: detail.id,
+                personnelId: detail.personnelId || detail.id,
+                noId: effectiveNoId, // ใช้ noId จากตำแหน่งว่างที่จะไป
+                fullName: detail.fullName,
+                rank: detail.rank,
+                nationalId: detail.nationalId,
+                age: null,
+                seniority: null,
+                birthDate: null,
+                education: null,
+                lastAppointment: null,
+                currentRankSince: null,
+                enrollmentDate: null,
+                retirementDate: null,
+                yearsOfService: null,
+                trainingLocation: null,
+                trainingCourse: null,
+                avatarUrl: null,
+                
+                posCodeId: detail.posCodeId,
+                posCodeMaster: detail.posCodeMaster,
+                fromPosition: detail.fromPosition,
+                fromPositionNumber: detail.fromPositionNumber,
+                fromUnit: detail.fromUnit,
+                fromActingAs: detail.fromActingAs,
+                
+                toPosCodeId: detail.toPosCodeId,
+                toPosCodeMaster: detail.toPosCodeMaster,
+                toPosition: detail.toPosition,
+                toPositionNumber: detail.toPositionNumber,
+                toUnit: detail.toUnit,
+                toActingAs: detail.toActingAs,
+                
+                transaction: detail.transaction ? {
+                    id: detail.transaction.id,
+                    year: detail.transaction.year,
+                    swapDate: detail.transaction.swapDate,
+                    swapType: detail.transaction.swapType,
+                    groupNumber: detail.transaction.groupNumber,
+                    groupName: detail.transaction.groupName,
+                } : null,
+                
+                sequence: detail.sequence ?? null,
+                hasSwapped: true,
+                replacedPerson: null as any,
+                targetNoId: effectiveNoId, // สำหรับ placeholder ใช้ noId ของตำแหน่งว่างเอง
+            };
+        });
+
+        // รวม placeholders เข้ากับ combinedData
+        combinedData = [...combinedData, ...placeholderData];
+        console.log('[API] Combined data total after adding placeholders:', combinedData.length);
 
         // กรองตำแหน่งว่างที่มีคนครองแล้วออกจาก combinedData (ใช้ filledPositions ที่สร้างไว้ก่อนหน้า)
         combinedData = combinedData.filter(person => {
@@ -391,9 +510,21 @@ export async function GET(request: NextRequest) {
         }
 
         // เรียงตาม noId เหมือนหน้า police_personnel
+        // สำหรับ promotion-chain ให้ใช้ min(noId, targetNoId) เพื่อให้แถวอยู่ที่ตำแหน่งเดิมของตำแหน่งว่าง
         combinedData.sort((a, b) => {
-            const noIdA = a.noId || '';
-            const noIdB = b.noId || '';
+            // Helper: หา effectiveNoId (ค่าน้อยสุดระหว่าง noId กับ targetNoId)
+            const getEffectiveNoId = (d: typeof a): string => {
+                if (d.transaction?.swapType === 'promotion-chain' && d.targetNoId) {
+                    const noIdNum = Number(d.noId) || Infinity;
+                    const targetNoIdNum = Number(d.targetNoId) || Infinity;
+                    const minNoId = Math.min(noIdNum, targetNoIdNum);
+                    return minNoId === Infinity ? '' : String(minNoId);
+                }
+                return d.noId || '';
+            };
+            
+            const noIdA = getEffectiveNoId(a);
+            const noIdB = getEffectiveNoId(b);
             
             if (noIdA && noIdB) {
                 const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });

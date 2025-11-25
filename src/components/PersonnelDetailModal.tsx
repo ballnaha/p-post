@@ -18,6 +18,7 @@ import {
   Avatar,
   IconButton,
   Tooltip,
+  TextField,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -28,6 +29,8 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   PhotoCamera as PhotoCameraIcon,
+  Save as SaveIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 
@@ -72,6 +75,7 @@ interface PersonnelDetailModalProps {
   title?: string; // Custom title (default: "รายละเอียดบุคลากร")
   onClearData?: () => void; // Optional callback to clear personnel data after animation
   onAvatarUpdate?: (avatarUrl: string | null) => void; // Callback เมื่อ avatar เปลี่ยนแปลง
+  onSupporterUpdate?: (supporterName: string | null, supportReason: string | null) => void; // Callback เมื่อบันทึกผู้สนับสนุน
 }
 
 // Utility function สำหรับ format วันที่
@@ -127,7 +131,8 @@ export default function PersonnelDetailModal({
   loading = false,
   title = 'รายละเอียดบุคลากร',
   onClearData,
-  onAvatarUpdate
+  onAvatarUpdate,
+  onSupporterUpdate
 }: PersonnelDetailModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -139,6 +144,12 @@ export default function PersonnelDetailModal({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Supporter editing state
+  const [isEditingSupporter, setIsEditingSupporter] = useState(false);
+  const [supporterName, setSupporterName] = useState<string>('');
+  const [supportReason, setSupportReason] = useState<string>('');
+  const [savingSupporter, setSavingSupporter] = useState(false);
+
   // Set avatar URL from personnel data
   useEffect(() => {
     if (personnel?.avatarUrl) {
@@ -148,13 +159,82 @@ export default function PersonnelDetailModal({
     }
   }, [personnel?.avatarUrl, personnel]);
 
+  // Set supporter data from personnel
+  useEffect(() => {
+    if (personnel) {
+      setSupporterName(personnel.supporterName || '');
+      setSupportReason(personnel.supportReason || '');
+    }
+  }, [personnel]);
+
+  // Reset editing state when modal closes
+  useEffect(() => {
+    if (!open) {
+      setIsEditingSupporter(false);
+    }
+  }, [open]);
+
   const handleClose = () => {
+    setIsEditingSupporter(false);
     onClose();
     // Delay clearing data until animation completes (if callback provided)
     if (onClearData) {
       setTimeout(() => {
         onClearData();
       }, 300); // Match MUI Dialog transition duration
+    }
+  };
+
+  // Supporter handlers
+  const handleEditSupporter = () => {
+    setIsEditingSupporter(true);
+  };
+
+  const handleCancelEditSupporter = () => {
+    // Reset to original values
+    setSupporterName(personnel?.supporterName || '');
+    setSupportReason(personnel?.supportReason || '');
+    setIsEditingSupporter(false);
+  };
+
+  const handleSaveSupporter = async () => {
+    if (!personnel?.id) {
+      showSnackbar('ไม่สามารถบันทึกได้ เนื่องจากไม่พบ ID บุคลากร', 'error');
+      return;
+    }
+
+    try {
+      setSavingSupporter(true);
+
+      const response = await fetch(`/api/police-personnel/${personnel.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          supporterName: supporterName.trim() || null,
+          supportReason: supportReason.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'เกิดข้อผิดพลาดในการบันทึก');
+      }
+
+      showSnackbar('บันทึกข้อมูลสำเร็จ', 'success');
+      setIsEditingSupporter(false);
+      
+      // Call callback to update parent state
+      onSupporterUpdate?.(
+        supporterName.trim() || null, 
+        supportReason.trim() || null
+      );
+    } catch (error) {
+      console.error('Save supporter error:', error);
+      showSnackbar(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการบันทึก', 'error');
+    } finally {
+      setSavingSupporter(false);
     }
   };
 
@@ -629,37 +709,95 @@ export default function PersonnelDetailModal({
               </Box>
             </Box>
 
-            {/* ข้อมูลการเสนอชื่อ - Full Width */}
-            {(personnel.supporterName || personnel.supportReason) && (
-              <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'primary.50', borderRadius: 1, border: 1, borderColor: 'primary.200' }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mb: 1, fontSize: '0.938rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {/* ข้อมูลการเสนอชื่อ - Full Width - แก้ไขได้ */}
+            <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'primary.50', borderRadius: 1, border: 1, borderColor: 'primary.200' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', fontSize: '0.938rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <PersonIcon sx={{ fontSize: 16 }} />
                   ข้อมูลการเสนอชื่อ
                 </Typography>
-                
-                {personnel.supporterName && (
+                {!isEditingSupporter ? (
+                  <Tooltip title="แก้ไขข้อมูลการเสนอชื่อ">
+                    <IconButton
+                      size="small"
+                      onClick={handleEditSupporter}
+                      disabled={!personnel.id}
+                      sx={{ color: 'primary.main' }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Tooltip title="บันทึก">
+                      <IconButton
+                        size="small"
+                        onClick={handleSaveSupporter}
+                        disabled={savingSupporter}
+                        sx={{ color: 'success.main' }}
+                      >
+                        {savingSupporter ? <CircularProgress size={18} /> : <SaveIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="ยกเลิก">
+                      <IconButton
+                        size="small"
+                        onClick={handleCancelEditSupporter}
+                        disabled={savingSupporter}
+                        sx={{ color: 'error.main' }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )}
+              </Box>
+              
+              {isEditingSupporter ? (
+                <Stack spacing={1.5}>
+                  <TextField
+                    label="ผู้สนับสนุน/ผู้เสนอชื่อ"
+                    value={supporterName}
+                    onChange={(e) => setSupporterName(e.target.value)}
+                    fullWidth
+                    size="small"
+                    placeholder="กรอกชื่อผู้สนับสนุน..."
+                    disabled={savingSupporter}
+                  />
+                  <TextField
+                    label="เหตุผลในการสนับสนุน"
+                    value={supportReason}
+                    onChange={(e) => setSupportReason(e.target.value)}
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={3}
+                    placeholder="กรอกเหตุผลในการสนับสนุน..."
+                    disabled={savingSupporter}
+                  />
+                </Stack>
+              ) : (
+                <>
                   <Box sx={{ mb: 1 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.25 }}>
                       ผู้สนับสนุน/ผู้เสนอชื่อ:
                     </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                      {personnel.supporterName}
+                    <Typography variant="body2" sx={{ color: supporterName ? 'text.secondary' : 'text.disabled', fontSize: '0.875rem', fontStyle: supporterName ? 'normal' : 'italic' }}>
+                      {supporterName || 'ยังไม่ได้ระบุ'}
                     </Typography>
                   </Box>
-                )}
-                
-                {personnel.supportReason && (
+                  
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.25 }}>
                       เหตุผลในการสนับสนุน:
                     </Typography>
-                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: 'text.secondary', fontSize: '0.875rem' }}>
-                      {personnel.supportReason}
+                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: supportReason ? 'text.secondary' : 'text.disabled', fontSize: '0.875rem', fontStyle: supportReason ? 'normal' : 'italic' }}>
+                      {supportReason || 'ยังไม่ได้ระบุ'}
                     </Typography>
                   </Box>
-                )}
-              </Paper>
-            )}
+                </>
+              )}
+            </Paper>
 
             {/* หมายเหตุ - Full Width */}
             {personnel.notes && (

@@ -40,6 +40,8 @@ import {
   Menu,
   ListItemIcon,
   ListItemText,
+  Autocomplete,
+  debounce,
 } from '@mui/material';
 import {
   Clear as ClearIcon,
@@ -64,6 +66,7 @@ import {
   Add as AddIcon,
   List as ListIcon,
   ArrowDropDown as ArrowDropDownIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import PromotionChainVacantSelector from './components/PromotionChainVacantSelector';
 import PromotionChainDrawer from './components/PromotionChainDrawer';
@@ -177,6 +180,23 @@ interface InOutData {
     units: string[];
     positionCodes: PositionCode[];
   };
+}
+
+// Interface สำหรับ Autocomplete Suggestion
+interface AutocompleteSuggestion {
+  id: string;
+  label: string;
+  subtitle: string;
+  type: 'personnel' | 'position_number';
+  posCode: string | null;
+  searchText: string;
+  originalData: {
+    fullName: string | null;
+    rank: string | null;
+    position: string | null;
+    unit: string | null;
+    positionNumber: string | null;
+  } | null;
 }
 
 export default function InOutPage() {
@@ -318,6 +338,11 @@ export default function InOutPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Autocomplete states
+  const [autocompleteOptions, setAutocompleteOptions] = useState<AutocompleteSuggestion[]>([]);
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
+  const [autocompleteInputValue, setAutocompleteInputValue] = useState<string>('');
   
   // Infinite scroll states
   const [loadMode, setLoadMode] = useState<'pagination' | 'infinite'>('pagination');
@@ -437,6 +462,51 @@ export default function InOutPage() {
 
     return years;
   }, []);
+
+  // Fetch autocomplete suggestions with debounce
+  // ค้นหาจากทุกหน่วย ไม่ต้อง filter unit
+  const fetchAutocompleteSuggestions = useMemo(
+    () =>
+      debounce(async (query: string) => {
+        if (!query || query.trim().length < 2) {
+          setAutocompleteOptions([]);
+          setAutocompleteLoading(false);
+          return;
+        }
+
+        setAutocompleteLoading(true);
+        try {
+          const params = new URLSearchParams({
+            q: query.trim(),
+            year: selectedYear.toString(),
+            limit: '15',
+          });
+
+          const response = await fetch(`/api/new-in-out/autocomplete?${params}`);
+          if (!response.ok) throw new Error('Failed to fetch suggestions');
+
+          const result = await response.json();
+          if (result.success && result.data?.suggestions) {
+            setAutocompleteOptions(result.data.suggestions);
+          } else {
+            setAutocompleteOptions([]);
+          }
+        } catch (error) {
+          console.error('Autocomplete error:', error);
+          setAutocompleteOptions([]);
+        } finally {
+          setAutocompleteLoading(false);
+        }
+      }, 300),
+    [selectedYear]
+  );
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      fetchAutocompleteSuggestions.clear();
+    };
+  }, [fetchAutocompleteSuggestions]);
 
   // Fetch filter options only once on mount
   const fetchFilters = async () => {
@@ -1162,6 +1232,8 @@ export default function InOutPage() {
     setLoading(true); // แสดง skeleton loading ทันที
     setData(null); // Clear data ทันทีเพื่อแสดง skeleton
     setSearchText('');
+    setAutocompleteInputValue(''); // Reset autocomplete input
+    setAutocompleteOptions([]); // Clear autocomplete options
     setSelectedUnit('all');
     setSelectedPosCode('all');
     setSelectedStatus('all');
@@ -1583,6 +1655,42 @@ export default function InOutPage() {
     }
   };
 
+  // Handler สำหรับอัพเดทข้อมูลผู้สนับสนุนและเหตุผล
+  const handleSupporterUpdate = (supporterName: string | null, supportReason: string | null) => {
+    if (selectedPersonnelForDetail) {
+      // อัพเดท selectedPersonnelForDetail
+      const updatedPersonnel = {
+        ...selectedPersonnelForDetail,
+        supporterName,
+        supportReason
+      };
+      setSelectedPersonnelForDetail(updatedPersonnel);
+
+      // อัพเดทข้อมูลใน data array
+      if (data?.swapDetails) {
+        const updatedSwapDetails = data.swapDetails.map(detail => 
+          detail.personnelId === selectedPersonnelForDetail.personnelId
+            ? { ...detail, supporterName, supportReason }
+            : detail
+        );
+        setData({
+          ...data,
+          swapDetails: updatedSwapDetails
+        });
+      }
+
+      // อัพเดทข้อมูลใน allData (สำหรับ infinite scroll mode)
+      if (loadMode === 'infinite' && allData.length > 0) {
+        const updatedAllData = allData.map(detail =>
+          detail.personnelId === selectedPersonnelForDetail.personnelId
+            ? { ...detail, supporterName, supportReason }
+            : detail
+        );
+        setAllData(updatedAllData);
+      }
+    }
+  };
+
   // Scroll to top function
   const scrollToTop = () => {
     if (isFullscreen) {
@@ -1619,6 +1727,7 @@ export default function InOutPage() {
     const search = searchParams.get('search');
     if (search) {
       setSearchText(search);
+      setAutocompleteInputValue(search); // Sync autocomplete input
       setHasSearched(true);
       setInitialLoad(false);
     }
@@ -1986,28 +2095,154 @@ export default function InOutPage() {
               </>
             ) : (
               <>
-                <TextField
+                <Autocomplete
+                  freeSolo
                   fullWidth
-                  label="ค้นหา"
-                  placeholder={isMobile ? "ค้นหา..." : "ค้นหาชื่อ, นามสกุล, ยศ, เลขตำแหน่ง, หน่วย, ตำแหน่ง..."}
                   size="small"
-                  value={searchText}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  slotProps={{
-                    input: {
-                      endAdornment: searchText && (
-                        <InputAdornment position="end">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleSearchChange('')}
-                            edge="end"
-                          >
-                            <ClearIcon fontSize="small" />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    },
+                  options={autocompleteOptions}
+                  loading={autocompleteLoading}
+                  inputValue={autocompleteInputValue}
+                  value={null}
+                  filterOptions={(x) => x} // ไม่ filter เพราะ API filter ให้แล้ว
+                  getOptionLabel={(option) => {
+                    if (typeof option === 'string') return option;
+                    return option.label || '';
                   }}
+                  isOptionEqualToValue={(option, value) => {
+                    if (typeof value === 'string') return option.label === value;
+                    return option.id === value.id;
+                  }}
+                  onInputChange={(_, newInputValue, reason) => {
+                    setAutocompleteInputValue(newInputValue);
+                    if (reason === 'input') {
+                      fetchAutocompleteSuggestions(newInputValue);
+                    }
+                    // เมื่อกดปุ่ม clear (X) ของ Autocomplete
+                    if (reason === 'clear') {
+                      handleSearchChange('');
+                      setAutocompleteOptions([]);
+                    }
+                  }}
+                  onChange={(_, newValue) => {
+                    if (newValue) {
+                      if (typeof newValue === 'string') {
+                        // เมื่อพิมพ์ค้นหาเอง ให้ reset filters เพื่อค้นหาจากทุกหน่วย
+                        setSelectedUnit('all');
+                        setSelectedPosCode('all');
+                        setSelectedStatus('all');
+                        handleSearchChange(newValue);
+                      } else {
+                        // เมื่อเลือก suggestion - reset filters เพื่อให้ค้นหาเจอ
+                        setSelectedUnit('all');
+                        setSelectedPosCode('all');
+                        setSelectedStatus('all');
+                        
+                        // ใช้ชื่อ (ไม่รวมยศ) เพื่อค้นหาให้เจอง่ายขึ้น
+                        let searchValue: string;
+                        if (newValue.type === 'position_number') {
+                          searchValue = newValue.searchText;
+                        } else if (newValue.originalData?.fullName) {
+                          // ใช้ชื่อเต็มโดยไม่รวมยศ
+                          searchValue = newValue.originalData.fullName;
+                        } else {
+                          searchValue = newValue.label;
+                        }
+                        
+                        setAutocompleteInputValue(searchValue);
+                        handleSearchChange(searchValue);
+                      }
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // เมื่อกด Enter ให้ค้นหาด้วย input ปัจจุบัน
+                      handleSearchChange(autocompleteInputValue);
+                    }
+                  }}
+                  slotProps={{
+                    popper: {
+                      sx: { zIndex: isFullscreen ? 1400 : undefined }
+                    }
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="ค้นหา"
+                      placeholder={isMobile ? "ค้นหา..." : "ค้นหาชื่อ, นามสกุล, ยศ, เลขตำแหน่ง..."}
+                      slotProps={{
+                        input: {
+                          ...params.InputProps,
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                            </InputAdornment>
+                          ),
+                          endAdornment: (
+                            <>
+                              {autocompleteLoading ? <CircularProgress color="inherit" size={18} /> : null}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        },
+                      }}
+                    />
+                  )}
+                  renderOption={(props, option) => {
+                    const { key, ...otherProps } = props;
+                    return (
+                      <Box
+                        component="li"
+                        key={key}
+                        {...otherProps}
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start !important',
+                          py: 1,
+                          px: 2,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          '&:last-child': { borderBottom: 'none' },
+                          '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                          {option.type === 'personnel' ? (
+                            <PersonIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                          ) : (
+                            <SearchIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                          )}
+                          <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+                            {option.label}
+                          </Typography>
+                          {option.posCode && (
+                            <Chip
+                              label={option.posCode}
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              sx={{ height: 20, fontSize: '0.7rem' }}
+                            />
+                          )}
+                        </Box>
+                        {option.subtitle && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mt: 0.25, ml: 3.5 }}
+                          >
+                            {option.subtitle}
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  }}
+                  noOptionsText={
+                    autocompleteInputValue.length < 2
+                      ? "พิมพ์อย่างน้อย 2 ตัวอักษร"
+                      : "ไม่พบข้อมูล"
+                  }
+                  loadingText="กำลังค้นหา..."
                 />
                 <Box sx={{
                   display: 'flex',
@@ -2270,7 +2505,7 @@ export default function InOutPage() {
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
-                    <TableCell sx={{ color: 'white', width: 60, fontWeight: 600, py: 2, px: 1 }}>
+                    <TableCell sx={{ color: 'white', width: 30, fontWeight: 600, py: 2, px: 1 }}>
                       <Checkbox
                         checked={filteredSwapDetails.length > 0 && selectedRows.size === filteredSwapDetails.length}
                         indeterminate={selectedRows.size > 0 && selectedRows.size < filteredSwapDetails.length}
@@ -2283,7 +2518,7 @@ export default function InOutPage() {
                         }}
                       />
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: 50, fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: 20, fontWeight: 600, py: 2 }}>
                       #
                     </TableCell>
                     <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
@@ -2295,16 +2530,16 @@ export default function InOutPage() {
                     <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
                       ตำแหน่งคนครอง
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: '13%', fontWeight: 600, py: 2 }}>
                       ตำแหน่งใหม่
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: '12%', fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: '10%', fontWeight: 600, py: 2 }}>
                       ผู้สนับสนุน
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: '13%', fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: '10%', fontWeight: 600, py: 2 }}>
                       เหตุผล
                     </TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 80, py: 2 }} align="center">
+                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 40, py: 2 }} align="center">
                       จัดการ
                     </TableCell>
                   </TableRow>
@@ -2473,7 +2708,7 @@ export default function InOutPage() {
                                       }}
                                       sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
                                     >
-                                      <InfoOutline sx={{ fontSize: '1rem' }} />
+                                      <InfoOutline sx={{ fontSize: '1.2rem' }} />
                                     </IconButton>
                                   </Tooltip>
                                 </Box>
@@ -2507,7 +2742,7 @@ export default function InOutPage() {
                                       }}
                                       sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
                                     >
-                                      <InfoOutline sx={{ fontSize: '1rem' }} />
+                                      <InfoOutline sx={{ fontSize: '1.2rem' }} />
                                     </IconButton>
                                   </Tooltip>
                                 </Box>
@@ -2543,7 +2778,7 @@ export default function InOutPage() {
                                     }}
                                     sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
                                   >
-                                    <InfoOutline sx={{ fontSize: '1rem' }} />
+                                    <InfoOutline sx={{ fontSize: '1.2rem' }} />
                                   </IconButton>
                                 </Tooltip>
                               </Box>
@@ -2593,7 +2828,7 @@ export default function InOutPage() {
                                     }}
                                     sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
                                   >
-                                    <InfoOutline sx={{ fontSize: '1rem' }} />
+                                    <InfoOutline sx={{ fontSize: '1.2rem' }} />
                                   </IconButton>
                                 </Tooltip>
                               </Box>
@@ -2896,7 +3131,7 @@ export default function InOutPage() {
                                     }
                                   }}
                                 >
-                                  <InfoIcon sx={{ fontSize: '1rem' }} />
+                                  <InfoIcon sx={{ fontSize: '1.2rem' }} />
                                 </IconButton>
                               </Tooltip>
                             )}
@@ -3286,6 +3521,7 @@ export default function InOutPage() {
             open={personnelDetailModalOpen}
             onClose={handleClosePersonnelDetailModal}
             onAvatarUpdate={handleAvatarUpdate}
+            onSupporterUpdate={handleSupporterUpdate}
             personnel={{
               id: selectedPersonnelForDetail.personnelId,
               noId: selectedPersonnelForDetail.noId,
@@ -3310,6 +3546,8 @@ export default function InOutPage() {
               trainingLocation: selectedPersonnelForDetail.trainingLocation,
               trainingCourse: selectedPersonnelForDetail.trainingCourse,
               avatarUrl: selectedPersonnelForDetail.avatarUrl,
+              supporterName: selectedPersonnelForDetail.supporterName,
+              supportReason: selectedPersonnelForDetail.supportReason,
             }}
           />
         )}

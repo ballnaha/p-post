@@ -77,6 +77,49 @@ export async function PUT(
   }
 }
 
+// PATCH - แก้ไขข้อมูลบุคลากรบางส่วน (เช่น supporterName, supportReason)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    
+    // Optional: Check authentication
+    const session = await getServerSession(authOptions);
+
+    const body = await request.json();
+    const username = session?.user?.username || 'system';
+
+    // อนุญาตให้อัพเดทเฉพาะบาง field
+    const allowedFields = ['supporterName', 'supportReason', 'notes'];
+    const updateData: Record<string, any> = { updatedBy: username };
+    
+    for (const field of allowedFields) {
+      if (field in body) {
+        updateData[field] = body[field];
+      }
+    }
+
+    const personnel = await prisma.policePersonnel.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: personnel,
+      message: 'อัปเดตข้อมูลสำเร็จ',
+    });
+  } catch (error: any) {
+    console.error('Patch error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE - ลบข้อมูลบุคลากร
 export async function DELETE(
   request: NextRequest,

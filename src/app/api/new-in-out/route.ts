@@ -228,6 +228,10 @@ export async function GET(request: NextRequest) {
                     toUnit: swapInfo?.toUnit || null,
                     toActingAs: swapInfo?.toActingAs || null,
                     
+                    // ผู้สนับสนุนและเหตุผล (ใช้จาก swapInfo ก่อน ถ้าไม่มีใช้จาก person)
+                    supporterName: swapInfo?.supporterName || person.supporterName || null,
+                    supportReason: swapInfo?.supportReason || person.supportReason || null,
+                    
                     transaction: swapInfo ? {
                         id: swapInfo.transaction.id,
                         year: swapInfo.transaction.year,
@@ -309,6 +313,10 @@ export async function GET(request: NextRequest) {
                 toPositionNumber: detail.toPositionNumber,
                 toUnit: detail.toUnit,
                 toActingAs: detail.toActingAs,
+                
+                // ผู้สนับสนุนและเหตุผล
+                supporterName: detail.supporterName || null,
+                supportReason: detail.supportReason || null,
                 
                 transaction: detail.transaction ? {
                     id: detail.transaction.id,

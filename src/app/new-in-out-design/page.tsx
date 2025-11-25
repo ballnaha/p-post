@@ -135,6 +135,10 @@ interface SwapDetail {
   // targetNoId - noId ของตำแหน่งว่างที่ถูกจับคู่ (สำหรับ promotion-chain)
   targetNoId?: string | null;
 
+  // ผู้สนับสนุนและเหตุผล
+  supporterName?: string | null;
+  supportReason?: string | null;
+
   // Replaced person (คนที่เดิมอยู่ในตำแหน่งใหม่) - มาจาก API แล้ว
   replacedPerson?: SwapDetail | null;
 }
@@ -2282,17 +2286,23 @@ export default function InOutPage() {
                     <TableCell sx={{ color: 'white', width: 50, fontWeight: 600, py: 2 }}>
                       #
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: '25%', fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
                       คนเข้า
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: '25%', fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
                       คนครอง
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: '25%', fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
                       ตำแหน่งคนครอง
                     </TableCell>
-                    <TableCell sx={{ color: 'white', width: '25%', fontWeight: 600, py: 2 }}>
+                    <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
                       ตำแหน่งใหม่
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', width: '12%', fontWeight: 600, py: 2 }}>
+                      ผู้สนับสนุน
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', width: '13%', fontWeight: 600, py: 2 }}>
+                      เหตุผล
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600, width: 80, py: 2 }} align="center">
                       จัดการ
@@ -2323,6 +2333,12 @@ export default function InOutPage() {
                         <TableCell sx={{ py: 0.5, px: 1 }}>
                           <Skeleton variant="text" width="90%" height={16} />
                         </TableCell>
+                        <TableCell sx={{ py: 0.5, px: 1 }}>
+                          <Skeleton variant="text" width="70%" height={16} />
+                        </TableCell>
+                        <TableCell sx={{ py: 0.5, px: 1 }}>
+                          <Skeleton variant="text" width="80%" height={16} />
+                        </TableCell>
                         <TableCell align="center" sx={{ py: 0.5, px: 1 }}>
                           <Skeleton variant="circular" width={20} height={20} sx={{ mx: 'auto' }} />
                         </TableCell>
@@ -2330,7 +2346,7 @@ export default function InOutPage() {
                     ))
                   ) : filteredSwapDetails.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} sx={{ p: 0, border: 'none' }}>
+                      <TableCell colSpan={9} sx={{ p: 0, border: 'none' }}>
                         <EmptyState
                           icon={PersonIcon}
                           title={!hasSearched ? 'เลือก Filter แล้วจะแสดงข้อมูล' : (searchText ? 'ไม่พบข้อมูลที่ตรงกับการค้นหา' : 'ไม่พบข้อมูล')}
@@ -2819,6 +2835,44 @@ export default function InOutPage() {
                               </Box>
                             ) : (
                               ''
+                            )}
+                          </TableCell>
+
+                          {/* ผู้สนับสนุน */}
+                          <TableCell sx={{ py: 0.75, px: 1 }}>
+                            {detail.supporterName ? (
+                              <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.875rem',
+                                    }}>
+                                {detail.supporterName}
+                              </Typography>
+                            ) : (
+                              <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.disabled' }}>
+                                -
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          {/* เหตุผล */}
+                          <TableCell sx={{ py: 0.75, px: 1 }}>
+                            {detail.supportReason ? (
+                              <Tooltip title={detail.supportReason}>
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.875rem',
+                                    
+                                  }}
+                                >
+                                  {detail.supportReason}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.disabled' }}>
+                                -
+                              </Typography>
                             )}
                           </TableCell>
 

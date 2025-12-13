@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Police Personnel');
 
     // ตั้งค่าความกว้างของคอลัมน์ตามลำดับใหม่
-    const columnWidths = [     
+    const columnWidths = [
       { wch: 10 }, // 1. อาวุโส
       { wch: 12 }, // 2. ยศ
       { wch: 25 }, // 3. ชื่อ สกุล

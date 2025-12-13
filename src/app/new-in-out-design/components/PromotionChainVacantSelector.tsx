@@ -9,7 +9,6 @@ import {
   InputAdornment,
   IconButton,
   Stack,
-  Collapse,
   FormControl,
   InputLabel,
   Select,
@@ -22,7 +21,7 @@ import {
   Paper,
   Alert
 } from '@mui/material';
-import { Add as AddIcon, Close as CloseIcon, Search as SearchIcon, FilterList as FilterListIcon } from '@mui/icons-material';
+import { Add as AddIcon, Close as CloseIcon, Search as SearchIcon } from '@mui/icons-material';
 import DataTablePagination from '@/components/DataTablePagination';
 import { alpha } from '@mui/material/styles';
 
@@ -73,7 +72,6 @@ export default function PromotionChainVacantSelector({
   const [searchInput, setSearchInput] = useState('');
   const [filterPosCode, setFilterPosCode] = useState<string>('all');
   const [filterUnit, setFilterUnit] = useState<string>('all');
-  const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [posCodeOptions, setPosCodeOptions] = useState<Array<{ id: number; name: string }>>([]);
@@ -210,27 +208,22 @@ export default function PromotionChainVacantSelector({
                   )
                 }}
               />
-              <Button size="small" onClick={() => setShowFilters(!showFilters)} startIcon={<FilterListIcon />} sx={{ textTransform: 'none', justifyContent: 'flex-start', fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
-                ตัวกรองเพิ่มเติม {showFilters ? '▲' : '▼'}
-              </Button>
-              <Collapse in={showFilters}>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1, pt: 1 }}>
-                  <FormControl size="small">
-                    <InputLabel>หน่วย</InputLabel>
-                    <Select value={filterUnit} label="หน่วย" onChange={(e) => { setFilterUnit(e.target.value); setPage(0); }} MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}>
-                      <MenuItem value="all"><Typography variant="body2">ทุกหน่วย</Typography></MenuItem>
-                      {unitOptions.map(unit => <MenuItem key={unit} value={unit}><Typography variant="body2" noWrap>{unit}</Typography></MenuItem>)}
-                    </Select>
-                  </FormControl>
-                  <FormControl size="small">
-                    <InputLabel>ตำแหน่ง</InputLabel>
-                    <Select value={filterPosCode} label="ตำแหน่ง" onChange={(e) => { setFilterPosCode(e.target.value); setPage(0); }} MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}>
-                      <MenuItem value="all"><Typography variant="body2">ทุกระดับ</Typography></MenuItem>
-                      {posCodeOptions.map(pc => <MenuItem key={pc.id} value={pc.id.toString()}><Typography variant="body2" fontWeight={600} noWrap>{pc.id} - {pc.name}</Typography></MenuItem>)}
-                    </Select>
-                  </FormControl>
-                </Box>
-              </Collapse>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1, pt: 1 }}>
+                <FormControl size="small">
+                  <InputLabel>หน่วย</InputLabel>
+                  <Select value={filterUnit} label="หน่วย" onChange={(e) => { setFilterUnit(e.target.value); setPage(0); }} MenuProps={{ PaperProps: { style: { maxHeight: 300 } }, sx: { zIndex: 10002 } }}>
+                    <MenuItem value="all"><Typography variant="body2">ทุกหน่วย</Typography></MenuItem>
+                    {unitOptions.map(unit => <MenuItem key={unit} value={unit}><Typography variant="body2" noWrap>{unit}</Typography></MenuItem>)}
+                  </Select>
+                </FormControl>
+                <FormControl size="small">
+                  <InputLabel>ตำแหน่ง</InputLabel>
+                  <Select value={filterPosCode} label="ตำแหน่ง" onChange={(e) => { setFilterPosCode(e.target.value); setPage(0); }} MenuProps={{ PaperProps: { style: { maxHeight: 300 } }, sx: { zIndex: 10002 } }}>
+                    <MenuItem value="all"><Typography variant="body2">ทุกระดับ</Typography></MenuItem>
+                    {posCodeOptions.map(pc => <MenuItem key={pc.id} value={pc.id.toString()}><Typography variant="body2" fontWeight={600} noWrap>{pc.id} - {pc.name}</Typography></MenuItem>)}
+                  </Select>
+                </FormControl>
+              </Box>
               {(searchText || filterPosCode !== 'all' || filterUnit !== 'all') && (
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5 }}>
                   <Typography variant="caption" color="text.secondary">พบ {totalVacantPositions} ตำแหน่ง</Typography>
@@ -274,7 +267,7 @@ export default function PromotionChainVacantSelector({
             )}
           </Box>
           {!loadingVacant && totalVacantPositions > 0 && (
-            <Box sx={{ position: 'sticky', bottom: 0, bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider', zIndex: 10, pt: { xs: 1, sm: 1.5 }, pb: { xs: 1, sm: 1.5 } }}>
+            <Box sx={{ position: 'sticky', bottom: 0, bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider', zIndex: 10002, pt: { xs: 1, sm: 1.5 }, pb: { xs: 1, sm: 1.5 } }}>
               <DataTablePagination
                 count={totalVacantPositions}
                 page={page}
@@ -283,6 +276,7 @@ export default function PromotionChainVacantSelector({
                 onRowsPerPageChange={(newRpp: number) => { setRowsPerPage(newRpp); setPage(0); }}
                 rowsPerPageOptions={[10, 20, 50, 100]}
                 variant="minimal"
+                menuZIndex={10003}
               />
             </Box>
           )}

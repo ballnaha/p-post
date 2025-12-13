@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {

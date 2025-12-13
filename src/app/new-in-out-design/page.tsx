@@ -71,12 +71,21 @@ import {
 import PromotionChainVacantSelector from './components/PromotionChainVacantSelector';
 import PromotionChainDrawer from './components/PromotionChainDrawer';
 import PromotionChainListDrawer from './components/PromotionChainListDrawer';
+import ColumnHeaderFilter from './components/ColumnHeaderFilter';
 import Layout from '../components/Layout';
 import DataTablePagination from '@/components/DataTablePagination';
 import { EmptyState } from '@/app/components/EmptyState';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import InOutDetailModal from '@/components/InOutDetailModal';
 import { useSearchParams } from 'next/navigation';
+import {
+  getIncomingLabel,
+  getCurrentHolderLabel,
+  getCurrentPositionLabel,
+  getNewPositionLabel,
+  getSupporterLabel,
+  getReasonLabel,
+} from '@/utils/columnFilterLabels';
 
 interface SwapDetail {
   id: string;
@@ -397,6 +406,122 @@ export default function InOutPage() {
   
   // Selected rows state for checkbox selection
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+
+  // Column filters state - สำหรับ filter แบบ Excel ที่ header
+  const [columnFilters, setColumnFilters] = useState<{
+    incomingPerson: Set<string>;       // คนเข้า - fullName
+    currentHolder: Set<string>;        // คนครอง - replacedPerson.fullName
+    currentPosition: Set<string>;      // ตำแหน่งคนครอง - fromPosition/fromUnit
+    newPosition: Set<string>;          // ตำแหน่งใหม่ - toPosition/toUnit
+    supporter: Set<string>;            // ผู้สนับสนุน - supporterName
+    reason: Set<string>;               // เหตุผล - supportReason
+  }>({
+    incomingPerson: new Set(),
+    currentHolder: new Set(),
+    currentPosition: new Set(),
+    newPosition: new Set(),
+    supporter: new Set(),
+    reason: new Set(),
+  });
+
+  // Handler สำหรับเปลี่ยน column filter
+  const handleColumnFilterChange = useCallback((columnKey: string, values: Set<string>) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [columnKey]: values,
+    }));
+  }, []);
+
+  // ล้าง column filters ทั้งหมด
+  const clearAllColumnFilters = useCallback(() => {
+    setColumnFilters({
+      incomingPerson: new Set(),
+      currentHolder: new Set(),
+      currentPosition: new Set(),
+      newPosition: new Set(),
+      supporter: new Set(),
+      reason: new Set(),
+    });
+  }, []);
+
+  // ตรวจสอบว่ามี column filter ใดถูกใช้งานหรือไม่
+  const hasActiveColumnFilters = useMemo(() => {
+    return columnFilters.incomingPerson.size > 0 ||
+           columnFilters.currentHolder.size > 0 ||
+           columnFilters.currentPosition.size > 0 ||
+           columnFilters.newPosition.size > 0 ||
+           columnFilters.supporter.size > 0 ||
+           columnFilters.reason.size > 0;
+  }, [columnFilters]);
+
+  // Column filter options from API
+  const [columnFilterOptions, setColumnFilterOptions] = useState<{
+    incomingPerson: { value: string; label: string; count?: number }[];
+    currentHolder: { value: string; label: string; count?: number }[];
+    currentPosition: { value: string; label: string; count?: number }[];
+    newPosition: { value: string; label: string; count?: number }[];
+    supporter: { value: string; label: string; count?: number }[];
+    reason: { value: string; label: string; count?: number }[];
+  }>({
+    incomingPerson: [],
+    currentHolder: [],
+    currentPosition: [],
+    newPosition: [],
+    supporter: [],
+    reason: [],
+  });
+  const [loadingColumnFilters, setLoadingColumnFilters] = useState(false);
+  
+  // Cache key สำหรับ column filters
+  const columnFilterCacheKeyRef = useRef<string>('');
+  // Flag เพื่อป้องกันการโหลดซ้ำ
+  const isLoadingColumnFiltersRef = useRef(false);
+
+  // Fetch column filter options from API - โหลดทุก column พร้อมกัน
+  const fetchColumnFilterOptions = useCallback(async () => {
+    const cacheKey = `${selectedUnit}-${selectedPosCode}-${selectedStatus}-${selectedSwapType}-${selectedYear}`;
+    
+    // ถ้ากำลังโหลดอยู่ หรือ cache key เหมือนเดิมและมีข้อมูลแล้ว ไม่ต้องโหลดซ้ำ
+    if (isLoadingColumnFiltersRef.current) return;
+    if (columnFilterCacheKeyRef.current === cacheKey && columnFilterOptions.incomingPerson.length > 0) return;
+    
+    // ถ้า cache key เปลี่ยน ต้อง reset options
+    if (columnFilterCacheKeyRef.current !== cacheKey) {
+      columnFilterCacheKeyRef.current = cacheKey;
+    }
+    
+    isLoadingColumnFiltersRef.current = true;
+    setLoadingColumnFilters(true);
+
+    try {
+      const params = new URLSearchParams({
+        unit: selectedUnit,
+        posCodeId: selectedPosCode,
+        status: selectedStatus,
+        swapType: selectedSwapType,
+        year: selectedYear.toString(),
+      });
+
+      const response = await fetch(`/api/new-in-out/column-filters?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch column filters');
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        setColumnFilterOptions(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch column filter options:', error);
+    } finally {
+      setLoadingColumnFilters(false);
+      isLoadingColumnFiltersRef.current = false;
+    }
+  }, [selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear, columnFilterOptions.incomingPerson.length]);
+
+  // Handler สำหรับ load column filter - เรียกเมื่อ click header filter
+  const handleLoadColumnFilter = useCallback(async () => {
+    await fetchColumnFilterOptions();
+  }, [fetchColumnFilterOptions]);
+
   const [hiddenRowsHistory, setHiddenRowsHistory] = useState<string[]>(() => {
     // โหลด history จาก localStorage
     if (typeof window !== 'undefined') {
@@ -730,6 +855,23 @@ export default function InOutPage() {
     loadFiltersAndCheckUnit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // โหลด column filter options เมื่อ filters หลักเปลี่ยน - ใช้ lazy loading แทน
+  // Reset cache เมื่อ filter เปลี่ยน
+  useEffect(() => {
+    if (hasSearched) {
+      // Reset cache key เมื่อ filter เปลี่ยน เพื่อให้ lazy load ใหม่
+      columnFilterCacheKeyRef.current = '';
+      setColumnFilterOptions({
+        incomingPerson: [],
+        currentHolder: [],
+        currentPosition: [],
+        newPosition: [],
+        supporter: [],
+        reason: [],
+      });
+    }
+  }, [hasSearched, selectedUnit, selectedPosCode, selectedStatus, selectedSwapType, selectedYear]);
 
   // (Vacant positions loading moved inside PromotionChainVacantSelector)
 
@@ -1178,8 +1320,59 @@ export default function InOutPage() {
       }
     }
 
-    return sorted;
-  }, [data?.swapDetails, loading, loadMode, allData, loadingMore, hiddenRows, selectedSwapType, searchText]);
+    // Apply column filters
+    let finalFiltered = sorted;
+    
+    // Filter by incomingPerson (คนเข้า - fullName + rank)
+    if (columnFilters.incomingPerson.size > 0) {
+      finalFiltered = finalFiltered.filter(detail => {
+        const label = getIncomingLabel(detail);
+        return label ? columnFilters.incomingPerson.has(label) : false;
+      });
+    }
+    
+    // Filter by currentHolder (คนครอง)
+    if (columnFilters.currentHolder.size > 0) {
+      finalFiltered = finalFiltered.filter(detail => {
+        const label = getCurrentHolderLabel(detail);
+        return columnFilters.currentHolder.has(label);
+      });
+    }
+    
+    // Filter by currentPosition (ตำแหน่งคนครอง)
+    if (columnFilters.currentPosition.size > 0) {
+      finalFiltered = finalFiltered.filter(detail => {
+        const label = getCurrentPositionLabel(detail);
+        return label ? columnFilters.currentPosition.has(label) : false;
+      });
+    }
+    
+    // Filter by newPosition (ตำแหน่งใหม่)
+    if (columnFilters.newPosition.size > 0) {
+      finalFiltered = finalFiltered.filter(detail => {
+        const label = getNewPositionLabel(detail);
+        return label ? columnFilters.newPosition.has(label) : false;
+      });
+    }
+    
+    // Filter by supporter (ผู้สนับสนุน)
+    if (columnFilters.supporter.size > 0) {
+      finalFiltered = finalFiltered.filter(detail => {
+        const label = getSupporterLabel(detail);
+        return columnFilters.supporter.has(label);
+      });
+    }
+    
+    // Filter by reason (เหตุผล)
+    if (columnFilters.reason.size > 0) {
+      finalFiltered = finalFiltered.filter(detail => {
+        const label = getReasonLabel(detail);
+        return columnFilters.reason.has(label);
+      });
+    }
+
+    return finalFiltered;
+  }, [data?.swapDetails, loading, loadMode, allData, loadingMore, hiddenRows, selectedSwapType, searchText, columnFilters]);
 
   const handleUnitChange = (event: SelectChangeEvent<string>) => {
     setInitialLoad(false); // Mark that user has interacted
@@ -2283,6 +2476,25 @@ export default function InOutPage() {
                       {isMobile ? <ClearIcon /> : 'ล้างตัวกรอง'}
                     </Button>
                   )}
+                  {hasActiveColumnFilters && (
+                    <Chip
+                      label={`กรอง ${
+                        columnFilters.incomingPerson.size + 
+                        columnFilters.currentHolder.size + 
+                        columnFilters.currentPosition.size + 
+                        columnFilters.newPosition.size + 
+                        columnFilters.supporter.size + 
+                        columnFilters.reason.size
+                      } รายการ`}
+                      color="warning"
+                      size="small"
+                      onDelete={clearAllColumnFilters}
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                      }}
+                    />
+                  )}
                 </Box>
               </>
             )}
@@ -2522,22 +2734,76 @@ export default function InOutPage() {
                       #
                     </TableCell>
                     <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
-                      คนเข้า
+                      <ColumnHeaderFilter
+                        columnKey="incomingPerson"
+                        columnLabel="คนเข้า"
+                        options={columnFilterOptions.incomingPerson}
+                        selectedValues={columnFilters.incomingPerson}
+                        onFilterChange={handleColumnFilterChange}
+                        onLoadOptions={handleLoadColumnFilter}
+                        isLoading={loadingColumnFilters}
+                        disabled={loading || filteredSwapDetails.length === 0}
+                      />
                     </TableCell>
                     <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
-                      คนครอง
+                      <ColumnHeaderFilter
+                        columnKey="currentHolder"
+                        columnLabel="คนครอง"
+                        options={columnFilterOptions.currentHolder}
+                        selectedValues={columnFilters.currentHolder}
+                        onFilterChange={handleColumnFilterChange}
+                        onLoadOptions={handleLoadColumnFilter}
+                        isLoading={loadingColumnFilters}
+                        disabled={loading || filteredSwapDetails.length === 0}
+                      />
                     </TableCell>
                     <TableCell sx={{ color: 'white', width: '15%', fontWeight: 600, py: 2 }}>
-                      ตำแหน่งคนครอง
+                      <ColumnHeaderFilter
+                        columnKey="currentPosition"
+                        columnLabel="ตำแหน่งคนครอง"
+                        options={columnFilterOptions.currentPosition}
+                        selectedValues={columnFilters.currentPosition}
+                        onFilterChange={handleColumnFilterChange}
+                        onLoadOptions={handleLoadColumnFilter}
+                        isLoading={loadingColumnFilters}
+                        disabled={loading || filteredSwapDetails.length === 0}
+                      />
                     </TableCell>
                     <TableCell sx={{ color: 'white', width: '13%', fontWeight: 600, py: 2 }}>
-                      ตำแหน่งใหม่
+                      <ColumnHeaderFilter
+                        columnKey="newPosition"
+                        columnLabel="ตำแหน่งใหม่"
+                        options={columnFilterOptions.newPosition}
+                        selectedValues={columnFilters.newPosition}
+                        onFilterChange={handleColumnFilterChange}
+                        onLoadOptions={handleLoadColumnFilter}
+                        isLoading={loadingColumnFilters}
+                        disabled={loading || filteredSwapDetails.length === 0}
+                      />
                     </TableCell>
                     <TableCell sx={{ color: 'white', width: '10%', fontWeight: 600, py: 2 }}>
-                      ผู้สนับสนุน
+                      <ColumnHeaderFilter
+                        columnKey="supporter"
+                        columnLabel="ผู้สนับสนุน"
+                        options={columnFilterOptions.supporter}
+                        selectedValues={columnFilters.supporter}
+                        onFilterChange={handleColumnFilterChange}
+                        onLoadOptions={handleLoadColumnFilter}
+                        isLoading={loadingColumnFilters}
+                        disabled={loading || filteredSwapDetails.length === 0}
+                      />
                     </TableCell>
                     <TableCell sx={{ color: 'white', width: '10%', fontWeight: 600, py: 2 }}>
-                      เหตุผล
+                      <ColumnHeaderFilter
+                        columnKey="reason"
+                        columnLabel="เหตุผล"
+                        options={columnFilterOptions.reason}
+                        selectedValues={columnFilters.reason}
+                        onFilterChange={handleColumnFilterChange}
+                        onLoadOptions={handleLoadColumnFilter}
+                        isLoading={loadingColumnFilters}
+                        disabled={loading || filteredSwapDetails.length === 0}
+                      />
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600, width: 40, py: 2 }} align="center">
                       จัดการ

@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 
 // ฟังก์ชันสำหรับแปลง Excel Serial Number เป็นวันที่ไทย
 function convertExcelDateToThai(value: any): string | null {
   if (!value) return null;
-  
+
   // ถ้าเป็น string แล้วและมีรูปแบบวันที่ไทย ให้ return เลย
   if (typeof value === 'string' && value.includes('/')) {
     return value;
   }
-  
+
   // ถ้าเป็น number (Excel Serial Number)
   if (typeof value === 'number') {
     try {
@@ -29,7 +29,7 @@ function convertExcelDateToThai(value: any): string | null {
       console.error('Error converting Excel date:', error);
     }
   }
-  
+
   // ถ้าแปลงไม่ได้ ให้ return เป็น string
   return value ? String(value) : null;
 }
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const yearParam = formData.get('year') as string;
-    
+
     // Parse year จาก form data (default = ปีปัจจุบัน พ.ศ.)
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const importYear = yearParam ? parseInt(yearParam) : currentBuddhistYear;
@@ -128,77 +128,77 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
 
     console.log(`[Import] Job ${jobId}: Started processing`);
 
-      // อ่านไฟล์ Excel (อ่านเป็น formatted text เพื่อให้ได้วันที่ตามที่แสดงใน Excel)
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { 
-        type: 'buffer', 
-        cellDates: false,
-        raw: false  // ใช้ formatted text แทน raw value
-      });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      
-      // แปลงเป็น JSON โดยรักษาค่าที่แสดงใน Excel
-      const data = XLSX.utils.sheet_to_json(worksheet, { 
-        raw: false,  // ไม่ใช้ raw value เพื่อให้ได้ formatted text
-        defval: null
-      });
+    // อ่านไฟล์ Excel (อ่านเป็น formatted text เพื่อให้ได้วันที่ตามที่แสดงใน Excel)
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, {
+      type: 'buffer',
+      cellDates: false,
+      raw: false  // ใช้ formatted text แทน raw value
+    });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
 
-      if (data.length === 0) {
-        throw new Error('ไม่พบข้อมูลในไฟล์ Excel');
+    // แปลงเป็น JSON โดยรักษาค่าที่แสดงใน Excel
+    const data = XLSX.utils.sheet_to_json(worksheet, {
+      raw: false,  // ไม่ใช้ raw value เพื่อให้ได้ formatted text
+      defval: null
+    });
+
+    if (data.length === 0) {
+      throw new Error('ไม่พบข้อมูลในไฟล์ Excel');
+    }
+
+    // ตรวจสอบจำนวนคอลัมน์ในไฟล์
+    const firstRow: any = data[0];
+    const columnCount = Object.keys(firstRow).length;
+
+    if (columnCount < 10) {
+      throw new Error(`ไฟล์นี้มีเพียง ${columnCount} คอลัมน์ ต้องมีอย่างน้อย 21 คอลัมน์`);
+    }
+
+    // ตรวจสอบว่ามี pos_code_master ในระบบหรือไม่
+    const posCodeCount = await prisma.posCodeMaster.count();
+    if (posCodeCount === 0) {
+      throw new Error('กรุณาเพิ่มข้อมูล POS Code Master ในระบบก่อน');
+    }
+
+    // Update total rows
+    await prisma.importJob.update({
+      where: { id: jobId },
+      data: { totalRows: data.length }
+    });
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as string[],
+      created: [] as any[],
+      updated: 0,
+      deleted: 0,
+      totalProcessed: 0,
+    };
+
+    // ตรวจสอบว่ามีข้อมูลของปีนี้อยู่แล้วหรือไม่
+    const existingRecordsCount = await prisma.policePersonnel.count({
+      where: {
+        year: importYear,
+        isActive: true
       }
+    });
 
-      // ตรวจสอบจำนวนคอลัมน์ในไฟล์
-      const firstRow: any = data[0];
-      const columnCount = Object.keys(firstRow).length;
-      
-      if (columnCount < 10) {
-        throw new Error(`ไฟล์นี้มีเพียง ${columnCount} คอลัมน์ ต้องมีอย่างน้อย 21 คอลัมน์`);
-      }
+    const isUpdateMode = existingRecordsCount > 0;
+    console.log(`[Import] Job ${jobId}: ${isUpdateMode ? 'UPSERT' : 'INSERT'} mode (${existingRecordsCount} existing records)`);
 
-      // ตรวจสอบว่ามี pos_code_master ในระบบหรือไม่
-      const posCodeCount = await prisma.posCodeMaster.count();
-      if (posCodeCount === 0) {
-        throw new Error('กรุณาเพิ่มข้อมูล POS Code Master ในระบบก่อน');
-      }
+    // นำเข้าข้อมูลแบบ batch เพื่อความเร็ว
+    // ลด batch size ลงเพื่อป้องกัน connection timeout บน production
+    const batchSize = 500; // ลดจาก 1000 เป็น 500 records ต่อ batch
+    const totalBatches = Math.ceil(data.length / batchSize);
 
-      // Update total rows
-      await prisma.importJob.update({
-        where: { id: jobId },
-        data: { totalRows: data.length }
-      });
-
-      const results = {
-        success: 0,
-        failed: 0,
-        errors: [] as string[],
-        created: [] as any[],
-        updated: 0,
-        deleted: 0,
-        totalProcessed: 0,
-      };
-
-      // ตรวจสอบว่ามีข้อมูลของปีนี้อยู่แล้วหรือไม่
-      const existingRecordsCount = await prisma.policePersonnel.count({
-        where: {
-          year: importYear,
-          isActive: true
-        }
-      });
-
-      const isUpdateMode = existingRecordsCount > 0;
-      console.log(`[Import] Job ${jobId}: ${isUpdateMode ? 'UPSERT' : 'INSERT'} mode (${existingRecordsCount} existing records)`);
-
-      // นำเข้าข้อมูลแบบ batch เพื่อความเร็ว
-      // ลด batch size ลงเพื่อป้องกัน connection timeout บน production
-      const batchSize = 500; // ลดจาก 1000 เป็น 500 records ต่อ batch
-      const totalBatches = Math.ceil(data.length / batchSize);
-      
-      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
       const startIndex = batchIndex * batchSize;
       const endIndex = Math.min(startIndex + batchSize, data.length);
       const batchData = data.slice(startIndex, endIndex);
-      
+
       try {
         // เตรียมข้อมูลทั้ง batch
         const personnelDataArray = batchData.map((row: any, index: number) => {
@@ -443,32 +443,32 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
       }
     }
 
-      // Complete job
-      const successMessage = isUpdateMode 
-        ? `อัปเดตข้อมูลปี ${importYear} สำเร็จ: ${results.success} รายการ (อัปเดต ${results.updated} รายการ, ล้มเหลว ${results.failed} รายการ)`
-        : `นำเข้าข้อมูลปี ${importYear} ใหม่สำเร็จ ${results.success} รายการ (ล้มเหลว ${results.failed} รายการ)`;
+    // Complete job
+    const successMessage = isUpdateMode
+      ? `อัปเดตข้อมูลปี ${importYear} สำเร็จ: ${results.success} รายการ (อัปเดต ${results.updated} รายการ, ล้มเหลว ${results.failed} รายการ)`
+      : `นำเข้าข้อมูลปี ${importYear} ใหม่สำเร็จ ${results.success} รายการ (ล้มเหลว ${results.failed} รายการ)`;
 
-      await prisma.importJob.update({
-        where: { id: jobId },
-        data: {
-          status: 'completed',
-          completedAt: new Date(),
-          errorMessage: successMessage
-        }
-      });
+    await prisma.importJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'completed',
+        completedAt: new Date(),
+        errorMessage: successMessage
+      }
+    });
 
-      console.log(`[Import] Job ${jobId}: Completed - ${successMessage}`);
+    console.log(`[Import] Job ${jobId}: Completed - ${successMessage}`);
 
-    } catch (error: any) {
-      console.error(`[Import] Job ${jobId} error:`, error);
-      
-      await prisma.importJob.update({
-        where: { id: jobId },
-        data: {
-          status: 'failed',
-          completedAt: new Date(),
-          errorMessage: error.message || 'เกิดข้อผิดพลาด'
-        }
-      });
-    }
+  } catch (error: any) {
+    console.error(`[Import] Job ${jobId} error:`, error);
+
+    await prisma.importJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'failed',
+        completedAt: new Date(),
+        errorMessage: error.message || 'เกิดข้อผิดพลาด'
+      }
+    });
+  }
 }

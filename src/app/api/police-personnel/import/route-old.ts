@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 
 // ฟังก์ชันสำหรับแปลง Excel Serial Number เป็นวันที่ไทย
 function convertExcelDateToThai(value: any): string | null {
   if (!value) return null;
-  
+
   // ถ้าเป็น string แล้วและมีรูปแบบวันที่ไทย ให้ return เลย
   if (typeof value === 'string' && value.includes('/')) {
     return value;
   }
-  
+
   // ถ้าเป็น number (Excel Serial Number)
   if (typeof value === 'number') {
     try {
@@ -29,7 +29,7 @@ function convertExcelDateToThai(value: any): string | null {
       console.error('Error converting Excel date:', error);
     }
   }
-  
+
   // ถ้าแปลงไม่ได้ ให้ return เป็น string
   return value ? String(value) : null;
 }
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const yearParam = formData.get('year') as string;
-    
+
     // Parse year จาก form data (default = ปีปัจจุบัน พ.ศ.)
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const importYear = yearParam ? parseInt(yearParam) : currentBuddhistYear;
@@ -128,91 +128,91 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
 
     console.log(`[Import] Job ${jobId}: Started processing`);
 
-      // อ่านไฟล์ Excel (อ่านเป็น formatted text เพื่อให้ได้วันที่ตามที่แสดงใน Excel)
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { 
-        type: 'buffer', 
-        cellDates: false,
-        raw: false  // ใช้ formatted text แทน raw value
-      });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      
-      // แปลงเป็น JSON โดยรักษาค่าที่แสดงใน Excel
-      const data = XLSX.utils.sheet_to_json(worksheet, { 
-        raw: false,  // ไม่ใช้ raw value เพื่อให้ได้ formatted text
-        defval: null
-      });
+    // อ่านไฟล์ Excel (อ่านเป็น formatted text เพื่อให้ได้วันที่ตามที่แสดงใน Excel)
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, {
+      type: 'buffer',
+      cellDates: false,
+      raw: false  // ใช้ formatted text แทน raw value
+    });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
 
-      if (data.length === 0) {
-        sendProgress({ type: 'error', error: 'ไม่พบข้อมูลในไฟล์ Excel' });
-        close();
-        return;
-      }
+    // แปลงเป็น JSON โดยรักษาค่าที่แสดงใน Excel
+    const data = XLSX.utils.sheet_to_json(worksheet, {
+      raw: false,  // ไม่ใช้ raw value เพื่อให้ได้ formatted text
+      defval: null
+    });
 
-      // ตรวจสอบจำนวนคอลัมน์ในไฟล์ (Import แบบเต็มต้องมีอย่างน้อย 10 คอลัมน์)
-      const firstRow: any = data[0];
-      const columnCount = Object.keys(firstRow).length;
-      
-      if (columnCount < 10) {
-        sendProgress({ 
-          type: 'error', 
-          error: `ไฟล์นี้มีเพียง ${columnCount} คอลัมน์ ซึ่งไม่ใช่ไฟล์ Template สำหรับ Import แบบเต็ม (ต้องมีอย่างน้อย 21 คอลัมน์)\n\nหากต้องการอัปเดตเฉพาะผู้สนับสนุน กรุณาเลือก "อัปเดตผู้สนับสนุนเท่านั้น" แทน` 
-        });
-        close();
-        return;
-      }
+    if (data.length === 0) {
+      sendProgress({ type: 'error', error: 'ไม่พบข้อมูลในไฟล์ Excel' });
+      close();
+      return;
+    }
 
-      // ตรวจสอบว่ามี pos_code_master ในระบบหรือไม่
-      const posCodeCount = await prisma.posCodeMaster.count();
-      if (posCodeCount === 0) {
-        sendProgress({ 
-          type: 'error', 
-          error: 'กรุณาเพิ่มข้อมูล POS Code Master ในระบบก่อน (ใช้คำสั่ง npm run seed:poscode)' 
-        });
-        close();
-        return;
-      }
+    // ตรวจสอบจำนวนคอลัมน์ในไฟล์ (Import แบบเต็มต้องมีอย่างน้อย 10 คอลัมน์)
+    const firstRow: any = data[0];
+    const columnCount = Object.keys(firstRow).length;
 
-      const results = {
-        success: 0,
-        failed: 0,
-        errors: [] as string[],
-        created: [] as any[],
-        updated: 0,
-        deleted: 0,
-        totalProcessed: 0,
-      };
-
-      // ตรวจสอบว่ามีข้อมูลของปีนี้อยู่แล้วหรือไม่
-      const existingRecordsCount = await prisma.policePersonnel.count({
-        where: {
-          year: importYear,
-          isActive: true
-        }
-      });
-
-      const isUpdateMode = existingRecordsCount > 0;
-      console.log(`[Import] Year ${importYear}: ${isUpdateMode ? 'UPSERT' : 'INSERT'} mode (${existingRecordsCount} existing records)`);
-      
-      // Send initial progress
+    if (columnCount < 10) {
       sendProgress({
-        type: 'progress',
-        current: 0,
-        total: data.length,
-        message: isUpdateMode ? 'กำลัง UPSERT ข้อมูลปี ' + importYear + '...' : 'กำลังนำเข้าข้อมูลปี ' + importYear + ' ใหม่...'
+        type: 'error',
+        error: `ไฟล์นี้มีเพียง ${columnCount} คอลัมน์ ซึ่งไม่ใช่ไฟล์ Template สำหรับ Import แบบเต็ม (ต้องมีอย่างน้อย 21 คอลัมน์)\n\nหากต้องการอัปเดตเฉพาะผู้สนับสนุน กรุณาเลือก "อัปเดตผู้สนับสนุนเท่านั้น" แทน`
       });
+      close();
+      return;
+    }
 
-      // นำเข้าข้อมูลแบบ batch เพื่อความเร็ว
-      // ลด batch size ลงเพื่อป้องกัน connection timeout บน production
-      const batchSize = 500; // ลดจาก 1000 เป็น 500 records ต่อ batch
-      const totalBatches = Math.ceil(data.length / batchSize);
-      
-      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+    // ตรวจสอบว่ามี pos_code_master ในระบบหรือไม่
+    const posCodeCount = await prisma.posCodeMaster.count();
+    if (posCodeCount === 0) {
+      sendProgress({
+        type: 'error',
+        error: 'กรุณาเพิ่มข้อมูล POS Code Master ในระบบก่อน (ใช้คำสั่ง npm run seed:poscode)'
+      });
+      close();
+      return;
+    }
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as string[],
+      created: [] as any[],
+      updated: 0,
+      deleted: 0,
+      totalProcessed: 0,
+    };
+
+    // ตรวจสอบว่ามีข้อมูลของปีนี้อยู่แล้วหรือไม่
+    const existingRecordsCount = await prisma.policePersonnel.count({
+      where: {
+        year: importYear,
+        isActive: true
+      }
+    });
+
+    const isUpdateMode = existingRecordsCount > 0;
+    console.log(`[Import] Year ${importYear}: ${isUpdateMode ? 'UPSERT' : 'INSERT'} mode (${existingRecordsCount} existing records)`);
+
+    // Send initial progress
+    sendProgress({
+      type: 'progress',
+      current: 0,
+      total: data.length,
+      message: isUpdateMode ? 'กำลัง UPSERT ข้อมูลปี ' + importYear + '...' : 'กำลังนำเข้าข้อมูลปี ' + importYear + ' ใหม่...'
+    });
+
+    // นำเข้าข้อมูลแบบ batch เพื่อความเร็ว
+    // ลด batch size ลงเพื่อป้องกัน connection timeout บน production
+    const batchSize = 500; // ลดจาก 1000 เป็น 500 records ต่อ batch
+    const totalBatches = Math.ceil(data.length / batchSize);
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
       const startIndex = batchIndex * batchSize;
       const endIndex = Math.min(startIndex + batchSize, data.length);
       const batchData = data.slice(startIndex, endIndex);
-      
+
       try {
         // เตรียมข้อมูลทั้ง batch
         const personnelDataArray = batchData.map((row: any, index: number) => {
@@ -338,7 +338,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
         for (let i = 0; i < batchData.length; i++) {
           const row: any = batchData[i];
           try {
-            const personnelData: any = {         
+            const personnelData: any = {
               seniority: row['อาวุโส'] ? String(row['อาวุโส']) : null,
               rank: row['ยศ'] ? String(row['ยศ']) : null,
               fullName: row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']) : null,
@@ -388,32 +388,32 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
       }
     }
 
-      const successMessage = isUpdateMode 
-        ? `อัปเดตข้อมูลปี ${importYear} สำเร็จ: แทนที่ ${results.deleted} แถว ด้วยข้อมูลใหม่ ${results.success} แถว (ล้มเหลว ${results.failed} แถว)`
-        : `นำเข้าข้อมูลปี ${importYear} ใหม่สำเร็จ ${results.success} แถว (ล้มเหลว ${results.failed} แถว)`;
-      
-      sendProgress({
-        type: 'complete',
-        success: true,
-        message: successMessage,
-        results,
-      });
-    } catch (error: any) {
-      console.error('Import error:', error);
-      sendProgress({
-        type: 'error',
-        error: error.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล'
-      });
-    } finally {
-      close();
-    }
-  })();
+    const successMessage = isUpdateMode
+      ? `อัปเดตข้อมูลปี ${importYear} สำเร็จ: แทนที่ ${results.deleted} แถว ด้วยข้อมูลใหม่ ${results.success} แถว (ล้มเหลว ${results.failed} แถว)`
+      : `นำเข้าข้อมูลปี ${importYear} ใหม่สำเร็จ ${results.success} แถว (ล้มเหลว ${results.failed} แถว)`;
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
+    sendProgress({
+      type: 'complete',
+      success: true,
+      message: successMessage,
+      results,
+    });
+  } catch (error: any) {
+    console.error('Import error:', error);
+    sendProgress({
+      type: 'error',
+      error: error.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล'
+    });
+  } finally {
+    close();
+  }
+}) ();
+
+return new Response(stream, {
+  headers: {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  },
+});
 }

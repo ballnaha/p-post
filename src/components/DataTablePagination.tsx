@@ -36,6 +36,7 @@ export type DataTablePaginationProps = {
   showLabel?: boolean; // show left info label
   showRowsPerPage?: boolean; // show rows per page selector
   sx?: SxProps<Theme>; // allow custom spacing overrides
+  menuZIndex?: number; // z-index for dropdown menu (useful when inside Drawer)
 };
 
 export default function DataTablePagination({
@@ -52,6 +53,7 @@ export default function DataTablePagination({
   showLabel = true,
   showRowsPerPage = true,
   sx,
+  menuZIndex,
 }: DataTablePaginationProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -114,9 +116,10 @@ export default function DataTablePagination({
                   onChange={(e) => onRowsPerPageChange(parseInt(String(e.target.value), 10))}
                   sx={{ fontSize: dense ? { xs: '0.72rem', sm: '0.76rem' } : { xs: '0.75rem', sm: '0.8rem', md: '0.875rem' } }}
                   MenuProps={{
+                    sx: { zIndex: menuZIndex ?? 1500 },
                     PaperProps: {
                       sx: {
-                        zIndex: 1500, // สูงกว่า Drawer (1400)
+                        maxHeight: 300,
                       }
                     }
                   }}

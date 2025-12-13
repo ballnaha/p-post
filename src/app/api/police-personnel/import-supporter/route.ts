@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const yearParam = formData.get('year') as string;
-    
+
     // Parse year จาก form data (default = ปีปัจจุบัน พ.ศ.)
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const importYear = yearParam ? parseInt(yearParam) : currentBuddhistYear;
@@ -74,15 +74,15 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
 
     // อ่านไฟล์ Excel
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { 
-      type: 'buffer', 
+    const workbook = XLSX.read(buffer, {
+      type: 'buffer',
       cellDates: false,
       raw: false
     });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    
-    const data = XLSX.utils.sheet_to_json(worksheet, { 
+
+    const data = XLSX.utils.sheet_to_json(worksheet, {
       raw: false,
       defval: null
     });
@@ -94,7 +94,7 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
     // ตรวจสอบจำนวนคอลัมน์ในไฟล์ (อัปเดตผู้สนับสนุนควรมี 4 คอลัมน์)
     const firstRow: any = data[0];
     const columnCount = Object.keys(firstRow).length;
-    
+
     if (columnCount > 10) {
       throw new Error(`ไฟล์นี้มี ${columnCount} คอลัมน์ ซึ่งเป็นไฟล์ Template สำหรับ Import แบบเต็ม\n\nหากต้องการ Import ข้อมูลทั้งหมด กรุณาเลือก "Import แบบเต็ม" แทน\nหรือดาวน์โหลด Template สำหรับอัปเดตผู้สนับสนุน (4 คอลัมน์)`);
     }
@@ -102,7 +102,7 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
     // ตรวจสอบว่ามีคอลัมน์ที่จำเป็น
     const requiredColumns = ['ชื่อ สกุล', 'เลขตำแหน่ง'];
     const missingColumns = requiredColumns.filter(col => !(col in firstRow));
-    
+
     if (missingColumns.length > 0) {
       throw new Error(`ไฟล์ไม่มีคอลัมน์ที่จำเป็น: ${missingColumns.join(', ')}\n\nกรุณาใช้ Template ที่ดาวน์โหลดจากระบบ`);
     }
@@ -125,7 +125,7 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
     // อัปเดตข้อมูลทีละรายการ
     for (let i = 0; i < data.length; i++) {
       const row: any = data[i];
-      
+
       try {
         const fullName = row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']).trim() : null;
         const positionNumber = row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']).trim() : null;
@@ -144,7 +144,7 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
         // กรณีที่ 1: มีเลขบัตรประชาชน → ค้นหาด้วยเลขบัตร + เลขตำแหน่ง (แม่นยำที่สุด)
         // กรณีที่ 2: ไม่มีเลขบัตรประชาชน (ตำแหน่งว่าง) → ค้นหาด้วยเลขตำแหน่ง + ชื่อ
         let personnel;
-        
+
         if (nationalId) {
           // มีเลขบัตร: ค้นหาด้วยเลขบัตร + เลขตำแหน่ง
           personnel = await prisma.policePersonnel.findFirst({
@@ -155,7 +155,7 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
               isActive: true
             }
           });
-          
+
           // ถ้าไม่เจอ ลองค้นหาด้วยเลขบัตรอย่างเดียว
           if (!personnel) {
             personnel = await prisma.policePersonnel.findFirst({
@@ -176,7 +176,7 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
               isActive: true
             }
           });
-          
+
           // ถ้าไม่เจอ ลองค้นหาด้วยเลขตำแหน่งอย่างเดียว
           if (!personnel) {
             personnel = await prisma.policePersonnel.findFirst({
@@ -262,9 +262,9 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
 
   } catch (error: unknown) {
     console.error(`[Import Supporter] Job ${jobId} error:`, error);
-    
+
     const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาด';
-    
+
     await prisma.importJob.update({
       where: { id: jobId },
       data: {

@@ -130,6 +130,7 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
         const fullName = row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']).trim() : null;
         const positionNumber = row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']).trim() : null;
         const nationalId = row['เลขประจำตัวประชาชน'] ? String(row['เลขประจำตัวประชาชน']).trim() : null;
+        const requestedPosition = row['ตำแหน่งที่ร้องขอ'] ? String(row['ตำแหน่งที่ร้องขอ']).trim() : null;
         const supporterName = row['ชื่อผู้สนับสนุน'] ? String(row['ชื่อผู้สนับสนุน']).trim() : null;
         const supportReason = row['เหตุผล'] ? String(row['เหตุผล']).substring(0, 5000).trim() : null;
 
@@ -203,6 +204,9 @@ async function processImportSupporterJob(jobId: string, file: File, importYear: 
         };
 
         // อัปเดตเฉพาะฟิลด์ที่มีค่า
+        if (requestedPosition !== null) {
+          updateData.requestedPosition = requestedPosition;
+        }
         if (supporterName !== null) {
           updateData.supporterName = supporterName;
         }

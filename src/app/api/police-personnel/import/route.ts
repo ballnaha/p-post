@@ -210,8 +210,6 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               rank: row['ยศ'] ? String(row['ยศ']) : null,
               fullName: row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']) : null,
               noId: row['ID'] ? parseInt(String(row['ID'])) : null,
-              createdBy: username,
-              updatedBy: username,
               posCodeId: (row['POSCODE'] || row['ID/POSCODE']) ? parseInt(String(row['POSCODE'] || row['ID/POSCODE'])) : null,
               position: row['ตำแหน่ง'] ? String(row['ตำแหน่ง']) : null,
               positionNumber: row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']) : null,
@@ -231,6 +229,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               enrollmentDate: convertExcelDateToThai(row['บรรจุ']),
               retirementDate: convertExcelDateToThai(row['เกษียณ']),
               yearsOfService: row['จำนวนปี'] ? String(row['จำนวนปี']) : null,
+              requestedPosition: row['ตำแหน่งที่ร้องขอ'] ? String(row['ตำแหน่งที่ร้องขอ']) : null,
               createdBy: username,
               updatedBy: username,
             };
@@ -395,8 +394,6 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               seniority: row['อาวุโส'] ? String(row['อาวุโส']) : null,
               rank: row['ยศ'] ? String(row['ยศ']) : null,
               fullName: row['ชื่อ สกุล'] ? String(row['ชื่อ สกุล']) : null,
-              createdBy: username,
-              updatedBy: username,
               noId: row['ID'] ? parseInt(String(row['ID'])) : null,
               posCodeId: row['ID/POSCODE'] ? parseInt(String(row['ID/POSCODE'])) : null,
               position: row['ตำแหน่ง'] ? String(row['ตำแหน่ง']) : null,
@@ -417,6 +414,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               enrollmentDate: convertExcelDateToThai(row['บรรจุ']),
               retirementDate: convertExcelDateToThai(row['เกษียณ']),
               yearsOfService: row['จำนวนปี'] ? String(row['จำนวนปี']) : null,
+              requestedPosition: row['ตำแหน่งที่ร้องขอ'] ? String(row['ตำแหน่งที่ร้องขอ']) : null,
               createdBy: username,
               updatedBy: username,
             };

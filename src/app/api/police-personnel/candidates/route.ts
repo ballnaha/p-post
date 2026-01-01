@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || undefined;
     const unit = searchParams.get('unit') || undefined; // exact match
     const posCodeIdParam = searchParams.get('posCodeId') || undefined;
-    const supporter = searchParams.get('supporter') || undefined; // supporter filter
+    const hasRequestedPosition = searchParams.get('hasRequestedPosition') || undefined; // hasRequestedPosition filter
     const pageParam = searchParams.get('page');
     const limitParam = searchParams.get('limit');
     const yearParam = searchParams.get('year'); // Year filter for excluding already assigned
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         if (excludeTransactionId) {
           transactionWhere.id = { not: excludeTransactionId };
         }
-        
+
         // Single optimized query with join
         const swapDetails = await prisma.swapTransactionDetail.findMany({
           where: {
@@ -69,6 +69,14 @@ export async function GET(request: NextRequest) {
       ]
     };
 
+    // Filter by year if provided
+    if (yearParam) {
+      const year = parseInt(yearParam, 10);
+      if (!isNaN(year)) {
+        where.year = year;
+      }
+    }
+
     // Exclude personnel already in swap transactions for the year
     if (excludedPersonnelIds.length > 0) {
       where.id = { notIn: excludedPersonnelIds };
@@ -78,23 +86,35 @@ export async function GET(request: NextRequest) {
       where.unit = unit;
     }
 
+    const minPosCodeIdParam = searchParams.get('minPosCodeId') || undefined;
+
     if (posCodeIdParam && posCodeIdParam !== 'all') {
       const posCodeId = parseInt(posCodeIdParam, 10);
       if (!isNaN(posCodeId)) {
         where.posCodeId = posCodeId;
       }
+    } else if (minPosCodeIdParam) {
+      const minPosCodeId = parseInt(minPosCodeIdParam, 10);
+      if (!isNaN(minPosCodeId)) {
+        where.posCodeId = { gte: minPosCodeId };
+      }
     }
 
-    // Filter by supporter status
-    if (supporter && supporter !== 'all') {
-      if (supporter === 'with-supporter') {
-        where.supporterName = { not: null };
-      } else if (supporter === 'without-supporter') {
+    // Filter by hasRequestedPosition status
+    if (hasRequestedPosition && hasRequestedPosition !== 'all') {
+      if (hasRequestedPosition === 'with-supporter') {
         where.AND.push({
           OR: [
-            { supporterName: null },
-            { supporterName: '' }
+            { supporterName: { not: null, notIn: [''] } },
+            { supportReason: { not: null, notIn: [''] } },
+            { requestedPosition: { not: null, notIn: [''] } },
           ]
+        });
+      } else if (hasRequestedPosition === 'without-supporter') {
+        where.AND.push({
+          supporterName: { in: [null, ''] },
+          supportReason: { in: [null, ''] },
+          requestedPosition: { in: [null, ''] },
         });
       }
     }
@@ -148,6 +168,8 @@ export async function GET(request: NextRequest) {
         notes: true,
         supporterName: true, // เพิ่มฟิลด์ผู้สนับสนุน
         supportReason: true, // เพิ่มฟิลด์เหตุผล
+        requestedPosition: true, // เพิ่มฟิลด์ตำแหน่งที่ร้องขอ
+        avatarUrl: true, // เพิ่มฟิลด์รูปภาพ
       },
       orderBy: [
         { posCodeId: 'asc' },
@@ -187,6 +209,8 @@ export async function GET(request: NextRequest) {
       notes: p.notes || null,
       supporterName: p.supporterName || null, // ผู้สนับสนุน
       supportReason: p.supportReason || null, // เหตุผลในการสนับสนุน
+      requestedPosition: p.requestedPosition || null, // ตำแหน่งที่ร้องขอ
+      avatarUrl: p.avatarUrl || null, // รูปภาพ
     }));
 
     return NextResponse.json({

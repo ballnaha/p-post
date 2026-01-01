@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 
-const prisma = new PrismaClient();
 
 /**
  * POST /api/swap-transactions/[id]/complete
@@ -36,9 +35,9 @@ export async function POST(
 
     if (hasPlaceholder) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: "ยังมีตำแหน่งว่าง (placeholder) อยู่ กรุณาเลือกบุคลากรให้ครบก่อน" 
+        {
+          success: false,
+          error: "ยังมีตำแหน่งว่าง (placeholder) อยู่ กรุณาเลือกบุคลากรให้ครบก่อน"
         },
         { status: 400 }
       );

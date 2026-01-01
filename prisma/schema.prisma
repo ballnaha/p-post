@@ -90,6 +90,9 @@ model PolicePersonnel {
   // รูปภาพ Avatar
   avatarUrl String? @map("avatar_url") // URL ของรูป avatar
 
+  // ตำแหน่งที่ร้องขอ
+  requestedPosition String? @map("requested_position") // ตำแหน่งที่ร้องขอ (text)
+
   // Metadata
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -259,6 +262,9 @@ model SwapTransactionDetail {
   
   // ข้อมูลเพิ่มเติม
   notes              String? @db.Text // หมายเหตุเฉพาะคน
+
+  // ตำแหน่งที่ร้องขอ (Snapshot)
+  requestedPosition  String? @map("requested_position") // ตำแหน่งที่ร้องขอ
   
   // Metadata
   createdAt DateTime @default(now()) @map("created_at")

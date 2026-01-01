@@ -12,6 +12,8 @@ import prisma from '@/lib/prisma';
  * - limit: จำนวนรายการต่อหน้า (optional)
  * - search: ค้นหาจาก position, unit, positionNumber (optional)
  * - posCodeId: กรองตาม posCodeId (optional)
+ * - unit: กรองตามหน่วยงาน (optional)
+ * - status: กรองตามสถานะ 'vacant' หรือ 'reserved' (optional)
  * - minRankLevel: เลขระดับยศขั้นต่ำ (optional)
  * - maxRankLevel: เลขระดับยศสูงสุด (optional)
  */
@@ -24,6 +26,8 @@ export async function GET(request: NextRequest) {
     const limitParam = searchParams.get('limit');
     const search = searchParams.get('search');
     const posCodeId = searchParams.get('posCodeId');
+    const unit = searchParams.get('unit');
+    const status = searchParams.get('status'); // 'vacant', 'reserved', or 'all'
     const minRankLevel = searchParams.get('minRankLevel');
     const maxRankLevel = searchParams.get('maxRankLevel');
 
@@ -39,33 +43,87 @@ export async function GET(request: NextRequest) {
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
     const usePagination = page !== undefined && limit !== undefined;
 
+    // Build status filter based on status parameter
+    let fullNameFilter: any[];
+    if (status === 'vacant') {
+      // Only regular vacant positions (not reserved)
+      // Must match /api/police-personnel logic: fullName is null/empty OR doesn't contain 'กันตำแหน่ง'
+      fullNameFilter = [
+        { fullName: null },
+        { fullName: '' },
+        {
+          AND: [
+            { fullName: { not: null } },
+            { fullName: { not: '' } },
+            { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } },
+            { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }
+          ]
+        }
+      ];
+    } else if (status === 'reserved') {
+      // Only reserved positions
+      fullNameFilter = [
+        { fullName: { contains: 'ว่าง (กันตำแหน่ง)' } },
+        { fullName: { contains: 'ว่าง(กันตำแหน่ง)' } }
+      ];
+    } else {
+      // All vacant positions (default)
+      fullNameFilter = [
+        { fullName: null },
+        { fullName: '' },
+        { fullName: { contains: 'ว่าง' } },
+        { fullName: { contains: 'กันตำแหน่ง' } }
+      ];
+    }
+
     const whereClause: any = {
       year: parseInt(year),
+      isActive: true, // Only current active data
+      AND: [
+        {
+          OR: [
+            { rank: null },
+            { rank: '' }
+          ]
+        },
+        {
+          OR: fullNameFilter
+        }
+      ]
     };
+
+    // Filter by unit
+    if (unit && unit !== 'all') {
+      whereClause.AND.push({ unit: { equals: unit } });
+    }
 
     // Filter by search text
     if (search) {
-      whereClause.OR = [
-        { position: { contains: search } },
-        { unit: { contains: search } },
-        { positionNumber: { contains: search } },
-      ];
+      whereClause.AND.push({
+        OR: [
+          { position: { contains: search } },
+          { unit: { contains: search } },
+          { positionNumber: { contains: search } },
+          { fullName: { contains: search } }
+        ]
+      });
     }
 
     // Filter by posCodeId
     if (posCodeId) {
-      whereClause.posCodeId = parseInt(posCodeId);
+      const pId = parseInt(posCodeId);
+      if (whereClause.AND) {
+        whereClause.AND.push({ posCodeId: pId });
+      } else {
+        whereClause.AND = [{ posCodeId: pId }];
+      }
     }
 
-    // Note: rankLevel filtering is removed as PosCodeMaster doesn't have this field
-    // Filter by posCodeId instead if needed
-
-    // นับจำนวนทั้งหมด (สำหรับ pagination)
-    const totalCount = await prisma.vacantPosition.count({
+    // counts
+    const totalCount = await prisma.policePersonnel.count({
       where: whereClause,
     });
 
-    // ดึงข้อมูลตำแหน่งว่าง
     const queryOptions: any = {
       where: whereClause,
       include: {
@@ -74,16 +132,17 @@ export async function GET(request: NextRequest) {
       orderBy: [
         { posCodeId: 'asc' },
         { position: 'asc' },
+        { noId: 'asc' }
       ],
     };
 
-    // เพิ่ม pagination ถ้ามีการระบุ
-    if (usePagination && page !== undefined && limit !== undefined) {
+    // pagination
+    if (usePagination) {
       queryOptions.skip = page * limit;
       queryOptions.take = limit;
     }
 
-    const vacantPositions = await prisma.vacantPosition.findMany(queryOptions);
+    const vacantPositions = await prisma.policePersonnel.findMany(queryOptions);
 
     // ถ้าต้องการเฉพาะตำแหน่งที่ยังไม่ถูกจับคู่ ให้กรองออกตำแหน่งที่มีใน swap_transaction_detail
     let filteredPositions = vacantPositions;
@@ -109,7 +168,7 @@ export async function GET(request: NextRequest) {
       );
 
       // กรองออกตำแหน่งที่ถูกจับคู่แล้ว
-      filteredPositions = vacantPositions.filter(position => 
+      filteredPositions = vacantPositions.filter(position =>
         !assignedSet.has(`${position.position}-${position.unit}-${position.positionNumber}`)
       );
     }
@@ -130,13 +189,15 @@ export async function GET(request: NextRequest) {
 
       acc[key].positions.push({
         id: position.id,
+        noId: position.noId,
         position: position.position,
         unit: position.unit,
         positionNumber: position.positionNumber,
         rank: position.rank,
         fullName: position.fullName,
         nationalId: position.nationalId,
-        nominator: position.nominator,
+        actingAs: position.actingAs,
+        supporterName: position.supporterName,
         notes: position.notes,
       });
 
@@ -155,7 +216,7 @@ export async function GET(request: NextRequest) {
       count: filteredPositions.length,
       unassignedOnly,
       groups: formattedData,
-      ...(usePagination && { 
+      ...(usePagination && {
         pagination: {
           page,
           limit,

@@ -53,17 +53,17 @@ export default function ImportPolicePersonnelPage() {
   const [importMode, setImportMode] = useState<ImportMode>('full');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Generate available years (from 2568 to current year) - same as swap-list
   const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const startYear = 2568;
     const years: number[] = [];
-    
+
     for (let year = currentBuddhistYear; year >= startYear; year--) {
       years.push(year);
     }
-    
+
     return years;
   }, []);
 
@@ -102,7 +102,7 @@ export default function ImportPolicePersonnelPage() {
       formData.append('year', selectedYear.toString());
 
       // เลือก API endpoint ตาม import mode
-      const apiEndpoint = importMode === 'supporter' 
+      const apiEndpoint = importMode === 'supporter'
         ? '/api/police-personnel/import-supporter'
         : '/api/police-personnel/import';
 
@@ -136,7 +136,7 @@ export default function ImportPolicePersonnelPage() {
 
         if (data.success && data.job) {
           const job = data.job;
-          
+
           // Update progress
           setProgress({
             current: job.processedRows,
@@ -179,11 +179,11 @@ export default function ImportPolicePersonnelPage() {
     const templateEndpoint = importMode === 'supporter'
       ? '/api/police-personnel/template-supporter'
       : '/api/police-personnel/template';
-    
+
     const fileName = importMode === 'supporter'
       ? 'police_personnel_supporter_template.xlsx'
       : 'police_personnel_template.xlsx';
-    
+
     try {
       const response = await fetch(templateEndpoint);
       const blob = await response.blob();
@@ -244,7 +244,7 @@ export default function ImportPolicePersonnelPage() {
                   อัปเดตผู้สนับสนุนเท่านั้น (ไม่ลบข้อมูลเดิม)
                 </ToggleButton>
               </ToggleButtonGroup>
-              
+
               {/* Year Selection Dropdown */}
               <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel id="year-select-label">ปี พ.ศ.</InputLabel>
@@ -273,7 +273,7 @@ export default function ImportPolicePersonnelPage() {
               </Typography>
             ) : (
               <Typography variant="body2">
-                <strong>✨ อัปเดตผู้สนับสนุน:</strong> ระบบจะอัปเดตเฉพาะฟิลด์ "ชื่อผู้สนับสนุน" และ "เหตุผล" โดยค้นหาจากเลขตำแหน่ง (รองรับทั้งตำแหน่งที่มีคนและตำแหน่งว่าง)
+                <strong>✨ อัปเดตผู้สนับสนุน:</strong> ระบบจะอัปเดตเฉพาะฟิลด์ "ตำแหน่งที่ร้องขอ", "ชื่อผู้สนับสนุน" และ "เหตุผล" โดยค้นหาจากเลขตำแหน่ง (รองรับทั้งตำแหน่งที่มีคนและตำแหน่งว่าง)
               </Typography>
             )}
           </Alert>
@@ -340,15 +340,15 @@ export default function ImportPolicePersonnelPage() {
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                 {[
-                  'อาวุโส', 'ยศ', 'ชื่อ สกุล','ID', 'POSCODE', 'ตำแหน่ง', 
-                  'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ', 
-                  'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ', 
-                  'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข', 'ชื่อผู้สนับสนุน', 'เหตุผล'
+                  'อาวุโส', 'ยศ', 'ชื่อ สกุล', 'ID', 'POSCODE', 'ตำแหน่ง',
+                  'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ',
+                  'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ',
+                  'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข', 'ตำแหน่งที่ร้องขอ', 'ชื่อผู้สนับสนุน', 'เหตุผล'
                 ].map((column, index) => (
-                  <Chip 
-                    key={column} 
-                    label={`${index + 1}. ${column}`} 
-                    size="small" 
+                  <Chip
+                    key={column}
+                    label={`${index + 1}. ${column}`}
+                    size="small"
                     variant="outlined"
                     sx={{ fontSize: '0.75rem' }}
                   />
@@ -363,12 +363,12 @@ export default function ImportPolicePersonnelPage() {
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 {[
-                  'ชื่อ สกุล', 'เลขตำแหน่ง', 'เลขประจำตัวประชาชน', 'ชื่อผู้สนับสนุน', 'เหตุผล'
+                  'ชื่อ สกุล', 'เลขตำแหน่ง', 'เลขประจำตัวประชาชน', 'ตำแหน่งที่ร้องขอ', 'ชื่อผู้สนับสนุน', 'เหตุผล'
                 ].map((column, index) => (
-                  <Chip 
-                    key={column} 
-                    label={`${index + 1}. ${column}`} 
-                    size="small" 
+                  <Chip
+                    key={column}
+                    label={`${index + 1}. ${column}`}
+                    size="small"
                     variant="outlined"
                     color="secondary"
                     sx={{ fontSize: '0.75rem' }}
@@ -380,8 +380,8 @@ export default function ImportPolicePersonnelPage() {
             <Alert severity="warning" sx={{ mb: 2 }}>
               <strong>⚠️ ข้อควรระวัง:</strong>
               <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                <li><strong>Import แบบเต็ม:</strong> จะไม่ลบข้อมูลเดิม แต่จะเพิ่มข้อมูลใหม่เข้าไปในระบบ (23 คอลัมน์)</li>
-                <li><strong>อัปเดตผู้สนับสนุน:</strong> จะอัปเดตเฉพาะฟิลด์ผู้สนับสนุนและเหตุผล โดยอ้างอิงจากเลขตำแหน่ง (5 คอลัมน์)</li>
+                <li><strong>Import แบบเต็ม:</strong> จะไม่ลบข้อมูลเดิม แต่จะเพิ่มข้อมูลใหม่เข้าไปในระบบ (24 คอลัมน์)</li>
+                <li><strong>อัปเดตผู้สนับสนุน:</strong> จะอัปเดตเฉพาะฟิลด์ "ตำแหน่งที่ร้องขอ", "ผู้สนับสนุน" และ "เหตุผล" โดยอ้างอิงจากเลขตำแหน่ง (6 คอลัมน์)</li>
                 <li><strong>สำหรับตำแหน่งที่มีคน:</strong> ใส่เลขบัตรประชาชน</li>
                 <li><strong>สำหรับตำแหน่งว่าง:</strong> เว้นเลขบัตรประชาชนว่างไว้ ระบบจะใช้เลขตำแหน่งในการค้นหา</li>
                 <li>ห้ามลบหรือเปลี่ยนชื่อหัวคอลัมน์ เพราะจะทำให้การ import ผิดพลาด</li>
@@ -470,9 +470,9 @@ export default function ImportPolicePersonnelPage() {
                   กำลังประมวลผล...
                 </Typography>
               </Box>
-              <LinearProgress 
-                variant={progress.total > 0 ? "determinate" : "indeterminate"} 
-                value={progress.percentage} 
+              <LinearProgress
+                variant={progress.total > 0 ? "determinate" : "indeterminate"}
+                value={progress.percentage}
                 sx={{ height: 8, borderRadius: 1 }}
               />
               {progress.total > 0 && (
@@ -604,7 +604,8 @@ export default function ImportPolicePersonnelPage() {
                     <TableHead>
                       <TableRow>
                         <TableCell>ชื่อ-นามสกุล</TableCell>
-                        <TableCell>เลขบัตรประชาชน</TableCell>
+                        <TableCell>เลขประจำตัวประชาชน</TableCell>
+                        <TableCell>ตำแหน่งที่ร้องขอ</TableCell>
                         <TableCell>ผู้สนับสนุน</TableCell>
                         <TableCell>เหตุผล</TableCell>
                       </TableRow>
@@ -614,6 +615,7 @@ export default function ImportPolicePersonnelPage() {
                         <TableRow key={index}>
                           <TableCell>{person.fullName}</TableCell>
                           <TableCell>{person.nationalId}</TableCell>
+                          <TableCell>{person.requestedPosition || '-'}</TableCell>
                           <TableCell>{person.supporterName || '-'}</TableCell>
                           <TableCell>{person.supportReason || '-'}</TableCell>
                         </TableRow>

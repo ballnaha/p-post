@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import sharp from 'sharp';
 import { writeFile, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 
-const prisma = new PrismaClient();
+
 
 // Type for personnel with avatarUrl
 type PersonnelWithAvatar = {

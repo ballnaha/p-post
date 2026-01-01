@@ -85,35 +85,41 @@ const Sidebar: React.FC = () => {
     {
       title: 'Swap Management', key: 'group-swap',
       items: [
-        { 
-          label: 'สลับตำแหน่ง', 
-          href: '/police-personnel/swap-list', 
-          icon: <SwapIcon sx={{ fontSize: 20 }} />, 
-          key: 'swap-list' 
+        {
+          label: 'สลับตำแหน่ง',
+          href: '/police-personnel/swap-list',
+          icon: <SwapIcon sx={{ fontSize: 20 }} />,
+          key: 'swap-list'
         },
-        { 
-          label: 'สามเส้า', 
-          href: '/police-personnel/three-way-swap', 
-          icon: <ThreeWayIcon sx={{ fontSize: 20 }} />, 
-          key: 'three-way-swap' 
+        {
+          label: 'สามเส้า',
+          href: '/police-personnel/three-way-swap',
+          icon: <ThreeWayIcon sx={{ fontSize: 20 }} />,
+          key: 'three-way-swap'
         },
-        { 
-          label: 'จัดคนเข้าตำแหน่งว่าง', 
-          href: '/police-personnel/promotion-chain', 
-          icon: <VacantIcon sx={{ fontSize: 20 }} />, 
-          key: 'vacant-filling' 
+        {
+          label: 'จัดคนเข้าตำแหน่งว่าง',
+          href: '/police-personnel/promotion-chain',
+          icon: <VacantIcon sx={{ fontSize: 20 }} />,
+          key: 'vacant-filling'
         },
-        { 
-          label: 'ย้ายหน่วย', 
-          href: '/police-personnel/promotion', 
-          icon: <TrendingUpIcon sx={{ fontSize: 20 }} />, 
-          key: 'transfer' 
+        {
+          label: 'ย้ายหน่วย',
+          href: '/police-personnel/promotion',
+          icon: <TrendingUpIcon sx={{ fontSize: 20 }} />,
+          key: 'transfer'
         },
-        { 
-          label: 'In-Out', 
-          href: '/new-in-out', 
-          icon: <TableViewIcon sx={{ fontSize: 20 }} />, 
-          key: 'new-in-out' 
+        {
+          label: 'In-Out',
+          href: '/new-in-out',
+          icon: <TableViewIcon sx={{ fontSize: 20 }} />,
+          key: 'new-in-out'
+        },
+        {
+          label: 'Workflow Board',
+          href: '/personnel-board-v2',
+          icon: <AssignmentIcon sx={{ fontSize: 20 }} />,
+          key: 'personnel-board'
         },
       ]
     },
@@ -121,24 +127,24 @@ const Sidebar: React.FC = () => {
     {
       title: 'Settings', key: 'group-settings',
       items: [
-        { 
-          label: 'Personnel List', 
-          href: '/police-personnel', 
-          icon: <BadgeIcon sx={{ fontSize: 20 }} />, 
-          key: 'police-list' 
+        {
+          label: 'Personnel List',
+          href: '/police-personnel',
+          icon: <BadgeIcon sx={{ fontSize: 20 }} />,
+          key: 'police-list'
         },
-        { 
-          label: 'Import Data', 
-          href: '/police-personnel/import', 
-          icon: <ImportIcon sx={{ fontSize: 20 }} />, 
-          key: 'police-import' 
+        {
+          label: 'Import Data',
+          href: '/police-personnel/import',
+          icon: <ImportIcon sx={{ fontSize: 20 }} />,
+          key: 'police-import'
         },
-        
-        { 
-          label: 'Sync ตำแหน่งว่าง', 
-          href: '/police-personnel/vacant-position/sync', 
-          icon: <SyncIcon sx={{ fontSize: 20 }} />, 
-          key: 'vacant-sync' 
+
+        {
+          label: 'Sync ตำแหน่งว่าง',
+          href: '/police-personnel/vacant-position/sync',
+          icon: <SyncIcon sx={{ fontSize: 20 }} />,
+          key: 'vacant-sync'
         },
       ]
     },
@@ -146,7 +152,7 @@ const Sidebar: React.FC = () => {
       title: 'Admin', key: 'group-admin',
       items: [
         { label: 'จัดการผู้ใช้งาน', href: '/users', icon: <PersonAddIcon sx={{ fontSize: 20 }} />, key: 'users' },
-        
+
       ]
     },
     // {
@@ -193,13 +199,13 @@ const Sidebar: React.FC = () => {
       }}
     >
       {/* Menu List + Submenus */}
-      <Box 
-        sx={{ 
-          flex: 1, 
+      <Box
+        sx={{
+          flex: 1,
           overflowY: 'auto', // เปิด scroll แนวตั้ง
           overflowX: 'hidden', // ปิด scroll แนวนอน
-          px: 1, 
-          pb: 2, 
+          px: 1,
+          pb: 2,
           pt: 2,
           // Custom scrollbar
           '&::-webkit-scrollbar': {
@@ -224,96 +230,96 @@ const Sidebar: React.FC = () => {
             </Typography>
             <List sx={{ mt: 0.5 }}>
               {group.items.map((item) => {
-            const active = isActive(item.href) || isParentActive(item);
-            const hasChildren = !!item.children?.length;
-            const open = expanded[item.key] || false;
+                const active = isActive(item.href) || isParentActive(item);
+                const hasChildren = !!item.children?.length;
+                const open = expanded[item.key] || false;
 
-            return (
-              <Box key={item.key}>
-                <ListItemButton
-                  selected={!!item.href && isActive(item.href)}
-                  onClick={() => {
-                    if (hasChildren) {
-                      toggleExpand(item.key);
-                    } else if (item.href) {
-                      router.push(item.href);
-                      if (isMobile) closeAllMenus();
-                    }
-                  }}
-                  sx={{
-                    borderRadius: 2,
-                    mx: 1,
-                    mb: hasChildren ? 0 : 0.5,
-                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
-                    '&.Mui-selected': { 
-                      backgroundColor: 'rgba(99, 102, 241, 0.15)', 
-                      borderLeft: '3px solid #6366F1',
-                      paddingLeft: '13px',
-                    },
-                    '&.Mui-selected:hover': { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 36, color: active ? '#818CF8' : '#9CA3AF' }}>
-                    {item.icon}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography sx={{ fontSize: 14, color: active ? '#E5E7EB' : '#D1D5DB', fontWeight: active ? 700 : 500 }}>
-                        {item.label}
-                      </Typography>
-                    }
-                  />
-          {hasChildren ? (open ? <ExpandLess sx={{ color: '#9CA3AF' }} /> : <ExpandMore sx={{ color: '#9CA3AF' }} />) : null}
-                </ListItemButton>
+                return (
+                  <Box key={item.key}>
+                    <ListItemButton
+                      selected={!!item.href && isActive(item.href)}
+                      onClick={() => {
+                        if (hasChildren) {
+                          toggleExpand(item.key);
+                        } else if (item.href) {
+                          router.push(item.href);
+                          if (isMobile) closeAllMenus();
+                        }
+                      }}
+                      sx={{
+                        borderRadius: 2,
+                        mx: 1,
+                        mb: hasChildren ? 0 : 0.5,
+                        '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+                        '&.Mui-selected': {
+                          backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                          borderLeft: '3px solid #6366F1',
+                          paddingLeft: '13px',
+                        },
+                        '&.Mui-selected:hover': { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 36, color: active ? '#818CF8' : '#9CA3AF' }}>
+                        {item.icon}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={
+                          <Typography sx={{ fontSize: 14, color: active ? '#E5E7EB' : '#D1D5DB', fontWeight: active ? 700 : 500 }}>
+                            {item.label}
+                          </Typography>
+                        }
+                      />
+                      {hasChildren ? (open ? <ExpandLess sx={{ color: '#9CA3AF' }} /> : <ExpandMore sx={{ color: '#9CA3AF' }} />) : null}
+                    </ListItemButton>
 
-                {hasChildren && (
-                  <Collapse in={open} timeout="auto" unmountOnExit>
-                    <List component="div" disablePadding sx={{ mb: 0.5, borderLeft: '1px dashed #4B5563', ml: 2 }}>
-                      {item.children!.map((child) => {
-                        const childActive = isActive(child.href);
-                        return (
-                          <ListItemButton
-                            key={child.key}
-                            selected={childActive}
-                            onClick={() => {
-                              if (child.href) {
-                                router.push(child.href);
-                                if (isMobile) closeAllMenus();
-                              }
-                            }}
-                            sx={{
-                              borderRadius: 2,
-                              mx: 2,
-                              mb: 0.5,
-                              '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
-                              '&.Mui-selected': { 
-                                backgroundColor: 'rgba(99, 102, 241, 0.15)', 
-                                borderLeft: '3px solid #6366F1',
-                                paddingLeft: '13px',
-                              },
-                              '&.Mui-selected:hover': { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
-                            }}
-                          >
-                            {child.icon && (
-                              <ListItemIcon sx={{ minWidth: 32, color: childActive ? '#818CF8' : '#9CA3AF' }}>
-                                {child.icon}
-                              </ListItemIcon>
-                            )}
-                            <ListItemText
-                              primary={
-                                <Typography sx={{ fontSize: 13, color: childActive ? '#E5E7EB' : '#D1D5DB', fontWeight: childActive ? 700 : 500 }}>
-                                  {child.label}
-                                </Typography>
-                              }
-                            />
-                          </ListItemButton>
-                        );
-                      })}
-                    </List>
-                  </Collapse>
-                )}
-              </Box>
-            );
+                    {hasChildren && (
+                      <Collapse in={open} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding sx={{ mb: 0.5, borderLeft: '1px dashed #4B5563', ml: 2 }}>
+                          {item.children!.map((child) => {
+                            const childActive = isActive(child.href);
+                            return (
+                              <ListItemButton
+                                key={child.key}
+                                selected={childActive}
+                                onClick={() => {
+                                  if (child.href) {
+                                    router.push(child.href);
+                                    if (isMobile) closeAllMenus();
+                                  }
+                                }}
+                                sx={{
+                                  borderRadius: 2,
+                                  mx: 2,
+                                  mb: 0.5,
+                                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+                                  '&.Mui-selected': {
+                                    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                                    borderLeft: '3px solid #6366F1',
+                                    paddingLeft: '13px',
+                                  },
+                                  '&.Mui-selected:hover': { backgroundColor: 'rgba(99, 102, 241, 0.25)' },
+                                }}
+                              >
+                                {child.icon && (
+                                  <ListItemIcon sx={{ minWidth: 32, color: childActive ? '#818CF8' : '#9CA3AF' }}>
+                                    {child.icon}
+                                  </ListItemIcon>
+                                )}
+                                <ListItemText
+                                  primary={
+                                    <Typography sx={{ fontSize: 13, color: childActive ? '#E5E7EB' : '#D1D5DB', fontWeight: childActive ? 700 : 500 }}>
+                                      {child.label}
+                                    </Typography>
+                                  }
+                                />
+                              </ListItemButton>
+                            );
+                          })}
+                        </List>
+                      </Collapse>
+                    )}
+                  </Box>
+                );
               })}
             </List>
             {gi < menuGroups.length - 1 && <Divider sx={{ my: 1.25, backgroundColor: '#374151' }} />}
@@ -329,14 +335,14 @@ const Sidebar: React.FC = () => {
     if (!isSidebarOpen) {
       return null;
     }
-    
+
     return (
       <Drawer
         variant="temporary"
         anchor="left"
         open={true}
         onClose={closeAllMenus}
-        ModalProps={{ 
+        ModalProps={{
           keepMounted: false,
           disableScrollLock: false,
           slotProps: {
@@ -391,11 +397,11 @@ const Sidebar: React.FC = () => {
       {/* Collapsed header spacer removed per request (hide hamburger in sidebar when collapsed) */}
 
       {/* Search and content hidden when collapsed */}
-      <Box 
-        sx={{ 
+      <Box
+        sx={{
           display: isSidebarCollapsed ? 'none' : 'flex',
           flexDirection: 'column',
-          height: '100%', 
+          height: '100%',
           overflow: 'hidden', // ให้ Box นี้ไม่ overflow
         }}
       >
@@ -425,11 +431,11 @@ const Sidebar: React.FC = () => {
                       my: 0.5,
                       mx: 0.75,
                       borderRadius: 2,
-                      
+
                       minHeight: 48,
                       justifyContent: 'center',
                       '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
-                      '&.Mui-selected': { backgroundColor: 'transparent' },                     
+                      '&.Mui-selected': { backgroundColor: 'transparent' },
                       '&.Mui-selected:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
                       '&::before': activeCollapsed ? {
                         content: '""',

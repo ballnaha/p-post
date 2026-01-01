@@ -103,6 +103,7 @@ interface PolicePersonnel {
   notes?: string;
   supporterName?: string; // ผู้สนับสนุน/ผู้เสนอชื่อ
   supportReason?: string; // เหตุผลในการสนับสนุน
+  requestedPosition?: string; // ตำแหน่งที่ร้องขอ
   createdAt: string;
   updatedAt?: string;
   createdBy?: string;
@@ -120,7 +121,7 @@ export default function PolicePersonnelPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const toast = useToast();
-  
+
   // Cache สำหรับ list data เพื่อลดการโหลดซ้ำ
   const [listDataCache, setListDataCache] = useState<{
     year: number | null;
@@ -137,7 +138,7 @@ export default function PolicePersonnelPage() {
     promotionChainList: new Set(),
     vacantList: new Set()
   });
-  
+
   const [data, setData] = useState<PolicePersonnel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -157,6 +158,7 @@ export default function PolicePersonnelPage() {
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<'all' | 'two-way' | 'three-way' | 'promotion-chain'>('all');
   const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
   const [units, setUnits] = useState<string[]>([]);
+  const [yearFilter, setYearFilter] = useState<number>(() => new Date().getFullYear() + 543);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -164,7 +166,7 @@ export default function PolicePersonnelPage() {
   const [editFormData, setEditFormData] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   // State สำหรับ Add to Swap
   const [addToSwapModalOpen, setAddToSwapModalOpen] = useState(false);
   const [selectedSwapYear, setSelectedSwapYear] = useState<number>(() => {
@@ -216,6 +218,7 @@ export default function PolicePersonnelPage() {
   const [selectedSupporterPersonnel, setSelectedSupporterPersonnel] = useState<PolicePersonnel | null>(null);
   const [supporterName, setSupporterName] = useState('');
   const [supportReason, setSupportReason] = useState('');
+  const [requestedPosition, setRequestedPosition] = useState('');
   const [isAddingSupporter, setIsAddingSupporter] = useState(false);
 
   // Create Modal state
@@ -253,18 +256,18 @@ export default function PolicePersonnelPage() {
       const now = Date.now();
       const cacheAge = now - listDataCache.timestamp;
       const CACHE_DURATION = 30000; // 30 วินาที
-      
+
       // ใช้ cache ถ้าข้อมูลยังไม่เก่าเกินไปและเป็นปีเดียวกัน
-      if (!forceRefresh && 
-          listDataCache.year === currentYear && 
-          cacheAge < CACHE_DURATION) {
+      if (!forceRefresh &&
+        listDataCache.year === currentYear &&
+        cacheAge < CACHE_DURATION) {
         setSwapListData(listDataCache.swapList);
         setThreeWayListData(listDataCache.threeWayList);
         setPromotionChainData(listDataCache.promotionChainList);
         setVacantListData(listDataCache.vacantList);
         return;
       }
-      
+
       // เรียก API พร้อมกัน 4 ตัวเพื่อลดเวลารอ
       const [swapResponse, threeWayResponse, promotionChainResponse, vacantResponse] = await Promise.all([
         fetch(`/api/swap-list?year=${currentYear}&swapType=two-way`),
@@ -275,7 +278,7 @@ export default function PolicePersonnelPage() {
 
       // Process swap list (two-way)
       const swapResult = await swapResponse.json();
-      const swapNationalIds = swapResult.success 
+      const swapNationalIds = swapResult.success
         ? new Set<string>(swapResult.data.map((item: any) => item.nationalId).filter((id: string) => id))
         : new Set<string>();
 
@@ -302,7 +305,7 @@ export default function PolicePersonnelPage() {
       setThreeWayListData(threeWayNationalIds);
       setPromotionChainData(promotionChainNationalIds);
       setVacantListData(vacantNationalIds);
-      
+
       // บันทึก cache
       setListDataCache({
         year: currentYear,
@@ -312,7 +315,7 @@ export default function PolicePersonnelPage() {
         promotionChainList: promotionChainNationalIds,
         vacantList: vacantNationalIds
       });
-      
+
     } catch (err) {
       console.error('Error fetching lists:', err);
     }
@@ -342,7 +345,7 @@ export default function PolicePersonnelPage() {
       const currentYear = new Date().getFullYear() + 543;
       const response = await fetch(`/api/swap-list?year=${currentYear}&swapType=three-way`);
       const result = await response.json();
-      
+
       if (result.success && Array.isArray(result.data)) {
         const nationalIds = new Set<string>(
           result.data
@@ -361,7 +364,7 @@ export default function PolicePersonnelPage() {
       const currentYear = new Date().getFullYear() + 543;
       const response = await fetch(`/api/vacant-position?year=${currentYear}`);
       const result = await response.json();
-      
+
       if (Array.isArray(result)) {
         const nationalIds = new Set<string>(
           result
@@ -445,20 +448,20 @@ export default function PolicePersonnelPage() {
   const fetchData = async (abortSignal?: AbortSignal) => {
     setLoading(true);
     setError('');
-    
+
     // Clear ข้อมูลเก่าทันทีเพื่อป้องกัน flicker
     setData([]);
     setTotal(0);
-    
+
     try {
       const searchParam = nameSearch || search || '';
       const response = await fetch(
-        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}&supporter=${supporterFilter}&transactionType=${transactionTypeFilter}`,
+        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}&supporter=${supporterFilter}&transactionType=${transactionTypeFilter}&year=${yearFilter}`,
         abortSignal ? { signal: abortSignal } : {}
       );
-      
+
       if (abortSignal?.aborted) return;
-      
+
       const result = await response.json();
 
       if (result.success) {
@@ -481,17 +484,17 @@ export default function PolicePersonnelPage() {
   useEffect(() => {
     // ใช้ AbortController เพื่อป้องกัน race condition
     const abortController = new AbortController();
-    
+
     // เพิ่ม debounce สำหรับ filter เพื่อลดการเรียก API
     const timer = setTimeout(() => {
       fetchData(abortController.signal);
     }, 200); // รอ 200ms หลังจาก filter เปลี่ยน
-    
+
     return () => {
       clearTimeout(timer);
       abortController.abort();
     };
-  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter, transactionTypeFilter]);
+  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter, transactionTypeFilter, yearFilter]);
 
   const handleCreateSuccess = () => {
     fetchData();
@@ -507,6 +510,7 @@ export default function PolicePersonnelPage() {
     setUnitFilter('all');
     setSupporterFilter('all');
     setTransactionTypeFilter('all');
+    setYearFilter(new Date().getFullYear() + 543);
     setPage(0);
   };
 
@@ -568,6 +572,7 @@ export default function PolicePersonnelPage() {
       notes: personnel.notes || '',
       supporterName: personnel.supporterName || '', // ผู้สนับสนุน
       supportReason: personnel.supportReason || '', // เหตุผลในการสนับสนุน
+      requestedPosition: personnel.requestedPosition || '', // ตำแหน่งที่ร้องขอ
     });
     setEditModalOpen(true);
   };
@@ -648,6 +653,7 @@ export default function PolicePersonnelPage() {
     setSelectedSupporterPersonnel(personnel);
     setSupporterName(personnel.supporterName || '');
     setSupportReason(personnel.supportReason || '');
+    setRequestedPosition(personnel.requestedPosition || '');
     setAddSupporterModalOpen(true);
   };
 
@@ -657,11 +663,12 @@ export default function PolicePersonnelPage() {
     setIsAddingSupporter(true);
     try {
       const response = await fetch(`/api/police-personnel/${selectedSupporterPersonnel.id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           supporterName: supporterName || null,
           supportReason: supportReason || null,
+          requestedPosition: requestedPosition || null,
         }),
       });
 
@@ -673,6 +680,7 @@ export default function PolicePersonnelPage() {
         setSelectedSupporterPersonnel(null);
         setSupporterName('');
         setSupportReason('');
+        setRequestedPosition('');
         fetchData();
       } else {
         toast.error(result.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
@@ -690,6 +698,7 @@ export default function PolicePersonnelPage() {
     setSelectedSupporterPersonnel(null);
     setSupporterName('');
     setSupportReason('');
+    setRequestedPosition('');
   };
 
   // Handler สำหรับ Add to Swap
@@ -739,12 +748,12 @@ export default function PolicePersonnelPage() {
         setAddToSwapModalOpen(false);
         setSelectedPersonnel(null);
         setSwapNotes('');
-        
+
         // อัพเดท state ทันที (ใช้ nationalId)
         if (selectedPersonnel.nationalId) {
           setSwapListData(prev => new Set(prev).add(selectedPersonnel.nationalId!));
         }
-        
+
         // อัพเดท swap list
         fetchSwapListForCurrentYear();
       } else {
@@ -827,12 +836,12 @@ export default function PolicePersonnelPage() {
         setAddToThreeWayModalOpen(false);
         setSelectedPersonnel(null);
         setThreeWayNotes('');
-        
+
         // อัพเดท state ทันที
         if (selectedPersonnel.nationalId) {
           setThreeWayListData(prev => new Set(prev).add(selectedPersonnel.nationalId!));
         }
-        
+
         fetchThreeWayListForCurrentYear();
       } else {
         const result = await response.json();
@@ -871,24 +880,24 @@ export default function PolicePersonnelPage() {
   const handleRemoveFromThreeWay = async (nationalId: string) => {
     // เพิ่ม loading state
     setLoadingThreeWay(prev => new Set(prev).add(nationalId));
-    
+
     try {
       const currentYear = new Date().getFullYear() + 543;
-      
+
       // ค้นหา record ใน swap_list
       const listResponse = await fetch(`/api/swap-list?year=${currentYear}&swapType=three-way`);
       const listResult = await listResponse.json();
-      
+
       if (!listResult.success) {
         throw new Error('Failed to fetch swap list');
       }
-      
+
       const swapItem = listResult.data.find((item: any) => item.nationalId === nationalId);
-      
+
       if (!swapItem) {
         throw new Error('ไม่พบรายการในระบบ');
       }
-      
+
       // ลบออก
       const response = await fetch(`/api/swap-list/${swapItem.id}`, {
         method: 'DELETE'
@@ -899,25 +908,25 @@ export default function PolicePersonnelPage() {
       if (!response.ok) {
         // ถ้า HTTP status ไม่ใช่ 2xx ให้ throw error พร้อมข้อความจาก API
         let errorMessage = result.error || `HTTP ${response.status}: ${response.statusText}`;
-        
+
         // ถ้ามี detail field ให้รวมเข้าด้วยกัน (สำหรับ API ที่ส่ง detail แยก)
         if (result.detail && !errorMessage.includes(result.detail)) {
           errorMessage += ` ${result.detail}`;
         }
-        
+
         throw new Error(errorMessage);
       }
 
       if (result.success) {
         toast.success('ลบออกจากรายการสามเส้าแล้ว');
-        
+
         // อัพเดท state ทันที
         setThreeWayListData(prev => {
           const newSet = new Set(prev);
           newSet.delete(nationalId);
           return newSet;
         });
-        
+
         fetchAllListsForCurrentYear(true); // force refresh เพื่อให้ได้ข้อมูลล่าสุด
       } else {
         // แสดงข้อความ error ที่ละเอียดจาก API
@@ -925,13 +934,13 @@ export default function PolicePersonnelPage() {
       }
     } catch (error: any) {
       console.error('Remove from three way swap error:', error);
-      
+
       // ถ้ามี error message จาก API ให้ใช้ error message นั้น
       let errorMessage = 'เกิดข้อผิดพลาดในการลบข้อมูล';
       if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast.error(errorMessage);
     } finally {
       // ลบ loading state
@@ -946,24 +955,24 @@ export default function PolicePersonnelPage() {
   const handleRemoveFromSwap = async (nationalId: string) => {
     // เพิ่ม loading state
     setLoadingSwap(prev => new Set(prev).add(nationalId));
-    
+
     try {
       const currentYear = new Date().getFullYear() + 543;
-      
+
       // ค้นหา record ใน swap_list
       const listResponse = await fetch(`/api/swap-list?year=${currentYear}&swapType=two-way`);
       const listResult = await listResponse.json();
-      
+
       if (!listResult.success) {
         throw new Error('Failed to fetch swap list');
       }
-      
+
       const swapItem = listResult.data.find((item: any) => item.nationalId === nationalId);
-      
+
       if (!swapItem) {
         throw new Error('ไม่พบรายการในระบบ');
       }
-      
+
       // ลบออกโดยใช้ ID
       const response = await fetch(`/api/swap-list/${swapItem.id}`, {
         method: 'DELETE'
@@ -974,25 +983,25 @@ export default function PolicePersonnelPage() {
       if (!response.ok) {
         // ถ้า HTTP status ไม่ใช่ 2xx ให้ throw error พร้อมข้อความจาก API
         let errorMessage = result.error || `HTTP ${response.status}: ${response.statusText}`;
-        
+
         // ถ้ามี detail field ให้รวมเข้าด้วยกัน (สำหรับ API ที่ส่ง detail แยก)
         if (result.detail && !errorMessage.includes(result.detail)) {
           errorMessage += ` ${result.detail}`;
         }
-        
+
         throw new Error(errorMessage);
       }
 
       if (result.success) {
         toast.success('ลบออกจากรายการสลับตำแหน่งสำเร็จ');
-        
+
         // อัพเดท state ทันที
         setSwapListData(prev => {
           const newSet = new Set(prev);
           newSet.delete(nationalId);
           return newSet;
         });
-        
+
         fetchAllListsForCurrentYear(true); // force refresh เพื่อให้ได้ข้อมูลล่าสุด
       } else {
         // แสดง error message ที่ละเอียดขึ้น
@@ -1000,13 +1009,13 @@ export default function PolicePersonnelPage() {
       }
     } catch (error: any) {
       console.error('Remove from swap error:', error);
-      
+
       // ถ้ามี error message จาก API ให้ใช้ error message นั้น
       let errorMessage = 'เกิดข้อผิดพลาดในการลบข้อมูล';
       if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast.error(errorMessage);
     } finally {
       // ลบ loading state
@@ -1046,7 +1055,7 @@ export default function PolicePersonnelPage() {
 
     // เพิ่ม loading state สำหรับ modal button
     setIsAddingToVacant(true);
-    
+
     // เพิ่ม loading state สำหรับ icon
     if (selectedVacantPersonnel.nationalId) {
       setLoadingVacant(prev => new Set(prev).add(selectedVacantPersonnel.nationalId!));
@@ -1082,12 +1091,12 @@ export default function PolicePersonnelPage() {
 
       if (response.ok) {
         toast.success('ยื่นขอตำแหน่งสำเร็จ');
-        
+
         // อัพเดท state ทันที (ใช้ nationalId)
         if (selectedVacantPersonnel.nationalId) {
           setVacantListData(prev => new Set(prev).add(selectedVacantPersonnel.nationalId!));
         }
-        
+
         fetchVacantListForCurrentYear();
 
         // ปิด modal และ clear form
@@ -1120,7 +1129,7 @@ export default function PolicePersonnelPage() {
   const handleRemoveFromVacant = async (nationalId: string) => {
     // เพิ่ม loading state
     setLoadingVacant(prev => new Set(prev).add(nationalId));
-    
+
     try {
       const currentYear = new Date().getFullYear() + 543;
       const response = await fetch(
@@ -1130,14 +1139,14 @@ export default function PolicePersonnelPage() {
 
       if (response.ok) {
         toast.success('ยกเลิกการยื่นขอตำแหน่งแล้ว');
-        
+
         // อัพเดท state ทันที
         setVacantListData(prev => {
           const newSet = new Set(prev);
           newSet.delete(nationalId);
           return newSet;
         });
-        
+
         fetchVacantListForCurrentYear();
       } else {
         // แสดง error message จาก API
@@ -1160,7 +1169,7 @@ export default function PolicePersonnelPage() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
-    
+
     // ถ้าเป็นรูปแบบวันที่ไทยอยู่แล้ว (DD/MM/YYYY) ให้ return เลย
     if (typeof dateString === 'string' && dateString.includes('/')) {
       const parts = dateString.split('/');
@@ -1169,23 +1178,23 @@ export default function PolicePersonnelPage() {
         const day = parts[0];
         const month = parts[1];
         const year = parts[2];
-        
+
         // ถ้าปีเป็น พ.ศ. (มากกว่า 2500) ให้ return เลย
         if (parseInt(year) > 2500) {
           return `${day}/${month}/${year}`;
         }
-        
+
         // ถ้าปีเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
         if (parseInt(year) > 1900 && parseInt(year) < 2100) {
           const thaiYear = parseInt(year) + 543;
           return `${day}/${month}/${thaiYear}`;
         }
       }
-      
+
       // ถ้าเป็นรูปแบบอื่นที่มี / ให้ return เลย
       return dateString;
     }
-    
+
     // ถ้าเป็น ISO date string หรือ timestamp
     try {
       const date = new Date(dateString);
@@ -1199,7 +1208,7 @@ export default function PolicePersonnelPage() {
       // ถ้าแปลงไม่ได้ ให้ return ค่าเดิม
       return dateString;
     }
-    
+
     return dateString;
   };
 
@@ -1300,288 +1309,296 @@ export default function PolicePersonnelPage() {
               flexDirection: 'column',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': {
-                
+
                 boxShadow: (theme) => `0 12px 24px ${alpha(theme.palette.primary.main, 0.15)}`,
               },
             }}
           >
-              <CardContent sx={{ flexGrow: 1, pb: 2 }}>
-                {/* Status Badge */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <BadgeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                        {person.positionNumber || 'ไม่ระบุเลขตำแหน่ง'}
-                      </Typography>
-                    </Box>
-                    {person.posCodeMaster && (
-                      <Chip 
-                        label={`${person.posCodeMaster.id} - ${person.posCodeMaster.name}`} 
-                        size="small" 
-                        color="primary"
-                        variant="outlined"
-                        sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600 }}
-                      />
-                    )}
-                  </Box>
+            <CardContent sx={{ flexGrow: 1, pb: 2 }}>
+              {/* Status Badge */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    {person.rank && person.supporterName && (
-                      <Tooltip title="มีผู้สนับสนุน" arrow>
-                        <StarIcon sx={{ fontSize: 20, color: 'warning.main' }} />
-                      </Tooltip>
-                    )}
-                    {!person.rank && (
-                      <Chip
-                        label="ว่าง"
-                        color="default"
-                        size="small"
-                        sx={{ fontWeight: 500, fontSize: '0.75rem' }}
-                      />
-                    )}
+                    <BadgeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                      {person.positionNumber || 'ไม่ระบุเลขตำแหน่ง'}
+                    </Typography>
                   </Box>
+                  {person.posCodeMaster && (
+                    <Chip
+                      label={`${person.posCodeMaster.id} - ${person.posCodeMaster.name}`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600 }}
+                    />
+                  )}
                 </Box>
-
-                {/* Line 1: ยศ ชื่อ-สกุล */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
-                  <PersonIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.3 }} />
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 700,
-                      fontSize: '1.125rem',
-                      lineHeight: 1.4,
-                      color: person.rank ? 'text.primary' : 'text.secondary',
-                      flex: 1,
-                    }}
-                  >
-                    {person.rank ? (
-                      <>
-                        {person.rank && `${person.rank} `}
-                        {person.fullName}
-                      </>
-                    ) : (
-                      isReservedPosition(person.fullName)
-                        ? 'ว่าง (กันตำแหน่ง)'
-                        : 'ว่าง'
-                    )}
-                  </Typography>
-                </Box>
-
-                <Divider sx={{ mb: 1.5 }} />
-
-                {/* Line 2: ตำแหน่ง */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5 }}>
-                  <PositionIcon sx={{ fontSize: 18, color: 'primary.main', mt: 0.2 }} />
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      fontWeight: 500,
-                      color: 'primary.main',
-                      lineHeight: 1.6,
-                      flex: 1,
-                    }}
-                  >
-                    {person.position || '-'}
-                  </Typography>
-                </Box>
-
-                {/* Line 3: คุณวุฒิ/อายุ/จำนวนปี/นรต. */}
-                {person.rank && (person.education || person.age || person.yearsOfService || person.trainingCourse) && (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    
-                    {/* คุณวุฒิ */}
-                    {person.education && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <EducationIcon sx={{ fontSize: 16, color: 'info.main' }} />
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            color: 'text.secondary',
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {person.education}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {/* อายุ / จำนวนปี / นรต. */}
-                    {(person.age || person.yearsOfService || person.trainingCourse) && (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {person.age && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ServiceIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                color: 'text.secondary',
-                                lineHeight: 1.6,
-                              }}
-                            >
-                              อายุ {person.age}
-                            </Typography>
-                          </Box>
-                        )}
-                        {person.yearsOfService && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <ServiceIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                color: 'text.secondary',
-                                lineHeight: 1.6,
-                              }}
-                            >
-                              จำนวนปี {person.yearsOfService}
-                            </Typography>
-                          </Box>
-                        )}
-                        {person.trainingCourse && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <EducationIcon sx={{ fontSize: 16, color: 'warning.main' }} />
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                color: 'text.secondary',
-                                lineHeight: 1.6,
-                              }}
-                            >
-                              นรต.{person.trainingCourse}
-                            </Typography>
-                          </Box>
-                        )}
-                      </Box>
-                    )}
-                  </Box>
-                )}
-
-                {/* ทำหน้าที่ และ หน่วย */}
-                {(person.actingAs || person.unit) && (
-                  <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
-                    {person.actingAs && (
-                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: person.unit ? 0.5 : 0 }}>
-                        ทำหน้าที่: {person.actingAs}
-                      </Typography>
-                    )}
-                    {person.unit && (
-                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        หน่วย: {person.unit}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-
-                {/* ผู้สนับสนุน และ เหตุผล */}
-                {(person.supporterName || person.supportReason) && (
-                  <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
-                    {person.supporterName && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: person.supportReason ? 0.5 : 0 }}>
-                        <PersonIcon sx={{ fontSize: 16, color: 'primary.main' }} />
-                        <Typography variant="body2" color="text.secondary">
-                          ผู้สนับสนุน: {person.supporterName}
-                        </Typography>
-                      </Box>
-                    )}
-                    {person.supportReason && (
-                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                        <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main', mt: 0.1 }} />
-                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                          เหตุผล: {person.supportReason}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                )}
-              </CardContent>
-
-              <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                {/* Chip แสดงสถานะ Swap List */}
-                {person.rank && getPersonnelStatus(person.nationalId).isInSwap && (
-                  <Chip 
-                    label="อยู่ในสลับตำแหน่ง" 
-                    size="small" 
-                    color="info"
-                    sx={{ fontSize: '0.7rem', height: 20 }}
-                  />
-                )}
-                {/* Chip แสดงสถานะ Three Way Swap */}
-                {person.rank && person.nationalId && threeWayListData.has(person.nationalId) && (
-                  <Chip 
-                    label="อยู่ในสามเส้า" 
-                    size="small" 
-                    color="warning"
-                    sx={{ fontSize: '0.7rem', height: 20 }}
-                  />
-                )}
-                {/* Chip แสดงสถานะ Promotion Chain */}
-                {person.rank && person.nationalId && promotionChainData.has(person.nationalId) && (
-                  <Chip 
-                    label="แทนตำแหน่ง" 
-                    size="small" 
-                    color="success"
-                    sx={{ fontSize: '0.7rem', height: 20 }}
-                  />
-                )}
-                
-                {/* ปุ่มฝั่งขวา: เพิ่มผู้สนับสนุน + ดูรายละเอียด + Menu */}
-                <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  {person.rank && (
-                    <Tooltip title="เพิ่ม/แก้ไขผู้สนับสนุน" leaveDelay={0} disableFocusListener>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleAddSupporter(person)}
-                        sx={{
-                          border: 1,
-                          borderColor: 'success.main',
-                          borderRadius: 2,
-                          color: 'success.main',
-                          '&:hover': {
-                            bgcolor: 'success.main',
-                            color: 'white',
-                          }
-                        }}
-                      >
-                        <PersonAddIcon fontSize="small" />
-                      </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  {person.rank && person.supporterName && (
+                    <Tooltip title="มีผู้สนับสนุน" arrow>
+                      <StarIcon sx={{ fontSize: 20, color: 'warning.main' }} />
                     </Tooltip>
                   )}
-                  
-                  <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
+                  {!person.rank && (
+                    <Chip
+                      label="ว่าง"
+                      color="default"
+                      size="small"
+                      sx={{ fontWeight: 500, fontSize: '0.75rem' }}
+                    />
+                  )}
+                </Box>
+              </Box>
+
+              {/* Line 1: ยศ ชื่อ-สกุล */}
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+                <PersonIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.3 }} />
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '1.125rem',
+                    lineHeight: 1.4,
+                    color: person.rank ? 'text.primary' : 'text.secondary',
+                    flex: 1,
+                  }}
+                >
+                  {person.rank ? (
+                    <>
+                      {person.rank && `${person.rank} `}
+                      {person.fullName}
+                    </>
+                  ) : (
+                    isReservedPosition(person.fullName)
+                      ? 'ว่าง (กันตำแหน่ง)'
+                      : 'ว่าง'
+                  )}
+                </Typography>
+              </Box>
+
+              <Divider sx={{ mb: 1.5 }} />
+
+              {/* Line 2: ตำแหน่ง */}
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5 }}>
+                <PositionIcon sx={{ fontSize: 18, color: 'primary.main', mt: 0.2 }} />
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 500,
+                    color: 'primary.main',
+                    lineHeight: 1.6,
+                    flex: 1,
+                  }}
+                >
+                  {person.position || '-'}
+                </Typography>
+              </Box>
+
+              {/* Line 3: คุณวุฒิ/อายุ/จำนวนปี/นรต. */}
+              {person.rank && (person.education || person.age || person.yearsOfService || person.trainingCourse) && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+
+                  {/* คุณวุฒิ */}
+                  {person.education && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <EducationIcon sx={{ fontSize: 16, color: 'info.main' }} />
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {person.education}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* อายุ / จำนวนปี / นรต. */}
+                  {(person.age || person.yearsOfService || person.trainingCourse) && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {person.age && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <ServiceIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.secondary',
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            อายุ {person.age}
+                          </Typography>
+                        </Box>
+                      )}
+                      {person.yearsOfService && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <ServiceIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.secondary',
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            จำนวนปี {person.yearsOfService}
+                          </Typography>
+                        </Box>
+                      )}
+                      {person.trainingCourse && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <EducationIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.secondary',
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            นรต.{person.trainingCourse}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              {/* ทำหน้าที่ และ หน่วย */}
+              {(person.actingAs || person.unit) && (
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+                  {person.actingAs && (
+                    <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: person.unit ? 0.5 : 0 }}>
+                      ทำหน้าที่: {person.actingAs}
+                    </Typography>
+                  )}
+                  {person.unit && (
+                    <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      หน่วย: {person.unit}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {/* ผู้สนับสนุน และ เหตุผล */}
+              {(person.supporterName || person.supportReason || person.requestedPosition) && (
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+                  {person.requestedPosition && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <PositionIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                      <Typography variant="body2" color="text.secondary">
+                        ตำแหน่งที่ร้องขอ: {person.requestedPosition}
+                      </Typography>
+                    </Box>
+                  )}
+                  {person.supporterName && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: person.supportReason ? 0.5 : 0 }}>
+                      <PersonIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                      <Typography variant="body2" color="text.secondary">
+                        ผู้สนับสนุน: {person.supporterName}
+                      </Typography>
+                    </Box>
+                  )}
+                  {person.supportReason && (
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                      <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main', mt: 0.1 }} />
+                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                        เหตุผล: {person.supportReason}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </CardContent>
+
+            <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {/* Chip แสดงสถานะ Swap List */}
+              {person.rank && getPersonnelStatus(person.nationalId).isInSwap && (
+                <Chip
+                  label="อยู่ในสลับตำแหน่ง"
+                  size="small"
+                  color="info"
+                  sx={{ fontSize: '0.7rem', height: 20 }}
+                />
+              )}
+              {/* Chip แสดงสถานะ Three Way Swap */}
+              {person.rank && person.nationalId && threeWayListData.has(person.nationalId) && (
+                <Chip
+                  label="อยู่ในสามเส้า"
+                  size="small"
+                  color="warning"
+                  sx={{ fontSize: '0.7rem', height: 20 }}
+                />
+              )}
+              {/* Chip แสดงสถานะ Promotion Chain */}
+              {person.rank && person.nationalId && promotionChainData.has(person.nationalId) && (
+                <Chip
+                  label="แทนตำแหน่ง"
+                  size="small"
+                  color="success"
+                  sx={{ fontSize: '0.7rem', height: 20 }}
+                />
+              )}
+
+              {/* ปุ่มฝั่งขวา: เพิ่มผู้สนับสนุน + ดูรายละเอียด + Menu */}
+              <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
+                {person.rank && (
+                  <Tooltip title="เพิ่ม/แก้ไขผู้สนับสนุน" leaveDelay={0} disableFocusListener>
                     <IconButton
                       size="small"
-                      onClick={() => handleViewDetail(person)}
+                      onClick={() => handleAddSupporter(person)}
                       sx={{
                         border: 1,
-                        borderColor: 'primary.main',
+                        borderColor: 'success.main',
                         borderRadius: 2,
-                        color: 'primary.main',
+                        color: 'success.main',
                         '&:hover': {
-                          bgcolor: 'primary.main',
+                          bgcolor: 'success.main',
                           color: 'white',
                         }
                       }}
                     >
-                      <InfoOutlinedIcon fontSize="small" />
+                      <PersonAddIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  
-                  <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => handleMenuOpen(e, person)}
-                      sx={{
-                        border: 1,
-                        borderColor: 'grey.400',
-                        borderRadius: 2,
-                      }}
-                    >
-                      <MoreVertIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </CardActions>
-            </Card>
+                )}
+
+                <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
+                  <IconButton
+                    size="small"
+                    onClick={() => handleViewDetail(person)}
+                    sx={{
+                      border: 1,
+                      borderColor: 'primary.main',
+                      borderRadius: 2,
+                      color: 'primary.main',
+                      '&:hover': {
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                      }
+                    }}
+                  >
+                    <InfoOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleMenuOpen(e, person)}
+                    sx={{
+                      border: 1,
+                      borderColor: 'grey.400',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </CardActions>
+          </Card>
         ))}
       </Box>
     );
@@ -1589,17 +1606,17 @@ export default function PolicePersonnelPage() {
 
   return (
     <Layout>
-      <Box sx={{         
+      <Box sx={{
         mx: 'auto',
         width: '100%',
         // ป้องกันปัญหา overflow ใน mobile
         overflow: 'visible',
       }}>
         {/* Header */}
-  <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+        <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: { xs: 'flex-start', sm: 'center' },
             flexDirection: { xs: 'column', sm: 'row' },
             gap: { xs: 2, sm: 0 },
@@ -1613,9 +1630,9 @@ export default function PolicePersonnelPage() {
                 จัดการข้อมูลบุคลากรตำรวจ
               </Typography>
             </Box>
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 1, 
+            <Box sx={{
+              display: 'flex',
+              gap: 1,
               alignItems: 'center',
               width: { xs: '100%', sm: 'auto' },
               justifyContent: { xs: 'space-between', sm: 'flex-end' },
@@ -1648,7 +1665,7 @@ export default function PolicePersonnelPage() {
                 color="success"
                 startIcon={<PersonAddIcon />}
                 onClick={() => setCreateModalOpen(true)}
-                sx={{ 
+                sx={{
                   minWidth: { xs: 'auto', sm: 140 },
                   fontSize: { xs: '0.875rem', sm: '0.9375rem' },
                   mr: 1
@@ -1661,10 +1678,10 @@ export default function PolicePersonnelPage() {
                 variant="contained"
                 startIcon={<ImportIcon />}
                 onClick={() => router.push('/police-personnel/import')}
-                sx={{ 
+                sx={{
                   minWidth: { xs: 'auto', sm: 140 },
                   fontSize: { xs: '0.875rem', sm: '0.9375rem' },
-                  
+
                 }}
               >
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>นำเข้าข้อมูล</Box>
@@ -1691,13 +1708,13 @@ export default function PolicePersonnelPage() {
               loading={loadingNames}
               loadingText="กำลังค้นหา..."
               noOptionsText={nameInputValue.length < 1 ? "พิมพ์เพื่อค้นหา..." : "ไม่พบข้อมูล"}
-              sx={{ 
-                flex: { 
+              sx={{
+                flex: {
                   xs: '1 1 100%',        // Mobile: full width
                   sm: '1 1 100%',        // Small tablet: full width
                   md: '1 1 auto'         // Desktop/iPad landscape: auto flex
-                }, 
-                minWidth: { xs: '100%', sm: '100%', md: 300 } 
+                },
+                minWidth: { xs: '100%', sm: '100%', md: 300 }
               }}
               renderInput={(params) => (
                 <TextField
@@ -1719,13 +1736,38 @@ export default function PolicePersonnelPage() {
               )}
             />
 
-            <FormControl size="small" sx={{ 
-              flex: { 
+            <FormControl size="small" sx={{
+              flex: {
+                xs: '1 1 100%',              // Mobile: full width
+                sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
+                md: '0 1 120px'              // Desktop/iPad landscape: fixed width
+              },
+              minWidth: 100
+            }}>
+              <InputLabel>ปี พ.ศ.</InputLabel>
+              <Select
+                value={yearFilter}
+                label="ปี พ.ศ."
+                onChange={(e) => {
+                  setYearFilter(e.target.value as number);
+                  setPage(0);
+                }}
+              >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + 543 - i).map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{
+              flex: {
                 xs: '1 1 100%',              // Mobile: full width
                 sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
                 md: '0 1 180px'              // Desktop/iPad landscape: fixed width
-              }, 
-              minWidth: 150 
+              },
+              minWidth: 150
             }}>
               <InputLabel>สถานะตำแหน่ง</InputLabel>
               <Select
@@ -1740,13 +1782,13 @@ export default function PolicePersonnelPage() {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ 
-              flex: { 
+            <FormControl size="small" sx={{
+              flex: {
                 xs: '1 1 100%',              // Mobile: full width
                 sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
                 md: '0 1 200px'              // Desktop/iPad landscape: fixed width
-              }, 
-              minWidth: 150 
+              },
+              minWidth: 150
             }}>
               <InputLabel>รหัสตำแหน่ง</InputLabel>
               <Select
@@ -1763,13 +1805,13 @@ export default function PolicePersonnelPage() {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ 
-              flex: { 
+            <FormControl size="small" sx={{
+              flex: {
                 xs: '1 1 100%',              // Mobile: full width
                 sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
                 md: '0 1 200px'              // Desktop/iPad landscape: fixed width
-              }, 
-              minWidth: 150 
+              },
+              minWidth: 150
             }}>
               <InputLabel>หน่วย</InputLabel>
               <Select
@@ -1789,13 +1831,13 @@ export default function PolicePersonnelPage() {
 
           {/* Supporter Filter & Search - New Row */}
           <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ 
-              flex: { 
+            <FormControl size="small" sx={{
+              flex: {
                 xs: '1 1 100%',              // Mobile: full width
                 sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
                 md: '0 1 200px'              // Desktop/iPad landscape: fixed width
-              }, 
-              minWidth: 150 
+              },
+              minWidth: 150
             }}>
               <InputLabel>ผู้สนับสนุน</InputLabel>
               <Select
@@ -1809,13 +1851,13 @@ export default function PolicePersonnelPage() {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ 
-              flex: { 
+            <FormControl size="small" sx={{
+              flex: {
                 xs: '1 1 100%',              // Mobile: full width
                 sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
                 md: '0 1 200px'              // Desktop/iPad landscape: fixed width
-              }, 
-              minWidth: 150 
+              },
+              minWidth: 150
             }}>
               <InputLabel>ประเภทรายการ</InputLabel>
               <Select
@@ -1839,8 +1881,8 @@ export default function PolicePersonnelPage() {
                 setSearch(e.target.value);
                 setPage(0);
               }}
-              sx={{ 
-                flex: { 
+              sx={{
+                flex: {
                   xs: '1 1 100%',           // Mobile: full width
                   sm: '1 1 auto',           // Tablet: auto flex
                   md: '1 1 auto'            // Desktop: auto flex
@@ -1857,8 +1899,8 @@ export default function PolicePersonnelPage() {
             />
 
             <Tooltip title="รีเซ็ต" leaveDelay={0} disableFocusListener>
-              <IconButton 
-                onClick={handleReset} 
+              <IconButton
+                onClick={handleReset}
                 color="secondary"
               >
                 <ResetIcon />
@@ -1879,224 +1921,229 @@ export default function PolicePersonnelPage() {
           {(isMobile ? 'card' : viewMode) === 'table' ? (
             <>
               <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>ลำดับ</TableCell>
-                  <TableCell>เลขตำแหน่ง</TableCell>
-                  <TableCell>ตำแหน่ง</TableCell>
-                  <TableCell>ยศ</TableCell>
-                  <TableCell>ชื่อ-สกุล</TableCell>
-                  <TableCell>หน่วย</TableCell>
-                  <TableCell>อายุ</TableCell>
-                  <TableCell>ผู้สนับสนุน</TableCell>
-                  <TableCell>สถานะ</TableCell>
-                  <TableCell align="center">จัดการ</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 8 }}>
-                      <CircularProgress />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                        กำลังโหลดข้อมูล...
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : data.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} sx={{ p: 0, border: 'none' }}>
-                      <EmptyState
-                        icon={PersonIcon}
-                        title="ไม่พบข้อมูลบุคลากร"
-                        description="เริ่มต้นโดยการนำเข้าข้อมูลบุคลากรตำรวจ"
-                        actionLabel="นำเข้าข้อมูล"
-                        onAction={() => router.push('/police-personnel/import')}
-                        variant="compact"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  data.map((row, index) => (
-                    <TableRow key={row.id} hover>
-                      <TableCell>{page * rowsPerPage + index + 1}</TableCell>
-                      <TableCell>{row.positionNumber || '-'}</TableCell>
-                      <TableCell>{row.position || '-'}</TableCell>
-                      <TableCell>{row.rank || '-'}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {isReservedPosition(row.fullName)
-                            ? 'ว่าง (กันตำแหน่ง)'
-                            : (row.fullName || 'ว่าง')
-                          }
-                        </Typography>
-                        {row.nationalId && (
-                          <Typography variant="caption" color="text.secondary">
-                            {row.nationalId}
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>ลำดับ</TableCell>
+                      <TableCell>เลขตำแหน่ง</TableCell>
+                      <TableCell>ตำแหน่ง</TableCell>
+                      <TableCell>ยศ</TableCell>
+                      <TableCell>ชื่อ-สกุล</TableCell>
+                      <TableCell>หน่วย</TableCell>
+                      <TableCell>อายุ</TableCell>
+                      <TableCell>ผู้สนับสนุน</TableCell>
+                      <TableCell>สถานะ</TableCell>
+                      <TableCell align="center">จัดการ</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={10} align="center" sx={{ py: 8 }}>
+                          <CircularProgress />
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                            กำลังโหลดข้อมูล...
                           </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>{row.unit || '-'}</TableCell>
-                      <TableCell>{row.age || '-'}</TableCell>
-                      <TableCell>
-                        {row.supporterName ? (
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.875rem' }}>
-                              {row.supporterName}
+                        </TableCell>
+                      </TableRow>
+                    ) : data.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={10} sx={{ p: 0, border: 'none' }}>
+                          <EmptyState
+                            icon={PersonIcon}
+                            title="ไม่พบข้อมูลบุคลากร"
+                            description="เริ่มต้นโดยการนำเข้าข้อมูลบุคลากรตำรวจ"
+                            actionLabel="นำเข้าข้อมูล"
+                            onAction={() => router.push('/police-personnel/import')}
+                            variant="compact"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      data.map((row, index) => (
+                        <TableRow key={row.id} hover>
+                          <TableCell>{page * rowsPerPage + index + 1}</TableCell>
+                          <TableCell>{row.positionNumber || '-'}</TableCell>
+                          <TableCell>{row.position || '-'}</TableCell>
+                          <TableCell>{row.rank || '-'}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {isReservedPosition(row.fullName)
+                                ? 'ว่าง (กันตำแหน่ง)'
+                                : (row.fullName || 'ว่าง')
+                              }
                             </Typography>
-                            {row.supportReason && (
-                              <Typography 
-                                variant="caption" 
-                                color="text.secondary" 
-                                sx={{ 
-                                  display: 'block',
-                                  maxWidth: 120,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                                title={row.supportReason}
-                              >
-                                {row.supportReason}
+                            {row.nationalId && (
+                              <Typography variant="caption" color="text.secondary">
+                                {row.nationalId}
                               </Typography>
                             )}
-                          </Box>
-                        ) : (
-                          <Typography variant="body2" color="text.disabled">
-                            -
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {row.rank && row.supporterName && (
-                            <Tooltip title="มีผู้สนับสนุน" arrow>
-                              <StarIcon sx={{ fontSize: 18, color: 'warning.main' }} />
-                            </Tooltip>
-                          )}
-                          {!row.rank && (
-                            <Chip label="ว่าง" color="default" size="small" />
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
-                          {/* Chip แสดงสถานะ Swap List */}
-                          {row.rank && getPersonnelStatus(row.nationalId).isInSwap && (
-                            <Chip 
-                              label="อยู่ใน Swap List" 
-                              size="small" 
-                              color="info"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          )}
-                          {/* Chip แสดงสถานะ Three Way Swap */}
-                          {row.rank && row.nationalId && threeWayListData.has(row.nationalId) && (
-                            <Chip 
-                              label="อยู่ในสามเส้า" 
-                              size="small" 
-                              color="warning"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          )}
-                          {/* Chip แสดงสถานะ Promotion Chain */}
-                          {row.rank && row.nationalId && promotionChainData.has(row.nationalId) && (
-                            <Chip 
-                              label="แทนตำแหน่ง" 
-                              size="small" 
-                              color="success"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          )}
-                          {/* Chip แสดงสถานะ Vacant Position */}
-                          {row.rank && row.nationalId && vacantListData.has(row.nationalId) && (
-                            <Chip 
-                              label="ยื่นขอตำแหน่ง" 
-                              size="small" 
-                              color="success"
-                              sx={{ fontSize: '0.7rem', height: 20 }}
-                            />
-                          )}
-                          
-                          {/* ปุ่มฝั่งขวา: เพิ่มผู้สนับสนุน + ดูรายละเอียด + Menu */}
-                          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
-                            {row.rank && (
-                              <Tooltip title="เพิ่ม/แก้ไขผู้สนับสนุน" leaveDelay={0} disableFocusListener>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleAddSupporter(row)}
-                                  sx={{
-                                    border: 1,
-                                    borderColor: 'success.main',
-                                    borderRadius: 1,
-                                    color: 'success.main',
-                                    '&:hover': {
-                                      bgcolor: 'success.main',
-                                      color: 'white',
-                                    }
-                                  }}
-                                >
-                                  <PersonAddIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
+                          </TableCell>
+                          <TableCell>{row.unit || '-'}</TableCell>
+                          <TableCell>{row.age || '-'}</TableCell>
+                          <TableCell>
+                            {(row.supporterName || row.requestedPosition) ? (
+                              <Box>
+                                {row.requestedPosition && (
+                                  <Typography variant="caption" sx={{ fontWeight: 600, color: 'warning.dark', display: 'block', mb: 0.5 }}>
+                                    ขอ: {row.requestedPosition}
+                                  </Typography>
+                                )}
+                                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                                  {row.supporterName}
+                                </Typography>
+                                {row.supportReason && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{
+                                      display: 'block',
+                                      maxWidth: 120,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                    title={row.supportReason}
+                                  >
+                                    {row.supportReason}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" color="text.disabled">
+                                -
+                              </Typography>
                             )}
-                            
-                            <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleViewDetail(row)}
-                                sx={{
-                                  border: 1,
-                                  borderColor: 'primary.main',
-                                  borderRadius: 1,
-                                  color: 'primary.main',
-                                  '&:hover': {
-                                    bgcolor: 'primary.main',
-                                    color: 'white',
-                                  }
-                                }}
-                              >
-                                <ViewIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            
-                            <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
-                              <IconButton 
-                                size="small"
-                                onClick={(e) => handleMenuOpen(e, row)}
-                                sx={{
-                                  border: 1,
-                                  borderColor: 'grey.400',
-                                  borderRadius: 1,
-                                }}
-                              >
-                                <MoreVertIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              {row.rank && row.supporterName && (
+                                <Tooltip title="มีผู้สนับสนุน" arrow>
+                                  <StarIcon sx={{ fontSize: 18, color: 'warning.main' }} />
+                                </Tooltip>
+                              )}
+                              {!row.rank && (
+                                <Chip label="ว่าง" color="default" size="small" />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
+                              {/* Chip แสดงสถานะ Swap List */}
+                              {row.rank && getPersonnelStatus(row.nationalId).isInSwap && (
+                                <Chip
+                                  label="อยู่ใน Swap List"
+                                  size="small"
+                                  color="info"
+                                  sx={{ fontSize: '0.7rem', height: 20 }}
+                                />
+                              )}
+                              {/* Chip แสดงสถานะ Three Way Swap */}
+                              {row.rank && row.nationalId && threeWayListData.has(row.nationalId) && (
+                                <Chip
+                                  label="อยู่ในสามเส้า"
+                                  size="small"
+                                  color="warning"
+                                  sx={{ fontSize: '0.7rem', height: 20 }}
+                                />
+                              )}
+                              {/* Chip แสดงสถานะ Promotion Chain */}
+                              {row.rank && row.nationalId && promotionChainData.has(row.nationalId) && (
+                                <Chip
+                                  label="แทนตำแหน่ง"
+                                  size="small"
+                                  color="success"
+                                  sx={{ fontSize: '0.7rem', height: 20 }}
+                                />
+                              )}
+                              {/* Chip แสดงสถานะ Vacant Position */}
+                              {row.rank && row.nationalId && vacantListData.has(row.nationalId) && (
+                                <Chip
+                                  label="ยื่นขอตำแหน่ง"
+                                  size="small"
+                                  color="success"
+                                  sx={{ fontSize: '0.7rem', height: 20 }}
+                                />
+                              )}
 
-          <DataTablePagination
-            count={total}
-            page={page}
-            rowsPerPage={rowsPerPage}
-            onPageChange={(newPage) => setPage(newPage)}
-            onRowsPerPageChange={(newRowsPerPage) => {
-              setRowsPerPage(newRowsPerPage);
-              setPage(0);
-            }}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            variant="minimal"
-            disabled={loading}
-          />
+                              {/* ปุ่มฝั่งขวา: เพิ่มผู้สนับสนุน + ดูรายละเอียด + Menu */}
+                              <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
+                                {row.rank && (
+                                  <Tooltip title="เพิ่ม/แก้ไขผู้สนับสนุน" leaveDelay={0} disableFocusListener>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleAddSupporter(row)}
+                                      sx={{
+                                        border: 1,
+                                        borderColor: 'success.main',
+                                        borderRadius: 1,
+                                        color: 'success.main',
+                                        '&:hover': {
+                                          bgcolor: 'success.main',
+                                          color: 'white',
+                                        }
+                                      }}
+                                    >
+                                      <PersonAddIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+
+                                <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleViewDetail(row)}
+                                    sx={{
+                                      border: 1,
+                                      borderColor: 'primary.main',
+                                      borderRadius: 1,
+                                      color: 'primary.main',
+                                      '&:hover': {
+                                        bgcolor: 'primary.main',
+                                        color: 'white',
+                                      }
+                                    }}
+                                  >
+                                    <ViewIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+
+                                <Tooltip title="เมนู" leaveDelay={0} disableFocusListener>
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleMenuOpen(e, row)}
+                                    sx={{
+                                      border: 1,
+                                      borderColor: 'grey.400',
+                                      borderRadius: 1,
+                                    }}
+                                  >
+                                    <MoreVertIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <DataTablePagination
+                count={total}
+                page={page}
+                rowsPerPage={rowsPerPage}
+                onPageChange={(newPage) => setPage(newPage)}
+                onRowsPerPageChange={(newRowsPerPage) => {
+                  setRowsPerPage(newRowsPerPage);
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                variant="minimal"
+                disabled={loading}
+              />
             </>
           ) : (
             <>
@@ -2119,7 +2166,7 @@ export default function PolicePersonnelPage() {
         </Paper>
 
         {/* Detail Modal - Using Reusable Component */}
-        <PersonnelDetailModal 
+        <PersonnelDetailModal
           open={detailModalOpen}
           onClose={handleCloseDetailModal}
           personnel={selectedPersonnel}
@@ -2128,11 +2175,11 @@ export default function PolicePersonnelPage() {
         />
 
         {/* Edit Dialog */}
-        <Dialog 
+        <Dialog
           key={`edit-${editModalOpen}-${isMobile}`} // Force re-render when mobile state changes
-          open={editModalOpen} 
-          onClose={handleEditClose} 
-          maxWidth="md" 
+          open={editModalOpen}
+          onClose={handleEditClose}
+          maxWidth="md"
           fullWidth
           fullScreen={isMobile}
           TransitionProps={{
@@ -2167,8 +2214,8 @@ export default function PolicePersonnelPage() {
             }
           }}
         >
-          <DialogTitle sx={{ 
-            borderBottom: 1, 
+          <DialogTitle sx={{
+            borderBottom: 1,
             borderColor: 'divider',
             display: 'flex',
             alignItems: 'center',
@@ -2182,8 +2229,8 @@ export default function PolicePersonnelPage() {
               แก้ไขข้อมูลบุคลากร
             </Box>
           </DialogTitle>
-          
-          <DialogContent sx={{ 
+
+          <DialogContent sx={{
             flex: 1,
             overflow: 'auto',
             p: { xs: 2, md: 3 },
@@ -2208,11 +2255,11 @@ export default function PolicePersonnelPage() {
           }}>
             <Stack spacing={{ xs: 2, sm: 3 }}>
               {/* ข้อมูลบุคคล */}
-              <Paper sx={{                 
+              <Paper sx={{
                 p: { xs: 2, sm: 3 },
-                mt: { xs: 1.5, sm: 5 },                 
-                borderRadius: 2, 
-                border: '1px solid', 
+                mt: { xs: 1.5, sm: 5 },
+                borderRadius: 2,
+                border: '1px solid',
                 borderColor: 'grey.200',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
               }}>
@@ -2309,10 +2356,10 @@ export default function PolicePersonnelPage() {
               </Paper>
 
               {/* ข้อมูลตำแหน่ง */}
-              <Paper sx={{ 
-                p: { xs: 2, sm: 3 }, 
-                borderRadius: 2, 
-                border: '1px solid', 
+              <Paper sx={{
+                p: { xs: 2, sm: 3 },
+                borderRadius: 2,
+                border: '1px solid',
                 borderColor: 'grey.200',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
               }}>
@@ -2370,10 +2417,10 @@ export default function PolicePersonnelPage() {
               </Paper>
 
               {/* ข้อมูลวันที่ */}
-              <Paper sx={{ 
-                p: { xs: 2, sm: 3 }, 
-                borderRadius: 2, 
-                border: '1px solid', 
+              <Paper sx={{
+                p: { xs: 2, sm: 3 },
+                borderRadius: 2,
+                border: '1px solid',
                 borderColor: 'grey.200',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
               }}>
@@ -2447,10 +2494,10 @@ export default function PolicePersonnelPage() {
               </Paper>
 
               {/* ข้อมูลการฝึกอบรม */}
-              <Paper sx={{ 
-                p: { xs: 2, sm: 3 }, 
-                borderRadius: 2, 
-                border: '1px solid', 
+              <Paper sx={{
+                p: { xs: 2, sm: 3 },
+                borderRadius: 2,
+                border: '1px solid',
                 borderColor: 'grey.200',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
               }}>
@@ -2481,10 +2528,10 @@ export default function PolicePersonnelPage() {
               </Paper>
 
               {/* ข้อมูลการเสนอชื่อ */}
-              <Paper sx={{                 
+              <Paper sx={{
                 p: { xs: 2, sm: 3 },
-                borderRadius: 2, 
-                border: '1px solid', 
+                borderRadius: 2,
+                border: '1px solid',
                 borderColor: 'grey.200',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
               }}>
@@ -2513,6 +2560,15 @@ export default function PolicePersonnelPage() {
                   />
                   <TextField
                     fullWidth
+                    label="ตำแหน่งที่ร้องขอ"
+                    value={editFormData.requestedPosition || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, requestedPosition: e.target.value })}
+                    variant="outlined"
+                    size="small"
+                    placeholder="ระบุตำแหน่งที่ร้องขอ"
+                  />
+                  <TextField
+                    fullWidth
                     multiline
                     rows={3}
                     label="เหตุผลในการสนับสนุน"
@@ -2537,10 +2593,10 @@ export default function PolicePersonnelPage() {
               </Paper>
 
               {/* หมายเหตุ */}
-              <Paper sx={{ 
-                p: { xs: 2, sm: 3 }, 
-                borderRadius: 2, 
-                border: '1px solid', 
+              <Paper sx={{
+                p: { xs: 2, sm: 3 },
+                borderRadius: 2,
+                border: '1px solid',
                 borderColor: 'grey.200',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
               }}>
@@ -2575,34 +2631,34 @@ export default function PolicePersonnelPage() {
               </Paper>
             </Stack>
           </DialogContent>
-          
-          <DialogActions sx={{ 
+
+          <DialogActions sx={{
             p: 2,
-            borderTop: 1, 
+            borderTop: 1,
             borderColor: 'divider',
             bgcolor: 'background.paper',
             gap: 1,
             flexShrink: 0
           }}>
-            <Button 
-              onClick={handleEditClose} 
-              variant="outlined" 
+            <Button
+              onClick={handleEditClose}
+              variant="outlined"
               size="medium"
               disabled={isSaving}
-              sx={{ 
+              sx={{
                 minWidth: 100,
                 borderRadius: 1.5
               }}
             >
               ยกเลิก
             </Button>
-            <Button 
-              onClick={handleEditSave} 
-              variant="contained" 
+            <Button
+              onClick={handleEditSave}
+              variant="contained"
               size="medium"
               disabled={isSaving}
               startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <EditIcon />}
-              sx={{ 
+              sx={{
                 minWidth: 120,
                 borderRadius: 1.5
               }}
@@ -2633,9 +2689,9 @@ export default function PolicePersonnelPage() {
             <Button onClick={handleDeleteCancel} variant="outlined" size="medium" disabled={isDeleting}>
               ยกเลิก
             </Button>
-            <Button 
-              onClick={handleDeleteConfirm} 
-              variant="contained" 
+            <Button
+              onClick={handleDeleteConfirm}
+              variant="contained"
               color="error"
               size="medium"
               disabled={isDeleting}
@@ -2647,11 +2703,11 @@ export default function PolicePersonnelPage() {
         </Dialog>
 
         {/* Add Supporter Dialog */}
-        <Dialog 
+        <Dialog
           key={`supporter-${addSupporterModalOpen}-${isMobile}`}
-          open={addSupporterModalOpen} 
-          onClose={handleAddSupporterCancel} 
-          maxWidth="sm" 
+          open={addSupporterModalOpen}
+          onClose={handleAddSupporterCancel}
+          maxWidth="sm"
           fullWidth
           fullScreen={isMobile}
           TransitionProps={{
@@ -2686,8 +2742,8 @@ export default function PolicePersonnelPage() {
             }
           }}
         >
-          <DialogTitle sx={{ 
-            borderBottom: 1, 
+          <DialogTitle sx={{
+            borderBottom: 1,
             borderColor: 'divider',
             display: 'flex',
             alignItems: 'center',
@@ -2701,8 +2757,8 @@ export default function PolicePersonnelPage() {
               เพิ่ม/แก้ไขผู้สนับสนุน
             </Box>
           </DialogTitle>
-          
-          <DialogContent sx={{ 
+
+          <DialogContent sx={{
             flex: 1,
             overflow: 'auto',
             p: { xs: 2, md: 3 },
@@ -2710,13 +2766,13 @@ export default function PolicePersonnelPage() {
           }}>
             <Stack spacing={2}>
               {/* แสดงข้อมูลบุคลากรที่เลือก */}
-              <Box sx={{ 
-                p: 2, 
-                bgcolor: 'grey.50', 
+              <Box sx={{
+                p: 2,
+                bgcolor: 'grey.50',
                 borderRadius: 1,
                 border: 1,
                 borderColor: 'grey.200'
-                
+
               }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                   บุคลากรที่เลือก
@@ -2735,7 +2791,7 @@ export default function PolicePersonnelPage() {
                 <Typography variant="body2" color="text.secondary">
                   หน่วย: {selectedSupporterPersonnel?.unit || '-'}
                 </Typography>
-                
+
                 {/* แสดงข้อมูลเพิ่มเติม: อายุ, จำนวนปี, นรต. */}
                 <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider', display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                   {selectedSupporterPersonnel?.age && (
@@ -2766,6 +2822,16 @@ export default function PolicePersonnelPage() {
                 size="medium"
               />
 
+              {/* ตำแหน่งที่ร้องขอ */}
+              <TextField
+                fullWidth
+                label="ตำแหน่งที่ร้องขอ"
+                value={requestedPosition}
+                onChange={(e) => setRequestedPosition(e.target.value)}
+                placeholder="ระบุตำแหน่งที่ร้องขอ..."
+                size="medium"
+              />
+
               {/* เหตุผลในการสนับสนุน */}
               <TextField
                 fullWidth
@@ -2779,35 +2845,35 @@ export default function PolicePersonnelPage() {
               />
             </Stack>
           </DialogContent>
-          
-          <DialogActions sx={{ 
+
+          <DialogActions sx={{
             p: 2,
-            borderTop: 1, 
+            borderTop: 1,
             borderColor: 'divider',
             bgcolor: 'background.paper',
             gap: 1,
             flexShrink: 0
           }}>
-            <Button 
-              onClick={handleAddSupporterCancel} 
-              variant="outlined" 
+            <Button
+              onClick={handleAddSupporterCancel}
+              variant="outlined"
               size="medium"
               disabled={isAddingSupporter}
-              sx={{ 
+              sx={{
                 minWidth: 100,
                 borderRadius: 1.5
               }}
             >
               ยกเลิก
             </Button>
-            <Button 
-              onClick={handleAddSupporterConfirm} 
-              variant="contained" 
+            <Button
+              onClick={handleAddSupporterConfirm}
+              variant="contained"
               color="success"
               size="medium"
               disabled={isAddingSupporter}
               startIcon={isAddingSupporter ? <CircularProgress size={20} color="inherit" /> : <PersonAddIcon />}
-              sx={{ 
+              sx={{
                 minWidth: 120,
                 borderRadius: 1.5
               }}
@@ -2827,16 +2893,16 @@ export default function PolicePersonnelPage() {
               </Typography>
             </Box>
           </DialogTitle>
-          <DialogContent sx={{ pt: 2 , mt: 2 }}>
+          <DialogContent sx={{ pt: 2, mt: 2 }}>
             <Stack spacing={2}>
               {/* แสดงข้อมูลบุคลากรที่เลือก */}
-              <Box sx={{ 
-                p: 2, 
-                bgcolor: 'grey.50', 
+              <Box sx={{
+                p: 2,
+                bgcolor: 'grey.50',
                 borderRadius: 1,
                 border: 1,
                 borderColor: 'grey.200'
-                
+
               }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                   บุคลากรที่เลือก
@@ -2862,12 +2928,12 @@ export default function PolicePersonnelPage() {
                 >
                   {(() => {
                     const currentYear = new Date().getFullYear() + 543;
-                    
+
                     // แสดงปีปัจจุบันและปีก่อนหน้า
                     // เช่น ปี 2568: แสดง 2568
                     //      ปี 2569: แสดง 2569, 2568
                     const years = [currentYear, currentYear - 1];
-                    
+
                     return years.map(year => {
                       const isCurrent = year === currentYear;
                       return (
@@ -2901,9 +2967,9 @@ export default function PolicePersonnelPage() {
             <Button onClick={handleAddToSwapCancel} variant="outlined" size="medium" disabled={isAddingToSwap}>
               ยกเลิก
             </Button>
-            <Button 
-              onClick={handleAddToSwapConfirm} 
-              variant="contained" 
+            <Button
+              onClick={handleAddToSwapConfirm}
+              variant="contained"
               color="info"
               size="medium"
               sx={{ minWidth: 120 }}
@@ -2928,9 +2994,9 @@ export default function PolicePersonnelPage() {
           <DialogContent sx={{ pt: 2, mt: 2 }}>
             <Stack spacing={2}>
               {/* แสดงข้อมูลบุคลากรที่เลือก */}
-              <Box sx={{ 
-                p: 2, 
-                bgcolor: 'grey.50', 
+              <Box sx={{
+                p: 2,
+                bgcolor: 'grey.50',
                 borderRadius: 1,
                 border: 1,
                 borderColor: 'grey.200'
@@ -2960,7 +3026,7 @@ export default function PolicePersonnelPage() {
                   {(() => {
                     const currentYear = new Date().getFullYear() + 543;
                     const years = [currentYear, currentYear - 1];
-                    
+
                     return years.map(year => {
                       const isCurrent = year === currentYear;
                       return (
@@ -2994,9 +3060,9 @@ export default function PolicePersonnelPage() {
             <Button onClick={handleAddToThreeWayCancel} variant="outlined" size="medium" disabled={isAddingToThreeWay}>
               ยกเลิก
             </Button>
-            <Button 
-              onClick={handleAddToThreeWayConfirm} 
-              variant="contained" 
+            <Button
+              onClick={handleAddToThreeWayConfirm}
+              variant="contained"
               color="warning"
               size="medium"
               sx={{ minWidth: 120 }}
@@ -3021,9 +3087,9 @@ export default function PolicePersonnelPage() {
           <DialogContent sx={{ pt: 2, mt: 2 }}>
             <Stack spacing={2.5}>
               {/* แสดงข้อมูลบุคลากรที่เลือก */}
-              <Box sx={{ 
-                p: 2, 
-                bgcolor: 'grey.50', 
+              <Box sx={{
+                p: 2,
+                bgcolor: 'grey.50',
                 borderRadius: 1,
                 border: 1,
                 borderColor: 'grey.200'
@@ -3065,7 +3131,7 @@ export default function PolicePersonnelPage() {
                 </Select>
               </FormControl>
 
-              
+
               {/* ตำแหน่งที่ขอ - Dropdown จาก pos_code_master */}
               <FormControl fullWidth required>
                 <InputLabel>ตำแหน่งที่ขอ</InputLabel>
@@ -3092,7 +3158,7 @@ export default function PolicePersonnelPage() {
                 placeholder="ระบุชื่อผู้สนับสนุน/ผู้เสนอชื่อ"
                 value={vacantNominator}
                 onChange={(e) => setVacantNominator(e.target.value)}
-                
+
               />
 
 
@@ -3115,7 +3181,7 @@ export default function PolicePersonnelPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderTop: 1, borderColor: 'divider' }}>
-            <Button 
+            <Button
               onClick={() => {
                 setAddToVacantModalOpen(false);
                 setSelectedVacantPersonnel(null);
@@ -3123,16 +3189,16 @@ export default function PolicePersonnelPage() {
                 setVacantNominator('');
                 setVacantRequestedPosition(null);
                 setVacantNotes('');
-              }} 
-              variant="outlined" 
+              }}
+              variant="outlined"
               size="medium"
               disabled={isAddingToVacant}
             >
               ยกเลิก
             </Button>
-            <Button 
-              onClick={handleConfirmAddToVacant} 
-              variant="contained" 
+            <Button
+              onClick={handleConfirmAddToVacant}
+              variant="contained"
               color="success"
               size="medium"
               sx={{ minWidth: 120 }}
@@ -3158,7 +3224,7 @@ export default function PolicePersonnelPage() {
             horizontal: 'right',
           }}
         >
-          <MenuItem 
+          <MenuItem
             onClick={() => {
               if (menuPersonnel) handleEdit(menuPersonnel);
               handleMenuClose();
@@ -3169,7 +3235,7 @@ export default function PolicePersonnelPage() {
             </ListItemIcon>
             <ListItemText>แก้ไข</ListItemText>
           </MenuItem>
-          <MenuItem 
+          <MenuItem
             onClick={() => {
               if (menuPersonnel) handleDelete(menuPersonnel);
               handleMenuClose();

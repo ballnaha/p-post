@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 
-const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,19 +78,19 @@ export async function GET(request: NextRequest) {
     // แปลงข้อมูลเป็น suggestion format
     const suggestions: Suggestion[] = personnel.map((p) => {
       const parts: string[] = [];
-      
+
       // ชื่อเต็มพร้อมยศ
       if (p.rank) parts.push(p.rank);
       if (p.fullName) parts.push(p.fullName);
-      
+
       const displayName = parts.join(' ');
-      
+
       // สร้าง subtitle
       const subtitleParts: string[] = [];
       if (p.position) subtitleParts.push(p.position);
       if (p.unit) subtitleParts.push(p.unit);
       if (p.positionNumber) subtitleParts.push(`#${p.positionNumber}`);
-      
+
       return {
         id: p.id,
         label: displayName || 'ไม่ระบุชื่อ',
@@ -121,7 +120,7 @@ export async function GET(request: NextRequest) {
         searchText: searchTerm,
         originalData: null,
       };
-      
+
       // เพิ่มเป็นตัวเลือกแรก
       suggestions.unshift(positionNumberSuggestion);
     }

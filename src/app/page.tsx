@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { 
-  Box, 
-  Container, 
-  Typography, 
+import {
+  Box,
+  Container,
+  Typography,
   Paper,
   FormControl,
   InputLabel,
@@ -33,7 +33,7 @@ import {
   TablePagination,
   LinearProgress
 } from '@mui/material';
-import { 
+import {
   AssignmentTurnedIn,
   SwapHoriz,
   Person,
@@ -233,13 +233,13 @@ export default function HomePage() {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [isFirstLoad, setIsFirstLoad] = useState(true); // ตรวจสอบว่าเป็นการโหลดครั้งแรกหรือไม่
   const [defaultUnitSet, setDefaultUnitSet] = useState(false); // ตรวจสอบว่าตั้งค่า default unit แล้วหรือยัง
-  
+
   // Drilldown state
   const [drilldownOpen, setDrilldownOpen] = useState(false);
   const [drilldownTitle, setDrilldownTitle] = useState('');
   const [drilldownData, setDrilldownData] = useState<any[]>([]);
   const [drilldownFilterType, setDrilldownFilterType] = useState<string>('all');
-  
+
   // Supported Personnel Drawer state
   const [supportDrawerOpen, setSupportDrawerOpen] = useState(false);
   const [selectedSupportPerson, setSelectedSupportPerson] = useState<SupportedPersonnel | null>(null);
@@ -247,7 +247,7 @@ export default function HomePage() {
   // Utility function สำหรับ format วันที่
   const formatDate = (dateString?: string | null): string => {
     if (!dateString) return '-';
-    
+
     // ถ้าเป็นรูปแบบวันที่ไทยอยู่แล้ว (DD/MM/YYYY) ให้ return เลย
     if (typeof dateString === 'string' && dateString.includes('/')) {
       const parts = dateString.split('/');
@@ -255,12 +255,12 @@ export default function HomePage() {
         const day = parts[0];
         const month = parts[1];
         const year = parts[2];
-        
+
         // ถ้าปีเป็น พ.ศ. (มากกว่า 2500) ให้ return เลย
         if (parseInt(year) > 2500) {
           return `${day}/${month}/${year}`;
         }
-        
+
         // ถ้าปีเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
         if (parseInt(year) > 1900 && parseInt(year) < 2100) {
           const thaiYear = parseInt(year) + 543;
@@ -269,7 +269,7 @@ export default function HomePage() {
       }
       return dateString;
     }
-    
+
     // ถ้าเป็น ISO date string หรือ timestamp
     try {
       const date = new Date(dateString);
@@ -282,7 +282,7 @@ export default function HomePage() {
     } catch (error) {
       return dateString;
     }
-    
+
     return dateString;
   };
 
@@ -293,10 +293,10 @@ export default function HomePage() {
   const handleStatusClick = (status: any) => {
     if (status.transactions && status.transactions.length > 0) {
       // Filter to show only promotion and promotion-chain
-      const filteredTransactions = status.transactions.filter((tx: any) => 
+      const filteredTransactions = status.transactions.filter((tx: any) =>
         ['transfer', 'promotion-chain'].includes(tx.swapType)
       );
-      
+
       setDrilldownTitle(status.label);
       setDrilldownData(filteredTransactions);
       setDrilldownFilterType('all');
@@ -340,7 +340,7 @@ export default function HomePage() {
         document.body.style.position = 'fixed';
         document.body.style.width = '100%';
         document.body.style.top = `-${scrollY}px`;
-        
+
         return () => {
           // คืนค่า scroll position เมื่อเสร็จ loading
           document.body.style.overflow = '';
@@ -358,11 +358,11 @@ export default function HomePage() {
     const currentBuddhistYear = new Date().getFullYear() + 543;
     const startYear = 2568;
     const years: number[] = [];
-    
+
     for (let year = currentBuddhistYear; year >= startYear; year--) {
       years.push(year);
     }
-    
+
     setAvailableYears(years);
   }, []);
 
@@ -376,19 +376,19 @@ export default function HomePage() {
           setError(null);
           const url = `/api/dashboard?year=${selectedYear}&unit=all`;
           const response = await fetch(url);
-          
+
           if (!response.ok) {
             throw new Error('Failed to fetch dashboard data');
           }
-          
+
           const result = await response.json();
-          
+
           if (result.success && result.data.availableUnits) {
             // ตั้งค่า unit เป็น 'น' ถ้ามี ไม่งั้นใช้ 'all'
             const defaultUnit = result.data.availableUnits.includes('น') ? 'น' : 'all';
             setSelectedUnit(defaultUnit);
             setDefaultUnitSet(true);
-            
+
             // ถ้า default unit คือ 'all' ให้ใช้ข้อมูลที่โหลดมาเลย
             if (defaultUnit === 'all') {
               setStats(result.data);
@@ -399,7 +399,7 @@ export default function HomePage() {
           }
           return;
         }
-        
+
         // กรณีปกติ: โหลดข้อมูลตาม filter ที่เลือก
         if (defaultUnitSet) {
           // ใช้ filter loading เมื่อไม่ใช่ครั้งแรก
@@ -407,17 +407,17 @@ export default function HomePage() {
             setFilterLoading(true);
           }
           // ถ้ายังเป็น firstLoad ไม่ต้อง set loading อีกเพราะ initialLoading ยังเป็น true อยู่แล้ว
-          
+
           setError(null);
           const url = `/api/dashboard?year=${selectedYear}&unit=${selectedUnit}`;
           const response = await fetch(url);
-          
+
           if (!response.ok) {
             throw new Error('Failed to fetch dashboard data');
           }
-          
+
           const result = await response.json();
-          
+
           if (result.success) {
             // Debug: Check supportedPersonnel data
             const matchedPerson = result.data.supportedPersonnel?.find((p: any) => p.fullName?.includes('อภิสัณห์'));
@@ -425,7 +425,7 @@ export default function HomePage() {
               console.log('อภิสัณห์ หว้าจีน data:', matchedPerson);
             }
             setStats(result.data);
-            
+
             // ปิด loading หลังจากโหลดข้อมูลจริงเสร็จแล้ว
             if (isFirstLoad) {
               setIsFirstLoad(false);
@@ -591,10 +591,10 @@ export default function HomePage() {
         boxHeight: 12,
         boxPadding: 6,
         callbacks: {
-          title: function(tooltipItems: any) {
+          title: function (tooltipItems: any) {
             return 'ตำแหน่ง: ' + tooltipItems[0].label;
           },
-          label: function(context: any) {
+          label: function (context: any) {
             let label = context.dataset.label || '';
             const value = context.parsed.y;
             if (label) {
@@ -603,7 +603,7 @@ export default function HomePage() {
             label += value.toLocaleString() + ' คน';
             return label;
           },
-          afterBody: function(tooltipItems: any) {
+          afterBody: function (tooltipItems: any) {
             if (!chartDataRaw) return [];
             const dataIndex = tooltipItems[0].dataIndex;
             const assigned = chartDataRaw[dataIndex]?.totalApplicants || 0;
@@ -619,10 +619,10 @@ export default function HomePage() {
         }
       },
       datalabels: {
-        display: function(context: any) {
+        display: function (context: any) {
           return context.dataset.data[context.dataIndex] > 0;
         },
-        color: function(context: any) {
+        color: function (context: any) {
           // ถ้าเป็น dataset ตำแหน่งว่าง ใช้สีเข้ม
           if (context.dataset.label === 'ตำแหน่งว่าง (รอจับคู่)') {
             return '#424242';
@@ -634,7 +634,7 @@ export default function HomePage() {
           size: 12,
           weight: 'bold' as const,
         },
-        formatter: function(value: number) {
+        formatter: function (value: number) {
           if (value >= 1000) {
             return (value / 1000).toFixed(1) + 'k';
           }
@@ -642,7 +642,7 @@ export default function HomePage() {
         },
         anchor: 'center' as const,
         align: 'center' as const,
-        textStrokeColor: function(context: any) {
+        textStrokeColor: function (context: any) {
           if (context.dataset.label === 'ตำแหน่งว่าง (รอจับคู่)') {
             return 'rgba(255, 255, 255, 0.3)';
           }
@@ -686,7 +686,7 @@ export default function HomePage() {
           },
           color: '#424242',
           padding: 14,
-          callback: function(value: any) {
+          callback: function (value: any) {
             if (value >= 1000) {
               return (value / 1000).toFixed(0) + 'k';
             }
@@ -717,10 +717,10 @@ export default function HomePage() {
 
   if (initialLoading) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         width: '100vw',
         position: 'fixed',
@@ -730,72 +730,72 @@ export default function HomePage() {
         zIndex: 9999,
         overflow: 'hidden',
       }}>
-          <Stack 
-            direction="column"
-            alignItems="center"
-            spacing={2.5}
-            sx={{
-              animation: 'fadeIn 0.5s ease-in-out',
-              '@keyframes fadeIn': {
-                '0%': { opacity: 0, transform: 'translateY(-10px)' },
-                '100%': { opacity: 1, transform: 'translateY(0)' }
-              }
-            }}
-          >
-            <Box sx={{ position: 'relative' }}>
-              
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  right: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: '50%',
-                    bgcolor: 'rgba(29, 233, 182, 0.1)',
-                  }}
-                />
-              </Box>
-            </Box>
-            <Typography 
-              variant="body1" 
-              color="text.secondary"
-              sx={{ 
-                fontWeight: 600,
-                letterSpacing: 0.5,
-                fontSize: '1rem'
+        <Stack
+          direction="column"
+          alignItems="center"
+          spacing={2.5}
+          sx={{
+            animation: 'fadeIn 0.5s ease-in-out',
+            '@keyframes fadeIn': {
+              '0%': { opacity: 0, transform: 'translateY(-10px)' },
+              '100%': { opacity: 1, transform: 'translateY(0)' }
+            }
+          }}
+        >
+          <Box sx={{ position: 'relative' }}>
+
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                bottom: 0,
+                right: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              กำลังโหลดข้อมูล...
-            </Typography>
-          </Stack>
-        </Box>
+              <Box
+                sx={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  bgcolor: 'rgba(29, 233, 182, 0.1)',
+                }}
+              />
+            </Box>
+          </Box>
+          <Typography
+            variant="body1"
+            color="text.secondary"
+            sx={{
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              fontSize: '1rem'
+            }}
+          >
+            กำลังโหลดข้อมูล...
+          </Typography>
+        </Stack>
+      </Box>
     );
   }
 
   if (error) {
     return (
       <Layout>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
           minHeight: 'calc(100vh - 120px)',
           p: 3,
           overflow: 'hidden',
         }}>
-          <Alert 
+          <Alert
             severity="error"
-            sx={{ 
+            sx={{
               maxWidth: 600,
               width: '100%',
               borderRadius: 2,
@@ -823,17 +823,17 @@ export default function HomePage() {
     if (!initialLoading && !filterLoading) {
       return (
         <Layout>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
             minHeight: 'calc(100vh - 120px)',
             p: 3,
             overflow: 'hidden',
           }}>
-            <Alert 
+            <Alert
               severity="info"
-              sx={{ 
+              sx={{
                 maxWidth: 600,
                 width: '100%',
                 borderRadius: 2,
@@ -892,12 +892,12 @@ export default function HomePage() {
     <Layout>
       <Box>
         {/* Header with Year Filter */}
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          mb: 4, 
-          flexWrap: 'wrap', 
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 4,
+          flexWrap: 'wrap',
           gap: 3,
           animation: 'slideDown 0.6s ease-out',
           '@keyframes slideDown': {
@@ -906,9 +906,9 @@ export default function HomePage() {
           }
         }}>
           <Box>
-            <Typography 
-              variant="h4" 
-              fontWeight={800} 
+            <Typography
+              variant="h4"
+              fontWeight={800}
               mb={0.5}
               sx={{
                 background: 'linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)',
@@ -919,10 +919,10 @@ export default function HomePage() {
             >
               Dashboard
             </Typography>
-            <Typography 
-              variant="body2" 
+            <Typography
+              variant="body2"
               color="text.secondary"
-              sx={{ 
+              sx={{
                 fontWeight: 500,
                 display: 'flex',
                 alignItems: 'center',
@@ -944,10 +944,10 @@ export default function HomePage() {
               )}
             </Typography>
           </Box>
-          
-          <Box sx={{ 
-            display: 'flex', 
-            gap: 2, 
+
+          <Box sx={{
+            display: 'flex',
+            gap: 2,
             flexWrap: 'wrap',
             animation: 'slideLeft 0.6s ease-out 0.2s backwards',
             '@keyframes slideLeft': {
@@ -955,9 +955,9 @@ export default function HomePage() {
               '100%': { opacity: 1, transform: 'translateX(0)' }
             }
           }}>
-            <FormControl 
-              size="small" 
-              sx={{ 
+            <FormControl
+              size="small"
+              sx={{
                 minWidth: 150,
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
@@ -987,10 +987,10 @@ export default function HomePage() {
                 ))}
               </Select>
             </FormControl>
-            
-            <FormControl 
-              size="small" 
-              sx={{ 
+
+            <FormControl
+              size="small"
+              sx={{
                 minWidth: 200,
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
@@ -1026,10 +1026,10 @@ export default function HomePage() {
         </Box>
 
         {/* Stats Cards Row 1 */}
-        <Box sx={{ 
-          display: 'grid', 
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, 
-          gap: 3, 
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+          gap: 3,
           mb: 4,
           position: 'relative',
           animation: 'fadeInUp 0.8s ease-out 0.3s backwards',
@@ -1040,7 +1040,7 @@ export default function HomePage() {
         }}>
           {/* Loading Overlay removed - using full page skeleton instead */}
           {false && (
-            <Box sx={{ 
+            <Box sx={{
               position: 'absolute',
               top: 0,
               left: 0,
@@ -1086,94 +1086,94 @@ export default function HomePage() {
                   <CardContent sx={{ p: 3.5 }}>
                     {/* Enhanced Header skeleton */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                      <Skeleton 
-                        variant="rectangular" 
-                        width={48} 
-                        height={48} 
-                        sx={{ 
+                      <Skeleton
+                        variant="rectangular"
+                        width={48}
+                        height={48}
+                        sx={{
                           borderRadius: 3,
                           background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.1), rgba(0, 191, 165, 0.15))'
                         }}
                         animation="wave"
                       />
                       <Box sx={{ flex: 1 }}>
-                        <Skeleton 
-                          variant="text" 
-                          width="65%" 
-                          height={14} 
+                        <Skeleton
+                          variant="text"
+                          width="65%"
+                          height={14}
                           sx={{ mb: 0.8, borderRadius: 2 }}
                           animation="wave"
                         />
-                        <Skeleton 
-                          variant="text" 
-                          width="85%" 
+                        <Skeleton
+                          variant="text"
+                          width="85%"
                           height={22}
                           sx={{ mb: 0.5, borderRadius: 2 }}
                           animation="wave"
                         />
-                        <Skeleton 
-                          variant="text" 
-                          width="45%" 
+                        <Skeleton
+                          variant="text"
+                          width="45%"
                           height={12}
                           sx={{ borderRadius: 2 }}
                           animation="wave"
                         />
                       </Box>
                     </Box>
-                    
+
                     {/* Enhanced Main number skeleton */}
                     <Box sx={{ mb: 3 }}>
-                      <Skeleton 
-                        variant="text" 
-                        width="75%" 
-                        height={48} 
-                        sx={{ 
-                          mb: 1, 
+                      <Skeleton
+                        variant="text"
+                        width="75%"
+                        height={48}
+                        sx={{
+                          mb: 1,
                           borderRadius: 3,
                           background: 'linear-gradient(90deg, rgba(0,0,0,0.06), rgba(0,0,0,0.03), rgba(0,0,0,0.06))'
                         }}
                         animation="wave"
                       />
-                      <Skeleton 
-                        variant="text" 
-                        width="95%" 
+                      <Skeleton
+                        variant="text"
+                        width="95%"
                         height={16}
                         sx={{ borderRadius: 2 }}
                         animation="wave"
                       />
                     </Box>
-                    
+
                     {/* Enhanced Divider skeleton */}
-                    <Skeleton 
-                      variant="rectangular" 
-                      width="100%" 
-                      height={2} 
-                      sx={{ 
-                        mb: 3, 
+                    <Skeleton
+                      variant="rectangular"
+                      width="100%"
+                      height={2}
+                      sx={{
+                        mb: 3,
                         borderRadius: 1,
                         background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)'
                       }}
                       animation="wave"
                     />
-                    
+
                     {/* Enhanced Bottom content skeleton */}
-                    <Box sx={{ 
+                    <Box sx={{
                       textAlign: 'center',
                       p: 2,
                       borderRadius: 2,
                       bgcolor: 'rgba(248, 249, 250, 0.5)'
                     }}>
-                      <Skeleton 
-                        variant="text" 
-                        width="65%" 
-                        height={28} 
+                      <Skeleton
+                        variant="text"
+                        width="65%"
+                        height={28}
                         sx={{ mb: 0.5, mx: 'auto', borderRadius: 2 }}
                         animation="wave"
                       />
-                      <Skeleton 
-                        variant="text" 
-                        width="85%" 
-                        height={14} 
+                      <Skeleton
+                        variant="text"
+                        width="85%"
+                        height={14}
                         sx={{ mx: 'auto', borderRadius: 2 }}
                         animation="wave"
                       />
@@ -1183,7 +1183,7 @@ export default function HomePage() {
               ))}
             </Box>
           )}
-          
+
           {/* Vacant Position Summary Card */}
           <Card
             sx={{
@@ -1419,7 +1419,7 @@ export default function HomePage() {
                     สลับสำเร็จแล้ว
                   </Typography>
                 </Box>
-                
+
               </Box>
             </CardContent>
           </Card>
@@ -1531,7 +1531,7 @@ export default function HomePage() {
                     สลับสำเร็จแล้ว
                   </Typography>
                 </Box>
-                
+
               </Box>
             </CardContent>
           </Card>
@@ -1658,10 +1658,10 @@ export default function HomePage() {
         </Box>
 
         {/* Bar Chart: Vacant Positions vs Applicants */}
-        <Paper sx={{ 
-          borderRadius: 2, 
-          mb: 4, 
-          overflow: 'hidden', 
+        <Paper sx={{
+          borderRadius: 2,
+          mb: 4,
+          overflow: 'hidden',
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
           border: '1px solid',
           borderColor: 'divider',
@@ -1671,8 +1671,8 @@ export default function HomePage() {
             boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
           }
         }}>
-          <Box sx={{ 
-            p: 2, 
+          <Box sx={{
+            p: 2,
             pb: 1.5,
             bgcolor: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
             borderBottom: '2px solid',
@@ -1715,9 +1715,9 @@ export default function HomePage() {
                   แยกตามรหัสตำแหน่ง (POS Code) • ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                 </Typography>
               </Box>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+              <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
                 gap: 3,
                 bgcolor: 'white',
                 px: 2,
@@ -1728,9 +1728,9 @@ export default function HomePage() {
                 borderColor: 'divider',
               }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Box sx={{ 
-                    width: 14, 
-                    height: 14, 
+                  <Box sx={{
+                    width: 14,
+                    height: 14,
                     borderRadius: 1,
                     background: 'linear-gradient(135deg, #1DE9B6, #00BFA5)',
                     boxShadow: '0 2px 6px rgba(29, 233, 182, 0.35)',
@@ -1739,14 +1739,14 @@ export default function HomePage() {
                     <Typography variant="body2" fontSize="0.8rem" fontWeight={700} color="text.primary">
                       จับคู่ตำแหน่งว่างแล้ว
                     </Typography>
-                   
+
                   </Box>
                 </Box>
                 <Divider orientation="vertical" flexItem sx={{ my: 0.5 }} />
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Box sx={{ 
-                    width: 14, 
-                    height: 14, 
+                  <Box sx={{
+                    width: 14,
+                    height: 14,
                     borderRadius: 1,
                     background: 'linear-gradient(135deg, rgba(158, 158, 158, 0.9), rgba(189, 189, 189, 0.7))',
                     boxShadow: '0 2px 6px rgba(158, 158, 158, 0.25)',
@@ -1755,21 +1755,21 @@ export default function HomePage() {
                     <Typography variant="body2" fontSize="0.8rem" fontWeight={700} color="text.primary">
                       ตำแหน่งว่าง
                     </Typography>
-                    
+
                   </Box>
                 </Box>
               </Box>
             </Box>
           </Box>
-          <Box sx={{ 
-            p: 2, 
-            bgcolor: 'white', 
-            height: { xs: 300, sm: 340, md: 380 }, 
-            position: 'relative' 
+          <Box sx={{
+            p: 2,
+            bgcolor: 'white',
+            height: { xs: 300, sm: 340, md: 380 },
+            position: 'relative'
           }}>
             {/* Enhanced Filter Loading Overlay removed - using full page skeleton instead */}
             {false && (
-              <Box sx={{ 
+              <Box sx={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
@@ -1791,39 +1791,39 @@ export default function HomePage() {
                 {/* Enhanced Chart title skeleton */}
                 <Box sx={{ mb: 4 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Skeleton 
-                      variant="rectangular" 
-                      width={40} 
-                      height={40} 
-                      sx={{ 
+                    <Skeleton
+                      variant="rectangular"
+                      width={40}
+                      height={40}
+                      sx={{
                         borderRadius: 2,
                         background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.15), rgba(66, 165, 245, 0.15))'
                       }}
                       animation="wave"
                     />
-                    <Skeleton 
-                      variant="text" 
-                      width="45%" 
-                      height={28} 
+                    <Skeleton
+                      variant="text"
+                      width="45%"
+                      height={28}
                       sx={{ borderRadius: 3 }}
                       animation="wave"
                     />
                   </Box>
-                  <Skeleton 
-                    variant="text" 
-                    width="65%" 
+                  <Skeleton
+                    variant="text"
+                    width="65%"
                     height={18}
                     sx={{ borderRadius: 2, ml: 7 }}
                     animation="wave"
                   />
                 </Box>
-                
+
                 {/* Enhanced Chart bars skeleton with glassmorphism */}
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'end', 
-                  gap: 3, 
-                  height: '100%', 
+                <Box sx={{
+                  display: 'flex',
+                  alignItems: 'end',
+                  gap: 3,
+                  height: '100%',
                   pt: 3,
                   pb: 5,
                   px: 2,
@@ -1833,10 +1833,10 @@ export default function HomePage() {
                   backdropFilter: 'blur(8px)',
                 }}>
                   {[85, 50, 95, 35, 70, 90].map((height, index) => (
-                    <Box key={index} sx={{ 
-                      flex: 1, 
-                      display: 'flex', 
-                      flexDirection: 'column', 
+                    <Box key={index} sx={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
                       alignItems: 'center',
                       height: '100%',
                       animation: `barFloat 2s ease-in-out infinite ${index * 0.2}s`,
@@ -1845,14 +1845,14 @@ export default function HomePage() {
                         '50%': { transform: 'translateY(-2px)' }
                       }
                     }}>
-                      <Skeleton 
-                        variant="rectangular" 
-                        width="100%" 
+                      <Skeleton
+                        variant="rectangular"
+                        width="100%"
                         height={`${height}%`}
-                        sx={{ 
+                        sx={{
                           borderRadius: '24px 24px 8px 8px',
                           mb: 2,
-                          background: index % 2 === 0 
+                          background: index % 2 === 0
                             ? 'linear-gradient(180deg, rgba(29, 233, 182, 0.2), rgba(29, 233, 182, 0.05))'
                             : 'linear-gradient(180deg, rgba(158, 158, 158, 0.15), rgba(189, 189, 189, 0.05))',
                           border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -1876,9 +1876,9 @@ export default function HomePage() {
                         }}
                         animation="wave"
                       />
-                      <Skeleton 
-                        variant="text" 
-                        width="85%" 
+                      <Skeleton
+                        variant="text"
+                        width="85%"
                         height={16}
                         sx={{ borderRadius: 2 }}
                         animation="wave"
@@ -1886,10 +1886,10 @@ export default function HomePage() {
                     </Box>
                   ))}
                 </Box>
-                
+
                 {/* Chart legend skeleton */}
-                <Box sx={{ 
-                  display: 'flex', 
+                <Box sx={{
+                  display: 'flex',
                   justifyContent: 'center',
                   gap: 4,
                   mt: 3,
@@ -1901,16 +1901,16 @@ export default function HomePage() {
                 }}>
                   {[1, 2].map((item) => (
                     <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Skeleton 
-                        variant="rectangular" 
-                        width={20} 
-                        height={20} 
+                      <Skeleton
+                        variant="rectangular"
+                        width={20}
+                        height={20}
                         sx={{ borderRadius: 1 }}
                         animation="wave"
                       />
-                      <Skeleton 
-                        variant="text" 
-                        width={120} 
+                      <Skeleton
+                        variant="text"
+                        width={120}
                         height={16}
                         sx={{ borderRadius: 2 }}
                         animation="wave"
@@ -1920,7 +1920,7 @@ export default function HomePage() {
                 </Box>
               </Box>
             )}
-            
+
             {/* Chart Content */}
             {chartData ? (
               <Bar data={chartData} options={chartOptions} />
@@ -1953,10 +1953,10 @@ export default function HomePage() {
 
         {/* Details by Position Table */}
         {stats.positionDetails && stats.positionDetails.length > 0 && (
-          <Paper sx={{ 
-            borderRadius: 2, 
-            mb: 4, 
-            overflow: 'hidden', 
+          <Paper sx={{
+            borderRadius: 2,
+            mb: 4,
+            overflow: 'hidden',
             boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
             border: '1px solid',
             borderColor: 'divider',
@@ -1969,7 +1969,7 @@ export default function HomePage() {
           }}>
             {/* Enhanced Filter Loading Overlay for Table removed - using full page skeleton instead */}
             {false && (
-              <Box sx={{ 
+              <Box sx={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
@@ -1986,43 +1986,43 @@ export default function HomePage() {
                 }
               }}>
                 {/* Enhanced Table header skeleton */}
-                <Box sx={{ 
-                  p: 4, 
+                <Box sx={{
+                  p: 4,
                   pb: 3,
                   borderBottom: '2px solid rgba(240, 242, 247, 0.8)',
                   background: 'linear-gradient(135deg, rgba(248, 249, 250, 0.9), rgba(255, 255, 255, 0.9))'
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                    <Skeleton 
-                      variant="rectangular" 
-                      width={40} 
-                      height={40} 
-                      sx={{ 
+                    <Skeleton
+                      variant="rectangular"
+                      width={40}
+                      height={40}
+                      sx={{
                         borderRadius: 3,
                         background: 'linear-gradient(135deg, rgba(124, 93, 250, 0.15), rgba(157, 127, 250, 0.15))'
                       }}
                       animation="wave"
                     />
-                    <Skeleton 
-                      variant="text" 
-                      width="45%" 
+                    <Skeleton
+                      variant="text"
+                      width="45%"
                       height={28}
                       sx={{ borderRadius: 3 }}
                       animation="wave"
                     />
                   </Box>
-                  <Skeleton 
-                    variant="text" 
-                    width="65%" 
-                    height={18} 
+                  <Skeleton
+                    variant="text"
+                    width="65%"
+                    height={18}
                     sx={{ ml: 6.5, borderRadius: 2 }}
                     animation="wave"
                   />
                 </Box>
-                
+
                 {/* Enhanced Table content skeleton */}
                 <Box sx={{ p: 4 }}>
-                  <TableContainer sx={{ 
+                  <TableContainer sx={{
                     borderRadius: 3,
                     overflow: 'hidden',
                     background: 'rgba(255, 255, 255, 0.6)',
@@ -2031,17 +2031,17 @@ export default function HomePage() {
                   }}>
                     <Table>
                       <TableHead>
-                        <TableRow sx={{ 
+                        <TableRow sx={{
                           bgcolor: 'rgba(250, 250, 250, 0.8)',
                           '& .MuiTableCell-root': { border: 'none' }
                         }}>
                           {['PosCode', 'ชื่อตำแหน่ง', 'ตำแหน่งว่าง', 'จับคู่แล้ว', 'รอจับคู่', 'อัตราความสำเร็จ'].map((header, index) => (
                             <TableCell key={index}>
-                              <Skeleton 
-                                variant="text" 
-                                width={index === 1 ? "95%" : "75%"} 
+                              <Skeleton
+                                variant="text"
+                                width={index === 1 ? "95%" : "75%"}
                                 height={18}
-                                sx={{ 
+                                sx={{
                                   borderRadius: 2,
                                   '&::after': {
                                     animationDelay: `${index * 0.1}s`,
@@ -2055,10 +2055,10 @@ export default function HomePage() {
                       </TableHead>
                       <TableBody>
                         {[1, 2, 3, 4, 5].map((row) => (
-                          <TableRow 
-                            key={row} 
-                            sx={{ 
-                              '& .MuiTableCell-root': { 
+                          <TableRow
+                            key={row}
+                            sx={{
+                              '& .MuiTableCell-root': {
                                 border: 'none',
                                 borderBottom: '1px solid rgba(224, 224, 224, 0.3)'
                               },
@@ -2074,20 +2074,20 @@ export default function HomePage() {
                           >
                             {[1, 2, 3, 4, 5, 6].map((cell) => (
                               <TableCell key={cell}>
-                                <Skeleton 
+                                <Skeleton
                                   variant={cell === 2 ? "text" : cell === 6 ? "rectangular" : "text"}
-                                  width={cell === 2 ? "85%" : cell === 6 ? "80%" : "65%"} 
+                                  width={cell === 2 ? "85%" : cell === 6 ? "80%" : "65%"}
                                   height={cell === 6 ? 24 : 16}
-                                  sx={{ 
+                                  sx={{
                                     borderRadius: cell === 6 ? 3 : 2,
-                                    background: cell === 6 
+                                    background: cell === 6
                                       ? 'linear-gradient(90deg, rgba(76, 175, 80, 0.1), rgba(129, 199, 132, 0.1))'
                                       : undefined,
                                     '&::after': {
                                       animationDelay: `${(row - 1) * 0.15 + cell * 0.05}s`,
                                     }
                                   }}
- animation="wave"
+                                  animation="wave"
                                 />
                               </TableCell>
                             ))}
@@ -2096,11 +2096,11 @@ export default function HomePage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  
+
                   {/* Enhanced pagination skeleton */}
-                  <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
+                  <Box sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
                     mt: 3,
                     p: 2,
@@ -2112,11 +2112,11 @@ export default function HomePage() {
                     <Skeleton variant="text" width={150} height={20} sx={{ borderRadius: 2 }} animation="wave" />
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       {[1, 2, 3, 4].map((btn) => (
-                        <Skeleton 
-                          key={btn} 
-                          variant="rectangular" 
-                          width={32} 
-                          height={32} 
+                        <Skeleton
+                          key={btn}
+                          variant="rectangular"
+                          width={32}
+                          height={32}
                           sx={{ borderRadius: 2 }}
                           animation="wave"
                         />
@@ -2124,12 +2124,12 @@ export default function HomePage() {
                     </Box>
                   </Box>
                 </Box>
-                </Box>
-              
+              </Box>
+
             )}
-            
-            <Box sx={{ 
-              p: 2, 
+
+            <Box sx={{
+              p: 2,
               pb: 1.5,
               bgcolor: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff  100%)',
               borderBottom: '2px solid',
@@ -2167,7 +2167,7 @@ export default function HomePage() {
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary" fontSize="0.8rem" sx={{ ml: 5.5 }}>
-                ปี {selectedYear} 
+                ปี {selectedYear}
                 {selectedUnit !== 'all' && ` • หน่วย: ${selectedUnit}`}
               </Typography>
             </Box>
@@ -2175,28 +2175,28 @@ export default function HomePage() {
               <Table sx={{ '& .MuiTableCell-root': { px: 3 } }}>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#FAFAFA' }}>
-                    <TableCell sx={{ 
-                      fontWeight: 600, 
-                      py: 1, 
-                      fontSize: '0.75rem', 
+                    <TableCell sx={{
+                      fontWeight: 600,
+                      py: 1,
+                      fontSize: '0.75rem',
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
                     }}>
                       POSCODE
                     </TableCell>
-                    <TableCell sx={{ 
-                      fontWeight: 600, 
-                      py: 1, 
-                      fontSize: '0.75rem', 
+                    <TableCell sx={{
+                      fontWeight: 600,
+                      py: 1,
+                      fontSize: '0.75rem',
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
                     }}>
                       ชื่อตำแหน่ง
                     </TableCell>
-                    <TableCell align="center" sx={{ 
-                      fontWeight: 600, 
-                      py: 1, 
-                      fontSize: '0.75rem', 
+                    <TableCell align="center" sx={{
+                      fontWeight: 600,
+                      py: 1,
+                      fontSize: '0.75rem',
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
                       textTransform: 'uppercase',
@@ -2204,10 +2204,10 @@ export default function HomePage() {
                     }}>
                       ตำแหน่งว่าง
                     </TableCell>
-                    <TableCell align="center" sx={{ 
-                      fontWeight: 600, 
-                      py: 1, 
-                      fontSize: '0.75rem', 
+                    <TableCell align="center" sx={{
+                      fontWeight: 600,
+                      py: 1,
+                      fontSize: '0.75rem',
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
                       textTransform: 'uppercase',
@@ -2215,10 +2215,10 @@ export default function HomePage() {
                     }}>
                       จับคู่แล้ว
                     </TableCell>
-                    <TableCell align="center" sx={{ 
-                      fontWeight: 600, 
-                      py: 1, 
-                      fontSize: '0.75rem', 
+                    <TableCell align="center" sx={{
+                      fontWeight: 600,
+                      py: 1,
+                      fontSize: '0.75rem',
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
                       textTransform: 'uppercase',
@@ -2226,10 +2226,10 @@ export default function HomePage() {
                     }}>
                       รอจับคู่
                     </TableCell>
-                    <TableCell align="center" sx={{ 
-                      fontWeight: 600, 
-                      py: 1, 
-                      fontSize: '0.75rem', 
+                    <TableCell align="center" sx={{
+                      fontWeight: 600,
+                      py: 1,
+                      fontSize: '0.75rem',
                       color: '#424242',
                       borderBottom: '1px solid #E0E0E0',
                       textTransform: 'uppercase',
@@ -2241,55 +2241,75 @@ export default function HomePage() {
                 </TableHead>
                 <TableBody>
                   {sortedPositionDetails.map((position, index) => {
-                                           const hasSlotData = position.availableSlots !== undefined;
-                      const slotStatus = hasSlotData 
-                        ? position.availableSlots! > position.assignedCount 
-                          ? 'available' 
-                          : position.availableSlots! === position.assignedCount 
-                            ? 'full' 
-                            : 'over'
-                        : 'unknown';
-                      
-                      return (
-                    <TableRow 
-                      key={position.posCodeId}
-                      hover
-                      sx={{ 
-                        '&:hover': { bgcolor: 'rgba(124, 93, 250, 0.08)' },
-                        transition: 'all 0.2s',
-                        borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
-                      }}
-                    >
-                      <TableCell sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        <Box sx={{ 
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: DASHBOARD_COLORS.primarySoft,
-                          color: DASHBOARD_COLORS.primary,
-                          fontWeight: 700,
-                          fontSize: '0.75rem',
-                          px: 1,
-                          py: 0.25,
-                          borderRadius: 1.5,
-                          minWidth: 45
-                        }}>
-                          {position.posCodeId}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        <Typography variant="body2" fontWeight={500} color="#424242" fontSize="0.8rem">
-                          {position.posCodeName}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        {hasSlotData ? (
-                          <Box sx={{ 
+                    const hasSlotData = position.availableSlots !== undefined;
+                    const slotStatus = hasSlotData
+                      ? position.availableSlots! > position.assignedCount
+                        ? 'available'
+                        : position.availableSlots! === position.assignedCount
+                          ? 'full'
+                          : 'over'
+                      : 'unknown';
+
+                    return (
+                      <TableRow
+                        key={position.posCodeId}
+                        hover
+                        sx={{
+                          '&:hover': { bgcolor: 'rgba(124, 93, 250, 0.08)' },
+                          transition: 'all 0.2s',
+                          borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
+                        }}
+                      >
+                        <TableCell sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                          <Box sx={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             bgcolor: DASHBOARD_COLORS.primarySoft,
                             color: DASHBOARD_COLORS.primary,
+                            fontWeight: 700,
+                            fontSize: '0.75rem',
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: 1.5,
+                            minWidth: 45
+                          }}>
+                            {position.posCodeId}
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                          <Typography variant="body2" fontWeight={500} color="#424242" fontSize="0.8rem">
+                            {position.posCodeName}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                          {hasSlotData ? (
+                            <Box sx={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              bgcolor: DASHBOARD_COLORS.primarySoft,
+                              color: DASHBOARD_COLORS.primary,
+                              fontWeight: 700,
+                              fontSize: '0.8rem',
+                              px: 1.25,
+                              py: 0.4,
+                              borderRadius: 1.5,
+                              minWidth: 50
+                            }}>
+                              {position.availableSlots}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">-</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                          <Box sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            bgcolor: DASHBOARD_COLORS.accentSoft,
+                            color: DASHBOARD_COLORS.accent,
                             fontWeight: 700,
                             fontSize: '0.8rem',
                             px: 1.25,
@@ -2297,84 +2317,64 @@ export default function HomePage() {
                             borderRadius: 1.5,
                             minWidth: 50
                           }}>
-                            {position.availableSlots}
+                            {position.assignedCount}
                           </Box>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">-</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        <Box sx={{ 
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: DASHBOARD_COLORS.accentSoft,
-                          color: DASHBOARD_COLORS.accent,
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          px: 1.25,
-                          py: 0.4,
-                          borderRadius: 1.5,
-                          minWidth: 50
-                        }}>
-                          {position.assignedCount}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        <Box sx={{ 
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: DASHBOARD_COLORS.pinkSoft,
-                          color: DASHBOARD_COLORS.pink,
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          px: 1.25,
-                          py: 0.4,
-                          borderRadius: 1.5,
-                          minWidth: 50
-                        }}>
-                          {position.pendingCount}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-                          <Box sx={{ flex: 1, bgcolor: 'rgba(29, 233, 182, 0.12)', borderRadius: 2, height: 5, overflow: 'hidden' }}>
-                            <Box sx={{ 
-                              height: '100%', 
-                              width: `${position.assignmentRate}%`,
-                              background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
-                              borderRadius: 2,
-                              transition: 'width 0.3s ease'
-                            }} />
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                          <Box sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            bgcolor: DASHBOARD_COLORS.pinkSoft,
+                            color: DASHBOARD_COLORS.pink,
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            px: 1.25,
+                            py: 0.4,
+                            borderRadius: 1.5,
+                            minWidth: 50
+                          }}>
+                            {position.pendingCount}
                           </Box>
-                          <Typography variant="body2" fontWeight={700} fontSize="0.8rem" sx={{ minWidth: 42, color: '#00BFA5' }}>
-                            {position.assignmentRate.toFixed(0)}%
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
-                    })}
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1, borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                            <Box sx={{ flex: 1, bgcolor: 'rgba(29, 233, 182, 0.12)', borderRadius: 2, height: 5, overflow: 'hidden' }}>
+                              <Box sx={{
+                                height: '100%',
+                                width: `${position.assignmentRate}%`,
+                                background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
+                                borderRadius: 2,
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </Box>
+                            <Typography variant="body2" fontWeight={700} fontSize="0.8rem" sx={{ minWidth: 42, color: '#00BFA5' }}>
+                              {position.assignmentRate.toFixed(0)}%
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
-            
+
           </Paper>
         )}
 
         {/* Summary Stats */}
-        <Box sx={{ 
-          display: 'grid', 
-          gridTemplateColumns: { xs: '1fr', md: '3fr 7fr' }, 
-          gap: 3, 
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '3fr 7fr' },
+          gap: 3,
           mb: 4,
           position: 'relative',
           animation: 'fadeInUp 0.8s ease-out 0.8s backwards',
         }}>
           {/* Enhanced Filter Loading Overlay for Summary Cards removed - using full page skeleton instead */}
           {false && (
-            <Box sx={{ 
+            <Box sx={{
               position: 'absolute',
               top: 0,
               left: 0,
@@ -2394,8 +2394,8 @@ export default function HomePage() {
               }
             }}>
               {/* Enhanced Summary Card Skeleton 1 */}
-              <Card sx={{ 
-                borderRadius: 3, 
+              <Card sx={{
+                borderRadius: 3,
                 overflow: 'hidden',
                 background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
                 boxShadow: '0 12px 40px rgba(0, 0, 0, 0.08)',
@@ -2412,8 +2412,8 @@ export default function HomePage() {
                 }
               }}>
                 {/* Enhanced Header skeleton */}
-                <Box sx={{ 
-                  p: 2.5, 
+                <Box sx={{
+                  p: 2.5,
                   pb: 2,
                   borderBottom: '2px solid rgba(240, 242, 247, 0.6)',
                   background: 'linear-gradient(135deg, rgba(248, 249, 250, 0.9), rgba(255, 255, 255, 0.9))',
@@ -2430,27 +2430,27 @@ export default function HomePage() {
                   }
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Skeleton 
-                      variant="rectangular" 
-                      width={32} 
-                      height={32} 
-                      sx={{ 
+                    <Skeleton
+                      variant="rectangular"
+                      width={32}
+                      height={32}
+                      sx={{
                         borderRadius: 2,
                         background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.2), rgba(0, 191, 165, 0.15))'
                       }}
                       animation="wave"
                     />
                     <Box>
-                      <Skeleton 
-                        variant="text" 
-                        width={200} 
-                        height={22} 
+                      <Skeleton
+                        variant="text"
+                        width={200}
+                        height={22}
                         sx={{ mb: 0.5, borderRadius: 3 }}
                         animation="wave"
                       />
-                      <Skeleton 
-                        variant="text" 
-                        width={140} 
+                      <Skeleton
+                        variant="text"
+                        width={140}
                         height={16}
                         sx={{ borderRadius: 2 }}
                         animation="wave"
@@ -2462,11 +2462,11 @@ export default function HomePage() {
                 <CardContent sx={{ p: 2.5 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {[1, 2, 3, 4, 5].map((item) => (
-                      <Box 
-                        key={item} 
-                        sx={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
+                      <Box
+                        key={item}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
                           p: 1.5,
                           borderRadius: 2,
@@ -2480,42 +2480,42 @@ export default function HomePage() {
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                          <Skeleton 
-                            variant="rectangular" 
-                            width={36} 
-                            height={36} 
-                            sx={{ 
+                          <Skeleton
+                            variant="rectangular"
+                            width={36}
+                            height={36}
+                            sx={{
                               borderRadius: 2,
-                              background: item === 1 
+                              background: item === 1
                                 ? 'linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 165, 0, 0.2))'
-                                : item === 2 
+                                : item === 2
                                   ? 'linear-gradient(135deg, rgba(192, 192, 192, 0.3), rgba(169, 169, 169, 0.2))'
                                   : 'linear-gradient(135deg, rgba(224, 224, 224, 0.3), rgba(189, 189, 189, 0.2))'
                             }}
                             animation="wave"
                           />
                           <Box sx={{ flex: 1 }}>
-                            <Skeleton 
-                              variant="text" 
-                              width="85%" 
-                              height={18} 
+                            <Skeleton
+                              variant="text"
+                              width="85%"
+                              height={18}
                               sx={{ mb: 0.5, borderRadius: 2 }}
                               animation="wave"
                             />
-                            <Skeleton 
-                              variant="text" 
-                              width="65%" 
+                            <Skeleton
+                              variant="text"
+                              width="65%"
                               height={14}
                               sx={{ borderRadius: 2 }}
                               animation="wave"
                             />
                           </Box>
                         </Box>
-                        <Skeleton 
-                          variant="rectangular" 
-                          width={70} 
-                          height={30} 
-                          sx={{ 
+                        <Skeleton
+                          variant="rectangular"
+                          width={70}
+                          height={30}
+                          sx={{
                             borderRadius: 3,
                             background: 'linear-gradient(135deg, rgba(227, 242, 253, 0.8), rgba(187, 222, 251, 0.6))'
                           }}
@@ -2528,8 +2528,8 @@ export default function HomePage() {
               </Card>
 
               {/* Enhanced Summary Card Skeleton 2 */}
-              <Card sx={{ 
-                borderRadius: 3, 
+              <Card sx={{
+                borderRadius: 3,
                 overflow: 'hidden',
                 background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
                 boxShadow: '0 12px 40px rgba(0, 0, 0, 0.08)',
@@ -2542,8 +2542,8 @@ export default function HomePage() {
                 }
               }}>
                 {/* Enhanced Header skeleton */}
-                <Box sx={{ 
-                  p: 2.5, 
+                <Box sx={{
+                  p: 2.5,
                   pb: 2,
                   borderBottom: '2px solid rgba(240, 242, 247, 0.6)',
                   background: 'linear-gradient(135deg, rgba(248, 249, 250, 0.9), rgba(255, 255, 255, 0.9))',
@@ -2560,27 +2560,27 @@ export default function HomePage() {
                   }
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Skeleton 
-                      variant="rectangular" 
-                      width={32} 
-                      height={32} 
-                      sx={{ 
+                    <Skeleton
+                      variant="rectangular"
+                      width={32}
+                      height={32}
+                      sx={{
                         borderRadius: 2,
                         background: 'linear-gradient(135deg, rgba(255, 154, 68, 0.2), rgba(255, 152, 0, 0.15))'
                       }}
                       animation="wave"
                     />
                     <Box>
-                      <Skeleton 
-                        variant="text" 
-                        width={200} 
-                        height={22} 
+                      <Skeleton
+                        variant="text"
+                        width={200}
+                        height={22}
                         sx={{ mb: 0.5, borderRadius: 3 }}
                         animation="wave"
                       />
-                      <Skeleton 
-                        variant="text" 
-                        width={140} 
+                      <Skeleton
+                        variant="text"
+                        width={140}
                         height={16}
                         sx={{ borderRadius: 2 }}
                         animation="wave"
@@ -2592,11 +2592,11 @@ export default function HomePage() {
                 <CardContent sx={{ p: 2.5 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {[1, 2, 3, 4].map((item) => (
-                      <Box 
-                        key={item} 
-                        sx={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
+                      <Box
+                        key={item}
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
                           p: 1.5,
                           borderRadius: 2,
@@ -2606,38 +2606,38 @@ export default function HomePage() {
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                          <Skeleton 
-                            variant="rectangular" 
-                            width={36} 
-                            height={36} 
-                            sx={{ 
+                          <Skeleton
+                            variant="rectangular"
+                            width={36}
+                            height={36}
+                            sx={{
                               borderRadius: 2,
                               background: 'linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 152, 0, 0.15))'
                             }}
                             animation="wave"
                           />
                           <Box sx={{ flex: 1 }}>
-                            <Skeleton 
-                              variant="text" 
-                              width="85%" 
-                              height={18} 
+                            <Skeleton
+                              variant="text"
+                              width="85%"
+                              height={18}
                               sx={{ mb: 0.5, borderRadius: 2 }}
                               animation="wave"
                             />
-                            <Skeleton 
-                              variant="text" 
-                              width="65%" 
+                            <Skeleton
+                              variant="text"
+                              width="65%"
                               height={14}
                               sx={{ borderRadius: 2 }}
                               animation="wave"
                             />
                           </Box>
                         </Box>
-                        <Skeleton 
-                          variant="rectangular" 
-                          width={70} 
-                          height={30} 
-                          sx={{ 
+                        <Skeleton
+                          variant="rectangular"
+                          width={70}
+                          height={30}
+                          sx={{
                             borderRadius: 3,
                             background: 'linear-gradient(135deg, rgba(255, 235, 7, 0.8), rgba(255, 152, 0, 0.6))'
                           }}
@@ -2646,38 +2646,38 @@ export default function HomePage() {
                       </Box>
                     ))}
                   </Box>
-                  
+
                   {/* Empty state skeleton for no pending positions */}
-                  <Box sx={{ 
-                    textAlign: 'center', 
+                  <Box sx={{
+                    textAlign: 'center',
                     py: 4,
                     mt: 2,
                     borderRadius: 2,
                     background: 'rgba(29, 233, 182, 0.05)',
                     border: '1px dashed rgba(29, 233, 182, 0.2)'
                   }}>
-                    <Skeleton 
-                      variant="circular" 
-                      width={56} 
-                      height={56} 
-                      sx={{ 
-                        mx: 'auto', 
+                    <Skeleton
+                      variant="circular"
+                      width={56}
+                      height={56}
+                      sx={{
+                        mx: 'auto',
                         mb: 2,
                         background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.2), rgba(0, 191, 165, 0.15))'
                       }}
                       animation="wave"
                     />
-                    <Skeleton 
-                      variant="text" 
-                      width="70%" 
-                      height={20} 
+                    <Skeleton
+                      variant="text"
+                      width="70%"
+                      height={20}
                       sx={{ mb: 1, mx: 'auto', borderRadius: 2 }}
                       animation="wave"
                     />
-                    <Skeleton 
-                      variant="text" 
-                      width="85%" 
-                      height={16} 
+                    <Skeleton
+                      variant="text"
+                      width="85%"
+                      height={16}
                       sx={{ mx: 'auto', borderRadius: 2 }}
                       animation="wave"
                     />
@@ -2686,11 +2686,11 @@ export default function HomePage() {
               </Card>
             </Box>
           )}
-          
+
           {/* Matching Progress Status */}
           {stats.transactionStatusSummary && stats.transactionStatusSummary.length > 0 && (
-            <Card sx={{ 
-              borderRadius: 2, 
+            <Card sx={{
+              borderRadius: 2,
               boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               border: '1px solid',
               borderColor: 'divider',
@@ -2704,8 +2704,8 @@ export default function HomePage() {
                 boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
               }
             }}>
-              <Box sx={{ 
-                p: 1.25, 
+              <Box sx={{
+                p: 1.25,
                 pb: 0.75,
                 background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
                 borderBottom: '2px solid',
@@ -2753,7 +2753,7 @@ export default function HomePage() {
               <CardContent sx={{ p: 1.25, bgcolor: 'white', flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
                   {stats.transactionStatusSummary.map((status, index) => (
-                    <Box 
+                    <Box
                       key={`${status.label}-${index}`}
                       sx={{
                         animation: `slideInLeft 0.5s ease-out ${index * 0.1}s backwards`,
@@ -2763,9 +2763,9 @@ export default function HomePage() {
                         }
                       }}
                     >
-                      <Box sx={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
+                      <Box sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
                         alignItems: 'center',
                         p: 0.5,
                         borderRadius: 1.5,
@@ -2776,17 +2776,17 @@ export default function HomePage() {
                           transform: 'translateX(4px)',
                         }
                       }}
-                      onClick={() => handleStatusClick(status)}
+                        onClick={() => handleStatusClick(status)}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                          <Box sx={{ 
-                            width: 28, 
-                            height: 28, 
-                            borderRadius: '50%', 
-                            display: 'flex', 
-                            alignItems: 'center', 
+                          <Box sx={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
                             justifyContent: 'center',
-                            background: status.type === 'completed' 
+                            background: status.type === 'completed'
                               ? 'linear-gradient(135deg, #00C853 0%, #69F0AE 100%)'
                               : 'linear-gradient(135deg, #FFD600 0%, #FFFF8D 100%)',
                             color: status.type === 'completed' ? 'white' : 'rgba(0,0,0,0.7)',
@@ -2800,12 +2800,12 @@ export default function HomePage() {
                             </Typography>
                           </Box>
                         </Box>
-                        <Chip 
+                        <Chip
                           label={`${status.count} รายการ`}
                           size="small"
-                          sx={{ 
+                          sx={{
                             fontWeight: 700,
-                            background: status.type === 'completed' 
+                            background: status.type === 'completed'
                               ? 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)'
                               : 'linear-gradient(135deg, #FFFDE7 0%, #FFF9C4 100%)',
                             color: status.type === 'completed' ? '#2E7D32' : '#F57F17',
@@ -2827,18 +2827,18 @@ export default function HomePage() {
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
                     รวม {matchingStatusTotals.total} รายการ • สำเร็จ {matchingStatusTotals.completed} ({matchingStatusTotals.percent.toFixed(1)}%)
                   </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={matchingStatusTotals.percent} 
-                    sx={{ 
-                      mt: 0.75, 
-                      height: 6, 
-                      borderRadius: 3, 
-                      backgroundColor: '#e0f2f1', 
-                      '& .MuiLinearProgress-bar': { 
-                        background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)' 
-                      } 
-                    }} 
+                  <LinearProgress
+                    variant="determinate"
+                    value={matchingStatusTotals.percent}
+                    sx={{
+                      mt: 0.75,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: '#e0f2f1',
+                      '& .MuiLinearProgress-bar': {
+                        background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)'
+                      }
+                    }}
                   />
                 </Box>
               </CardContent>
@@ -2847,8 +2847,8 @@ export default function HomePage() {
 
           {/* Supported Personnel Card */}
           {stats.supportedPersonnel && (
-            <Card sx={{ 
-              borderRadius: 2, 
+            <Card sx={{
+              borderRadius: 2,
               boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               border: '1px solid',
               borderColor: 'divider',
@@ -2862,8 +2862,8 @@ export default function HomePage() {
                 boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
               }
             }}>
-              <Box sx={{ 
-                p: 1.25, 
+              <Box sx={{
+                p: 1.25,
                 pb: 0.75,
                 background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
                 borderBottom: '2px solid',
@@ -2913,11 +2913,11 @@ export default function HomePage() {
                   <Table stickyHeader size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
                     <TableHead>
                       <TableRow>
-                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '25%' }}>ชื่อ-สกุล</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '25%' }}>ตำแหน่ง</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '20%' }}>ผู้สนับสนุน</TableCell>
-                          <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '30%' }}>เหตุผล</TableCell>
-                        </TableRow>
+                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '25%' }}>ชื่อ-สกุล</TableCell>
+                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '25%' }}>ตำแหน่ง</TableCell>
+                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '20%' }}>ผู้สนับสนุน</TableCell>
+                        <TableCell sx={{ fontSize: '0.85rem', fontWeight: 600, py: 1, bgcolor: '#f8f9fa', width: '30%' }}>เหตุผล</TableCell>
+                      </TableRow>
                     </TableHead>
                     <TableBody>
                       {stats.supportedPersonnel.length > 0 ? (
@@ -2925,12 +2925,12 @@ export default function HomePage() {
                           .slice(supportPage * supportRowsPerPage, supportPage * supportRowsPerPage + supportRowsPerPage)
                           .map((person) => (
                             <TableRow key={person.id} hover>
-                              <TableCell 
-                                sx={{ 
-                                  fontSize: '0.85rem', 
-                                  py: 0.75, 
-                                  whiteSpace: 'normal', 
-                                  overflow: 'visible', 
+                              <TableCell
+                                sx={{
+                                  fontSize: '0.85rem',
+                                  py: 0.75,
+                                  whiteSpace: 'normal',
+                                  overflow: 'visible',
                                   textOverflow: 'unset',
                                   cursor: 'pointer',
                                   '&:hover': {
@@ -2973,7 +2973,7 @@ export default function HomePage() {
                               </TableCell>
                               <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>{person.supporterName || '-'}</TableCell>
                               <TableCell sx={{ fontSize: '0.85rem', py: 0.75, wordWrap: 'break-word' }}>
-                                <Typography variant="caption" sx={{ 
+                                <Typography variant="caption" sx={{
                                   fontSize: '0.8rem',
                                   whiteSpace: 'normal'
                                 }}>
@@ -3064,27 +3064,27 @@ export default function HomePage() {
                 <TableBody>
                   {filteredDrilldownData.map((tx) => (
                     <TableRow key={tx.id} hover>
-                      <TableCell sx={{ fontWeight: 600, color: 'primary.main', whiteSpace: 'nowrap' , overflow: 'hidden', textOverflow: 'ellipsis', maxWidth:180 }}>
+                      <TableCell sx={{ fontWeight: 600, color: 'primary.main', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
                         {tx.groupNumber || `#${tx.id.substring(0, 6)}...`}
                       </TableCell>
                       <TableCell>{tx.groupName || '-'}</TableCell>
                       <TableCell>
-                        <Chip 
-                          label={tx.swapType === 'promotion-chain' ? 'จัดคนเข้าตำแหน่งว่าง' : tx.swapType === 'transfer' ? 'ย้ายหน่วย' : tx.swapType === 'three-way' ? 'สามเส้า' : 'สลับตำแหน่ง'} 
-                          size="small" 
-                          color={tx.swapType === 'transfer' ? 'warning' : 'secondary'} 
+                        <Chip
+                          label={tx.swapType === 'promotion-chain' ? 'จัดคนเข้าตำแหน่งว่าง' : tx.swapType === 'transfer' ? 'ย้ายหน่วย' : tx.swapType === 'three-way' ? 'สามเส้า' : 'สลับตำแหน่ง'}
+                          size="small"
+                          color={tx.swapType === 'transfer' ? 'warning' : 'secondary'}
                           variant="outlined"
                           sx={{ borderRadius: 1, fontSize: '0.75rem', height: 24 }}
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <Button 
+                        <Button
                           component={Link}
-                          size="small" 
+                          size="small"
                           variant="outlined"
                           href={
-                            tx.swapType === 'two-way' 
-                              ? `/police-personnel/swap-list` 
+                            tx.swapType === 'two-way'
+                              ? `/police-personnel/swap-list`
                               : tx.swapType === 'three-way'
                                 ? `/police-personnel/three-way-swap`
                                 : tx.swapType === 'transfer'
@@ -3148,14 +3148,14 @@ export default function HomePage() {
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
                       {selectedSupportPerson.rank || ''} {selectedSupportPerson.fullName || '-'}
                     </Typography>
-                    
+
                   </Box>
 
                   {/* New Position Section - แสดงก่อน */}
                   {selectedSupportPerson.isMatched ? (
-                    <Paper 
+                    <Paper
                       elevation={0}
-                      sx={{ 
+                      sx={{
                         p: 2.5,
                         mb: 3,
                         bgcolor: 'success.50',
@@ -3206,10 +3206,10 @@ export default function HomePage() {
                       </Stack>
                     </Paper>
                   ) : (
-                    <Box sx={{ 
+                    <Box sx={{
                       mb: 3,
-                      p: 3, 
-                      bgcolor: 'grey.100', 
+                      p: 3,
+                      bgcolor: 'grey.100',
                       borderRadius: 1,
                       textAlign: 'center',
                       border: '1px dashed',
@@ -3229,7 +3229,7 @@ export default function HomePage() {
 
                   {/* Content Grid */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
-                    
+
                     {/* Left Column */}
                     <Box>
                       {/* ข้อมูลตำแหน่งเดิม */}
@@ -3249,8 +3249,8 @@ export default function HomePage() {
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>POSCODE</Typography>
                             <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
-                              {selectedSupportPerson.posCode && selectedSupportPerson.posCodeName 
-                                ? `${selectedSupportPerson.posCode} - ${selectedSupportPerson.posCodeName}` 
+                              {selectedSupportPerson.posCode && selectedSupportPerson.posCodeName
+                                ? `${selectedSupportPerson.posCode} - ${selectedSupportPerson.posCodeName}`
                                 : selectedSupportPerson.posCode || '-'}
                             </Typography>
                           </Box>
@@ -3289,7 +3289,7 @@ export default function HomePage() {
                             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ชื่อ-สกุล</Typography>
                             <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.fullName || '-'}</Typography>
                           </Box>
-                          
+
                           {selectedSupportPerson.seniority && (
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>อาวุโส</Typography>
@@ -3401,7 +3401,7 @@ export default function HomePage() {
                         <Person sx={{ fontSize: 16 }} />
                         ข้อมูลการเสนอชื่อ
                       </Typography>
-                      
+
                       {selectedSupportPerson.supporterName && (
                         <Box sx={{ mb: 1.5 }}>
                           <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.5 }}>
@@ -3412,7 +3412,7 @@ export default function HomePage() {
                           </Typography>
                         </Box>
                       )}
-                      
+
                       {selectedSupportPerson.supportReason && (
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 0.5 }}>

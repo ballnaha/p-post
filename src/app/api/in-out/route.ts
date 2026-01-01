@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
 
-const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
     try {
@@ -15,13 +15,13 @@ export async function GET(request: NextRequest) {
         const year = parseInt(searchParams.get('year') || String(new Date().getFullYear() + 543));
         const page = parseInt(searchParams.get('page') || '0');
         const pageSize = parseInt(searchParams.get('pageSize') || '10');
-        
+
         if (filtersOnly) {
             const currentBuddhistYear = new Date().getFullYear() + 543;
-            
+
             const [units, positionCodes] = await Promise.all([
                 prisma.policePersonnel.findMany({
-                    where: { 
+                    where: {
                         unit: { not: null },
                         year: currentBuddhistYear,
                         isActive: true
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
                     orderBy: { id: 'asc' },
                 })
             ]);
-            
+
             return NextResponse.json({
                 success: true,
                 data: {
@@ -69,15 +69,19 @@ export async function GET(request: NextRequest) {
                 andConditions.push({
                     AND: [
                         { OR: [{ rank: null }, { rank: '' }] },
-                        { OR: [
-                            { fullName: null },
-                            { fullName: '' },
-                            { AND: [
-                                { fullName: { not: null } },
-                                { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } },
-                                { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }
-                            ]}
-                        ]}
+                        {
+                            OR: [
+                                { fullName: null },
+                                { fullName: '' },
+                                {
+                                    AND: [
+                                        { fullName: { not: null } },
+                                        { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } },
+                                        { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }
+                                    ]
+                                }
+                            ]
+                        }
                     ]
                 });
             } else if (status === 'reserved') {
@@ -137,16 +141,16 @@ export async function GET(request: NextRequest) {
 
         const swapByPersonnelId = new Map();
         const swapByNationalId = new Map();
-        
+
         swapDetails.forEach(detail => {
             if (detail.personnelId) swapByPersonnelId.set(detail.personnelId, detail);
             if (detail.nationalId) swapByNationalId.set(detail.nationalId, detail);
         });
 
         let combinedData = personnel.map(person => {
-            const swapInfo = swapByPersonnelId.get(person.id) || 
-                            (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
-            
+            const swapInfo = swapByPersonnelId.get(person.id) ||
+                (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
+
             return {
                 id: person.id,
                 personnelId: person.id,
@@ -166,21 +170,21 @@ export async function GET(request: NextRequest) {
                 trainingLocation: person.trainingLocation,
                 trainingCourse: person.trainingCourse,
                 avatarUrl: person.avatarUrl,
-                
+
                 posCodeId: swapInfo?.posCodeId || person.posCodeId,
                 posCodeMaster: swapInfo?.posCodeMaster || person.posCodeMaster,
                 fromPosition: swapInfo?.fromPosition || person.position,
                 fromPositionNumber: swapInfo?.fromPositionNumber || person.positionNumber,
                 fromUnit: swapInfo?.fromUnit || person.unit,
                 fromActingAs: swapInfo?.fromActingAs || person.actingAs,
-                
+
                 toPosCodeId: swapInfo?.toPosCodeId || null,
                 toPosCodeMaster: swapInfo?.toPosCodeMaster || null,
                 toPosition: swapInfo?.toPosition || null,
                 toPositionNumber: swapInfo?.toPositionNumber || null,
                 toUnit: swapInfo?.toUnit || null,
                 toActingAs: swapInfo?.toActingAs || null,
-                
+
                 transaction: swapInfo ? {
                     id: swapInfo.transaction.id,
                     year: swapInfo.transaction.year,
@@ -188,7 +192,7 @@ export async function GET(request: NextRequest) {
                     swapType: swapInfo.transaction.swapType,
                     groupNumber: swapInfo.transaction.groupNumber,
                 } : null,
-                
+
                 sequence: swapInfo?.sequence ?? null,
                 hasSwapped: !!swapInfo,
                 replacedPerson: null as any,
@@ -199,7 +203,7 @@ export async function GET(request: NextRequest) {
             if (swapType === 'none') {
                 combinedData = combinedData.filter(d => !d.transaction);
             } else {
-                combinedData = combinedData.filter(d => 
+                combinedData = combinedData.filter(d =>
                     d.transaction && d.transaction.swapType === swapType
                 );
             }
@@ -209,15 +213,15 @@ export async function GET(request: NextRequest) {
         combinedData.sort((a, b) => {
             const noIdA = a.noId || '';
             const noIdB = b.noId || '';
-            
+
             if (noIdA && noIdB) {
                 const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
                 if (compareNum !== 0) return compareNum;
             }
-            
+
             if (noIdA && !noIdB) return -1;
             if (!noIdA && noIdB) return 1;
-            
+
             return (a.fullName || '').localeCompare(b.fullName || '', 'th');
         });
 
@@ -225,7 +229,7 @@ export async function GET(request: NextRequest) {
         const paginatedData = combinedData.slice(page * pageSize, (page + 1) * pageSize);
 
         const transactionIds = [...new Set(paginatedData.filter(d => d.transaction).map(d => d.transaction!.id))];
-        
+
         if (transactionIds.length > 0) {
             const allTransactionDetails = await prisma.swapTransactionDetail.findMany({
                 where: { transactionId: { in: transactionIds } },
@@ -241,24 +245,24 @@ export async function GET(request: NextRequest) {
                     return;
                 }
 
-                const transactionPeople = allTransactionDetails.filter(d => 
+                const transactionPeople = allTransactionDetails.filter(d =>
                     d.transactionId === detail.transaction?.id
                 );
-                
+
                 let replaced = null;
-                
+
                 if (detail.toPositionNumber) {
-                    replaced = transactionPeople.find(d => 
+                    replaced = transactionPeople.find(d =>
                         d.id !== detail.id && d.fromPositionNumber === detail.toPositionNumber
                     );
                 }
-                
+
                 if (!replaced && detail.toPosition) {
-                    replaced = transactionPeople.find(d => 
+                    replaced = transactionPeople.find(d =>
                         d.id !== detail.id && d.fromPosition === detail.toPosition
                     );
                 }
-                
+
                 if (!replaced && detail.transaction?.swapType === 'two-way' && transactionPeople.length === 2) {
                     replaced = transactionPeople.find(d => d.id !== detail.id);
                 }
@@ -306,7 +310,7 @@ export async function GET(request: NextRequest) {
 
         const [units, positionCodes] = await Promise.all([
             prisma.policePersonnel.findMany({
-                where: { 
+                where: {
                     unit: { not: null },
                     year: currentBuddhistYear,
                     isActive: true
@@ -323,17 +327,17 @@ export async function GET(request: NextRequest) {
         // คำนวณสถิติสรุป
         const summary = {
             totalPersonnel: combinedData.length,
-            promoted: combinedData.filter(d => 
+            promoted: combinedData.filter(d =>
                 d.posCodeId && d.toPosCodeId && d.toPosCodeId < d.posCodeId
             ).length,
-            transferred: combinedData.filter(d => 
+            transferred: combinedData.filter(d =>
                 d.posCodeId && d.toPosCodeId && d.toPosCodeId === d.posCodeId
             ).length,
             replacedOthers: combinedData.filter(d => d.replacedPerson).length,
-            filledVacant: combinedData.filter(d => 
+            filledVacant: combinedData.filter(d =>
                 (d.toPosCodeMaster || d.toPosition) && !d.replacedPerson
             ).length,
-            notAssigned: combinedData.filter(d => 
+            notAssigned: combinedData.filter(d =>
                 !d.toPosCodeMaster && !d.toPosition
             ).length,
         };
@@ -358,8 +362,8 @@ export async function GET(request: NextRequest) {
     } catch (error: any) {
         console.error('[In-Out API] Error:', error);
         return NextResponse.json(
-            { 
-                success: false, 
+            {
+                success: false,
                 error: 'Failed to fetch data',
                 message: error?.message || 'Unknown error',
             },

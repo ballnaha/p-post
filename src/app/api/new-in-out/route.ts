@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
 
-const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
     try {
@@ -15,13 +15,13 @@ export async function GET(request: NextRequest) {
         const year = parseInt(searchParams.get('year') || String(new Date().getFullYear() + 543));
         const page = parseInt(searchParams.get('page') || '0');
         const pageSize = parseInt(searchParams.get('pageSize') || '10');
-        
+
         if (filtersOnly) {
             const currentBuddhistYear = new Date().getFullYear() + 543;
-            
+
             const [units, positionCodes] = await Promise.all([
                 prisma.policePersonnel.findMany({
-                    where: { 
+                    where: {
                         unit: { not: null },
                         year: currentBuddhistYear,
                         isActive: true
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
                     orderBy: { id: 'asc' },
                 })
             ]);
-            
+
             return NextResponse.json({
                 success: true,
                 data: {
@@ -69,15 +69,19 @@ export async function GET(request: NextRequest) {
                 andConditions.push({
                     AND: [
                         { OR: [{ rank: null }, { rank: '' }] },
-                        { OR: [
-                            { fullName: null },
-                            { fullName: '' },
-                            { AND: [
-                                { fullName: { not: null } },
-                                { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } },
-                                { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }
-                            ]}
-                        ]}
+                        {
+                            OR: [
+                                { fullName: null },
+                                { fullName: '' },
+                                {
+                                    AND: [
+                                        { fullName: { not: null } },
+                                        { fullName: { not: { contains: 'ว่าง (กันตำแหน่ง)' } } },
+                                        { fullName: { not: { contains: 'ว่าง(กันตำแหน่ง)' } } }
+                                    ]
+                                }
+                            ]
+                        }
                     ]
                 });
             } else if (status === 'reserved') {
@@ -128,38 +132,38 @@ export async function GET(request: NextRequest) {
         const swapByPersonnelId = new Map();
         const swapByNationalId = new Map();
         const filledPositions = new Set(); // เก็บตำแหน่งที่มีคนเข้ามาแทนแล้ว
-        
+
         swapDetails.forEach(detail => {
             if (detail.personnelId) swapByPersonnelId.set(detail.personnelId, detail);
             if (detail.nationalId) swapByNationalId.set(detail.nationalId, detail);
-            
+
             // เก็บข้อมูลว่ามีคนเข้ามาแทนตำแหน่งไหนบ้าง (ดูจาก toPositionNumber เป็นหลัก)
             // ใช้ positionNumber เพราะไม่ซ้ำกัน ไม่ใช้ position เพราะซ้ำได้
             if (detail.toUnit && detail.toPositionNumber) {
                 filledPositions.add(`${detail.toUnit}|${detail.toPositionNumber}`);
             }
-            
+
             // Debug: Log promotion-chain details to verify toPositionNumber
-            if (detail.transaction?.swapType === 'promotion-chain' && !detail.isPlaceholder) {
-                console.log('[API] Promotion-chain real person:', {
-                    fullName: detail.fullName,
-                    fromPositionNumber: detail.fromPositionNumber,
-                    toPositionNumber: detail.toPositionNumber,
-                    transactionId: detail.transactionId,
-                });
-            }
+            // if (detail.transaction?.swapType === 'promotion-chain' && !detail.isPlaceholder) {
+            //     console.log('[API] Promotion-chain real person:', {
+            //         fullName: detail.fullName,
+            //         fromPositionNumber: detail.fromPositionNumber,
+            //         toPositionNumber: detail.toPositionNumber,
+            //         transactionId: detail.transactionId,
+            //     });
+            // }
         });
 
-        console.log('[API] Total personnel before filter:', personnel.length);
-        console.log('[API] Filled positions count:', filledPositions.size);
-        console.log('[API] Filled positions:', Array.from(filledPositions).slice(0, 10));
+        // console.log('[API] Total personnel before filter:', personnel.length);
+        // console.log('[API] Filled positions count:', filledPositions.size);
+        // console.log('[API] Filled positions:', Array.from(filledPositions).slice(0, 10));
 
         // สร้าง Map เก็บตำแหน่งว่างทั้งหมด (unit|positionNumber -> person)
         const vacantPositionsMap = new Map();
         personnel.forEach(person => {
-            const isVacant = !person.fullName || 
-                            person.fullName.trim() === '' ||
-                            ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
+            const isVacant = !person.fullName ||
+                person.fullName.trim() === '' ||
+                ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
             if (isVacant && person.unit && person.positionNumber) {
                 const posKey = `${person.unit}|${person.positionNumber}`;
                 vacantPositionsMap.set(posKey, person);
@@ -169,9 +173,9 @@ export async function GET(request: NextRequest) {
         // ไม่กรองตำแหน่งว่างที่มีคนมาแทนแล้วออก เพื่อให้เห็นว่าตำแหน่งว่างมีใครเข้ามาแทนบ้าง
         let combinedData = personnel
             .map(person => {
-                const swapInfo = swapByPersonnelId.get(person.id) || 
-                                (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
-                
+                const swapInfo = swapByPersonnelId.get(person.id) ||
+                    (person.nationalId ? swapByNationalId.get(person.nationalId) : null);
+
                 // หา noId ของตำแหน่งว่างที่จับคู่ (สำหรับ promotion-chain)
                 let targetNoId: string | null = null;
                 if (swapInfo?.transaction?.swapType === 'promotion-chain' && swapInfo.toUnit && swapInfo.toPositionNumber) {
@@ -179,21 +183,21 @@ export async function GET(request: NextRequest) {
                     const targetVacant = vacantPositionsMap.get(targetPosKey);
                     if (targetVacant) {
                         targetNoId = targetVacant.noId != null ? String(targetVacant.noId) : null;
-                        console.log('[API] Found targetNoId for promotion-chain:', {
-                            fullName: person.fullName,
-                            noId: person.noId,
-                            targetNoId: targetNoId,
-                            targetPosKey: targetPosKey
-                        });
+                        // console.log('[API] Found targetNoId for promotion-chain:', {
+                        //     fullName: person.fullName,
+                        //     noId: person.noId,
+                        //     targetNoId: targetNoId,
+                        //     targetPosKey: targetPosKey
+                        // });
                     } else {
-                        console.log('[API] NOT found targetNoId for promotion-chain:', {
-                            fullName: person.fullName,
-                            targetPosKey: targetPosKey,
-                            vacantMapSize: vacantPositionsMap.size
-                        });
+                        // console.log('[API] NOT found targetNoId for promotion-chain:', {
+                        //     fullName: person.fullName,
+                        //     targetPosKey: targetPosKey,
+                        //     vacantMapSize: vacantPositionsMap.size
+                        // });
                     }
                 }
-                
+
                 return {
                     id: person.id,
                     personnelId: person.id,
@@ -213,25 +217,25 @@ export async function GET(request: NextRequest) {
                     trainingLocation: person.trainingLocation,
                     trainingCourse: person.trainingCourse,
                     avatarUrl: person.avatarUrl,
-                    
+
                     posCodeId: swapInfo?.posCodeId || person.posCodeId,
                     posCodeMaster: swapInfo?.posCodeMaster || person.posCodeMaster,
                     fromPosition: swapInfo?.fromPosition || person.position,
                     fromPositionNumber: swapInfo?.fromPositionNumber || person.positionNumber,
                     fromUnit: swapInfo?.fromUnit || person.unit,
                     fromActingAs: swapInfo?.fromActingAs || person.actingAs,
-                    
+
                     toPosCodeId: swapInfo?.toPosCodeId || null,
                     toPosCodeMaster: swapInfo?.toPosCodeMaster || null,
                     toPosition: swapInfo?.toPosition || null,
                     toPositionNumber: swapInfo?.toPositionNumber || null,
                     toUnit: swapInfo?.toUnit || null,
                     toActingAs: swapInfo?.toActingAs || null,
-                    
+
                     // ผู้สนับสนุนและเหตุผล (ใช้จาก swapInfo ก่อน ถ้าไม่มีใช้จาก person)
                     supporterName: swapInfo?.supporterName || person.supporterName || null,
                     supportReason: swapInfo?.supportReason || person.supportReason || null,
-                    
+
                     transaction: swapInfo ? {
                         id: swapInfo.transaction.id,
                         year: swapInfo.transaction.year,
@@ -240,7 +244,7 @@ export async function GET(request: NextRequest) {
                         groupNumber: swapInfo.transaction.groupNumber,
                         groupName: swapInfo.transaction.groupName,
                     } : null,
-                    
+
                     sequence: swapInfo?.sequence ?? null,
                     hasSwapped: !!swapInfo,
                     replacedPerson: null as any,
@@ -252,7 +256,7 @@ export async function GET(request: NextRequest) {
         // เพราะ placeholder ไม่มี personnelId/nationalId ที่ตรงกับ policePersonnel
         const matchedPersonnelIds = new Set(personnel.map(p => p.id));
         const matchedNationalIds = new Set(personnel.filter(p => p.nationalId).map(p => p.nationalId));
-        
+
         const unmatchedSwapDetails = swapDetails.filter(detail => {
             // ถ้ามี personnelId และ match แล้ว ไม่ต้องเพิ่ม
             if (detail.personnelId && matchedPersonnelIds.has(detail.personnelId)) {
@@ -266,7 +270,7 @@ export async function GET(request: NextRequest) {
             return true;
         });
 
-        console.log('[API] Unmatched swap details (placeholders):', unmatchedSwapDetails.length);
+        // console.log('[API] Unmatched swap details (placeholders):', unmatchedSwapDetails.length);
 
         // แปลง unmatched swapDetails เป็น format เดียวกับ combinedData
         const placeholderData = unmatchedSwapDetails.map(detail => {
@@ -279,7 +283,7 @@ export async function GET(request: NextRequest) {
                     effectiveNoId = vacantPos.noId != null ? String(vacantPos.noId) : null;
                 }
             }
-            
+
             return {
                 id: detail.id,
                 personnelId: detail.personnelId || detail.id,
@@ -299,25 +303,25 @@ export async function GET(request: NextRequest) {
                 trainingLocation: null,
                 trainingCourse: null,
                 avatarUrl: null,
-                
+
                 posCodeId: detail.posCodeId,
                 posCodeMaster: detail.posCodeMaster,
                 fromPosition: detail.fromPosition,
                 fromPositionNumber: detail.fromPositionNumber,
                 fromUnit: detail.fromUnit,
                 fromActingAs: detail.fromActingAs,
-                
+
                 toPosCodeId: detail.toPosCodeId,
                 toPosCodeMaster: detail.toPosCodeMaster,
                 toPosition: detail.toPosition,
                 toPositionNumber: detail.toPositionNumber,
                 toUnit: detail.toUnit,
                 toActingAs: detail.toActingAs,
-                
+
                 // ผู้สนับสนุนและเหตุผล
                 supporterName: detail.supporterName || null,
                 supportReason: detail.supportReason || null,
-                
+
                 transaction: detail.transaction ? {
                     id: detail.transaction.id,
                     year: detail.transaction.year,
@@ -326,7 +330,7 @@ export async function GET(request: NextRequest) {
                     groupNumber: detail.transaction.groupNumber,
                     groupName: detail.transaction.groupName,
                 } : null,
-                
+
                 sequence: detail.sequence ?? null,
                 hasSwapped: true,
                 replacedPerson: null as any,
@@ -336,18 +340,18 @@ export async function GET(request: NextRequest) {
 
         // รวม placeholders เข้ากับ combinedData
         combinedData = [...combinedData, ...placeholderData];
-        console.log('[API] Combined data total after adding placeholders:', combinedData.length);
+        // console.log('[API] Combined data total after adding placeholders:', combinedData.length);
 
         // กรองตำแหน่งว่างที่มีคนครองแล้วออกจาก combinedData (ใช้ filledPositions ที่สร้างไว้ก่อนหน้า)
         combinedData = combinedData.filter(person => {
-            const isVacant = !person.fullName || 
-                           person.fullName.trim() === '' ||
-                           ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
-            
+            const isVacant = !person.fullName ||
+                person.fullName.trim() === '' ||
+                ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
+
             if (isVacant && person.fromUnit && person.fromPositionNumber) {
                 const posKey = `${person.fromUnit}|${person.fromPositionNumber}`;
                 if (filledPositions.has(posKey)) {
-                    return false; 
+                    return false;
                 }
             }
             return true;
@@ -355,18 +359,18 @@ export async function GET(request: NextRequest) {
 
         // ถ้า filter สถานะ = "ว่าง" ให้เพิ่มคนที่เข้ามาแทนตำแหน่งว่างด้วย
         if (status === 'vacant') {
-            console.log('[API] Filtering vacant - checking for people moving into vacant positions');
-            
+            // console.log('[API] Filtering vacant - checking for people moving into vacant positions');
+
             // หาคนที่มี toPosition ชี้มาที่ตำแหน่งว่าง
             const peopleMovingIntoVacant = swapDetails.filter(detail => {
                 if (!detail.toUnit || !detail.toPositionNumber) return false;
-                
+
                 // ตรวจสอบว่าเป็นการเข้าตำแหน่งว่างหรือไม่
                 const posKey = `${detail.toUnit}|${detail.toPositionNumber}`;
                 return vacantPositionsMap.has(posKey);
             });
 
-            console.log('[API] Found people moving into vacant positions:', peopleMovingIntoVacant.length);
+            // console.log('[API] Found people moving into vacant positions:', peopleMovingIntoVacant.length);
 
             // สร้าง Set เก็บตำแหน่งว่างที่มีคนเข้ามาแทนแล้ว (เพื่อใช้กรอง)
             const filledVacantPositions = new Set<string>();
@@ -381,22 +385,22 @@ export async function GET(request: NextRequest) {
             // เก็บเฉพาะตำแหน่งว่างที่ยังไม่มีคนครอง
             combinedData = combinedData.filter(person => {
                 // ตรวจสอบว่าเป็นตำแหน่งว่างหรือไม่
-                const isVacant = !person.fullName || 
-                                person.fullName.trim() === '' ||
-                                ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
-                
+                const isVacant = !person.fullName ||
+                    person.fullName.trim() === '' ||
+                    ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(person.fullName.trim());
+
                 if (!isVacant) return true; // ถ้าไม่ใช่ตำแหน่งว่าง ให้แสดง
-                
+
                 // ถ้าเป็นตำแหน่งว่าง ตรวจสอบว่ามีคนครองหรือไม่
-                const posKey = person.fromUnit && person.fromPositionNumber ? 
-                              `${person.fromUnit}|${person.fromPositionNumber}` : null;
-                
+                const posKey = person.fromUnit && person.fromPositionNumber ?
+                    `${person.fromUnit}|${person.fromPositionNumber}` : null;
+
                 if (posKey && filledVacantPositions.has(posKey)) {
                     // ตำแหน่งว่างนี้มีคนครองแล้ว ไม่ต้องแสดง (จะแสดงคนที่ครองแทน)
-                    console.log('[API] Hiding vacant position (filled):', posKey);
+                    // console.log('[API] Hiding vacant position (filled):', posKey);
                     return false;
                 }
-                
+
                 return true; // แสดงตำแหน่งว่างที่ยังไม่มีคนครอง
             });
 
@@ -441,21 +445,21 @@ export async function GET(request: NextRequest) {
                     trainingLocation: swapInfo.trainingLocation,
                     trainingCourse: swapInfo.trainingCourse,
                     avatarUrl: swapInfo.avatarUrl || fullPersonnel?.avatarUrl || null,
-                    
+
                     posCodeId: swapInfo.posCodeId,
                     posCodeMaster: swapInfo.posCodeMaster,
                     fromPosition: swapInfo.fromPosition,
                     fromPositionNumber: swapInfo.fromPositionNumber,
                     fromUnit: swapInfo.fromUnit,
                     fromActingAs: swapInfo.fromActingAs,
-                    
+
                     toPosCodeId: swapInfo.toPosCodeId,
                     toPosCodeMaster: swapInfo.toPosCodeMaster,
                     toPosition: swapInfo.toPosition,
                     toPositionNumber: swapInfo.toPositionNumber,
                     toUnit: swapInfo.toUnit,
                     toActingAs: swapInfo.toActingAs,
-                    
+
                     transaction: {
                         id: swapInfo.transaction.id,
                         year: swapInfo.transaction.year,
@@ -464,7 +468,7 @@ export async function GET(request: NextRequest) {
                         groupNumber: swapInfo.transaction.groupNumber,
                         groupName: swapInfo.transaction.groupName,
                     },
-                    
+
                     sequence: swapInfo.sequence ?? null,
                     hasSwapped: true,
                     replacedPerson: null as any,
@@ -472,18 +476,18 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        console.log('[API] Combined data total:', combinedData.length);
+        // console.log('[API] Combined data total:', combinedData.length);
 
         if (swapType !== 'all') {
             if (swapType === 'none') {
                 combinedData = combinedData.filter(d => !d.transaction);
             } else if (swapType === 'paired') {
                 // แสดงเฉพาะคนที่จับคู่แล้วทั้งหมด (two-way, three-way, transfer, promotion-chain)
-                combinedData = combinedData.filter(d => 
+                combinedData = combinedData.filter(d =>
                     d.transaction && ['two-way', 'three-way', 'transfer', 'promotion-chain'].includes(d.transaction.swapType)
                 );
             } else {
-                combinedData = combinedData.filter(d => 
+                combinedData = combinedData.filter(d =>
                     d.transaction && d.transaction.swapType === swapType
                 );
             }
@@ -530,18 +534,18 @@ export async function GET(request: NextRequest) {
                 }
                 return d.noId || '';
             };
-            
+
             const noIdA = getEffectiveNoId(a);
             const noIdB = getEffectiveNoId(b);
-            
+
             if (noIdA && noIdB) {
                 const compareNum = String(noIdA).localeCompare(String(noIdB), undefined, { numeric: true });
                 if (compareNum !== 0) return compareNum;
             }
-            
+
             if (noIdA && !noIdB) return -1;
             if (!noIdA && noIdB) return 1;
-            
+
             return (a.fullName || '').localeCompare(b.fullName || '', 'th');
         });
 
@@ -549,7 +553,7 @@ export async function GET(request: NextRequest) {
         const paginatedData = combinedData.slice(page * pageSize, (page + 1) * pageSize);
 
         const transactionIds = [...new Set(paginatedData.filter(d => d.transaction).map(d => d.transaction!.id))];
-        
+
         if (transactionIds.length > 0) {
             const allTransactionDetails = await prisma.swapTransactionDetail.findMany({
                 where: { transactionId: { in: transactionIds } },
@@ -566,41 +570,41 @@ export async function GET(request: NextRequest) {
                     continue;
                 }
 
-                const transactionPeople = allTransactionDetails.filter(d => 
+                const transactionPeople = allTransactionDetails.filter(d =>
                     d.transactionId === detail.transaction?.id
                 );
-                
+
                 let replaced = null;
-                
+
                 // ฟังก์ชันช่วยเช็คว่าเป็น placeholder หรือไม่
                 const isPlaceholder = (person: any) => {
                     const fullName = person.fullName?.trim() || '';
                     return ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)', ''].includes(fullName);
                 };
-                
+
                 if (detail.toPositionNumber) {
-                    replaced = transactionPeople.find(d => 
-                        d.id !== detail.id && 
+                    replaced = transactionPeople.find(d =>
+                        d.id !== detail.id &&
                         d.fromPositionNumber === detail.toPositionNumber &&
                         !isPlaceholder(d)  // ไม่เอา placeholder
                     );
                 }
-                
+
                 if (!replaced && detail.toPosition) {
-                    replaced = transactionPeople.find(d => 
-                        d.id !== detail.id && 
+                    replaced = transactionPeople.find(d =>
+                        d.id !== detail.id &&
                         d.fromPosition === detail.toPosition &&
                         !isPlaceholder(d)  // ไม่เอา placeholder
                     );
                 }
-                
+
                 if (!replaced && detail.transaction?.swapType === 'two-way' && transactionPeople.length === 2) {
-                    replaced = transactionPeople.find(d => 
+                    replaced = transactionPeople.find(d =>
                         d.id !== detail.id &&
                         !isPlaceholder(d)  // ไม่เอา placeholder
                     );
                 }
-                
+
                 // ถ้าไม่เจอคนครองและเป็น placeholder - หาข้อมูลตำแหน่งว่างจาก personnel
                 if (!replaced && isPlaceholder(detail) && (detail.toPositionNumber || detail.toPosition)) {
                     let vacantPosition = null;
@@ -617,12 +621,12 @@ export async function GET(request: NextRequest) {
                                 ]
                             }
                         ];
-                        
+
                         // เพิ่ม conditions ตามข้อมูลที่มี
                         if (detail.toPositionNumber) andConditions.push({ positionNumber: detail.toPositionNumber });
                         if (detail.toUnit) andConditions.push({ unit: detail.toUnit });
                         if (detail.toPosition) andConditions.push({ position: detail.toPosition });
-                        
+
                         vacantPosition = await prisma.policePersonnel.findFirst({
                             where: { AND: andConditions },
                             include: { posCodeMaster: true }
@@ -631,7 +635,7 @@ export async function GET(request: NextRequest) {
                         console.error('[Vacant Position Query Error]:', queryError);
                         // ถ้า query error ไม่ต้อง throw ให้ replaced = null
                     }
-                    
+
                     if (vacantPosition) {
                         replaced = {
                             id: vacantPosition.id,
@@ -709,10 +713,10 @@ export async function GET(request: NextRequest) {
             // กรณีไม่มี transaction - ตรวจสอบว่าเป็นตำแหน่งว่างหรือไม่
             for (let index = 0; index < paginatedData.length; index++) {
                 const detail = paginatedData[index];
-                
+
                 // ถ้าเป็นตำแหน่งว่างและยังไม่ได้จับคู่ - ให้แสดงข้อมูลตำแหน่งว่างตัวเอง
                 const isVacantPosition = ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(detail.fullName?.trim() || '');
-                
+
                 if (isVacantPosition) {
                     // สร้าง replaced object จากตัวเองเพื่อแสดงข้อมูลตำแหน่งว่าง
                     paginatedData[index].replacedPerson = {
@@ -757,7 +761,7 @@ export async function GET(request: NextRequest) {
 
         const [units, positionCodes] = await Promise.all([
             prisma.policePersonnel.findMany({
-                where: { 
+                where: {
                     unit: { not: null },
                     year: currentBuddhistYear,
                     isActive: true
@@ -773,19 +777,19 @@ export async function GET(request: NextRequest) {
 
         // นับตำแหน่งว่างทั้งหมดจาก personnel ที่ผ่าน filter แล้ว
         const totalVacantPositions = personnel.filter(p => {
-            const isVacant = !p.fullName || 
-                            p.fullName.trim() === '' ||
-                            ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(p.fullName.trim());
+            const isVacant = !p.fullName ||
+                p.fullName.trim() === '' ||
+                ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(p.fullName.trim());
             return isVacant;
         }).length;
 
         // นับตำแหน่งว่างที่มีคนเลือกเข้าไปแล้ว (เฉพาะที่อยู่ใน personnel ที่ผ่าน filter)
         const vacantPositionsFilled = personnel.filter(p => {
-            const isVacant = !p.fullName || 
-                            p.fullName.trim() === '' ||
-                            ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(p.fullName.trim());
+            const isVacant = !p.fullName ||
+                p.fullName.trim() === '' ||
+                ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)'].includes(p.fullName.trim());
             if (!isVacant) return false;
-            
+
             // ตรวจสอบว่าตำแหน่งนี้มีคนเข้ามาแทนหรือไม่
             const posKey = p.unit && p.positionNumber ? `${p.unit}|${p.positionNumber}` : null;
             return posKey && filledPositions.has(posKey);
@@ -793,21 +797,21 @@ export async function GET(request: NextRequest) {
 
         const summary = {
             totalPersonnel: combinedData.length,
-            promoted: combinedData.filter(d => 
+            promoted: combinedData.filter(d =>
                 d.posCodeId && d.toPosCodeId && d.toPosCodeId < d.posCodeId
             ).length,
-            twoWaySwap: combinedData.filter(d => 
+            twoWaySwap: combinedData.filter(d =>
                 d.transaction && d.transaction.swapType === 'two-way'
             ).length,
-            threeWaySwap: combinedData.filter(d => 
+            threeWaySwap: combinedData.filter(d =>
                 d.transaction && d.transaction.swapType === 'three-way'
             ).length,
-            transfer: combinedData.filter(d => 
+            transfer: combinedData.filter(d =>
                 d.transaction && d.transaction.swapType === 'transfer'
             ).length,
             totalVacant: totalVacantPositions,
             vacantFilled: vacantPositionsFilled,
-            notAssigned: combinedData.filter(d => 
+            notAssigned: combinedData.filter(d =>
                 !d.toPosCodeMaster && !d.toPosition
             ).length,
         };
@@ -832,8 +836,8 @@ export async function GET(request: NextRequest) {
     } catch (error: any) {
         console.error('[New-In-Out API] Error:', error);
         return NextResponse.json(
-            { 
-                success: false, 
+            {
+                success: false,
                 error: 'Failed to fetch data',
                 message: error?.message || 'Unknown error',
             },

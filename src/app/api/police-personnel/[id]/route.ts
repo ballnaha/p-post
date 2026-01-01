@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    
+
     const personnel = await prisma.policePersonnel.findUnique({
       where: { id },
       include: {
@@ -45,7 +45,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    
+
     // Optional: Check authentication
     const session = await getServerSession(authOptions);
     // if (!session) {
@@ -84,7 +84,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    
+
     // Optional: Check authentication
     const session = await getServerSession(authOptions);
 
@@ -92,9 +92,9 @@ export async function PATCH(
     const username = session?.user?.username || 'system';
 
     // อนุญาตให้อัพเดทเฉพาะบาง field
-    const allowedFields = ['supporterName', 'supportReason', 'notes'];
+    const allowedFields = ['supporterName', 'supportReason', 'notes', 'actingAs', 'requestedPosition'];
     const updateData: Record<string, any> = { updatedBy: username };
-    
+
     for (const field of allowedFields) {
       if (field in body) {
         updateData[field] = body[field];
@@ -127,7 +127,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    
+
     // Optional: Check authentication
     // const session = await getServerSession(authOptions);
     // if (!session) {
@@ -170,8 +170,8 @@ export async function DELETE(
     // ถ้ามีข้อผิดพลาด ส่งกลับไป
     if (errors.length > 0) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'ไม่สามารถลบข้อมูลได้',
           detail: `บุคลากรนี้${errors.join(', ')}. กรุณาลบออกจากรายการเหล่านั้นก่อน`,
           reasons: errors

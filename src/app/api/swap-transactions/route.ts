@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     const year = searchParams.get('year');
     const status = searchParams.get('status');
     const swapType = searchParams.get('swapType');
-    
+
     const where: any = {};
     if (year) where.year = parseInt(year);
     if (status) where.status = status;
@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
             // ข้อมูลการเสนอชื่อ
             supportName: true,
             supportReason: true,
+            requestedPosition: true,
             // ตำแหน่ง
             fromPosition: true,
             fromPositionNumber: true,
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     // สร้าง swapDetails array โดยเพิ่ม startingPersonnel เป็น sequence = 0 (สำหรับ promotion)
     const allDetails: any[] = [];
-    
+
     // ถ้าเป็น promotion ให้เพิ่ม startingPersonnel เป็น detail แรก (sequence = 0)
     if ((swapType === 'promotion' || swapType === 'promotion-chain') && startingPersonnel) {
       allDetails.push({
@@ -155,11 +156,11 @@ export async function POST(request: NextRequest) {
         toActingAs: null,
       });
     }
-    
+
     // เพิ่ม swapDetails ที่ส่งมา
     swapDetails.forEach((detail: any, index: number) => {
       const isPlaceholder = detail.isPlaceholder === true;
-      
+
       allDetails.push({
         sequence: detail.sequence !== undefined ? detail.sequence : ((swapType === 'three-way' || swapType === 'promotion' || swapType === 'promotion-chain') ? index + 1 : null),
         isPlaceholder: isPlaceholder,
@@ -184,6 +185,7 @@ export async function POST(request: NextRequest) {
         trainingCourse: detail.trainingCourse || null,
         supportName: detail.supportName || null,
         supportReason: detail.supportReason || null,
+        requestedPosition: detail.requestedPosition || null,
         fromPosition: detail.fromPosition || null,
         fromPositionNumber: detail.fromPositionNumber || null,
         fromUnit: detail.fromUnit || null,
@@ -195,7 +197,7 @@ export async function POST(request: NextRequest) {
         notes: detail.notes || null
       });
     });
-    
+
     // Create transaction with details
     const transaction = await prisma.swapTransaction.create({
       data: {

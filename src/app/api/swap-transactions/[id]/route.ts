@@ -100,7 +100,7 @@ export async function PUT(
 
       // สร้าง swapDetails array โดยเพิ่ม startingPersonnel เป็น sequence = 0 (สำหรับ promotion)
       const allDetails = [];
-      
+
       // ถ้าเป็น promotion และมี startingPersonnel ให้เพิ่มเป็น detail แรก (sequence = 0)
       const effectiveSwapType = swapType || existingTransaction.swapType;
       if ((effectiveSwapType === 'promotion' || effectiveSwapType === 'promotion-chain') && startingPersonnel) {
@@ -124,7 +124,7 @@ export async function PUT(
           toActingAs: null,
         });
       }
-      
+
       // เพิ่ม swapDetails ที่ส่งมา
       allDetails.push(...swapDetails.map((detail: any) => {
         const isPlaceholder = detail.isPlaceholder === true;
@@ -169,11 +169,11 @@ export async function PUT(
           notes: detail.notes || null
         };
       })),
-      
-      // สร้าง swapDetails ใหม่
-      updateData.swapDetails = {
-        create: allDetails
-      };
+
+        // สร้าง swapDetails ใหม่
+        updateData.swapDetails = {
+          create: allDetails
+        };
     }
 
     const transaction = await prisma.swapTransaction.update({
@@ -217,6 +217,8 @@ export async function PUT(
 /**
  * DELETE /api/swap-transactions/[id]
  * ลบข้อมูลผลการสลับตำแหน่ง
+ * Query params:
+ * - force: ถ้า true จะลบโดยไม่ตรวจสอบ conflict (ใช้สำหรับลบจาก board)
  */
 export async function DELETE(
   request: NextRequest,
@@ -224,6 +226,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const force = searchParams.get('force') === 'true';
 
     // ตรวจสอบว่ามีข้อมูลอยู่หรือไม่
     const existingTransaction = await prisma.swapTransaction.findUnique({
@@ -240,59 +244,62 @@ export async function DELETE(
       );
     }
 
-    // ดึง personnelId ของบุคลากรที่เกี่ยวข้องในธุรกรรมนี้
-    const personnelIds = existingTransaction.swapDetails
-      .map(detail => detail.personnelId)
-      .filter((id): id is string => id !== null);
+    // ถ้าไม่ใช่ force mode ให้ตรวจสอบ conflict
+    if (!force) {
+      // ดึง personnelId ของบุคลากรที่เกี่ยวข้องในธุรกรรมนี้
+      const personnelIds = existingTransaction.swapDetails
+        .map(detail => detail.personnelId)
+        .filter((id): id is string => id !== null);
 
-    // ตรวจสอบว่าบุคลากรเหล่านี้มีการสลับตำแหน่งในปีนี้หรือไม่ (รวมทั้งสามเส้า)
-    const relatedSwapTransactions = await prisma.swapTransaction.findMany({
-      where: {
-        id: { not: existingTransaction.id }, // ไม่ใช่ตัวเอง
-        year: existingTransaction.year,
-        swapDetails: {
-          some: {
-            personnelId: {
-              in: personnelIds
+      // ตรวจสอบว่าบุคลากรเหล่านี้มีการสลับตำแหน่งในปีนี้หรือไม่ (รวมทั้งสามเส้า)
+      const relatedSwapTransactions = await prisma.swapTransaction.findMany({
+        where: {
+          id: { not: existingTransaction.id }, // ไม่ใช่ตัวเอง
+          year: existingTransaction.year,
+          swapDetails: {
+            some: {
+              personnelId: {
+                in: personnelIds
+              }
             }
           }
-        }
-      },
-      include: {
-        swapDetails: {
-          where: {
-            personnelId: {
-              in: personnelIds
+        },
+        include: {
+          swapDetails: {
+            where: {
+              personnelId: {
+                in: personnelIds
+              }
             }
           }
-        }
-      }
-    });
-
-    if (relatedSwapTransactions.length > 0) {
-      // หาชื่อบุคลากรที่มีปัญหา
-      const conflictPersonnelNames: string[] = [];
-      relatedSwapTransactions.forEach(transaction => {
-        if (transaction.swapDetails) {
-          transaction.swapDetails.forEach(detail => {
-            if (detail.personnelId && personnelIds.includes(detail.personnelId) && detail.fullName) {
-              conflictPersonnelNames.push(detail.fullName);
-            }
-          });
         }
       });
 
-      const uniqueNames = [...new Set(conflictPersonnelNames)];
-      
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: `ไม่สามารถลบได้ เนื่องจากบุคลากร ${uniqueNames.join(', ')} ได้ถูกสลับตำแหน่งในปี ${existingTransaction.year} แล้ว กรุณาลบข้อมูลการสลับตำแหน่งของบุคลากรเหล่านี้ก่อน`,
-          conflictPersonnel: uniqueNames,
-          year: existingTransaction.year
-        },
-        { status: 400 }
-      );
+      if (relatedSwapTransactions.length > 0) {
+        // หาชื่อบุคลากรที่มีปัญหา
+        const conflictPersonnelNames: string[] = [];
+        relatedSwapTransactions.forEach(transaction => {
+          if (transaction.swapDetails) {
+            transaction.swapDetails.forEach(detail => {
+              if (detail.personnelId && personnelIds.includes(detail.personnelId) && detail.fullName) {
+                conflictPersonnelNames.push(detail.fullName);
+              }
+            });
+          }
+        });
+
+        const uniqueNames = [...new Set(conflictPersonnelNames)];
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: `ไม่สามารถลบได้ เนื่องจากบุคลากร ${uniqueNames.join(', ')} ได้ถูกสลับตำแหน่งในปี ${existingTransaction.year} แล้ว กรุณาลบข้อมูลการสลับตำแหน่งของบุคลากรเหล่านี้ก่อน`,
+            conflictPersonnel: uniqueNames,
+            year: existingTransaction.year
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // ลบ swapDetails ก่อน (Cascade delete should handle this, but being explicit)

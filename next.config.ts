@@ -2,19 +2,20 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  transpilePackages: ['react-window', 'react-virtualized-auto-sizer'],
   turbopack: {
     root: process.cwd(),
+    resolveAlias: {
+      '@prisma/client': './node_modules/@prisma/client',
+    },
   },
-  eslint: {
-    // ปิดการตรวจสอบ ESLint เมื่อ build
-    ignoreDuringBuilds: true,
-  },
+
   typescript: {
     // ปิดการตรวจสอบ TypeScript type checking เมื่อ build (ถ้าต้องการ)
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ['localhost'],
+
     unoptimized: true, // ปิด optimization ชั่วคราวเพื่อแก้ปัญหา production
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -40,7 +41,7 @@ const nextConfig: NextConfig = {
     ],
   },
   // เพิ่มการตั้งค่า timeout และ performance
-  serverExternalPackages: [],
+  serverExternalPackages: ['@prisma/client'],
   // กำหนด headers สำหรับ timeout และ static files
   async headers() {
     return [

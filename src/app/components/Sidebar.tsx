@@ -97,12 +97,12 @@ const Sidebar: React.FC = () => {
           icon: <ThreeWayIcon sx={{ fontSize: 20 }} />,
           key: 'three-way-swap'
         },
-        {
-          label: 'จัดคนเข้าตำแหน่งว่าง',
-          href: '/police-personnel/promotion-chain',
-          icon: <VacantIcon sx={{ fontSize: 20 }} />,
-          key: 'vacant-filling'
-        },
+        // {
+        //   label: 'จัดคนเข้าตำแหน่งว่าง',
+        //   href: '/police-personnel/promotion-chain',
+        //   icon: <VacantIcon sx={{ fontSize: 20 }} />,
+        //   key: 'vacant-filling'
+        // },
         {
           label: 'ย้ายหน่วย',
           href: '/police-personnel/promotion',

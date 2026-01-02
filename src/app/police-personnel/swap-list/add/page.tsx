@@ -13,6 +13,10 @@ import {
   IconButton,
   useMediaQuery,
   useTheme,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -78,44 +82,43 @@ export default function AddSwapTransactionPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [swappedPersonnelIds, setSwappedPersonnelIds] = useState<Set<string>>(new Set());
-  
+
   // Personnel selections
   const [personnelA, setPersonnelA] = useState<PolicePersonnel | null>(null);
   const [personnelB, setPersonnelB] = useState<PolicePersonnel | null>(null);
-  
+
   // Dialog state
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedPersonnelDetail, setSelectedPersonnelDetail] = useState<PolicePersonnel | null>(null);
-  
+
   // Drawer state
   const [drawerAOpen, setDrawerAOpen] = useState(false);
   const [drawerBOpen, setDrawerBOpen] = useState(false);
-  
+
   // Form data
   const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
   const [swapDate, setSwapDate] = useState<Dayjs | null>(dayjs());
   const [notes, setNotes] = useState('');
   const [groupNumber, setGroupNumber] = useState<string>('');
 
-  const fetchNextGroupNumber = useCallback(async (): Promise<Set<string>> => {
+  const fetchNextGroupNumber = useCallback(async (selectedYear: number): Promise<Set<string>> => {
     try {
-      const currentYear = new Date().getFullYear() + 543;
-      const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=two-way`);
-      
+      const response = await fetch(`/api/swap-transactions?year=${selectedYear}&swapType=two-way`);
+
       if (!response.ok) {
         throw new Error('Failed to fetch swap transactions');
       }
-      
+
       const result = await response.json();
       const transactions = result.data || [];
-      
-      // Find the maximum group number for this year (format: 2568/2W-001)
+
+      // Find the maximum group number for this year (format: 2568/SWAP-001)
       let maxNumber = 0;
       if (Array.isArray(transactions)) {
         transactions.forEach((transaction: any) => {
           if (transaction.groupNumber) {
-            // Extract number from format "2568/2W-001"
-            const match = transaction.groupNumber.match(/\/2W-(\d+)$/);
+            // Extract number from format "2568/SWAP-001" or legacy "2568/2W-001"
+            const match = transaction.groupNumber.match(/\/(?:SWAP|2W)-(\d+)$/);
             if (match) {
               const num = parseInt(match[1], 10);
               if (num > maxNumber) {
@@ -125,12 +128,12 @@ export default function AddSwapTransactionPage() {
           }
         });
       }
-      
+
       // Next number is max + 1
       const nextNumber = maxNumber + 1;
       const formattedNumber = String(nextNumber).padStart(3, '0');
-      setGroupNumber(`${currentYear}/2W-${formattedNumber}`);
-      
+      setGroupNumber(`${selectedYear}/SWAP-${formattedNumber}`);
+
       // Extract personnel IDs who already swapped in this year
       const swappedIds = new Set<string>();
       if (Array.isArray(transactions)) {
@@ -149,8 +152,7 @@ export default function AddSwapTransactionPage() {
     } catch (error) {
       console.error('Error fetching group number:', error);
       // Fallback to default
-      const currentYear = new Date().getFullYear() + 543;
-      setGroupNumber(`${currentYear}/2W-001`);
+      setGroupNumber(`${selectedYear}/SWAP-001`);
       return new Set<string>();
     }
   }, []);
@@ -158,12 +160,11 @@ export default function AddSwapTransactionPage() {
 
 
   useEffect(() => {
-    const fetchData = async () => {
-      await fetchNextGroupNumber();
-    };
-    fetchData();
+    if (year) {
+      fetchNextGroupNumber(year);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ เรียกแค่ครั้งเดียวตอน mount
+  }, [year]); // Re-fetch when year changes
 
   const handleShowDetail = useCallback(async (personnel: PolicePersonnel) => {
     // ใน add page ข้อมูล personnel จาก PersonnelDrawer ควรจะครบอยู่แล้ว
@@ -189,8 +190,8 @@ export default function AddSwapTransactionPage() {
 
 
 
-  const canSwap = useMemo(() => 
-    Boolean(personnelA && personnelB), 
+  const canSwap = useMemo(() =>
+    Boolean(personnelA && personnelB),
     [personnelA, personnelB]
   );
 
@@ -357,15 +358,15 @@ export default function AddSwapTransactionPage() {
       <Box>
         {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
             mb: 2,
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                
+
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
                   ผลการสลับตำแหน่ง
                 </Typography>
@@ -393,18 +394,25 @@ export default function AddSwapTransactionPage() {
                 size="small"
                 helperText="เลขกลุ่มจะถูกสร้างอัตโนมัติ"
               />
-              <TextField
-                label="ประจำปี *"
-                type="text"
-                value={year || ''}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  const value = e.target.value;
-                  setYear(value === '' ? 0 : parseInt(value) || 0);
-                }}
-                required
-                inputProps={{ min: 2500, max: 2700 }}
-                size="small"
-              />
+              <FormControl size="small" fullWidth>
+                <InputLabel id="year-select-label">ประจำปี *</InputLabel>
+                <Select
+                  labelId="year-select-label"
+                  value={year}
+                  label="ประจำปี *"
+                  onChange={(e) => setYear(Number(e.target.value))}
+                  required
+                >
+                  {(() => {
+                    const currentYear = new Date().getFullYear() + 543;
+                    return Array.from({ length: 11 }, (_, i) => currentYear - 5 + i).map((y) => (
+                      <MenuItem key={y} value={y}>
+                        พ.ศ. {y}
+                      </MenuItem>
+                    ));
+                  })()}
+                </Select>
+              </FormControl>
               <DatePicker
                 label="วันที่ทำการสลับ *"
                 value={swapDate}
@@ -423,17 +431,17 @@ export default function AddSwapTransactionPage() {
         {/* Main Form */}
         <form onSubmit={handleSubmit}>
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Box sx={{ 
-              display: 'grid', 
-              gridTemplateColumns: { xs: '1fr', md: '1fr auto 1fr' }, 
+            <Box sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '1fr auto 1fr' },
               gap: 3,
               alignItems: 'start',
             }}>
               {/* บุคลากร A */}
-              <Paper 
-                elevation={3} 
-                sx={{ 
-                  p: 3, 
+              <Paper
+                elevation={3}
+                sx={{
+                  p: 3,
                   bgcolor: personnelA ? 'success.50' : 'grey.50',
                   border: 2,
                   borderColor: personnelA ? 'success.main' : 'grey.300',
@@ -449,7 +457,7 @@ export default function AddSwapTransactionPage() {
                     {personnelA.rank} {personnelA.fullName}
                   </Typography>
                 )}
-                
+
                 {!personnelA ? (
                   <Button
                     fullWidth
@@ -457,7 +465,7 @@ export default function AddSwapTransactionPage() {
                     size="large"
                     startIcon={<SearchIcon />}
                     onClick={() => setDrawerAOpen(true)}
-                    sx={{ 
+                    sx={{
                       py: 1.5,
                       borderStyle: 'dashed',
                       borderWidth: 2,
@@ -484,8 +492,8 @@ export default function AddSwapTransactionPage() {
                   <Box sx={{ mt: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Divider sx={{ flexGrow: 1 }} />
-                      <IconButton 
-                        size="small" 
+                      <IconButton
+                        size="small"
                         color="primary"
                         onClick={() => handleShowDetail(personnelA)}
                         sx={{ ml: 1 }}
@@ -509,7 +517,7 @@ export default function AddSwapTransactionPage() {
                             <Typography variant="body2" fontWeight={600} color="primary.main">
                               {personnelA.posCodeMaster.id} - {personnelA.posCodeMaster.name}
                             </Typography>
-                            
+
                           </Box>
                         )}
                         <Box>
@@ -646,27 +654,27 @@ export default function AddSwapTransactionPage() {
               </Paper>
 
               {/* ลูกศรกลาง */}
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+              <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
                 minHeight: { xs: 40, md: 300 },
                 py: { xs: 2, md: 0 },
               }}>
-                <SwapHorizIcon 
-                  sx={{ 
-                    fontSize: { xs: 40, md: 64 }, 
+                <SwapHorizIcon
+                  sx={{
+                    fontSize: { xs: 40, md: 64 },
                     color: canSwap ? 'success.main' : 'grey.400',
                     transition: 'all 0.3s',
-                  }} 
+                  }}
                 />
               </Box>
 
               {/* บุคลากร B */}
-              <Paper 
-                elevation={3} 
-                sx={{ 
-                  p: 3, 
+              <Paper
+                elevation={3}
+                sx={{
+                  p: 3,
                   bgcolor: personnelB ? 'success.50' : 'grey.50',
                   border: 2,
                   borderColor: personnelB ? 'success.main' : 'grey.300',
@@ -683,7 +691,7 @@ export default function AddSwapTransactionPage() {
                     {personnelB.rank} {personnelB.fullName}
                   </Typography>
                 )}
-                
+
                 {!personnelB ? (
                   <Button
                     fullWidth
@@ -692,7 +700,7 @@ export default function AddSwapTransactionPage() {
                     startIcon={<SearchIcon />}
                     onClick={() => setDrawerBOpen(true)}
                     disabled={!personnelA}
-                    sx={{ 
+                    sx={{
                       py: 1.5,
                       borderStyle: 'dashed',
                       borderWidth: 2,
@@ -719,8 +727,8 @@ export default function AddSwapTransactionPage() {
                   <Box sx={{ mt: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Divider sx={{ flexGrow: 1 }} />
-                      <IconButton 
-                        size="small" 
+                      <IconButton
+                        size="small"
                         color="primary"
                         onClick={() => handleShowDetail(personnelB)}
                         sx={{ ml: 1 }}
@@ -921,13 +929,13 @@ export default function AddSwapTransactionPage() {
           </Box>
 
           {/* Actions - Sticky Footer */}
-          <Paper 
-            sx={{ 
-              p: { xs: 1.5, sm: 2.5 }, 
-              position: 'sticky', 
-              bottom: 0, 
+          <Paper
+            sx={{
+              p: { xs: 1.5, sm: 2.5 },
+              position: 'sticky',
+              bottom: 0,
               zIndex: 10,
-              display: 'flex', 
+              display: 'flex',
               gap: { xs: 1, sm: 2 },
               flexDirection: { xs: 'column', sm: 'row' },
               justifyContent: 'space-between',
@@ -952,8 +960,8 @@ export default function AddSwapTransactionPage() {
                 </Typography>
               )}
             </Box>
-            <Box sx={{ 
-              display: 'flex', 
+            <Box sx={{
+              display: 'flex',
               gap: { xs: 1, sm: 2 },
               flexDirection: { xs: 'column-reverse', sm: 'row' },
               width: { xs: '100%', sm: 'auto' }
@@ -963,7 +971,7 @@ export default function AddSwapTransactionPage() {
                 onClick={() => router.back()}
                 disabled={loading}
                 fullWidth={isMobile}
-                sx={{ 
+                sx={{
                   minHeight: { xs: '44px', sm: 'auto' },
                   fontSize: { xs: '0.875rem', md: '1rem' }
                 }}
@@ -978,7 +986,7 @@ export default function AddSwapTransactionPage() {
                 startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
                 disabled={loading || !canSwap}
                 fullWidth={isMobile}
-                sx={{ 
+                sx={{
                   minHeight: { xs: '48px', sm: 'auto' },
                   fontSize: { xs: '0.875rem', md: '1rem' },
                   fontWeight: 600
@@ -991,7 +999,7 @@ export default function AddSwapTransactionPage() {
         </form>
 
         {/* Personnel Detail Modal - Using Reusable Component */}
-        <PersonnelDetailModal 
+        <PersonnelDetailModal
           open={detailDialogOpen}
           onClose={handleCloseDetail}
           personnel={selectedPersonnelDetail}
@@ -1006,6 +1014,7 @@ export default function AddSwapTransactionPage() {
           onSelect={(personnel) => handleSelectPersonnelA(personnel as any)}
           title="เลือกบุคลากร A"
           excludePersonnelId={personnelB?.id}
+          filterYear={year}
         />
 
         {/* Personnel Drawer for B - กรองตามหน่วยและ posCode เดียวกับ A */}
@@ -1017,6 +1026,7 @@ export default function AddSwapTransactionPage() {
           excludePersonnelId={personnelA?.id}
           initialFilterUnit={personnelA?.unit}
           initialFilterPosCode={personnelA?.posCodeId}
+          filterYear={year}
         />
       </Box>
     </Layout>

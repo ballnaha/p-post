@@ -13,6 +13,10 @@ import {
   IconButton,
   useMediaQuery,
   useTheme,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -77,21 +81,21 @@ export default function AddThreeWaySwapPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [swappedPersonnelIds, setSwappedPersonnelIds] = useState<Set<string>>(new Set());
-  
+
   // Personnel selections - 3 คน
   const [personnelA, setPersonnelA] = useState<PolicePersonnel | null>(null);
   const [personnelB, setPersonnelB] = useState<PolicePersonnel | null>(null);
   const [personnelC, setPersonnelC] = useState<PolicePersonnel | null>(null);
-  
+
   // Dialog state
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedPersonnelDetail, setSelectedPersonnelDetail] = useState<PolicePersonnel | null>(null);
-  
+
   // Drawer state
   const [drawerAOpen, setDrawerAOpen] = useState(false);
   const [drawerBOpen, setDrawerBOpen] = useState(false);
   const [drawerCOpen, setDrawerCOpen] = useState(false);
-  
+
   // Form data
   const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
   const [swapDate, setSwapDate] = useState<Dayjs | null>(dayjs());
@@ -99,29 +103,31 @@ export default function AddThreeWaySwapPage() {
   const [groupNumber, setGroupNumber] = useState<string>('');
 
   useEffect(() => {
-    fetchNextGroupNumber();
-  }, []);
+    if (year) {
+      fetchNextGroupNumber(year);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year]);
 
-  const fetchNextGroupNumber = async (): Promise<Set<string>> => {
+  const fetchNextGroupNumber = async (selectedYear: number): Promise<Set<string>> => {
     try {
-      const currentYear = new Date().getFullYear() + 543;
       // Filter by swapType=three-way to get only three-way transactions
-      const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=three-way`);
-      
+      const response = await fetch(`/api/swap-transactions?year=${selectedYear}&swapType=three-way`);
+
       if (!response.ok) {
         throw new Error('Failed to fetch swap transactions');
       }
-      
+
       const result = await response.json();
       const transactions = result.data || [];
-      
-      // Find the maximum group number for three-way swaps this year (format: 2568/3W-001)
+
+      // Find the maximum group number for three-way swaps this year (format: 2568/THREE-001)
       let maxNumber = 0;
       if (Array.isArray(transactions)) {
         transactions.forEach((transaction: any) => {
           if (transaction.groupNumber) {
-            // Extract number from format "2568/3W-001"
-            const match = transaction.groupNumber.match(/\/3W-(\d+)$/);
+            // Extract number from format "2568/THREE-001" or legacy "2568/3W-001"
+            const match = transaction.groupNumber.match(/\/(?:THREE|3W)-(\d+)$/);
             if (match) {
               const num = parseInt(match[1], 10);
               if (num > maxNumber) {
@@ -131,12 +137,12 @@ export default function AddThreeWaySwapPage() {
           }
         });
       }
-      
+
       // Next number is max + 1
       const nextNumber = maxNumber + 1;
       const formattedNumber = String(nextNumber).padStart(3, '0');
-      setGroupNumber(`${currentYear}/3W-${formattedNumber}`);
-      
+      setGroupNumber(`${selectedYear}/THREE-${formattedNumber}`);
+
       // Extract personnel IDs who already swapped in this year (three-way only)
       const swappedIds = new Set<string>();
       if (Array.isArray(transactions)) {
@@ -155,8 +161,7 @@ export default function AddThreeWaySwapPage() {
     } catch (error) {
       console.error('Error fetching group number:', error);
       // Fallback to default
-      const currentYear = new Date().getFullYear() + 543;
-      setGroupNumber(`${currentYear}/3W-001`);
+      setGroupNumber(`${selectedYear}/THREE-001`);
       return new Set<string>();
     }
   };
@@ -199,8 +204,8 @@ export default function AddThreeWaySwapPage() {
 
 
 
-  const canSwap = useMemo(() => 
-    Boolean(personnelA && personnelB && personnelC), 
+  const canSwap = useMemo(() =>
+    Boolean(personnelA && personnelB && personnelC),
     [personnelA, personnelB, personnelC]
   );
 
@@ -385,10 +390,10 @@ export default function AddThreeWaySwapPage() {
     onOpenDrawer: () => void,
     disabled: boolean = false
   ) => (
-    <Paper 
-      elevation={3} 
-      sx={{ 
-        p: 3, 
+    <Paper
+      elevation={3}
+      sx={{
+        p: 3,
         bgcolor: personnel ? 'success.50' : 'grey.50',
         border: 2,
         borderColor: personnel ? 'success.main' : 'grey.300',
@@ -405,7 +410,7 @@ export default function AddThreeWaySwapPage() {
           {personnel.rank} {personnel.fullName}
         </Typography>
       )}
-      
+
       {!personnel ? (
         <Button
           fullWidth
@@ -414,7 +419,7 @@ export default function AddThreeWaySwapPage() {
           startIcon={<SearchIcon />}
           onClick={onOpenDrawer}
           disabled={disabled}
-          sx={{ 
+          sx={{
             py: 1.5,
             borderStyle: 'dashed',
             borderWidth: 2,
@@ -442,8 +447,8 @@ export default function AddThreeWaySwapPage() {
         <Box sx={{ mt: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Divider sx={{ flexGrow: 1 }} />
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               color="primary"
               onClick={() => handleShowDetail(personnel)}
               sx={{ ml: 1 }}
@@ -598,6 +603,35 @@ export default function AddThreeWaySwapPage() {
               )}
             </Stack>
           </Box>
+
+          {/* New Position Section */}
+          {personnelA && personnelB && personnelC && (
+            <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed', borderColor: 'grey.300' }}>
+              <Typography variant="subtitle2" color="success.main" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                🟢 ตำแหน่งใหม่ (ที่จะไป)
+              </Typography>
+              <Box sx={{ p: 1.5, bgcolor: 'success.50', borderRadius: 1, border: '1px solid', borderColor: 'success.200' }}>
+                {label === 'บุคลากร A' && (
+                  <>
+                    <Typography variant="body2" fontWeight={700} color="success.dark">{personnelB.position}</Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">{personnelB.unit}</Typography>
+                  </>
+                )}
+                {label === 'บุคลากร B' && (
+                  <>
+                    <Typography variant="body2" fontWeight={700} color="success.dark">{personnelC.position}</Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">{personnelC.unit}</Typography>
+                  </>
+                )}
+                {label === 'บุคลากร C' && (
+                  <>
+                    <Typography variant="body2" fontWeight={700} color="success.dark">{personnelA.position}</Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">{personnelA.unit}</Typography>
+                  </>
+                )}
+              </Box>
+            </Box>
+          )}
         </Box>
       )}
     </Paper>
@@ -608,9 +642,9 @@ export default function AddThreeWaySwapPage() {
       <Box>
         {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
             mb: 2,
           }}>
@@ -643,15 +677,25 @@ export default function AddThreeWaySwapPage() {
                 size="small"
                 helperText="เลขกลุ่มจะถูกสร้างอัตโนมัติ"
               />
-              <TextField
-                label="ประจำปี *"
-                type="number"
-                value={year || ''}
-                onChange={(e) => setYear(parseInt(e.target.value) || 0)}
-                required
-                inputProps={{ min: 2500, max: 2700 }}
-                size="small"
-              />
+              <FormControl size="small" fullWidth>
+                <InputLabel id="year-select-label">ประจำปี *</InputLabel>
+                <Select
+                  labelId="year-select-label"
+                  value={year}
+                  label="ประจำปี *"
+                  onChange={(e) => setYear(Number(e.target.value))}
+                  required
+                >
+                  {(() => {
+                    const currentYear = new Date().getFullYear() + 543;
+                    return Array.from({ length: 11 }, (_, i) => currentYear - 5 + i).map((y) => (
+                      <MenuItem key={y} value={y}>
+                        พ.ศ. {y}
+                      </MenuItem>
+                    ));
+                  })()}
+                </Select>
+              </FormControl>
               <DatePicker
                 label="วันที่ทำการสลับ *"
                 value={swapDate}
@@ -678,7 +722,7 @@ export default function AddThreeWaySwapPage() {
                 </Typography>
               </Alert>
             )}
-            
+
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3 }}>
               {renderPersonnelCard(personnelA, 'บุคลากร A', () => setDrawerAOpen(true), false)}
               {renderPersonnelCard(personnelB, 'บุคลากร B', () => setDrawerBOpen(true), !personnelA)}
@@ -729,13 +773,13 @@ export default function AddThreeWaySwapPage() {
           </Box>
 
           {/* Actions - Sticky Footer */}
-          <Paper 
-            sx={{ 
-              p: { xs: 1.5, sm: 2.5 }, 
-              position: 'sticky', 
-              bottom: 0, 
+          <Paper
+            sx={{
+              p: { xs: 1.5, sm: 2.5 },
+              position: 'sticky',
+              bottom: 0,
               zIndex: 10,
-              display: 'flex', 
+              display: 'flex',
               gap: { xs: 1, sm: 2 },
               flexDirection: { xs: 'column', sm: 'row' },
               justifyContent: 'space-between',
@@ -760,8 +804,8 @@ export default function AddThreeWaySwapPage() {
                 </Typography>
               )}
             </Box>
-            <Box sx={{ 
-              display: 'flex', 
+            <Box sx={{
+              display: 'flex',
               gap: { xs: 1, sm: 2 },
               flexDirection: { xs: 'column-reverse', sm: 'row' },
               width: { xs: '100%', sm: 'auto' }
@@ -771,7 +815,7 @@ export default function AddThreeWaySwapPage() {
                 onClick={() => router.back()}
                 disabled={loading}
                 fullWidth={isMobile}
-                sx={{ 
+                sx={{
                   minHeight: { xs: '44px', sm: 'auto' },
                   fontSize: { xs: '0.875rem', md: '1rem' }
                 }}
@@ -786,7 +830,7 @@ export default function AddThreeWaySwapPage() {
                 startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
                 disabled={loading || !canSwap}
                 fullWidth={isMobile}
-                sx={{ 
+                sx={{
                   minHeight: { xs: '48px', sm: 'auto' },
                   fontSize: { xs: '0.875rem', md: '1rem' },
                   fontWeight: 600
@@ -799,7 +843,7 @@ export default function AddThreeWaySwapPage() {
         </form>
 
         {/* Personnel Detail Modal */}
-        <PersonnelDetailModal 
+        <PersonnelDetailModal
           open={detailDialogOpen}
           onClose={handleCloseDetail}
           personnel={selectedPersonnelDetail}
@@ -814,6 +858,7 @@ export default function AddThreeWaySwapPage() {
           onSelect={(personnel) => handleSelectPersonnelA(personnel as any)}
           title="เลือกบุคลากร A"
           excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
+          filterYear={year}
         />
 
         {/* Personnel Drawer for B - กรองตามหน่วยและ posCode เดียวกับ A */}
@@ -825,6 +870,7 @@ export default function AddThreeWaySwapPage() {
           excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
           initialFilterUnit={personnelA?.unit}
           initialFilterPosCode={personnelA?.posCodeId}
+          filterYear={year}
         />
 
         {/* Personnel Drawer for C - กรองตามหน่วยและ posCode เดียวกับ A */}
@@ -836,6 +882,7 @@ export default function AddThreeWaySwapPage() {
           excludePersonnelId={[personnelA?.id, personnelB?.id, personnelC?.id].filter((id): id is string => !!id)}
           initialFilterUnit={personnelA?.unit}
           initialFilterPosCode={personnelA?.posCodeId}
+          filterYear={year}
         />
       </Box>
     </Layout>

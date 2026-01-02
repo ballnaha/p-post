@@ -34,11 +34,12 @@ import {
   Close as CloseIcon,
   ArrowDownward as ArrowDownwardIcon,
   AutoFixHigh as AutoFixHighIcon,
+  ArrowRightAlt as ArrowRightAltIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 
 // Interface สำหรับข้อมูลบุคลากร (รองรับทั้ง police-personnel, swap-list, three-way-swap, vacant-position)
-interface PersonnelData {
+export interface PersonnelData {
   id?: string;
   noId?: number | string | null;
   posCodeId?: number | null;
@@ -69,6 +70,19 @@ interface PersonnelData {
   supporterName?: string | null; // ผู้สนับสนุน/ผู้เสนอชื่อ
   supportReason?: string | null; // เหตุผลในการสนับสนุน
   avatarUrl?: string | null; // URL ของรูป avatar
+  // New position fields (for swap/transfer display)
+  toPosition?: string | null;
+  toPositionNumber?: string | null;
+  toUnit?: string | null;
+  toPosCode?: string | null;
+  toPosCodeId?: number | null;
+  toPosCodeMaster?: {
+    id: number;
+    name: string;
+  } | null;
+  // Swap partner info
+  swapPartnerName?: string | null;
+  swapPartnerRank?: string | null;
 }
 
 interface PersonnelDetailModalProps {
@@ -84,6 +98,7 @@ interface PersonnelDetailModalProps {
   onSuggest?: (data: PersonnelData) => void;
   onPositionUpdate?: (actingAs: string | null) => void;
   onNotesUpdate?: (notes: string | null) => void;
+  variant?: 'default' | 'vacant';
 }
 
 // Utility function สำหรับ format วันที่
@@ -144,11 +159,13 @@ export default function PersonnelDetailModal({
   targetInfo,
   onSuggest,
   onPositionUpdate,
-  onNotesUpdate
+  onNotesUpdate,
+  variant = 'default'
 }: PersonnelDetailModalProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { showSnackbar } = useSnackbar();
+  const isVacant = variant === 'vacant';
 
   // Avatar state
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -598,8 +615,8 @@ export default function PersonnelDetailModal({
                 </Button>
               )}
               <Chip
-                label={personnel.rank ? 'มีผู้ดำรง' : 'รายการยื่นขอตำแหน่ง'}
-                color={personnel.rank ? 'success' : 'default'}
+                label={isVacant ? 'ว่าง' : (personnel.rank ? 'มีผู้ดำรง' : 'รายการยื่นขอตำแหน่ง')}
+                color={isVacant ? 'error' : (personnel.rank ? 'success' : 'default')}
                 size="small"
                 sx={{ height: 24, fontSize: '0.75rem' }}
               />
@@ -643,13 +660,14 @@ export default function PersonnelDetailModal({
                       width: 120,
                       height: 120,
                       border: 3,
-                      borderColor: 'primary.main',
+                      borderColor: isVacant ? 'error.main' : 'primary.main',
                       boxShadow: 3,
                       opacity: uploading ? 0.5 : 1,
                       transition: 'opacity 0.3s',
+                      ...(isVacant && { bgcolor: 'error.light' })
                     }}
                   >
-                    {!avatarUrl && <PersonIcon sx={{ fontSize: 60 }} />}
+                    {!avatarUrl && <PersonIcon sx={{ fontSize: 60, color: isVacant ? 'white' : 'inherit' }} />}
                   </Avatar>
 
                   {/* Loading Overlay */}
@@ -672,53 +690,29 @@ export default function PersonnelDetailModal({
                   )}
 
                   {/* Avatar Action Buttons */}
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      bottom: -8,
-                      right: -8,
-                      display: 'flex',
-                      gap: 0.5,
-                    }}
-                  >
-                    {!avatarUrl ? (
-                      <Tooltip title="เพิ่มรูปภาพ">
-                        <span>
-                          <IconButton
-                            size="small"
-                            onClick={handleAddAvatar}
-                            disabled={uploading || !originalId}
-                            sx={{
-                              bgcolor: 'primary.main',
-                              color: 'white',
-                              boxShadow: 2,
-                              '&:hover': {
-                                bgcolor: 'primary.dark',
-                              },
-                              '&:disabled': {
-                                bgcolor: 'grey.400',
-                                color: 'grey.200',
-                              },
-                            }}
-                          >
-                            <AddIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      <>
-                        <Tooltip title="แก้ไขรูปภาพ">
+                  {!isVacant && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        bottom: -8,
+                        right: -8,
+                        display: 'flex',
+                        gap: 0.5,
+                      }}
+                    >
+                      {!avatarUrl ? (
+                        <Tooltip title="เพิ่มรูปภาพ">
                           <span>
                             <IconButton
                               size="small"
-                              onClick={handleEditAvatar}
+                              onClick={handleAddAvatar}
                               disabled={uploading || !originalId}
                               sx={{
-                                bgcolor: 'warning.main',
+                                bgcolor: 'primary.main',
                                 color: 'white',
                                 boxShadow: 2,
                                 '&:hover': {
-                                  bgcolor: 'warning.dark',
+                                  bgcolor: 'primary.dark',
                                 },
                                 '&:disabled': {
                                   bgcolor: 'grey.400',
@@ -726,36 +720,62 @@ export default function PersonnelDetailModal({
                                 },
                               }}
                             >
-                              <EditIcon fontSize="small" />
+                              <AddIcon fontSize="small" />
                             </IconButton>
                           </span>
                         </Tooltip>
-                        <Tooltip title="ลบรูปภาพ">
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={handleDeleteAvatar}
-                              disabled={uploading || !originalId}
-                              sx={{
-                                bgcolor: 'error.main',
-                                color: 'white',
-                                boxShadow: 2,
-                                '&:hover': {
-                                  bgcolor: 'error.dark',
-                                },
-                                '&:disabled': {
-                                  bgcolor: 'grey.400',
-                                  color: 'grey.200',
-                                },
-                              }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </>
-                    )}
-                  </Box>
+                      ) : (
+                        <>
+                          <Tooltip title="แก้ไขรูปภาพ">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={handleEditAvatar}
+                                disabled={uploading || !originalId}
+                                sx={{
+                                  bgcolor: 'warning.main',
+                                  color: 'white',
+                                  boxShadow: 2,
+                                  '&:hover': {
+                                    bgcolor: 'warning.dark',
+                                  },
+                                  '&:disabled': {
+                                    bgcolor: 'grey.400',
+                                    color: 'grey.200',
+                                  },
+                                }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="ลบรูปภาพ">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={handleDeleteAvatar}
+                                disabled={uploading || !originalId}
+                                sx={{
+                                  bgcolor: 'error.main',
+                                  color: 'white',
+                                  boxShadow: 2,
+                                  '&:hover': {
+                                    bgcolor: 'error.dark',
+                                  },
+                                  '&:disabled': {
+                                    bgcolor: 'grey.400',
+                                    color: 'grey.200',
+                                  },
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </>
+                      )}
+                    </Box>
+                  )}
 
                   {/* Hidden File Input */}
                   <input
@@ -770,9 +790,9 @@ export default function PersonnelDetailModal({
               </Box>
 
               {/* Header Section - ชื่อและตำแหน่ง */}
-              <Box sx={{ p: 2, mb: 2, bgcolor: 'primary.main', color: 'white', borderRadius: 1 }}>
+              <Box sx={{ p: 2, mb: 2, bgcolor: isVacant ? 'error.main' : 'primary.main', color: 'white', borderRadius: 1 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.25, fontSize: '1.125rem' }}>
-                  {personnel.rank || ''} {personnel.fullName || 'รายการยื่นขอตำแหน่ง'}
+                  {isVacant ? 'ตำแหน่งว่าง' : `${personnel.rank || ''} ${personnel.fullName || 'รายการยื่นขอตำแหน่ง'}`}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9, fontSize: '0.938rem' }}>
                   {personnel.position} • {personnel.unit || '-'}
@@ -817,30 +837,59 @@ export default function PersonnelDetailModal({
                     </Stack>
                   </Paper>
 
-                  {/* ข้อมูลตำแหน่งใหม่ (ถ้ามี) */}
-                  {targetInfo && (
-                    <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: alpha('#4caf50', 0.1), border: '2px solid', borderColor: 'success.main', borderRadius: 1 }}>
+                  {/* ข้อมูลตำแหน่งใหม่ (รวม toPosition และ targetInfo) */}
+                  {(personnel.toPosition || targetInfo) && (
+                    <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: alpha('#22c55e', 0.08), border: '2px solid', borderColor: 'success.main', borderRadius: 1 }}>
                       <Typography variant="body2" sx={{ fontWeight: 800, color: 'success.dark', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
-                        <ArrowDownwardIcon fontSize="small" />
-                        🎯 ตำแหน่งใหม่หลังสลับ
+                        <ArrowRightAltIcon fontSize="small" />
+                        🟢 ตำแหน่งใหม่ (ที่จะไป)
                       </Typography>
                       <Divider sx={{ mb: 1, borderColor: 'success.light' }} />
                       <Stack spacing={0.75} divider={<Divider sx={{ opacity: 0.5 }} />}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ตำแหน่งที่ไปดำรง</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ตำแหน่ง</Typography>
                           <Typography variant="body2" fontWeight={700} color="success.dark" sx={{ fontSize: '0.875rem' }}>
-                            {targetInfo.position || targetInfo.posCodeMaster?.name || '-'}
+                            {targetInfo?.position || personnel.toPosition || targetInfo?.posCodeMaster?.name || '-'}
                           </Typography>
                         </Box>
+                        {(personnel.toPositionNumber || targetInfo?.positionNumber) && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
+                            <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.875rem' }}>
+                              {personnel.toPositionNumber || targetInfo?.positionNumber}
+                            </Typography>
+                          </Box>
+                        )}
+                        {(personnel.toPosCodeMaster || targetInfo?.posCodeMaster) && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>POSCODE</Typography>
+                            <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.875rem' }}>
+                              {personnel.toPosCodeMaster
+                                ? `${personnel.toPosCodeMaster.id} - ${personnel.toPosCodeMaster.name}`
+                                : targetInfo?.posCodeMaster
+                                  ? `${targetInfo.posCodeMaster.id} - ${targetInfo.posCodeMaster.name}`
+                                  : '-'}
+                            </Typography>
+                          </Box>
+                        )}
+                        {!personnel.toPosCodeMaster && !targetInfo?.posCodeMaster && personnel.toPosCode && (
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>POSCODE</Typography>
+                            <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.875rem' }}>{personnel.toPosCode}</Typography>
+                          </Box>
+                        )}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หน่วยงานปลายทาง</Typography>
-                          <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.875rem' }}>{targetInfo.unit || '-'}</Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>หน่วยปลายทาง</Typography>
+                          <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.875rem' }}>
+                            {targetInfo?.unit || personnel.toUnit || '-'}
+                          </Typography>
                         </Box>
-                        {targetInfo.fullName && (
+                        {/* แสดงข้อมูลคู่สลับ */}
+                        {(targetInfo?.fullName || personnel.swapPartnerName) && (
                           <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed', borderColor: 'success.light' }}>
                             <Typography variant="caption" color="text.secondary" display="block">สลับกับ:</Typography>
                             <Typography variant="body2" fontWeight={600} color="success.dark">
-                              {targetInfo.rank} {targetInfo.fullName}
+                              {targetInfo?.rank || personnel.swapPartnerRank} {targetInfo?.fullName || personnel.swapPartnerName}
                             </Typography>
                           </Box>
                         )}
@@ -848,8 +897,9 @@ export default function PersonnelDetailModal({
                     </Paper>
                   )}
 
+
                   {/* ข้อมูลบุคคล */}
-                  {personnel.rank && (
+                  {!isVacant && personnel.rank && (
                     <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'success.50', borderRadius: 1 }}>
                       <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
                         <PersonIcon fontSize="small" />
@@ -894,7 +944,7 @@ export default function PersonnelDetailModal({
                 {/* Right Column */}
                 <Box>
                   {/* ข้อมูลการแต่งตั้ง */}
-                  {personnel.rank && (
+                  {!isVacant && personnel.rank && (
                     <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'info.50', borderRadius: 1 }}>
                       <Typography variant="body2" sx={{ fontWeight: 600, color: 'info.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
                         <CalendarIcon fontSize="small" />
@@ -927,7 +977,7 @@ export default function PersonnelDetailModal({
                   )}
 
                   {/* ข้อมูลการฝึกอบรม */}
-                  {(personnel.trainingLocation || personnel.trainingCourse) && (
+                  {!isVacant && (personnel.trainingLocation || personnel.trainingCourse) && (
                     <Paper elevation={0} sx={{ p: 1.5, mb: 1.5, bgcolor: 'warning.50', borderRadius: 1 }}>
                       <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.938rem' }}>
                         <EducationIcon fontSize="small" />
@@ -954,112 +1004,114 @@ export default function PersonnelDetailModal({
               </Box>
 
               {/* ข้อมูลการเสนอชื่อ - Full Width - แก้ไขได้ */}
-              <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'primary.50', borderRadius: 1, border: 1, borderColor: 'primary.200' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', fontSize: '0.938rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <PersonIcon sx={{ fontSize: 16 }} />
-                    ข้อมูลการเสนอชื่อ
-                  </Typography>
-                  {!isEditingSupporter ? (
-                    <Tooltip title="แก้ไขข้อมูลการเสนอชื่อ">
-                      <IconButton
+              {!isVacant && (
+                <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'primary.50', borderRadius: 1, border: 1, borderColor: 'primary.200' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', fontSize: '0.938rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <PersonIcon sx={{ fontSize: 16 }} />
+                      ข้อมูลการเสนอชื่อ
+                    </Typography>
+                    {!isEditingSupporter ? (
+                      <Tooltip title="แก้ไขข้อมูลการเสนอชื่อ">
+                        <IconButton
+                          size="small"
+                          onClick={handleEditSupporter}
+                          disabled={!originalId}
+                          sx={{ color: 'primary.main' }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    ) : (
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="บันทึก">
+                          <IconButton
+                            size="small"
+                            onClick={handleSaveSupporter}
+                            disabled={savingSupporter}
+                            sx={{ color: 'success.main' }}
+                          >
+                            {savingSupporter ? <CircularProgress size={18} /> : <SaveIcon fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="ยกเลิก">
+                          <IconButton
+                            size="small"
+                            onClick={handleCancelEditSupporter}
+                            disabled={savingSupporter}
+                            sx={{ color: 'error.main' }}
+                          >
+                            <CloseIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    )}
+                  </Box>
+
+                  {isEditingSupporter ? (
+                    <Stack spacing={1.5}>
+                      <TextField
+                        label="ตำแหน่งที่ร้องขอ"
+                        value={requestedPosition}
+                        onChange={(e) => setRequestedPosition(e.target.value)}
+                        fullWidth
                         size="small"
-                        onClick={handleEditSupporter}
-                        disabled={!originalId}
-                        sx={{ color: 'primary.main' }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                        placeholder="เช่น ร้องขอตำแหน่งใน จ.ราชบุรี..."
+                        disabled={savingSupporter}
+                      />
+                      <TextField
+                        label="ผู้สนับสนุน/ผู้เสนอชื่อ"
+                        value={supporterName}
+                        onChange={(e) => setSupporterName(e.target.value)}
+                        fullWidth
+                        size="small"
+                        placeholder="กรอกชื่อผู้สนับสนุน..."
+                        disabled={savingSupporter}
+                      />
+                      <TextField
+                        label="เหตุผลในการสนับสนุน"
+                        value={supportReason}
+                        onChange={(e) => setSupportReason(e.target.value)}
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={3}
+                        placeholder="กรอกเหตุผลในการสนับสนุน..."
+                        disabled={savingSupporter}
+                      />
+                    </Stack>
                   ) : (
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      <Tooltip title="บันทึก">
-                        <IconButton
-                          size="small"
-                          onClick={handleSaveSupporter}
-                          disabled={savingSupporter}
-                          sx={{ color: 'success.main' }}
-                        >
-                          {savingSupporter ? <CircularProgress size={18} /> : <SaveIcon fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="ยกเลิก">
-                        <IconButton
-                          size="small"
-                          onClick={handleCancelEditSupporter}
-                          disabled={savingSupporter}
-                          sx={{ color: 'error.main' }}
-                        >
-                          <CloseIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
+                    <>
+                      <Box sx={{ mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem', mb: 0.25 }}>
+                          ตำแหน่งที่ร้องขอ:
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: requestedPosition ? 'text.primary' : 'text.disabled', fontSize: '0.875rem', fontStyle: requestedPosition ? 'bold' : 'italic', fontWeight: 600 }}>
+                          {requestedPosition || 'ยังไม่ได้ระบุ'}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ mb: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem', mb: 0.25 }}>
+                          ผู้สนับสนุน/ผู้เสนอชื่อ:
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: supporterName ? 'text.primary' : 'text.disabled', fontSize: '0.875rem', fontStyle: supporterName ? 'bold' : 'italic', fontWeight: 600 }}>
+                          {supporterName || 'ยังไม่ได้ระบุ'}
+                        </Typography>
+                      </Box>
+
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem', mb: 0.25 }}>
+                          เหตุผลในการสนับสนุน:
+                        </Typography>
+                        <Typography variant="body2" sx={{ lineHeight: 1.6, color: supportReason ? 'text.primary' : 'text.disabled', fontSize: '0.875rem', fontStyle: supportReason ? 'bold' : 'italic', fontWeight: 600 }}>
+                          {supportReason || 'ยังไม่ได้ระบุ'}
+                        </Typography>
+                      </Box>
+                    </>
                   )}
-                </Box>
-
-                {isEditingSupporter ? (
-                  <Stack spacing={1.5}>
-                    <TextField
-                      label="ตำแหน่งที่ร้องขอ"
-                      value={requestedPosition}
-                      onChange={(e) => setRequestedPosition(e.target.value)}
-                      fullWidth
-                      size="small"
-                      placeholder="เช่น ร้องขอตำแหน่งใน จ.ราชบุรี..."
-                      disabled={savingSupporter}
-                    />
-                    <TextField
-                      label="ผู้สนับสนุน/ผู้เสนอชื่อ"
-                      value={supporterName}
-                      onChange={(e) => setSupporterName(e.target.value)}
-                      fullWidth
-                      size="small"
-                      placeholder="กรอกชื่อผู้สนับสนุน..."
-                      disabled={savingSupporter}
-                    />
-                    <TextField
-                      label="เหตุผลในการสนับสนุน"
-                      value={supportReason}
-                      onChange={(e) => setSupportReason(e.target.value)}
-                      fullWidth
-                      size="small"
-                      multiline
-                      rows={3}
-                      placeholder="กรอกเหตุผลในการสนับสนุน..."
-                      disabled={savingSupporter}
-                    />
-                  </Stack>
-                ) : (
-                  <>
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem', mb: 0.25 }}>
-                        ตำแหน่งที่ร้องขอ:
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: requestedPosition ? 'text.primary' : 'text.disabled', fontSize: '0.875rem', fontStyle: requestedPosition ? 'bold' : 'italic', fontWeight: 600 }}>
-                        {requestedPosition || 'ยังไม่ได้ระบุ'}
-                      </Typography>
-                    </Box>
-
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem', mb: 0.25 }}>
-                        ผู้สนับสนุน/ผู้เสนอชื่อ:
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: supporterName ? 'text.primary' : 'text.disabled', fontSize: '0.875rem', fontStyle: supporterName ? 'bold' : 'italic', fontWeight: 600 }}>
-                        {supporterName || 'ยังไม่ได้ระบุ'}
-                      </Typography>
-                    </Box>
-
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem', mb: 0.25 }}>
-                        เหตุผลในการสนับสนุน:
-                      </Typography>
-                      <Typography variant="body2" sx={{ lineHeight: 1.6, color: supportReason ? 'text.primary' : 'text.disabled', fontSize: '0.875rem', fontStyle: supportReason ? 'bold' : 'italic', fontWeight: 600 }}>
-                        {supportReason || 'ยังไม่ได้ระบุ'}
-                      </Typography>
-                    </Box>
-                  </>
-                )}
-              </Paper>
+                </Paper>
+              )}
 
               {/* หมายเหตุ */}
               <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>

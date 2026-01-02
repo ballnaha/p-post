@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, useMediaQuery, useTheme, Autocomplete, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Save as SaveIcon, CheckCircle as CheckCircleIcon , Check as CheckIcon } from '@mui/icons-material';
+import { Box, Paper, Typography, Button, Chip, CircularProgress, TextField, useMediaQuery, useTheme, Autocomplete, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Alert, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Save as SaveIcon, CheckCircle as CheckCircleIcon, Check as CheckIcon } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useToast } from '@/hooks/useToast';
 import PromotionTable from './components/PromotionTable';
@@ -15,44 +15,44 @@ interface ChainNode {
   isPlaceholder?: boolean; // true = ตำแหน่งว่าง (ยังไม่ได้เลือกบุคลากร)
   personnelId?: string;
   noId?: number;
-  
+
   nationalId: string;
   fullName: string;
   rank: string;
   seniority?: string;
-  
+
   birthDate?: string;
   age?: string;
   education?: string;
-  
+
   lastAppointment?: string;
   currentRankSince?: string;
   enrollmentDate?: string;
   retirementDate?: string;
   yearsOfService?: string;
-  
+
   trainingLocation?: string;
   trainingCourse?: string;
-  
+
   supporterName?: string;
   supportReason?: string;
-  
+
   notes?: string;
-  
+
   fromPosCodeId: number;
   fromPosCodeName?: string;
   fromPosition: string;
   fromPositionNumber?: string;
   fromUnit: string;
   fromActingAs?: string;
-  
+
   toPosCodeId: number;
   toPosCodeName?: string;
   toPosition: string;
   toPositionNumber?: string;
   toUnit: string;
   toActingAs?: string;
-  
+
   fromRankLevel: number;
   toRankLevel: number;
   isPromotionValid: boolean;
@@ -101,13 +101,14 @@ function CreatePromotionContent() {
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [saveAndComplete, setSaveAndComplete] = useState(false);
-  
+  const [year, setYear] = useState<number>(new Date().getFullYear() + 543);
+
   // Unit Information
   const [unitName, setUnitName] = useState<string>('');
   const [unitDescription, setUnitDescription] = useState<string>('');
   const [unitOptions, setUnitOptions] = useState<string[]>([]);
   const [unitLoading, setUnitLoading] = useState(true);
-  
+
   // อัพเดท toUnit ของ node แรกเมื่อเปลี่ยนหน่วยปลายทาง
   useEffect(() => {
     if (nodes.length > 0 && unitName) {
@@ -123,24 +124,23 @@ function CreatePromotionContent() {
       setNodes(updatedNodes);
     }
   }, [unitName]);
-  
 
-  
+
+
   // Selected Personnel to Transfer
   const [selectedPersonnel, setSelectedPersonnel] = useState<StartingPersonnel[]>([]);
-  
+
   // Get starting personnel (first selected personnel)
   const startingPersonnel = selectedPersonnel[0] || null;
-  
+
   // Chain nodes for filling vacant positions
   const [nodes, setNodes] = useState<ChainNode[]>([]);
   const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
-    const fetchNextGroupNumber = async () => {
+    const fetchNextGroupNumber = async (selectedYear: number) => {
       try {
-        const currentYear = new Date().getFullYear() + 543;
-        const response = await fetch(`/api/swap-transactions?year=${currentYear}&swapType=transfer`);
+        const response = await fetch(`/api/swap-transactions?year=${selectedYear}&swapType=transfer`);
         if (!response.ok) throw new Error('Failed to fetch transfer transactions');
         const result = await response.json();
         const transactions: any[] = Array.isArray(result?.data) ? result.data : [];
@@ -155,14 +155,15 @@ function CreatePromotionContent() {
           }
         }
         const next = String(maxNumber + 1).padStart(3, '0');
-        setGroupNumber(`${currentYear}/TF-${next}`);
+        setGroupNumber(`${selectedYear}/TF-${next}`);
       } catch (e) {
-        const currentYear = new Date().getFullYear() + 543;
-        setGroupNumber(`${currentYear}/TF-001`);
+        setGroupNumber(`${selectedYear}/TF-001`);
       }
     };
-    fetchNextGroupNumber();
-  }, []);
+    if (year) {
+      fetchNextGroupNumber(year);
+    }
+  }, [year]);
 
   // Fetch unique units from police_personnel
   useEffect(() => {
@@ -173,7 +174,7 @@ function CreatePromotionContent() {
         const response = await fetch('/api/in-out?filtersOnly=true');
         if (!response.ok) throw new Error('Failed to fetch filters');
         const result = await response.json();
-        
+
         if (result.success && result.data.filters) {
           const units = result.data.filters.units || [];
           console.log('Fetched unique units:', units.length, units);
@@ -199,7 +200,7 @@ function CreatePromotionContent() {
   const handleAddPlaceholder = () => {
     const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
     const isLastNodePlaceholder = lastNode?.isPlaceholder === true;
-    
+
     // สร้าง placeholder node
     const placeholderNode: ChainNode = {
       id: `placeholder-${Date.now()}`,
@@ -208,7 +209,7 @@ function CreatePromotionContent() {
       fullName: '[รอการเลือกบุคลากร]',
       nationalId: '',
       rank: '',
-      
+
       // ตำแหน่ง from ว่าง (เพราะยังไม่มีบุคคล)
       fromPosCodeId: 0,
       fromPosCodeName: undefined,
@@ -216,39 +217,39 @@ function CreatePromotionContent() {
       fromPositionNumber: undefined,
       fromUnit: '',
       fromActingAs: undefined,
-      
+
       // ตำแหน่ง to: ถ้า node ก่อนหน้าเป็น placeholder ให้เป็นค่าว่าง
-      toPosCodeId: nodes.length === 0 
-        ? 0 
-        : isLastNodePlaceholder 
-          ? 0 
+      toPosCodeId: nodes.length === 0
+        ? 0
+        : isLastNodePlaceholder
+          ? 0
           : (lastNode?.fromPosCodeId || 0),
-      toPosCodeName: nodes.length === 0 
-        ? undefined 
-        : isLastNodePlaceholder 
-          ? undefined 
+      toPosCodeName: nodes.length === 0
+        ? undefined
+        : isLastNodePlaceholder
+          ? undefined
           : lastNode?.fromPosCodeName,
-      toPosition: nodes.length === 0 
-        ? '' 
-        : isLastNodePlaceholder 
-          ? '' 
+      toPosition: nodes.length === 0
+        ? ''
+        : isLastNodePlaceholder
+          ? ''
           : (lastNode?.fromPosition || ''),
-      toPositionNumber: nodes.length === 0 
-        ? undefined 
-        : isLastNodePlaceholder 
-          ? undefined 
+      toPositionNumber: nodes.length === 0
+        ? undefined
+        : isLastNodePlaceholder
+          ? undefined
           : lastNode?.fromPositionNumber,
-      toUnit: nodes.length === 0 
-        ? unitName 
-        : isLastNodePlaceholder 
-          ? '' 
+      toUnit: nodes.length === 0
+        ? unitName
+        : isLastNodePlaceholder
+          ? ''
           : (lastNode?.fromUnit || ''),
-      toActingAs: nodes.length === 0 
-        ? undefined 
-        : isLastNodePlaceholder 
-          ? undefined 
+      toActingAs: nodes.length === 0
+        ? undefined
+        : isLastNodePlaceholder
+          ? undefined
           : lastNode?.fromActingAs,
-      
+
       // Rank levels
       fromRankLevel: 0,
       toRankLevel: nodes.length === 0 ? 0 : (lastNode?.fromRankLevel || 0),
@@ -276,7 +277,7 @@ function CreatePromotionContent() {
       fullName: '[รอการเลือกบุคลากร]',
       nationalId: '',
       rank: '',
-      
+
       // ตำแหน่ง from ว่าง
       fromPosCodeId: 0,
       fromPosCodeName: undefined,
@@ -284,7 +285,7 @@ function CreatePromotionContent() {
       fromPositionNumber: undefined,
       fromUnit: '',
       fromActingAs: undefined,
-      
+
       // ตำแหน่ง to ตามโหนดที่จะแทรกก่อน
       toPosCodeId: targetNode.toPosCodeId,
       toPosCodeName: targetNode.toPosCodeName,
@@ -292,7 +293,7 @@ function CreatePromotionContent() {
       toPositionNumber: targetNode.toPositionNumber,
       toUnit: targetNode.toUnit,
       toActingAs: targetNode.toActingAs,
-      
+
       // Rank levels
       fromRankLevel: 0,
       toRankLevel: targetNode.toRankLevel,
@@ -372,7 +373,7 @@ function CreatePromotionContent() {
           nodeOrder: index + 1,
         };
       }
-      
+
       if (index === 0) {
         // Node แรก: ไปหน่วยปลายทาง (ไม่มีตำแหน่งเฉพาะ)
         return {
@@ -418,7 +419,7 @@ function CreatePromotionContent() {
     });
 
     setNodes(reorderedNodes);
-    
+
     if (nodeIndex < nodes.length - 1) {
       const nextNode = nodes[nodeIndex + 1];
       toast.success(
@@ -553,7 +554,7 @@ function CreatePromotionContent() {
       }
 
       const year = new Date().getFullYear() + 543;
-      
+
       // ส่งทุก node รวม placeholder เพื่อให้ยังคงอยู่หลัง reload
       const swapDetails = nodes.map((node) => ({
         sequence: node.nodeOrder,
@@ -656,9 +657,9 @@ function CreatePromotionContent() {
         {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
           {/* Title and Back Button */}
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
             mb: 2,
           }}>
@@ -670,18 +671,39 @@ function CreatePromotionContent() {
                 เลือกบุคลากรที่จะย้ายไปหน่วยงานปลายทาง และจัดคนเติมตำแหน่งว่างแบบทอดต่อ
               </Typography>
             </Box>
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackIcon />}
-              onClick={() => router.push('/police-personnel/promotion')}
-              sx={{ flexShrink: 0 }}
-            >
-              ย้อนกลับ
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <InputLabel id="year-select-label">ประจำปี *</InputLabel>
+                <Select
+                  labelId="year-select-label"
+                  value={year}
+                  label="ประจำปี *"
+                  onChange={(e) => setYear(Number(e.target.value))}
+                  required
+                >
+                  {(() => {
+                    const currentYear = new Date().getFullYear() + 543;
+                    return Array.from({ length: 11 }, (_, i) => currentYear - 5 + i).map((y) => (
+                      <MenuItem key={y} value={y}>
+                        พ.ศ. {y}
+                      </MenuItem>
+                    ));
+                  })()}
+                </Select>
+              </FormControl>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => router.push('/police-personnel/promotion')}
+                sx={{ flexShrink: 0 }}
+              >
+                ย้อนกลับ
+              </Button>
+            </Box>
           </Box>
 
           {/* Destination Unit Info - Full Width */}
-          <Box sx={{ 
+          <Box sx={{
             p: 2,
             bgcolor: 'primary.50',
             borderRadius: 1,
@@ -694,7 +716,7 @@ function CreatePromotionContent() {
               </Typography>
               <Chip label={`${nodes.length} ขั้น`} size="small" color="primary" sx={{ height: 30, fontSize: '0.85rem' }} />
             </Box>
-            
+
             <Box sx={{ display: 'flex', gap: 2, mb: 1.5 }}>
               <Autocomplete
                 fullWidth
@@ -721,7 +743,7 @@ function CreatePromotionContent() {
                 )}
                 sx={{ bgcolor: 'white', flex: 1 }}
               />
-              
+
               <TextField
                 label="รายละเอียดเพิ่มเติม"
                 placeholder="ระบุรายละเอียดของหน่วยงาน (ถ้ามี)"
@@ -732,7 +754,7 @@ function CreatePromotionContent() {
                 sx={{ bgcolor: 'white', flex: 1 }}
               />
             </Box>
-            
+
             {/* Group Number Display */}
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
               <Chip label="เลขกลุ่ม" size="small" color="primary" sx={{ height: 22 }} />
@@ -772,17 +794,18 @@ function CreatePromotionContent() {
                 onAddPlaceholder={handleAddPlaceholder}
                 onInsertPlaceholder={handleInsertPlaceholder}
                 destinationUnit={unitName}
+                filterYear={year}
               />
             </Box>
 
             {/* Actions - Sticky Footer */}
-            <Paper 
-              sx={{ 
-                p: { xs: 1.5, sm: 2.5 }, 
-                position: 'sticky', 
-                bottom: 0, 
+            <Paper
+              sx={{
+                p: { xs: 1.5, sm: 2.5 },
+                position: 'sticky',
+                bottom: 0,
                 zIndex: 10,
-                display: 'flex', 
+                display: 'flex',
                 gap: { xs: 1, sm: 2 },
                 flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
@@ -807,8 +830,8 @@ function CreatePromotionContent() {
                   </Typography>
                 )}
               </Box>
-              <Box sx={{ 
-                display: 'flex', 
+              <Box sx={{
+                display: 'flex',
                 gap: { xs: 1, sm: 2 },
                 flexDirection: { xs: 'column-reverse', sm: 'row' },
                 width: { xs: '100%', sm: 'auto' }
@@ -818,14 +841,14 @@ function CreatePromotionContent() {
                   onClick={() => router.push('/police-personnel/promotion')}
                   disabled={saving || completing}
                   fullWidth={isMobile}
-                  sx={{ 
+                  sx={{
                     minHeight: { xs: '44px', sm: 'auto' },
                     fontSize: { xs: '0.875rem', md: '1rem' }
                   }}
                 >
                   ยกเลิก
                 </Button>
-                
+
                 <Button
                   variant="contained"
                   color="primary"
@@ -834,7 +857,7 @@ function CreatePromotionContent() {
                   onClick={() => handleSave(false)}
                   disabled={!isChainValid || saving || completing || nodes.length === 0}
                   fullWidth={isMobile}
-                  sx={{ 
+                  sx={{
                     minHeight: { xs: '48px', sm: 'auto' },
                     fontSize: { xs: '0.875rem', md: '1rem' },
                     fontWeight: 600
@@ -843,7 +866,7 @@ function CreatePromotionContent() {
                   {saving && !saveAndComplete ? 'กำลังบันทึก...' : 'บันทึกรายการ'}
                 </Button>
 
-                
+
                 {!nodes.some(n => n.isPlaceholder) && nodes.length > 0 && (
                   <Button
                     variant="outlined"
@@ -853,7 +876,7 @@ function CreatePromotionContent() {
                     onClick={handleCompleteClick}
                     disabled={!isChainValid || saving || completing}
                     fullWidth={isMobile}
-                    sx={{ 
+                    sx={{
                       minHeight: { xs: '44px', sm: 'auto' },
                       fontSize: { xs: '0.875rem', md: '1rem' },
                       fontWeight: 600
@@ -882,7 +905,7 @@ function CreatePromotionContent() {
             }
           }}
         >
-          <DialogTitle sx={{ 
+          <DialogTitle sx={{
             pb: 2,
             display: 'flex',
             alignItems: 'center',
@@ -891,9 +914,9 @@ function CreatePromotionContent() {
             borderBottom: '2px solid',
             borderColor: 'success.main',
           }}>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'center',
               width: 48,
               height: 48,
@@ -940,9 +963,9 @@ function CreatePromotionContent() {
                 </Box>
               </Paper>
             </Box>
-            <Box sx={{ 
-              p: 2, 
-              bgcolor: 'info.50', 
+            <Box sx={{
+              p: 2,
+              bgcolor: 'info.50',
               borderRadius: 1,
               borderLeft: '4px solid',
               borderColor: 'info.main',

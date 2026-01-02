@@ -126,7 +126,7 @@ const DraggableCard = memo(({
                     display: 'flex',
                     alignItems: 'stretch',
                     opacity: isDragging ? 0.5 : 1,
-                    cursor: isReadOnly ? 'default' : 'grab',
+                    cursor: 'default',
                     position: 'relative',
                     borderWidth: isSelected ? '3px' : '2px',
                     margin: isSelected ? '-1px 0 7px 0' : '0 0 8px 0',
@@ -137,10 +137,6 @@ const DraggableCard = memo(({
                     },
                     overflow: 'visible',
                     backgroundClip: 'padding-box',
-                }}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onToggle(personnel.id);
                 }}
             >
                 {/* Top Drop Indicator (Absolute) */}
@@ -173,23 +169,40 @@ const DraggableCard = memo(({
                     }} />
                 )}
 
-                {/* Drag Handle */}
-                <Box sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    px: 0.75,
-                    bgcolor: '#f8fafc',
-                    borderRight: '1px solid #e2e8f0',
-                    color: 'text.disabled',
-                    borderRadius: '10px 0 0 10px',
-                }}>
+                {/* Drag Handle - Click to toggle selection */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        px: 0.75,
+                        bgcolor: isSelected ? alpha('#3b82f6', 0.15) : '#f8fafc',
+                        borderRight: '1px solid #e2e8f0',
+                        color: isSelected ? 'primary.main' : 'text.disabled',
+                        borderRadius: '10px 0 0 10px',
+                        cursor: isReadOnly ? 'default' : 'grab',
+                        transition: 'all 0.15s ease',
+                        '&:hover': {
+                            bgcolor: alpha('#3b82f6', 0.1),
+                            color: 'primary.main',
+                        }
+                    }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isReadOnly) {
+                            onToggle(personnel.id);
+                        }
+                    }}
+                >
                     <DragIndicatorIcon fontSize="small" />
                 </Box>
 
-                {/* Content */}
+                {/* Content - Click to open modal */}
                 <Box
                     sx={{ flex: 1, p: 1.5, minWidth: 0, cursor: 'pointer' }}
-                    onClick={() => onCardClick?.(personnel, targetInfo)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCardClick?.(personnel, targetInfo);
+                    }}
                 >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                         {isChain && (

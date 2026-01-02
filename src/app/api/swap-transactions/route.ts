@@ -220,6 +220,85 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // ===== AUTO ADD TO BOARD LAYOUT =====
+    // เพิ่ม transaction ใหม่เข้าไปใน board-layout อัตโนมัติ
+    // เพื่อให้แสดงบน personnel-board-v2 ทันที
+    const BOARD_LAYOUT_TYPE = 'board-layout';
+
+    try {
+      // หา board-layout record สำหรับปีนั้น
+      const layoutRecord = await prisma.swapTransaction.findFirst({
+        where: {
+          year,
+          swapType: BOARD_LAYOUT_TYPE,
+        },
+      });
+
+      if (layoutRecord && layoutRecord.notes) {
+        // มี layout อยู่แล้ว - เพิ่ม transaction ใหม่เข้าไป
+        try {
+          const boardLayout = JSON.parse(layoutRecord.notes);
+          const lanes = boardLayout.lanes || [];
+
+          // เพิ่ม lane ใหม่ที่ต้นรายการ (index = 0) และ shift index อื่นๆ
+          lanes.forEach((lane: any) => {
+            if (typeof lane.index === 'number') {
+              lane.index += 1;
+            }
+          });
+
+          lanes.unshift({
+            index: 0,
+            transactionId: transaction.id,
+            title: transaction.groupName || groupName,
+            vacantPosition: null,
+            isCompleted: false,
+          });
+
+          // อัปเดต layout record
+          await prisma.swapTransaction.update({
+            where: { id: layoutRecord.id },
+            data: {
+              notes: JSON.stringify({ lanes }),
+              updatedAt: new Date(),
+            },
+          });
+
+          console.log(`Added transaction ${transaction.id} to board-layout for year ${year}`);
+        } catch (parseError) {
+          console.error('Error parsing board layout:', parseError);
+        }
+      } else {
+        // ยังไม่มี layout - สร้างใหม่
+        const newLanes = [{
+          index: 0,
+          transactionId: transaction.id,
+          title: transaction.groupName || groupName,
+          vacantPosition: null,
+          isCompleted: false,
+        }];
+
+        await prisma.swapTransaction.create({
+          data: {
+            year,
+            swapDate: new Date(),
+            swapType: BOARD_LAYOUT_TYPE,
+            groupName: `Board Layout ${year}`,
+            status: 'active',
+            isCompleted: true,
+            notes: JSON.stringify({ lanes: newLanes }),
+            createdBy: 'system',
+          },
+        });
+
+        console.log(`Created new board-layout for year ${year} with transaction ${transaction.id}`);
+      }
+    } catch (layoutError) {
+      // ไม่ให้ error จาก layout กระทบการสร้าง transaction หลัก
+      console.error('Error adding to board layout (non-critical):', layoutError);
+    }
+    // ===== END AUTO ADD TO BOARD LAYOUT =====
+
     return NextResponse.json({
       success: true,
       data: transaction,

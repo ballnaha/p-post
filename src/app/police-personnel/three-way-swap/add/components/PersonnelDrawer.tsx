@@ -1,39 +1,39 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Drawer, 
-  Button, 
-  TextField, 
-  InputAdornment, 
-  Box, 
-  Typography, 
-  CircularProgress, 
-  Paper, 
-  IconButton, 
-  Divider, 
-  FormControl, 
-  Select, 
-  MenuItem, 
-  SelectChangeEvent, 
-  Chip, 
-  Collapse, 
-  Stack, 
-  Pagination, 
+import {
+  Drawer,
+  Button,
+  TextField,
+  InputAdornment,
+  Box,
+  Typography,
+  CircularProgress,
+  Paper,
+  IconButton,
+  Divider,
+  FormControl,
+  Select,
+  MenuItem,
+  SelectChangeEvent,
+  Chip,
+  Collapse,
+  Stack,
+  Pagination,
   Skeleton,
   useMediaQuery,
   useTheme,
   Badge,
   Tooltip
 } from '@mui/material';
-import { 
-  Search as SearchIcon, 
-  Close as CloseIcon, 
-  FilterList as FilterListIcon, 
-  ExpandMore as ExpandMoreIcon, 
-  ExpandLess as ExpandLessIcon, 
-  Person as PersonIcon, 
-  Badge as BadgeIcon, 
-  CalendarToday as CalendarIcon, 
+import {
+  Search as SearchIcon,
+  Close as CloseIcon,
+  FilterList as FilterListIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Person as PersonIcon,
+  Badge as BadgeIcon,
+  CalendarToday as CalendarIcon,
   School as EducationIcon,
   Star as StarIcon
 } from '@mui/icons-material';
@@ -80,6 +80,7 @@ interface PersonnelDrawerProps {
   initialFilterUnit?: string; // หน่วยเริ่มต้นสำหรับ filter
   initialFilterPosCode?: number; // posCode เริ่มต้นสำหรับ filter
   excludeTransactionId?: string; // Transaction ID ที่กำลังแก้ไข (ไม่กรองบุคลากรใน transaction นี้ออก)
+  filterYear?: number; // ปีที่ต้องการกรอง (พ.ศ.)
 }
 
 export default function PersonnelDrawer({
@@ -91,6 +92,7 @@ export default function PersonnelDrawer({
   initialFilterUnit,
   initialFilterPosCode,
   excludeTransactionId,
+  filterYear,
 }: PersonnelDrawerProps) {
   const [loading, setLoading] = useState(false);
   const [personnel, setPersonnel] = useState<PolicePersonnel[]>([]);
@@ -108,7 +110,7 @@ export default function PersonnelDrawer({
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [initialLoading, setInitialLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [filterOptionsLoaded, setFilterOptionsLoaded] = useState(false);
@@ -132,15 +134,15 @@ export default function PersonnelDrawer({
       setSearchTerm('');
       setSelectedPersonnel(null);
       setExpandedPersonnelId(null);
-      
+
       // Set loading states
       setInitialLoading(true);
       setFilterOptionsLoaded(false);
-      
+
       // ตั้งค่า filter เริ่มต้นตาม props ที่ส่งมา
       const initialUnit = initialFilterUnit || 'all';
       const initialPosCode = initialFilterPosCode ? initialFilterPosCode.toString() : 'all';
-      
+
       setFilterUnit(initialUnit);
       setFilterPosCode(initialPosCode);
       setPage(0);
@@ -149,7 +151,7 @@ export default function PersonnelDrawer({
         try {
           // Load all data in parallel for faster performance
           const [_, __, personnelData] = await Promise.all([
-            loadAllUnits(), 
+            loadAllUnits(),
             loadPosCodes(),
             // Load personnel data immediately in parallel
             (async () => {
@@ -159,26 +161,26 @@ export default function PersonnelDrawer({
                 if (initialPosCode && initialPosCode !== 'all') params.set('posCodeId', initialPosCode);
                 params.set('page', '0');
                 params.set('limit', rowsPerPage.toString());
-                
-                const currentYear = new Date().getFullYear() + 543;
-                params.set('year', currentYear.toString());
-                
+                // ใช้ปีที่ส่งมาหรือปีปัจจุบัน
+                const yearToUse = filterYear || (new Date().getFullYear() + 543);
+                params.set('year', yearToUse.toString());
+
                 if (excludeTransactionId) {
                   params.set('excludeTransactionId', excludeTransactionId);
                 }
 
                 const response = await fetch(`/api/police-personnel/candidates?${params.toString()}`);
                 if (!response.ok) throw new Error('Failed to fetch personnel');
-                
+
                 const result = await response.json();
                 let pageData: any[] = Array.isArray(result?.data) ? result.data : [];
-                
+
                 // Apply client-side filter for excluded personnel
                 if (excludePersonnelId) {
                   const excludeIds = Array.isArray(excludePersonnelId) ? excludePersonnelId : [excludePersonnelId];
                   pageData = pageData.filter(p => !excludeIds.includes(p.id));
                 }
-                
+
                 return { data: pageData, total: result?.total || 0 };
               } catch (error) {
                 console.error('Error loading personnel:', error);
@@ -186,12 +188,12 @@ export default function PersonnelDrawer({
               }
             })()
           ]);
-          
+
           // Set all data at once after filtering is complete
           setPersonnel(personnelData.data as PolicePersonnel[]);
           setTotalPersonnel(personnelData.total);
           setFilterOptionsLoaded(true);
-          
+
         } catch (error) {
           console.error('Error in initial load:', error);
           setPersonnel([]);
@@ -205,7 +207,7 @@ export default function PersonnelDrawer({
       setInitialLoading(false);
       setFilterOptionsLoaded(false);
     }
-  }, [open, rowsPerPage, initialFilterUnit, initialFilterPosCode]);
+  }, [open, rowsPerPage, initialFilterUnit, initialFilterPosCode, filterYear]);
 
   const loadPosCodes = async () => {
     try {
@@ -236,11 +238,11 @@ export default function PersonnelDrawer({
   };
 
   const loadPersonnelWithFilter = async (
-    unit: string, 
+    unit: string,
     posCode: string,
     supporter: string,
-    search: string, 
-    currentPage: number, 
+    search: string,
+    currentPage: number,
     pageSize: number
   ) => {
     setLoading(true);
@@ -252,11 +254,10 @@ export default function PersonnelDrawer({
       if (supporter && supporter !== 'all') params.set('supporter', supporter);
       params.set('page', currentPage.toString());
       params.set('limit', pageSize.toString());
-      
-      // ส่งปีปัจจุบัน (พ.ศ.) เพื่อกรองบุคลากรที่มีอยู่ใน swap transaction แล้ว
-      const currentYear = new Date().getFullYear() + 543;
-      params.set('year', currentYear.toString());
-      
+      // ใช้ปีที่ส่งมาหรือปีปัจจุบัน
+      const yearToUse = filterYear || (new Date().getFullYear() + 543);
+      params.set('year', yearToUse.toString());
+
       // ส่ง transaction ID ที่กำลังแก้ไข เพื่อไม่กรองบุคลากรใน transaction นี้ออก
       if (excludeTransactionId) {
         params.set('excludeTransactionId', excludeTransactionId);
@@ -270,13 +271,13 @@ export default function PersonnelDrawer({
 
       const result = await response.json();
       let pageData: any[] = Array.isArray(result?.data) ? result.data : [];
-      
+
       // Filter out excluded personnel
       if (excludePersonnelId) {
         const excludeIds = Array.isArray(excludePersonnelId) ? excludePersonnelId : [excludePersonnelId];
         pageData = pageData.filter(p => !excludeIds.includes(p.id));
       }
-      
+
       setPersonnel(pageData as PolicePersonnel[]);
       setTotalPersonnel(result?.total || 0);
     } catch (error) {
@@ -288,29 +289,29 @@ export default function PersonnelDrawer({
 
   const loadPersonnel = async () => {
     await loadPersonnelWithFilter(
-      filterUnit, 
+      filterUnit,
       filterPosCode,
       filterSupporter,
-      debouncedSearchTerm, 
-      page, 
+      debouncedSearchTerm,
+      page,
       rowsPerPage
     );
   };
 
   const formatDate = (dateString?: string | null): string => {
     if (!dateString || dateString === '-') return '-';
-    
+
     if (typeof dateString === 'string' && dateString.includes('/')) {
       const parts = dateString.split('/');
       if (parts.length === 3) {
         const day = parts[0].padStart(2, '0');
         const month = parts[1].padStart(2, '0');
         const year = parseInt(parts[2]);
-        
+
         if (year > 2500) {
           return `${day}/${month}/${year}`;
         }
-        
+
         if (year > 1900 && year < 2100) {
           const thaiYear = year + 543;
           return `${day}/${month}/${thaiYear}`;
@@ -318,7 +319,7 @@ export default function PersonnelDrawer({
       }
       return dateString;
     }
-    
+
     try {
       const date = new Date(dateString);
       if (!isNaN(date.getTime())) {
@@ -330,7 +331,7 @@ export default function PersonnelDrawer({
     } catch (error) {
       // Return original string if parsing fails
     }
-    
+
     return dateString;
   };
 
@@ -397,7 +398,7 @@ export default function PersonnelDrawer({
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (!open) return;
-      
+
       if (e.key === 'Enter' && selectedPersonnel) {
         handleSelect();
       } else if (e.key === 'Escape') {
@@ -420,8 +421,8 @@ export default function PersonnelDrawer({
         }
       }}
       PaperProps={{
-        sx: { 
-          width: { xs: '100%', sm: '90%', md: 800 }, 
+        sx: {
+          width: { xs: '100%', sm: '90%', md: 800 },
           backgroundImage: 'none'
         }
       }}
@@ -431,16 +432,16 @@ export default function PersonnelDrawer({
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header */}
-        <Box sx={{ 
-          p: { xs: 1.5, md: 1 }, 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          borderBottom: 1, 
+        <Box sx={{
+          p: { xs: 1.5, md: 1 },
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: 1,
           borderColor: 'divider',
           bgcolor: 'background.paper',
-          position: 'sticky', 
-          top: 0, 
+          position: 'sticky',
+          top: 0,
           zIndex: 2,
         }}>
           <Box sx={{ lineHeight: 1, pl: { xs: 0, md: 1.5 } }}>
@@ -469,11 +470,11 @@ export default function PersonnelDrawer({
             <>
               {/* Info Badge - แสดงเมื่อมีการกรองตามบุคลากรอื่น */}
               {(initialFilterUnit || initialFilterPosCode) && (
-                <Paper 
-                  elevation={0} 
-                  sx={{ 
-                    p: 1.5, 
-                    mb: 1.5, 
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 1.5,
+                    mb: 1.5,
                     bgcolor: 'info.50',
                     borderLeft: 4,
                     borderColor: 'info.main',
@@ -485,7 +486,7 @@ export default function PersonnelDrawer({
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     {initialFilterUnit && (
-                      <Chip 
+                      <Chip
                         label={`หน่วย: ${initialFilterUnit}`}
                         size="small"
                         color="info"
@@ -493,7 +494,7 @@ export default function PersonnelDrawer({
                       />
                     )}
                     {initialFilterPosCode && (
-                      <Chip 
+                      <Chip
                         label={`PosCode: ${posCodeOptions.find(pc => pc.id === initialFilterPosCode)?.name || initialFilterPosCode}`}
                         size="small"
                         color="info"
@@ -530,23 +531,23 @@ export default function PersonnelDrawer({
                       ),
                     }}
                   />
-                  
+
                   {/* Filter Toggle Button for Mobile */}
                   {isMobile && (
-                    <Badge 
+                    <Badge
                       badgeContent={
-                        (filterUnit !== 'all' ? 1 : 0) + 
+                        (filterUnit !== 'all' ? 1 : 0) +
                         (filterPosCode !== 'all' ? 1 : 0) +
                         (filterSupporter !== 'all' ? 1 : 0)
-                      } 
+                      }
                       color="primary"
                       invisible={filterUnit === 'all' && filterPosCode === 'all' && filterSupporter === 'all'}
                     >
-                      <IconButton 
+                      <IconButton
                         onClick={() => setShowFilters(!showFilters)}
                         color={showFilters ? 'primary' : 'default'}
-                        sx={{ 
-                          border: 1, 
+                        sx={{
+                          border: 1,
                           borderColor: showFilters ? 'primary.main' : 'divider',
                           borderRadius: 1,
                         }}
@@ -559,171 +560,171 @@ export default function PersonnelDrawer({
 
                 {/* Filter Controls */}
                 <Collapse in={!isMobile || showFilters}>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    gap: 1, 
+                  <Box sx={{
+                    display: 'flex',
+                    gap: 1,
                     flexDirection: isMobile ? 'column' : 'row',
-                    mb: isMobile ? 1 : 0 
+                    mb: isMobile ? 1 : 0
                   }}>
                     <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
                       <Select
                         value={filterUnit}
                         onChange={(e: SelectChangeEvent) => setFilterUnit(e.target.value)}
-                      displayEmpty
-                      renderValue={(selected) => {
-                        if (selected === 'all') {
+                        displayEmpty
+                        renderValue={(selected) => {
+                          if (selected === 'all') {
+                            return (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <FilterListIcon fontSize="small" />
+                                <Typography variant="body2">ทุกหน่วย</Typography>
+                              </Box>
+                            );
+                          }
                           return (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <FilterListIcon fontSize="small" />
-                              <Typography variant="body2">ทุกหน่วย</Typography>
+                              <Typography variant="body2" noWrap>{selected}</Typography>
                             </Box>
                           );
-                        }
-                        return (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <FilterListIcon fontSize="small" />
-                            <Typography variant="body2" noWrap>{selected}</Typography>
-                          </Box>
-                        );
-                      }}
-                      MenuProps={{
-                        disablePortal: true,
-                        anchorOrigin: {
-                          vertical: 'bottom',
-                          horizontal: 'left',
-                        },
-                        transformOrigin: {
-                          vertical: 'top',
-                          horizontal: 'left',
-                        },
-                        PaperProps: {
-                          sx: {
-                            maxHeight: 300,
-                          }
-                        },
-                      }}
-                    >
-                      <MenuItem value="all">
-                        <Typography variant="body2">ทุกหน่วย</Typography>
-                      </MenuItem>
-                      {uniqueUnits.map((unit) => (
-                        <MenuItem key={unit} value={unit}>
-                          <Typography variant="body2">{unit}</Typography>
+                        }}
+                        MenuProps={{
+                          disablePortal: true,
+                          anchorOrigin: {
+                            vertical: 'bottom',
+                            horizontal: 'left',
+                          },
+                          transformOrigin: {
+                            vertical: 'top',
+                            horizontal: 'left',
+                          },
+                          PaperProps: {
+                            sx: {
+                              maxHeight: 300,
+                            }
+                          },
+                        }}
+                      >
+                        <MenuItem value="all">
+                          <Typography variant="body2">ทุกหน่วย</Typography>
                         </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                        {uniqueUnits.map((unit) => (
+                          <MenuItem key={unit} value={unit}>
+                            <Typography variant="body2">{unit}</Typography>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
 
                     <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
-                    <Select
-                      value={filterPosCode}
-                      onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
-                      displayEmpty
-                      renderValue={(selected) => {
-                        if (selected === 'all') {
+                      <Select
+                        value={filterPosCode}
+                        onChange={(e: SelectChangeEvent) => setFilterPosCode(e.target.value)}
+                        displayEmpty
+                        renderValue={(selected) => {
+                          if (selected === 'all') {
+                            return (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <FilterListIcon fontSize="small" />
+                                <Typography variant="body2">ทุกระดับ</Typography>
+                              </Box>
+                            );
+                          }
+                          const posCode = uniquePosCodes.find(pc => pc.id.toString() === selected);
                           return (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <FilterListIcon fontSize="small" />
-                              <Typography variant="body2">ทุกระดับ</Typography>
+                              <Typography variant="body2" noWrap>
+                                {posCode ? `${posCode.id} - ${posCode.name}` : selected}
+                              </Typography>
                             </Box>
                           );
-                        }
-                        const posCode = uniquePosCodes.find(pc => pc.id.toString() === selected);
-                        return (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <FilterListIcon fontSize="small" />
-                            <Typography variant="body2" noWrap>
-                              {posCode ? `${posCode.id} - ${posCode.name}` : selected}
-                            </Typography>
-                          </Box>
-                        );
-                      }}
-                      MenuProps={{
-                        disablePortal: true,
-                        anchorOrigin: {
-                          vertical: 'bottom',
-                          horizontal: 'left',
-                        },
-                        transformOrigin: {
-                          vertical: 'top',
-                          horizontal: 'left',
-                        },
-                        PaperProps: {
-                          sx: {
-                            maxHeight: 300,
-                          }
-                        },
-                      }}
-                    >
-                      <MenuItem value="all">
-                        <Typography variant="body2">ทุกระดับ</Typography>
-                      </MenuItem>
-                      {uniquePosCodes.map((posCode) => (
-                        <MenuItem key={posCode.id} value={posCode.id.toString()}>
-                          <Typography variant="body2">{posCode.id} - {posCode.name}</Typography>
+                        }}
+                        MenuProps={{
+                          disablePortal: true,
+                          anchorOrigin: {
+                            vertical: 'bottom',
+                            horizontal: 'left',
+                          },
+                          transformOrigin: {
+                            vertical: 'top',
+                            horizontal: 'left',
+                          },
+                          PaperProps: {
+                            sx: {
+                              maxHeight: 300,
+                            }
+                          },
+                        }}
+                      >
+                        <MenuItem value="all">
+                          <Typography variant="body2">ทุกระดับ</Typography>
                         </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                        {uniquePosCodes.map((posCode) => (
+                          <MenuItem key={posCode.id} value={posCode.id.toString()}>
+                            <Typography variant="body2">{posCode.id} - {posCode.name}</Typography>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
 
-                  <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
-                    <Select
-                      value={filterSupporter}
-                      onChange={(e: SelectChangeEvent) => setFilterSupporter(e.target.value)}
-                      displayEmpty
-                      renderValue={(selected) => {
-                        if (selected === 'all') {
+                    <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 180 }}>
+                      <Select
+                        value={filterSupporter}
+                        onChange={(e: SelectChangeEvent) => setFilterSupporter(e.target.value)}
+                        displayEmpty
+                        renderValue={(selected) => {
+                          if (selected === 'all') {
+                            return (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <FilterListIcon fontSize="small" />
+                                <Typography variant="body2">ทุกคน</Typography>
+                              </Box>
+                            );
+                          }
+                          const labels = {
+                            'with-supporter': 'มีผู้สนับสนุน',
+                            'without-supporter': 'ไม่มีผู้สนับสนุน'
+                          };
                           return (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               <FilterListIcon fontSize="small" />
-                              <Typography variant="body2">ทุกคน</Typography>
+                              <Typography variant="body2" noWrap>
+                                {labels[selected as keyof typeof labels] || selected}
+                              </Typography>
                             </Box>
                           );
-                        }
-                        const labels = {
-                          'with-supporter': 'มีผู้สนับสนุน',
-                          'without-supporter': 'ไม่มีผู้สนับสนุน'
-                        };
-                        return (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <FilterListIcon fontSize="small" />
-                            <Typography variant="body2" noWrap>
-                              {labels[selected as keyof typeof labels] || selected}
-                            </Typography>
-                          </Box>
-                        );
-                      }}
-                      MenuProps={{
-                        disablePortal: true,
-                        PaperProps: {
-                          sx: {
-                            maxHeight: 300,
-                          }
-                        },
-                      }}
-                    >
-                      <MenuItem value="all">
-                        <Typography variant="body2">ทุกคน</Typography>
-                      </MenuItem>
-                      <MenuItem value="with-supporter">
-                        <Typography variant="body2">มีผู้สนับสนุน</Typography>
-                      </MenuItem>
-                      <MenuItem value="without-supporter">
-                        <Typography variant="body2">ไม่มีผู้สนับสนุน</Typography>
-                      </MenuItem>
-                    </Select>
-                  </FormControl>
+                        }}
+                        MenuProps={{
+                          disablePortal: true,
+                          PaperProps: {
+                            sx: {
+                              maxHeight: 300,
+                            }
+                          },
+                        }}
+                      >
+                        <MenuItem value="all">
+                          <Typography variant="body2">ทุกคน</Typography>
+                        </MenuItem>
+                        <MenuItem value="with-supporter">
+                          <Typography variant="body2">มีผู้สนับสนุน</Typography>
+                        </MenuItem>
+                        <MenuItem value="without-supporter">
+                          <Typography variant="body2">ไม่มีผู้สนับสนุน</Typography>
+                        </MenuItem>
+                      </Select>
+                    </FormControl>
                   </Box>
                 </Collapse>
-                
+
                 {loading ? (
                   <Skeleton variant="rounded" height={28} sx={{ borderRadius: 0.75 }} />
                 ) : totalPersonnel > 0 && (
-                  <Paper 
-                    elevation={0} 
-                    sx={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
                       alignItems: 'center',
                       p: 0.75,
                       bgcolor: 'grey.50',
@@ -733,10 +734,10 @@ export default function PersonnelDrawer({
                     <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       📊 พบ {totalPersonnel} รายการ • หน้า {page + 1}/{Math.ceil(totalPersonnel / rowsPerPage) || 1}
                     </Typography>
-                    <Chip 
+                    <Chip
                       label="💡 Double-click = เลือกด่วน"
                       size="small"
-                      sx={{ 
+                      sx={{
                         bgcolor: 'primary.main',
                         color: 'white',
                         fontWeight: 600,
@@ -764,11 +765,11 @@ export default function PersonnelDrawer({
                   ))}
                 </Box>
               ) : totalPersonnel === 0 ? (
-                <Box sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
+                <Box sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   p: 5,
                   bgcolor: 'grey.50',
                   borderRadius: 1
@@ -786,18 +787,18 @@ export default function PersonnelDrawer({
                     <Paper
                       key={person.id}
                       elevation={selectedPersonnel?.id === person.id ? 3 : 0}
-                      sx={{ 
+                      sx={{
                         p: { xs: 1, md: 1.25 },
                         mb: 0.75,
                         cursor: 'pointer',
                         border: '2px solid',
-                        borderColor: selectedPersonnel?.id === person.id 
-                          ? 'primary.main' 
+                        borderColor: selectedPersonnel?.id === person.id
+                          ? 'primary.main'
                           : 'grey.200',
-                        bgcolor: selectedPersonnel?.id === person.id 
+                        bgcolor: selectedPersonnel?.id === person.id
                           ? 'primary.50'
                           : 'background.paper',
-                        
+
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                         position: 'relative',
                         '&:hover': {
@@ -830,7 +831,7 @@ export default function PersonnelDrawer({
                             <Typography variant="body1" fontWeight={700} sx={{ color: 'text.primary', fontSize: { xs: '0.9rem', md: '1rem' }, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               {person.rank} {person.fullName}
                               {(person.supporterName || person.supportReason) && (
-                                <Tooltip 
+                                <Tooltip
                                   title="มีผู้สนับสนุน"
                                   arrow
                                   placement="top"
@@ -844,28 +845,28 @@ export default function PersonnelDrawer({
                                 >
                                   <Box
                                     component="span"
-                                    sx={{ 
+                                    sx={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       cursor: 'help'
                                     }}
                                   >
-                                    <StarIcon 
-                                      sx={{ 
-                                        fontSize: 18, 
+                                    <StarIcon
+                                      sx={{
+                                        fontSize: 18,
                                         color: 'warning.main',
                                         filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))'
-                                      }} 
+                                      }}
                                     />
                                   </Box>
                                 </Tooltip>
                               )}
                             </Typography>
                             {person.age && person.age !== '-' && (
-                              <Chip 
+                              <Chip
                                 label={`${person.age}`}
                                 size="small"
-                                sx={{ 
+                                sx={{
                                   height: { xs: 18, md: 20 },
                                   fontSize: { xs: '0.65rem', md: '0.7rem' },
                                   bgcolor: 'grey.100',
@@ -874,12 +875,12 @@ export default function PersonnelDrawer({
                               />
                             )}
                           </Box>
-                          
+
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.25 }}>
-                            <Chip 
+                            <Chip
                               label={person.posCodeId ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}` : (person.posCodeMaster?.name || '-')}
                               size="small"
-                              sx={{ 
+                              sx={{
                                 height: { xs: 20, md: 22 },
                                 fontSize: { xs: '0.7rem', md: '0.75rem' },
                                 bgcolor: 'primary.50',
@@ -891,17 +892,17 @@ export default function PersonnelDrawer({
                               {person.position}
                             </Typography>
                             {person.positionNumber && (
-                              <Chip 
+                              <Chip
                                 label={person.positionNumber}
                                 size="small"
                                 variant="outlined"
                                 sx={{ height: { xs: 20, md: 22 }, fontSize: { xs: '0.7rem', md: '0.75rem' } }}
                               />
                             )}
-                            <Chip 
+                            <Chip
                               label={person.unit}
                               size="small"
-                              sx={{ 
+                              sx={{
                                 height: { xs: 20, md: 22 },
                                 fontSize: { xs: '0.7rem', md: '0.75rem' },
                                 bgcolor: 'grey.100',
@@ -930,11 +931,11 @@ export default function PersonnelDrawer({
                             </Box>
                           )}
                         </Box>
-                        
+
                         <IconButton
                           size="small"
                           onClick={(e) => handleToggleExpand(person.id, e)}
-                          sx={{ 
+                          sx={{
                             flexShrink: 0,
                             bgcolor: expandedPersonnelId === person.id ? 'primary.50' : 'transparent',
                             color: expandedPersonnelId === person.id ? 'primary.main' : 'text.secondary',
@@ -952,7 +953,7 @@ export default function PersonnelDrawer({
                       {/* Drilldown Section */}
                       <Collapse in={expandedPersonnelId === person.id}>
                         <Divider sx={{ my: 1 }} />
-                        
+
                         <Stack spacing={1.5}>
                           {/* ข้อมูลส่วนตัว */}
                           <Box>
@@ -1217,19 +1218,19 @@ export default function PersonnelDrawer({
 
               {/* Selected Summary */}
               {selectedPersonnel && (
-                <Paper 
+                <Paper
                   elevation={3}
-                  sx={{ 
-                    mt: 1.5, 
-                    p: 1.5, 
+                  sx={{
+                    mt: 1.5,
+                    p: 1.5,
                     bgcolor: 'success.main',
                     borderRadius: 1.5,
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ 
-                      width: 32, 
-                      height: 32, 
+                    <Box sx={{
+                      width: 32,
+                      height: 32,
                       borderRadius: '50%',
                       bgcolor: 'white',
                       display: 'flex',
@@ -1265,14 +1266,14 @@ export default function PersonnelDrawer({
         </Box>
 
         {/* Footer Actions */}
-        <Box sx={{ 
-          p: { xs: 1.5, md: 2 }, 
-          borderTop: 1, 
-          borderColor: 'divider', 
-          bgcolor: 'background.paper', 
-          display: 'flex', 
-          gap: { xs: 1, md: 1.5 }, 
-          justifyContent: 'space-between', 
+        <Box sx={{
+          p: { xs: 1.5, md: 2 },
+          borderTop: 1,
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          display: 'flex',
+          gap: { xs: 1, md: 1.5 },
+          justifyContent: 'space-between',
           alignItems: 'center',
           boxShadow: '0 -2px 8px rgba(0,0,0,0.05)',
           flexDirection: { xs: 'column', sm: 'row' },
@@ -1294,7 +1295,7 @@ export default function PersonnelDrawer({
             )}
           </Box>
           <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
-            
+
             <Button
               variant="contained"
               color="primary"
@@ -1302,7 +1303,7 @@ export default function PersonnelDrawer({
               disabled={!selectedPersonnel}
               size={isMobile ? 'medium' : 'large'}
               fullWidth={isMobile}
-              sx={{ 
+              sx={{
                 minHeight: { xs: 44, md: 42 },
                 fontSize: { xs: '0.9rem', md: '0.95rem' }
               }}

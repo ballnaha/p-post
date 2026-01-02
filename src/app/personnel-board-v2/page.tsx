@@ -30,7 +30,12 @@ import {
     Tab,
     Drawer,
     Divider,
+    Slide,
+    AppBar,
+    Toolbar,
 } from '@mui/material';
+import { TransitionProps } from '@mui/material/transitions';
+import InOutView from '@/components/InOutView';
 import {
     Add as AddIcon,
     Delete as DeleteIcon,
@@ -51,7 +56,17 @@ import {
     Sort as SortIcon,
     Tune as TuneIcon,
     RemoveCircleOutline as PlaceholderIcon,
+    TableChart as TableChartIcon,
 } from '@mui/icons-material';
+
+const Transition = React.forwardRef(function Transition(
+    props: TransitionProps & {
+        children: React.ReactElement<any, any>;
+    },
+    ref: React.Ref<unknown>,
+) {
+    return <Slide direction="up" ref={ref} {...props} />;
+});
 
 // Pragmatic DnD imports
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
@@ -66,6 +81,7 @@ import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import { Personnel, Column } from './types';
 import CreateSwapLaneTab from './components/CreateSwapLaneTab';
 import CreateThreeWayLaneTab from './components/CreateThreeWayLaneTab';
+import CreateTransferLaneTab from './components/CreateTransferLaneTab';
 
 // Components
 import DraggableCard from './components/DraggableCard';
@@ -142,6 +158,7 @@ export default function PersonnelBoardV2Page() {
     const [selectedVacantPosition, setSelectedVacantPosition] = useState<any | null>(null);
     const [isNewLaneDrawerOpen, setIsNewLaneDrawerOpen] = useState(false);
     const [showCompletedLanes, setShowCompletedLanes] = useState(false); // Toggle to show/hide completed lanes
+    const [isInOutTableOpen, setIsInOutTableOpen] = useState(false); // State for In-Out Table Dialog
 
     // Board Filter State
     const [boardFilterAnchor, setBoardFilterAnchor] = useState<null | HTMLElement>(null);
@@ -1045,15 +1062,9 @@ export default function PersonnelBoardV2Page() {
                                     const person = newMap[id];
                                     if (person) {
                                         if (isDestPromotionLane && destCol.vacantPosition) {
-                                            // Promotion lane: set toPosition from vacantPosition
-                                            newMap[id] = {
-                                                ...person,
-                                                toPosCodeId: destCol.vacantPosition.posCodeMaster?.id || destCol.vacantPosition.posCodeId,
-                                                toPosCodeMaster: destCol.vacantPosition.posCodeMaster,
-                                                toPosition: destCol.vacantPosition.position,
-                                                toPositionNumber: destCol.vacantPosition.positionNumber,
-                                                toUnit: destCol.vacantPosition.unit,
-                                            };
+                                            // Promotion/Transfer lane: 
+                                            // We don't overwrite blindly here because recalculateColumnToPositions 
+                                            // will handle the chain succession for Lv 1, Lv 2, etc.
                                         } else if (isDestSwapLane) {
                                             // Swap lane: will be handled below after columns update
                                         } else {
@@ -1115,6 +1126,24 @@ export default function PersonnelBoardV2Page() {
                                 return c;
                             });
                         });
+
+                        // After reorder or adding - Recalculate 'toPosition' for chains
+                        const isDestChain = destCol && (destCol.chainType === 'promotion' ||
+                            (destCol.vacantPosition && (destCol.vacantPosition.transactionType === 'transfer' || destCol.vacantPosition.transactionType === 'promotion-chain')) ||
+                            (destCol.vacantPosition && !destCol.vacantPosition.isTransaction));
+
+                        if (isDestChain) {
+                            // Trigger recalculation after state update to ensure itemIds are correct
+                            setTimeout(() => {
+                                setColumns(currentCols => {
+                                    const col = currentCols.find(c => c.id === destColumnId);
+                                    if (col) {
+                                        recalculateColumnToPositions(destColumnId, col.itemIds, col.vacantPosition, col);
+                                    }
+                                    return currentCols;
+                                });
+                            }, 50);
+                        }
 
                         // For swap lanes: update toPosition for both people when lane has 2 people
                         if (destCol && isMovingToNewLane) {
@@ -1195,6 +1224,79 @@ export default function PersonnelBoardV2Page() {
     }, [columns, selectedIds, clearSelection, commitAction, personnelMap, selectedYear, saveBoardData]);
 
     // Add to lane handler
+    // Recalculate 'toPosition' fields for all personnel in a specific column (for chains)
+    const recalculateColumnToPositions = useCallback((columnId: string, customItemIds?: string[], customVacantPos?: any, customColumn?: Column) => {
+        setPersonnelMap(prevMap => {
+            const columnFromState = columns.find(c => c.id === columnId);
+            const activeColumn = customColumn || columnFromState;
+            const itemIds = customItemIds || activeColumn?.itemIds;
+            const vacantPos = customVacantPos || activeColumn?.vacantPosition;
+
+            if (!itemIds) return prevMap;
+
+            // Determine if this is a chain-type lane (Promotion, Transfer, or anything with a vacant destination)
+            const isChain = activeColumn?.chainType === 'promotion' ||
+                activeColumn?.chainType === 'transfer' ||
+                (vacantPos?.transactionType === 'transfer' || vacantPos?.transactionType === 'promotion-chain') ||
+                (vacantPos && !vacantPos.isTransaction);
+
+            const newMap = { ...prevMap };
+
+            if (!isChain) {
+                // Not a chain lane: if it's not a swap/three-way either, we might want to clear destinations
+                // However, swap/three-way have their own logic in onDrop/handleMove to set toPosition.
+                return prevMap;
+            }
+
+            if (!vacantPos) return prevMap;
+
+            itemIds.forEach((itemId, index) => {
+                const person = newMap[itemId];
+                if (!person) return;
+
+                if (index === 0) {
+                    // Level 1 -> Points to the Vacant Position / Destination Unit
+                    newMap[itemId] = {
+                        ...person,
+                        toPosCodeId: vacantPos.posCodeMaster?.id || vacantPos.posCodeId || null,
+                        toPosCodeMaster: vacantPos.posCodeMaster || null,
+                        toPosition: vacantPos.position || null,
+                        toPositionNumber: vacantPos.positionNumber || null,
+                        toUnit: vacantPos.unit || null,
+                        toActingAs: vacantPos.actingAs || null
+                    };
+                } else {
+                    // Level 2+ -> Points to the previous person's ORIGINAL position (succession)
+                    const prevId = itemIds[index - 1];
+                    const prevPerson = newMap[prevId];
+                    if (prevPerson) {
+                        newMap[itemId] = {
+                            ...person,
+                            toPosCodeId: prevPerson.posCodeId || null,
+                            toPosCodeMaster: prevPerson.posCodeMaster || null,
+                            toPosition: prevPerson.position || null,
+                            toPositionNumber: prevPerson.positionNumber || null,
+                            toUnit: prevPerson.unit || null,
+                            toActingAs: prevPerson.actingAs || null
+                        };
+                    } else {
+                        // If previous person not found (placeholder missing data?), clear destination
+                        newMap[itemId] = {
+                            ...person,
+                            toPosCodeId: null,
+                            toPosCodeMaster: null,
+                            toPosition: null,
+                            toPositionNumber: null,
+                            toUnit: null,
+                            toActingAs: null
+                        };
+                    }
+                }
+            });
+            return newMap;
+        });
+    }, [columns]);
+
     const handleAddToLane = useCallback((person: Personnel, laneId: string) => {
         commitAction();
         const lane = columns.find(c => c.id === laneId);
@@ -1272,15 +1374,35 @@ export default function PersonnelBoardV2Page() {
                 return; // Exit early
             }
         } else if (isPromotionLane && lane?.vacantPosition) {
-            // Promotion lane: set toPosition from vacantPosition
-            newPerson = {
-                ...newPerson,
-                toPosCodeId: lane.vacantPosition.posCodeMaster?.id || lane.vacantPosition.posCodeId,
-                toPosCodeMaster: lane.vacantPosition.posCodeMaster,
-                toPosition: lane.vacantPosition.position,
-                toPositionNumber: lane.vacantPosition.positionNumber,
-                toUnit: lane.vacantPosition.unit,
-            };
+            // Promotion/Transfer chain lane: 
+            // Level 1: points to vacantPosition/destinationUnit
+            // Level 2+: points to former position of the person in front (Level N-1)
+
+            if (lane.itemIds.length === 0) {
+                // First person (Level 1)
+                newPerson = {
+                    ...newPerson,
+                    toPosCodeId: lane.vacantPosition.posCodeMaster?.id || lane.vacantPosition.posCodeId,
+                    toPosCodeMaster: lane.vacantPosition.posCodeMaster,
+                    toPosition: lane.vacantPosition.position,
+                    toPositionNumber: lane.vacantPosition.positionNumber,
+                    toUnit: lane.vacantPosition.unit,
+                };
+            } else {
+                // Subsequent person (Level 2+) -> points to previous person
+                const prevPersonId = lane.itemIds[lane.itemIds.length - 1];
+                const prevPerson = personnelMap[prevPersonId];
+                if (prevPerson) {
+                    newPerson = {
+                        ...newPerson,
+                        toPosCodeId: prevPerson.posCodeId,
+                        toPosCodeMaster: prevPerson.posCodeMaster,
+                        toPosition: prevPerson.position,
+                        toPositionNumber: prevPerson.positionNumber,
+                        toUnit: prevPerson.unit,
+                    };
+                }
+            }
         }
 
         setPersonnelMap(prev => ({ ...prev, [boardId]: newPerson }));
@@ -1313,7 +1435,18 @@ export default function PersonnelBoardV2Page() {
             return { ...c, title: newTitle, itemIds: newItemIds };
         }));
         setHasUnsavedChanges(true);
-    }, [columns, commitAction, personnelMap]);
+
+        // Recalculate chain toPositions
+        setTimeout(() => {
+            setColumns(currentCols => {
+                const col = currentCols.find(c => c.id === laneId);
+                if (col) {
+                    recalculateColumnToPositions(laneId, col.itemIds, col.vacantPosition, col);
+                }
+                return currentCols;
+            });
+        }, 50);
+    }, [columns, commitAction, personnelMap, recalculateColumnToPositions]);
 
     // Remove from board handler
     const handleRemoveFromBoard = (personId: string) => {
@@ -1360,6 +1493,18 @@ export default function PersonnelBoardV2Page() {
             delete newMap[personId];
             return newMap;
         });
+
+        if (sourceLane) {
+            setTimeout(() => {
+                setColumns(currentCols => {
+                    const col = currentCols.find(c => c.id === sourceLane.id);
+                    if (col) {
+                        recalculateColumnToPositions(sourceLane.id, col.itemIds, col.vacantPosition, col);
+                    }
+                    return currentCols;
+                });
+            }, 50);
+        }
 
         setHasUnsavedChanges(true);
     };
@@ -1475,11 +1620,30 @@ export default function PersonnelBoardV2Page() {
         }));
 
         // Add to column
-        setColumns(prev => prev.map(col =>
-            col.id === columnId
-                ? { ...col, itemIds: [...col.itemIds, placeholderId] }
-                : col
-        ));
+        setColumns(prev => {
+            const newCols = prev.map(col => {
+                if (col.id === columnId) {
+                    return { ...col, itemIds: [...col.itemIds, placeholderId] };
+                }
+                return col;
+            });
+
+            // Trigger recalculation for chain lanes so people after this placeholder (if any) are updated
+            const targetCol = newCols.find(c => c.id === columnId);
+            if (targetCol) {
+                setTimeout(() => {
+                    setColumns(currentCols => {
+                        const col = currentCols.find(c => c.id === columnId);
+                        if (col) {
+                            recalculateColumnToPositions(columnId, col.itemIds, col.vacantPosition, col);
+                        }
+                        return currentCols;
+                    });
+                }, 50);
+            }
+
+            return newCols;
+        });
 
         setHasUnsavedChanges(true);
         setSnackbar({
@@ -1487,7 +1651,7 @@ export default function PersonnelBoardV2Page() {
             message: '➕ เพิ่มช่องว่างในเลนเรียบร้อยแล้ว',
             severity: 'info'
         });
-    }, [columns, commitAction]);
+    }, [columns, commitAction, recalculateColumnToPositions]);
 
     // Remove lane handler (actual deletion)
     const handleRemoveLane = useCallback(async (laneId: string) => {
@@ -1543,21 +1707,20 @@ export default function PersonnelBoardV2Page() {
     }, [columns]);
 
     const triggerChainReaction = useCallback((personnel: Personnel, targetColumn: Column) => {
-        // Only trigger if dropping into a vacant position OR a promotion chain
-        if (!targetColumn.vacantPosition || targetColumn.vacantPosition.isTransaction) return;
+        // Trigger if dropping into a vacant position OR a promotion chain
+        if (!targetColumn.vacantPosition) return;
 
-        // Mark the column as a promotion chain if it's not already
-        if (targetColumn.chainType !== 'promotion') {
+        // If it's a promotion-type lane, mark it if not already
+        const isPromotionType = targetColumn.chainType === 'promotion' ||
+            (targetColumn.vacantPosition.isTransaction && (targetColumn.vacantPosition.transactionType === 'transfer' || targetColumn.vacantPosition.transactionType === 'promotion-chain'));
+
+        if (isPromotionType && targetColumn.chainType !== 'promotion') {
             setColumns(prev => prev.map(c =>
                 c.id === targetColumn.id
                     ? { ...c, chainType: 'promotion', chainId: targetColumn.chainId || `chain-${Date.now()}` }
                     : c
             ));
         }
-
-        // We no longer create a new lane here, as the user wants them in the same lane.
-        // The list of people in targetColumn.itemIds already represents the levels by order.
-        // Note: Snackbar is shown in the drop handler, not here to avoid duplicate/incorrect messages.
     }, []);
 
     // Add new lane
@@ -1593,7 +1756,17 @@ export default function PersonnelBoardV2Page() {
             return;
         }
 
-        let newPerson = { ...person };
+        let newPerson: Personnel = {
+            ...person,
+            // Reset toPosition fields when moving to a new lane context
+            // They will be recalculated shortly if it's a chain lane
+            toPosCodeId: null,
+            toPosCodeMaster: null,
+            toPosition: null,
+            toPositionNumber: null,
+            toUnit: null,
+            toActingAs: null
+        };
         const boardId = personId;
 
         // Special logic for Swap (2-way) - auto-set toPosition if 2nd person
@@ -1603,20 +1776,22 @@ export default function PersonnelBoardV2Page() {
             if (existingPerson) {
                 newPerson = {
                     ...newPerson,
-                    toPosCodeId: existingPerson.posCodeId,
-                    toPosCodeMaster: existingPerson.posCodeMaster,
-                    toPosition: existingPerson.position,
-                    toPositionNumber: existingPerson.positionNumber,
-                    toUnit: existingPerson.unit,
+                    toPosCodeId: existingPerson.posCodeId || null,
+                    toPosCodeMaster: existingPerson.posCodeMaster || null,
+                    toPosition: existingPerson.position || null,
+                    toPositionNumber: existingPerson.positionNumber || null,
+                    toUnit: existingPerson.unit || null,
+                    toActingAs: existingPerson.actingAs || null,
                 };
 
-                const updatedExistingPerson = {
+                const updatedExistingPerson: Personnel = {
                     ...existingPerson,
-                    toPosCodeId: person.posCodeId,
-                    toPosCodeMaster: person.posCodeMaster,
-                    toPosition: person.position,
-                    toPositionNumber: person.positionNumber,
-                    toUnit: person.unit,
+                    toPosCodeId: person.posCodeId || null,
+                    toPosCodeMaster: person.posCodeMaster || null,
+                    toPosition: person.position || null,
+                    toPositionNumber: person.positionNumber || null,
+                    toUnit: person.unit || null,
+                    toActingAs: person.actingAs || null,
                 };
 
                 setPersonnelMap(prev => ({
@@ -1675,9 +1850,21 @@ export default function PersonnelBoardV2Page() {
 
         triggerChainReaction(newPerson, targetLane);
         setHasUnsavedChanges(true);
+
+        // Recalculate chain toPositions
+        setTimeout(() => {
+            setColumns(currentCols => {
+                const col = currentCols.find(c => c.id === targetLaneId);
+                if (col) {
+                    recalculateColumnToPositions(targetLaneId, col.itemIds, col.vacantPosition, col);
+                }
+                return currentCols;
+            });
+        }, 50);
+
         setSnackbar({ open: true, message: `ย้าย ${person.fullName} ไปยัง ${targetLane.title} แล้ว`, severity: 'success' });
 
-    }, [columns, personnelMap, triggerChainReaction, commitAction]);
+    }, [columns, personnelMap, triggerChainReaction, commitAction, recalculateColumnToPositions]);
 
     // Add new lane
     const handleAddLane = (data?: any) => {
@@ -1872,42 +2059,84 @@ export default function PersonnelBoardV2Page() {
                     swapType: 'two-way',
                     groupName: title,
                     groupNumber: generatedGroupNumber,
-                    swapDetails: [ // เปลี่ยนจาก details เป็น swapDetails
+                    swapDetails: [
                         {
+                            sequence: 1,
                             personnelId: p1.id,
                             noId: p1.noId,
+                            nationalId: p1.nationalId,
                             fullName: p1.fullName,
                             rank: p1.rank,
+                            seniority: p1.seniority,
                             posCodeId: p1.posCodeId,
+                            toPosCodeId: p2.posCodeId,
+                            // ข้อมูลส่วนตัว
+                            birthDate: p1.birthDate,
+                            age: p1.age,
+                            education: p1.education,
+                            // ข้อมูลการแต่งตั้ง
+                            lastAppointment: p1.lastAppointment,
+                            currentRankSince: p1.currentRankSince,
+                            enrollmentDate: p1.enrollmentDate,
+                            retirementDate: p1.retirementDate,
+                            yearsOfService: p1.yearsOfService,
+                            // ข้อมูลการฝึกอบรม
+                            trainingLocation: p1.trainingLocation,
+                            trainingCourse: p1.trainingCourse,
+                            // ข้อมูลการเสนอชื่อ
+                            supportName: p1.supporterName,
+                            supportReason: p1.supportReason,
+                            requestedPosition: p1.requestedPosition,
+                            // หมายเหตุ
+                            notes: p1.notes,
+                            // ตำแหน่ง
                             fromPosition: p1.position,
                             fromPositionNumber: p1.positionNumber,
                             fromUnit: p1.unit,
-                            // Swap to person2's position
-                            toPosCodeId: p2.posCodeId,
+                            fromActingAs: p1.actingAs,
                             toPosition: p2.position,
                             toPositionNumber: p2.positionNumber,
                             toUnit: p2.unit,
-                            requestedPosition: p1.requestedPosition,
-                            supportName: p1.supporterName,
-                            supportReason: p1.supportReason,
+                            toActingAs: p2.actingAs,
                         },
                         {
+                            sequence: 2,
                             personnelId: p2.id,
                             noId: p2.noId,
+                            nationalId: p2.nationalId,
                             fullName: p2.fullName,
                             rank: p2.rank,
+                            seniority: p2.seniority,
                             posCodeId: p2.posCodeId,
+                            toPosCodeId: p1.posCodeId,
+                            // ข้อมูลส่วนตัว
+                            birthDate: p2.birthDate,
+                            age: p2.age,
+                            education: p2.education,
+                            // ข้อมูลการแต่งตั้ง
+                            lastAppointment: p2.lastAppointment,
+                            currentRankSince: p2.currentRankSince,
+                            enrollmentDate: p2.enrollmentDate,
+                            retirementDate: p2.retirementDate,
+                            yearsOfService: p2.yearsOfService,
+                            // ข้อมูลการฝึกอบรม
+                            trainingLocation: p2.trainingLocation,
+                            trainingCourse: p2.trainingCourse,
+                            // ข้อมูลการเสนอชื่อ
+                            supportName: p2.supporterName,
+                            supportReason: p2.supportReason,
+                            requestedPosition: p2.requestedPosition,
+                            // หมายเหตุ
+                            notes: p2.notes,
+                            // ตำแหน่ง
                             fromPosition: p2.position,
                             fromPositionNumber: p2.positionNumber,
                             fromUnit: p2.unit,
-                            // Swap to person1's position
-                            toPosCodeId: p1.posCodeId,
+                            fromActingAs: p2.actingAs,
                             toPosition: p1.position,
                             toPositionNumber: p1.positionNumber,
                             toUnit: p1.unit,
-                            requestedPosition: p2.requestedPosition,
-                            supportName: p2.supporterName,
-                            supportReason: p2.supportReason,
+                            toActingAs: p1.actingAs,
                         }
                     ]
                 }),
@@ -2009,7 +2238,15 @@ export default function PersonnelBoardV2Page() {
     // Create new 3-way swap lane (Called from Component)
     const handleCreateThreeWayLane = async (p1: Personnel, p2: Personnel, p3: Personnel, laneTitle: string) => {
         commitAction();
-        const runningNumber = (columns.length + 1).toString().padStart(3, '0');
+        // Find max existing THREE number to avoid duplicates
+        const existingThreeNumbers = columns
+            .filter(c => c.groupNumber?.includes('/THREE-'))
+            .map(c => {
+                const match = c.groupNumber?.match(/THREE-(\d+)/);
+                return match ? parseInt(match[1], 10) : 0;
+            });
+        const maxThreeNumber = existingThreeNumbers.length > 0 ? Math.max(...existingThreeNumbers) : 0;
+        const runningNumber = (maxThreeNumber + 1).toString().padStart(3, '0');
         const generatedGroupNumber = `${selectedYear}/THREE-${runningNumber}`;
         const title = laneTitle.trim() || `สามเส้า: ${p1.fullName} → ${p2.fullName} → ${p3.fullName} → ${p1.fullName}`;
 
@@ -2027,53 +2264,119 @@ export default function PersonnelBoardV2Page() {
                         {
                             sequence: 1,
                             personnelId: p1.id,
+                            noId: p1.noId,
+                            nationalId: p1.nationalId,
                             fullName: p1.fullName,
                             rank: p1.rank,
+                            seniority: p1.seniority,
                             posCodeId: p1.posCodeId,
+                            toPosCodeId: p2.posCodeId,
+                            // ข้อมูลส่วนตัว
+                            birthDate: p1.birthDate,
+                            age: p1.age,
+                            education: p1.education,
+                            // ข้อมูลการแต่งตั้ง
+                            lastAppointment: p1.lastAppointment,
+                            currentRankSince: p1.currentRankSince,
+                            enrollmentDate: p1.enrollmentDate,
+                            retirementDate: p1.retirementDate,
+                            yearsOfService: p1.yearsOfService,
+                            // ข้อมูลการฝึกอบรม
+                            trainingLocation: p1.trainingLocation,
+                            trainingCourse: p1.trainingCourse,
+                            // ข้อมูลการเสนอชื่อ
+                            supportName: p1.supporterName,
+                            supportReason: p1.supportReason,
+                            requestedPosition: p1.requestedPosition,
+                            // หมายเหตุ
+                            notes: p1.notes,
+                            // ตำแหน่ง
                             fromPosition: p1.position,
                             fromPositionNumber: p1.positionNumber,
                             fromUnit: p1.unit,
-                            toPosCodeId: p2.posCodeId,
+                            fromActingAs: p1.actingAs,
                             toPosition: p2.position,
                             toPositionNumber: p2.positionNumber,
                             toUnit: p2.unit,
-                            requestedPosition: p1.requestedPosition,
-                            supportName: p1.supporterName,
-                            supportReason: p1.supportReason,
+                            toActingAs: p2.actingAs,
                         },
                         {
                             sequence: 2,
                             personnelId: p2.id,
+                            noId: p2.noId,
+                            nationalId: p2.nationalId,
                             fullName: p2.fullName,
                             rank: p2.rank,
+                            seniority: p2.seniority,
                             posCodeId: p2.posCodeId,
+                            toPosCodeId: p3.posCodeId,
+                            // ข้อมูลส่วนตัว
+                            birthDate: p2.birthDate,
+                            age: p2.age,
+                            education: p2.education,
+                            // ข้อมูลการแต่งตั้ง
+                            lastAppointment: p2.lastAppointment,
+                            currentRankSince: p2.currentRankSince,
+                            enrollmentDate: p2.enrollmentDate,
+                            retirementDate: p2.retirementDate,
+                            yearsOfService: p2.yearsOfService,
+                            // ข้อมูลการฝึกอบรม
+                            trainingLocation: p2.trainingLocation,
+                            trainingCourse: p2.trainingCourse,
+                            // ข้อมูลการเสนอชื่อ
+                            supportName: p2.supporterName,
+                            supportReason: p2.supportReason,
+                            requestedPosition: p2.requestedPosition,
+                            // หมายเหตุ
+                            notes: p2.notes,
+                            // ตำแหน่ง
                             fromPosition: p2.position,
                             fromPositionNumber: p2.positionNumber,
                             fromUnit: p2.unit,
-                            toPosCodeId: p3.posCodeId,
+                            fromActingAs: p2.actingAs,
                             toPosition: p3.position,
                             toPositionNumber: p3.positionNumber,
                             toUnit: p3.unit,
-                            requestedPosition: p2.requestedPosition,
-                            supportName: p2.supporterName,
-                            supportReason: p2.supportReason,
+                            toActingAs: p3.actingAs,
                         },
                         {
                             sequence: 3,
                             personnelId: p3.id,
+                            noId: p3.noId,
+                            nationalId: p3.nationalId,
                             fullName: p3.fullName,
                             rank: p3.rank,
+                            seniority: p3.seniority,
                             posCodeId: p3.posCodeId,
+                            toPosCodeId: p1.posCodeId,
+                            // ข้อมูลส่วนตัว
+                            birthDate: p3.birthDate,
+                            age: p3.age,
+                            education: p3.education,
+                            // ข้อมูลการแต่งตั้ง
+                            lastAppointment: p3.lastAppointment,
+                            currentRankSince: p3.currentRankSince,
+                            enrollmentDate: p3.enrollmentDate,
+                            retirementDate: p3.retirementDate,
+                            yearsOfService: p3.yearsOfService,
+                            // ข้อมูลการฝึกอบรม
+                            trainingLocation: p3.trainingLocation,
+                            trainingCourse: p3.trainingCourse,
+                            // ข้อมูลการเสนอชื่อ
+                            supportName: p3.supporterName,
+                            supportReason: p3.supportReason,
+                            requestedPosition: p3.requestedPosition,
+                            // หมายเหตุ
+                            notes: p3.notes,
+                            // ตำแหน่ง
                             fromPosition: p3.position,
                             fromPositionNumber: p3.positionNumber,
                             fromUnit: p3.unit,
-                            toPosCodeId: p1.posCodeId,
+                            fromActingAs: p3.actingAs,
                             toPosition: p1.position,
                             toPositionNumber: p1.positionNumber,
                             toUnit: p1.unit,
-                            requestedPosition: p3.requestedPosition,
-                            supportName: p3.supporterName,
-                            supportReason: p3.supportReason,
+                            toActingAs: p1.actingAs,
                         }
                     ]
                 }),
@@ -2130,6 +2433,110 @@ export default function PersonnelBoardV2Page() {
 
         } catch (error) {
             console.error('Error creating three-way lane:', error);
+            setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการสร้างเลน', severity: 'error' });
+        }
+    };
+
+    // Create new transfer lane (Called from Component)
+    const handleCreateTransferLane = async (p1: Personnel, toUnit: string, laneTitle: string) => {
+        commitAction();
+        // Find max existing TF number to avoid duplicates
+        const existingTransferNumbers = columns
+            .filter(c => c.groupNumber?.includes('/TF-'))
+            .map(c => {
+                const match = c.groupNumber?.match(/TF-(\d+)/);
+                return match ? parseInt(match[1], 10) : 0;
+            });
+        const maxTransferNumber = existingTransferNumbers.length > 0 ? Math.max(...existingTransferNumbers) : 0;
+        const runningNumber = (maxTransferNumber + 1).toString().padStart(3, '0');
+        const generatedGroupNumber = `${selectedYear}/TF-${runningNumber}`;
+        const title = laneTitle.trim() || `ย้ายหน่วย: ${p1.fullName} → ${toUnit}`;
+
+        try {
+            const createRes = await fetch('/api/swap-transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    year: selectedYear,
+                    swapDate: new Date().toISOString(),
+                    swapType: 'transfer',
+                    groupName: title,
+                    groupNumber: generatedGroupNumber,
+                    swapDetails: [
+                        {
+                            sequence: 1,
+                            personnelId: p1.id,
+                            noId: p1.noId,
+                            nationalId: p1.nationalId,
+                            fullName: p1.fullName,
+                            rank: p1.rank,
+                            seniority: p1.seniority,
+                            posCodeId: p1.posCodeId,
+                            // ตำแหน่งเดิม
+                            fromPosition: p1.position,
+                            fromPositionNumber: p1.positionNumber,
+                            fromUnit: p1.unit,
+                            fromActingAs: p1.actingAs,
+                            // ตำแหน่งใหม่ (ระบุหน่วย)
+                            toUnit: toUnit,
+                            toPosition: `ย้ายหน่วยงาน (${toUnit})`
+                        }
+                    ]
+                }),
+            });
+
+            if (!createRes.ok) throw new Error('Failed to create transfer transaction');
+
+            const createData = await createRes.json();
+            const transactionId = createData.data?.id;
+            const details = createData.data?.swapDetails || [];
+
+            const itemIds: string[] = [];
+            const newPersonnel: Record<string, Personnel> = {};
+
+            if (details.length >= 1) {
+                const detail = details[0];
+                const boardPerson: Personnel = {
+                    ...p1,
+                    id: detail.id,
+                    originalId: p1.id,
+                    swapDetailId: detail.id,
+                    transactionId: transactionId,
+                    transactionType: 'transfer',
+                    toUnit: toUnit,
+                    toPosition: `ย้ายหน่วยงาน (${toUnit})`
+                };
+                newPersonnel[detail.id] = boardPerson;
+                itemIds.push(detail.id);
+            }
+
+            const newColumn: Column = {
+                id: `lane-tx-${transactionId}`,
+                title: title,
+                groupNumber: generatedGroupNumber,
+                itemIds: itemIds,
+                vacantPosition: {
+                    isTransaction: true,
+                    transactionType: 'transfer',
+                    groupNumber: generatedGroupNumber,
+                    unit: toUnit,
+                    position: `ย้ายหน่วยงาน (${toUnit})`
+                },
+                level: 1,
+                chainId: `chain-tx-${transactionId}`,
+                chainType: 'transfer',
+                linkedTransactionId: transactionId,
+                linkedTransactionType: 'transfer'
+            };
+
+            setPersonnelMap(prev => ({ ...prev, ...newPersonnel }));
+            setColumns(prev => [newColumn, ...prev]);
+            setIsNewLaneDrawerOpen(false);
+            setHasUnsavedChanges(true);
+            setSnackbar({ open: true, message: `สร้างเลน "ย้ายหน่วย" สำเร็จ`, severity: 'success' });
+
+        } catch (error) {
+            console.error('Error creating transfer lane:', error);
             setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการสร้างเลน', severity: 'error' });
         }
     };
@@ -2377,6 +2784,31 @@ export default function PersonnelBoardV2Page() {
                     </FormControl>
 
 
+
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<TableChartIcon />}
+                        onClick={() => setIsInOutTableOpen(true)}
+                        sx={{
+                            borderRadius: 3,
+                            px: 2,
+                            height: 40,
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            bgcolor: 'white',
+                            border: '1px solid',
+                            borderColor: 'grey.300',
+                            color: 'text.primary',
+                            '&:hover': {
+                                bgcolor: 'grey.50',
+                                borderColor: 'primary.main',
+                                color: 'primary.main',
+                            }
+                        }}
+                    >
+                        ตาราง In-Out
+                    </Button>
 
                     <Button
                         variant="contained"
@@ -2995,6 +3427,7 @@ export default function PersonnelBoardV2Page() {
                         <Tab label="ตำแหน่งว่าง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5 }} />
                         <Tab label="🔄 สลับตำแหน่ง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#f59e0b' }} />
                         <Tab label="🔄 สามเส้า" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#f43f5e' }} />
+                        <Tab label="📦 ย้ายหน่วย" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#3b82f6' }} />
                         <Tab label="สร้างเอง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5 }} />
                     </Tabs>
 
@@ -3232,7 +3665,15 @@ export default function PersonnelBoardV2Page() {
                             onCreate={handleCreateThreeWayLane}
                         />
                     ) : addLaneTab === 3 ? (
-                        /* Manual mode (Index 3) */
+                        /* Create Transfer Lane (Index 3) */
+                        <CreateTransferLaneTab
+                            selectedYear={selectedYear}
+                            allUnits={allUnits}
+                            posCodeOptions={posCodeOptions}
+                            onCreate={handleCreateTransferLane}
+                        />
+                    ) : addLaneTab === 4 ? (
+                        /* Manual mode (Index 4) */
                         <Box sx={{ p: 3 }}>
                             <Paper elevation={0} sx={{ p: 3, border: '2px dashed #e2e8f0', borderRadius: 3, textAlign: 'center', bgcolor: alpha('#f8fafc', 0.5) }}>
                                 <Typography variant="h6" sx={{ mb: 1, fontWeight: 800, color: '#0f172a' }}>🛠️ สร้างเลนกำหนดเอง</Typography>
@@ -3567,6 +4008,35 @@ export default function PersonnelBoardV2Page() {
                 column={selectedLaneSummary}
                 personnelMap={personnelMap}
             />
+            {/* In-Out Table Full Screen Dialog */}
+            <Dialog
+                fullScreen
+                open={isInOutTableOpen}
+                onClose={() => setIsInOutTableOpen(false)}
+                TransitionComponent={Transition}
+            >
+                <AppBar sx={{ position: 'relative', bgcolor: 'white', color: 'text.primary', boxShadow: 1, borderBottom: '1px solid #e0e0e0' }}>
+                    <Toolbar>
+                        <IconButton
+                            edge="start"
+                            color="inherit"
+                            onClick={() => setIsInOutTableOpen(false)}
+                            aria-label="close"
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                        <Typography sx={{ ml: 2, flex: 1, fontWeight: 700 }} variant="h6" component="div">
+                            ตารางเปรียบเทียบข้อมูล (In-Out Table)
+                        </Typography>
+                        <Button autoFocus color="primary" variant="contained" onClick={() => setIsInOutTableOpen(false)} sx={{ borderRadius: 2 }}>
+                            ปิดหน้าต่าง
+                        </Button>
+                    </Toolbar>
+                </AppBar>
+                <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: '#f8f9fa' }}>
+                    <InOutView initialYear={selectedYear} />
+                </Box>
+            </Dialog>
         </Box>
     );
 }

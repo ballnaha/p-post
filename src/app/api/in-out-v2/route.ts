@@ -37,7 +37,10 @@ export interface InOutRecord {
     group: string | null;
     outgoingPerson: {
         toPosition: string | null;
+        toPositionNumber: string | null;
         toUnit: string | null;
+        toPosCode: string | null;
+        toPosCodeId: number | null;
         requestedPosition: string | null;
         supporter: string | null;
     } | null;
@@ -213,6 +216,7 @@ export async function GET(request: NextRequest) {
             include: {
                 transaction: true,
                 posCodeMaster: true,
+                toPosCodeMaster: true,
             },
         });
 
@@ -312,7 +316,10 @@ export async function GET(request: NextRequest) {
                 group: swapDetail?.transaction?.groupNumber || null,
                 outgoingPerson: hasSwap ? {
                     toPosition: swapDetail.toPosition,
+                    toPositionNumber: swapDetail.toPositionNumber,
                     toUnit: swapDetail.toUnit,
+                    toPosCode: swapDetail.toPosCodeMaster?.name || null,
+                    toPosCodeId: swapDetail.toPosCodeId || null,
                     requestedPosition: person.requestedPosition || null,
                     supporter: person.supporterName,
                 } : null,

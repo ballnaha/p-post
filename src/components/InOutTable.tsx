@@ -62,7 +62,10 @@ export interface InOutRecord {
     group: string | null;
     outgoingPerson: {
         toPosition: string | null;
+        toPositionNumber: string | null;
         toUnit: string | null;
+        toPosCode: string | null;
+        toPosCodeId: number | null;
         requestedPosition: string | null;
         supporter: string | null;
     } | null;
@@ -376,6 +379,7 @@ export default function InOutTable({
                                                 // Get position info from either currentHolder or vacantPosition
                                                 const position = record.currentHolder?.position || record.vacantPosition?.position;
                                                 const posCode = record.currentHolder?.posCode || record.vacantPosition?.posCode;
+                                                const posCodeId = record.currentHolder?.posCodeId || record.vacantPosition?.posCodeId;
                                                 const positionNumber = record.positionNumber;
 
                                                 if (position || positionNumber) {
@@ -402,7 +406,7 @@ export default function InOutTable({
                                                                 )}
                                                                 {posCode && (
                                                                     <Chip
-                                                                        label={posCode}
+                                                                        label={posCodeId ? `${posCodeId} - ${posCode}` : posCode}
                                                                         size="small"
                                                                         sx={{
                                                                             height: 18,
@@ -467,14 +471,61 @@ export default function InOutTable({
                                             )}
                                         </TableCell>
 
-                                        {/* ตำแหน่งใหม่ (ออก) */}
                                         <TableCell sx={{ py: 1.5, px: 1.5, borderRight: `1px solid ${theme.palette.divider}` }}>
                                             {record.outgoingPerson?.toPosition ? (
-                                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-                                                    <ArrowForwardIcon sx={{ fontSize: 14, color: theme.palette.error.main, mt: 0.3 }} />
-                                                    <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.secondary, lineHeight: 1.4 }}>
-                                                        {record.outgoingPerson.toPosition}
-                                                    </Typography>
+                                                <Box>
+                                                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+                                                        <ArrowForwardIcon sx={{ fontSize: 14, color: theme.palette.error.main, mt: 0.3 }} />
+                                                        <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.secondary, lineHeight: 1.4 }}>
+                                                            {record.outgoingPerson.toPosition}
+                                                        </Typography>
+                                                    </Box>
+                                                    {record.outgoingPerson.toPositionNumber && (
+                                                        <Chip
+                                                            label={`เลข: ${record.outgoingPerson.toPositionNumber}`}
+                                                            size="small"
+                                                            sx={{
+                                                                mt: 0.5,
+                                                                ml: 2.5,
+                                                                height: 18,
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: 500,
+                                                                bgcolor: alpha(theme.palette.grey[500], 0.1),
+                                                                color: theme.palette.text.secondary,
+                                                            }}
+                                                        />
+                                                    )}
+                                                    {record.outgoingPerson.toPosCode && (
+                                                        <Chip
+                                                            label={record.outgoingPerson.toPosCodeId ? `${record.outgoingPerson.toPosCodeId} - ${record.outgoingPerson.toPosCode}` : record.outgoingPerson.toPosCode}
+                                                            size="small"
+                                                            sx={{
+                                                                mt: 0.5,
+                                                                ml: 0.5,
+                                                                height: 18,
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: 500,
+                                                                bgcolor: alpha(theme.palette.primary.main, 0.08),
+                                                                color: theme.palette.primary.main,
+                                                            }}
+                                                        />
+                                                    )}
+                                                    {record.outgoingPerson.toUnit && record.outgoingPerson.toUnit !== record.currentHolder?.unit && (
+                                                        <Chip
+                                                            label={`หน่วย: ${record.outgoingPerson.toUnit}`}
+                                                            size="small"
+                                                            color="error"
+                                                            variant="outlined"
+                                                            sx={{
+                                                                mt: 0.5,
+                                                                ml: 2.5,
+                                                                height: 18,
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: 700,
+                                                                borderColor: alpha(theme.palette.error.main, 0.4),
+                                                            }}
+                                                        />
+                                                    )}
                                                 </Box>
                                             ) : (
                                                 <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>

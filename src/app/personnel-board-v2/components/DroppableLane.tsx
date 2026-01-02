@@ -129,6 +129,7 @@ const DroppableLane = memo(({
     const isTransaction = column.vacantPosition?.isTransaction;
     const isSwap = column.chainType === 'swap' || column.vacantPosition?.transactionType === 'two-way';
     const isThreeWay = column.chainType === 'three-way' || column.vacantPosition?.transactionType === 'three-way';
+    const isTransfer = column.vacantPosition?.transactionType === 'transfer';
     const isVacant = hasVacantPosition && !isTransaction;
     const isCustom = !hasVacantPosition && column.chainType === 'custom';
 
@@ -157,6 +158,12 @@ const DroppableLane = memo(({
             accent: '#3b82f6',
             headerBg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
             label: 'ตำแหน่งว่าง'
+        };
+        if (isTransfer) return {
+            bg: '#f0fdf4',
+            accent: '#10b981',
+            headerBg: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+            label: 'ย้ายหน่วย'
         };
         return {
             bg: '#f8fafc',
@@ -500,7 +507,7 @@ const DroppableLane = memo(({
                                     targetInfo = previousPerson;
                                 }
                             } else if (column.vacantPosition?.isTransaction) {
-                                // Add logic for Swap (2-way) and Three-way
+                                // Logic for Swap (2-way), Three-way, and Transfer
                                 const type = column.vacantPosition.transactionType;
                                 if (type === 'two-way' && column.itemIds.length === 2) {
                                     // A -> B, B -> A
@@ -510,6 +517,15 @@ const DroppableLane = memo(({
                                     if (index === 0) targetInfo = personnelMap[column.itemIds[1]];
                                     else if (index === 1) targetInfo = personnelMap[column.itemIds[2]];
                                     else if (index === 2) targetInfo = personnelMap[column.itemIds[0]];
+                                } else if (type === 'transfer') {
+                                    // Transfer follows chain logic: 
+                                    // Lv 1 -> Destination Unit
+                                    // Lv 2+ -> Previous person
+                                    if (index === 0) {
+                                        targetInfo = column.vacantPosition;
+                                    } else {
+                                        targetInfo = personnelMap[column.itemIds[index - 1]];
+                                    }
                                 }
                             }
 

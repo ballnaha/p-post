@@ -111,9 +111,9 @@ const Sidebar: React.FC = () => {
         },
         {
           label: 'In-Out',
-          href: '/new-in-out',
+          href: '/in-out-v2',
           icon: <TableViewIcon sx={{ fontSize: 20 }} />,
-          key: 'new-in-out'
+          key: 'in-out-v2'
         },
         {
           label: 'Workflow Board',

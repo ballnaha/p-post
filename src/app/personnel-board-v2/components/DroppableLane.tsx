@@ -552,7 +552,7 @@ const DroppableLane = memo(({
                         })}
 
                         {/* Next Level Slot Placeholder - Professional "Ghost Slot" UI - Hide in read-only mode */}
-                        {column.chainType === 'promotion' && !isReadOnly && (
+                        {(column.chainType === 'promotion' || column.chainType === 'transfer' || isTransfer) && !isReadOnly && (
                             <Box
                                 onClick={() => onSuggest?.(column)}
                                 sx={{

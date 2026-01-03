@@ -15,6 +15,7 @@ export interface InOutRecord {
         fromPosition: string | null;
         fromUnit: string | null;
         posCode: string | null;
+        posCodeId: number | null;
     } | null;
     currentHolder: {
         personnelId: string;
@@ -44,7 +45,7 @@ export interface InOutRecord {
         requestedPosition: string | null;
         supporter: string | null;
     } | null;
-    status: 'filled' | 'vacant' | 'reserved' | 'swap' | 'promotion' | 'pending';
+    status: 'filled' | 'vacant' | 'reserved' | 'swap' | 'three-way' | 'promotion' | 'pending';
     remark: string | null;
     swapType: string | null;
 }
@@ -147,24 +148,12 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // Search filter
-        if (search) {
-            const searchConditions = [
-                { fullName: { contains: search } },
-                { position: { contains: search } },
-                { unit: { contains: search } },
-                { positionNumber: { contains: search } },
-            ];
+        // NOTE: Search filter is NOT applied at DB level because we need to search groupNumber
+        // which comes from SwapTransaction, not PolicePersonnel. 
+        // All search filtering is done in post-filter stage below.
 
-            if (where.AND || where.OR) {
-                where.AND = where.AND ? [...where.AND, { OR: searchConditions }] : [{ OR: searchConditions }];
-            } else {
-                where.OR = searchConditions;
-            }
-        }
-
-        // Check if we need to do post-query filtering (for swap/promotion status)
-        const needsPostFilter = status === 'swap' || status === 'promotion' || status === 'filled' || status === 'pending';
+        // Check if we need to do post-query filtering (for swap/promotion/three-way status or search with groupNumber)
+        const needsPostFilter = status === 'swap' || status === 'three-way' || status === 'promotion' || status === 'filled' || status === 'pending' || !!search;
         const skip = page * pageSize;
 
         // Main query - use DB pagination when possible
@@ -224,8 +213,14 @@ export async function GET(request: NextRequest) {
         // 1. By nationalId - to find outgoing info for current holder
         // 2. By toPositionNumber - to find incoming person for a position
         // NOTE: positionNumber is unique across units in a given year, so we can use it as the primary key
+        // Create lookup maps:
+        // 1. By nationalId - to find outgoing info for current holder
+        // 2. By toPositionNumber - to find incoming person for a position
+        // 3. By fromPositionNumber - to find outgoing move for a position (especially if vacant)
+        // NOTE: positionNumber is unique across units in a given year, so we can use it as the primary key
         const swapDetailsByNationalId = new Map<string, any>();
         const incomingByPositionNumber = new Map<string, any>();
+        const swapDetailsByFromPositionNumber = new Map<string, any>();
 
         for (const detail of allSwapDetails) {
             if (detail.nationalId) {
@@ -238,6 +233,31 @@ export async function GET(request: NextRequest) {
                     incomingByPositionNumber.set(normPosNum, detail);
                 }
             }
+            // Build outgoing move lookup: fromPositionNumber -> detail (person moving OUT)
+            if (detail.fromPositionNumber) {
+                const normFromPosNum = normalizePositionNumber(detail.fromPositionNumber);
+                if (normFromPosNum) {
+                    swapDetailsByFromPositionNumber.set(normFromPosNum, detail);
+                }
+            }
+        }
+
+        // Fetch all position names for lookup to ensure we show actual position names even if transaction says "ว่าง"
+        const allPositions = await prisma.policePersonnel.findMany({
+            where: { year, isActive: true },
+            select: { positionNumber: true, position: true, unit: true },
+        });
+        const positionNamesMap = new Map<string, { position: string, unit: string }>();
+        for (const p of allPositions) {
+            if (p.positionNumber) {
+                const norm = normalizePositionNumber(p.positionNumber);
+                if (norm) {
+                    positionNamesMap.set(norm, {
+                        position: p.position || '',
+                        unit: p.unit || ''
+                    });
+                }
+            }
         }
 
         // Transform personnel to InOutRecords
@@ -245,15 +265,53 @@ export async function GET(request: NextRequest) {
         let finalTotal: number;
 
         const transformPerson = (person: any): InOutRecord => {
-            const swapDetail = person.nationalId ? swapDetailsByNationalId.get(person.nationalId) : null;
             const isReserved = checkIsReserved(person.fullName);
             const isVacant = !isReserved && checkIsVacant(person.fullName, person.rank);
+            const normPosNum = person.positionNumber ? normalizePositionNumber(person.positionNumber) : null;
+
+            // 1. Find swap detail for the person (if any)
+            const swapDetailByPerson = person.nationalId ? swapDetailsByNationalId.get(person.nationalId) : null;
+
+            // 2. Find swap detail where this position is the source (useful for vacant positions or chain continuity)
+            const swapDetailByPosition = normPosNum ? swapDetailsByFromPositionNumber.get(normPosNum) : null;
+
+            // Prefer person-based swap, fallback to position-based (especially for vacant rows)
+            const swapDetail = swapDetailByPerson || swapDetailByPosition;
             const hasSwap = !!swapDetail;
 
             // Find incoming person - who is moving TO this position
             let incomingPerson: InOutRecord['incomingPerson'] = null;
-            if (person.positionNumber) {
-                const normPosNum = normalizePositionNumber(person.positionNumber);
+
+            // For two-way or three-way swaps, find swap partner from the SAME transaction
+            const swapType = swapDetail?.transaction?.swapType;
+            const isSwapTransaction = swapType === 'two-way' || swapType === 'three-way';
+
+            if (isSwapTransaction && swapDetail?.transactionId) {
+                // Find other person(s) in this swap transaction who is moving TO this position
+                const swapPartner = allSwapDetails.find(d =>
+                    d.transactionId === swapDetail.transactionId &&
+                    d.id !== swapDetail.id &&
+                    normalizePositionNumber(d.toPositionNumber) === normPosNum
+                );
+
+                if (swapPartner && swapPartner.fullName) {
+                    const partnerName = swapPartner.fullName?.trim() || '';
+                    const isPlaceholder = ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)', ''].includes(partnerName);
+
+                    if (!isPlaceholder) {
+                        incomingPerson = {
+                            personnelId: swapPartner.personnelId || swapPartner.id,
+                            name: swapPartner.fullName || '',
+                            rank: swapPartner.rank || null,
+                            fromPosition: swapPartner.fromPosition || null,
+                            fromUnit: swapPartner.fromUnit || null,
+                            posCode: swapPartner.posCodeMaster?.name || null,
+                            posCodeId: swapPartner.posCodeId || null,
+                        };
+                    }
+                }
+            } else if (normPosNum) {
+                // Fallback to original lookup for non-swap transactions
                 const incomingDetail = incomingByPositionNumber.get(normPosNum);
                 if (incomingDetail && incomingDetail.fullName) {
                     // Don't show placeholder ("ว่าง") as incoming person
@@ -268,6 +326,7 @@ export async function GET(request: NextRequest) {
                             fromPosition: incomingDetail.fromPosition || null,
                             fromUnit: incomingDetail.fromUnit || null,
                             posCode: incomingDetail.posCodeMaster?.name || null,
+                            posCodeId: incomingDetail.posCodeId || null,
                         };
                     }
                 }
@@ -280,9 +339,10 @@ export async function GET(request: NextRequest) {
             } else if (isVacant) {
                 recordStatus = 'vacant';
             } else if (hasSwap) {
-                const swapType = swapDetail.transaction?.swapType;
-                if (swapType === 'two-way' || swapType === 'three-way') {
+                if (swapType === 'two-way') {
                     recordStatus = 'swap';
+                } else if (swapType === 'three-way') {
+                    recordStatus = 'three-way';
                 } else if (swapType === 'promotion-chain') {
                     recordStatus = 'promotion';
                 } else {
@@ -291,6 +351,33 @@ export async function GET(request: NextRequest) {
             } else {
                 recordStatus = 'filled';
             }
+
+            // Look up target position info from master map for accuracy
+            // For swaps, if toPosition is missing, derive from swap partner's fromPosition
+            let toPosition = swapDetail?.toPosition;
+            let toPositionNumber = swapDetail?.toPositionNumber;
+            let toUnit = swapDetail?.toUnit;
+            let toPosCode = swapDetail?.toPosCodeMaster?.name || null;
+            let toPosCodeId = swapDetail?.toPosCodeId || null;
+
+            if (isSwapTransaction && swapDetail?.transactionId && (!toPosition || !toPositionNumber)) {
+                // Find swap partner to get their original position as our target
+                const swapPartner = allSwapDetails.find(d =>
+                    d.transactionId === swapDetail.transactionId &&
+                    d.id !== swapDetail.id
+                );
+
+                if (swapPartner) {
+                    toPosition = toPosition || swapPartner.fromPosition;
+                    toPositionNumber = toPositionNumber || swapPartner.fromPositionNumber;
+                    toUnit = toUnit || swapPartner.fromUnit;
+                    toPosCode = toPosCode || swapPartner.posCodeMaster?.name || null;
+                    toPosCodeId = toPosCodeId || swapPartner.posCodeId || null;
+                }
+            }
+
+            const targetPosNorm = toPositionNumber ? normalizePositionNumber(toPositionNumber) : null;
+            const targetPosInfo = targetPosNorm ? positionNamesMap.get(targetPosNorm) : null;
 
             return {
                 id: person.id,
@@ -315,13 +402,13 @@ export async function GET(request: NextRequest) {
                 division: person.unit?.split('.')[0] || null,
                 group: swapDetail?.transaction?.groupNumber || null,
                 outgoingPerson: hasSwap ? {
-                    toPosition: swapDetail.toPosition,
-                    toPositionNumber: swapDetail.toPositionNumber,
-                    toUnit: swapDetail.toUnit,
-                    toPosCode: swapDetail.toPosCodeMaster?.name || null,
-                    toPosCodeId: swapDetail.toPosCodeId || null,
-                    requestedPosition: person.requestedPosition || null,
-                    supporter: person.supporterName,
+                    toPosition: targetPosInfo?.position || toPosition,
+                    toPositionNumber: toPositionNumber,
+                    toUnit: targetPosInfo?.unit || toUnit,
+                    toPosCode: toPosCode,
+                    toPosCodeId: toPosCodeId,
+                    requestedPosition: swapDetail.requestedPosition || person.requestedPosition || null,
+                    supporter: swapDetail.supportName || person.supporterName,
                 } : null,
                 status: recordStatus,
                 remark: swapDetail?.notes || person.notes || null,
@@ -330,9 +417,38 @@ export async function GET(request: NextRequest) {
         };
 
         if (needsPostFilter) {
-            // Transform all and filter by status
+            // Transform all and filter by status and/or search
             const allRecords = personnel.map(transformPerson);
-            const filteredRecords = allRecords.filter(r => r.status === status);
+            let filteredRecords = allRecords;
+
+            // Filter by status if not 'all'
+            if (status !== 'all') {
+                filteredRecords = filteredRecords.filter((r: InOutRecord) => r.status === status);
+            }
+
+            // Filter by search term including groupNumber
+            if (search) {
+                const searchLower = search.toLowerCase();
+                filteredRecords = filteredRecords.filter((r: InOutRecord) => {
+                    // Check if groupNumber matches (additional search field not in DB)
+                    if (r.group && r.group.toLowerCase().includes(searchLower)) {
+                        return true;
+                    }
+                    // Check other fields (already filtered at DB level, but keep for consistency)
+                    if (r.currentHolder?.name?.toLowerCase().includes(searchLower)) return true;
+                    if (r.currentHolder?.position?.toLowerCase().includes(searchLower)) return true;
+                    if (r.currentHolder?.unit?.toLowerCase().includes(searchLower)) return true;
+                    if (r.vacantPosition?.position?.toLowerCase().includes(searchLower)) return true;
+                    if (r.vacantPosition?.unit?.toLowerCase().includes(searchLower)) return true;
+                    if (r.positionNumber?.toLowerCase().includes(searchLower)) return true;
+                    // Check incoming person
+                    if (r.incomingPerson?.name?.toLowerCase().includes(searchLower)) return true;
+                    // Check outgoing position
+                    if (r.outgoingPerson?.toPosition?.toLowerCase().includes(searchLower)) return true;
+                    return false;
+                });
+            }
+
             finalTotal = filteredRecords.length;
             finalRecords = filteredRecords.slice(skip, skip + pageSize);
         } else {

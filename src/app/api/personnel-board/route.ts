@@ -3,13 +3,24 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
 
-const BOARD_LAYOUT_TYPE = 'board-layout'; // Force recompile
+const BOARD_LAYOUT_TYPE = 'board-layout';
+
+// Helper for safe integer parsing
+const safeInt = (val: any): number | null => {
+    if (val === null || val === undefined || val === '') return null;
+    const parsed = parseInt(String(val), 10);
+    return isNaN(parsed) ? null : parsed;
+};
+
+// Helper for safe relation ID (must be positive integer to avoid FK errors)
+const safeRelationId = (val: any): number | null => {
+    const parsed = safeInt(val);
+    if (parsed === null || parsed <= 0) return null;
+    return parsed;
+};
 
 /**
  * GET /api/personnel-board?year={year}
- * ดึงข้อมูล Personnel Board สำหรับปีที่ระบุ
- * - โหลด board layout (ลำดับ lane และ transaction IDs)
- * - ดึงข้อมูลจาก SwapTransaction จริงๆ
  */
 export async function GET(request: NextRequest) {
     try {
@@ -30,7 +41,6 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid year parameter' }, { status: 400 });
         }
 
-        // ดึง board layout record
         const layoutRecord = await prisma.swapTransaction.findFirst({
             where: {
                 year,
@@ -39,7 +49,6 @@ export async function GET(request: NextRequest) {
         });
 
         if (!layoutRecord || !layoutRecord.notes) {
-            // No board layout found - return empty
             return NextResponse.json({
                 success: true,
                 year,
@@ -48,7 +57,6 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        // Parse board layout
         let boardLayout: any;
         try {
             boardLayout = JSON.parse(layoutRecord.notes);
@@ -61,12 +69,8 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        // Fetch all referenced transactions
         const transactionIds = boardLayout.lanes?.map((l: any) => l.transactionId).filter(Boolean) || [];
-
-        // Sort lanes by index to preserve order
         const sortedLanes = [...(boardLayout.lanes || [])].sort((a: any, b: any) => (a.index ?? 999) - (b.index ?? 999));
-
 
         const transactions = await prisma.swapTransaction.findMany({
             where: {
@@ -83,10 +87,7 @@ export async function GET(request: NextRequest) {
             },
         });
 
-        // Create lookup map
         const txMap = new Map(transactions.map(tx => [tx.id, tx]));
-
-        // Collect all personnel IDs to fetch detailed info
         const personnelIds: string[] = [];
         transactions.forEach(tx => {
             tx.swapDetails.forEach(detail => {
@@ -96,7 +97,6 @@ export async function GET(request: NextRequest) {
             });
         });
 
-        // Fetch personnel details manualy since there might be no relation defined
         const personnelDetails = await prisma.policePersonnel.findMany({
             where: {
                 id: { in: personnelIds }
@@ -107,8 +107,6 @@ export async function GET(request: NextRequest) {
         });
 
         const personnelDetailMap = new Map(personnelDetails.map(p => [p.id, p]));
-
-        // Build columns and personnelMap from actual transactions
         const columns: any[] = [];
         const personnelMap: Record<string, any> = {};
 
@@ -130,17 +128,15 @@ export async function GET(request: NextRequest) {
                     isCompleted: laneInfo.isCompleted || false,
                 });
 
-                // Add personnel from transaction
                 tx.swapDetails.forEach((detail: any) => {
-                    // Use data from original personnel record if available, fallback to snapshot in detail
                     const original = detail.personnelId ? personnelDetailMap.get(detail.personnelId) : null;
 
                     personnelMap[detail.id] = {
                         id: detail.id,
-                        isPlaceholder: !detail.personnelId || detail.personnelId.startsWith('placeholder-'),
+                        isPlaceholder: !detail.personnelId || String(detail.personnelId).startsWith('placeholder-'),
                         originalId: detail.personnelId,
                         swapDetailId: detail.id,
-                        noId: original?.noId ? parseInt(String(original.noId), 10) : (detail.noId ? parseInt(String(detail.noId), 10) : null), // Ensure number
+                        noId: safeInt(original?.noId) || safeInt(detail.noId),
                         nationalId: original?.nationalId || detail.nationalId,
                         fullName: original?.fullName || detail.fullName,
                         rank: original?.rank || detail.rank,
@@ -159,15 +155,13 @@ export async function GET(request: NextRequest) {
                         trainingLocation: original?.trainingLocation || detail.trainingLocation,
                         trainingCourse: original?.trainingCourse || detail.trainingCourse,
 
-                        // Fields: Prefer original data if available (fresh), fallback to detail (snapshot)
                         supporterName: original?.supporterName || detail.supportName,
                         supportReason: original?.supportReason || detail.supportReason,
                         requestedPosition: original?.requestedPosition || detail.requestedPosition,
                         notes: detail.notes || original?.notes,
                         actingAs: detail.fromActingAs || original?.actingAs,
 
-                        // Relations
-                        posCodeId: original?.posCodeId || detail.posCodeId,
+                        posCodeId: safeInt(original?.posCodeId) || safeInt(detail.posCodeId),
                         posCodeMaster: original?.posCodeMaster ? {
                             id: original.posCodeMaster.id,
                             name: original.posCodeMaster.name,
@@ -176,8 +170,7 @@ export async function GET(request: NextRequest) {
                             name: detail.posCodeMaster.name,
                         } : null),
 
-                        // Destination (To) fields
-                        toPosCodeId: detail.toPosCodeId,
+                        toPosCodeId: safeInt(detail.toPosCodeId),
                         toPosCodeMaster: detail.toPosCodeMaster ? {
                             id: detail.toPosCodeMaster.id,
                             name: detail.toPosCodeMaster.name,
@@ -191,7 +184,6 @@ export async function GET(request: NextRequest) {
                     };
                 });
             } else if (laneInfo.isCustomLane) {
-                // Custom lane (not linked to any transaction) - stored in layout
                 columns.push({
                     id: laneInfo.id,
                     title: laneInfo.title || 'Custom Lane',
@@ -202,14 +194,12 @@ export async function GET(request: NextRequest) {
                     isCompleted: laneInfo.isCompleted || false,
                 });
 
-                // Custom lane personnel are stored in layout
                 if (laneInfo.personnel) {
                     for (const p of laneInfo.personnel) {
                         personnelMap[p.id] = p;
                     }
                 }
             } else {
-                // Lane with transactionId but transaction not found - add with saved data
                 console.warn(`Lane ${laneInfo.title} (tx: ${laneInfo.transactionId}) - transaction not found, using saved data`);
                 columns.push({
                     id: laneInfo.transactionId || `missing-${columns.length}`,
@@ -242,10 +232,6 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/personnel-board
- * บันทึกข้อมูล Personnel Board
- * - บันทึก board layout (ลำดับ lane และ transaction IDs)
- * - อัปเดต SwapTransaction จริงๆ สำหรับ linked lanes
- * - สร้าง SwapTransaction ใหม่สำหรับ custom lanes
  */
 export async function POST(request: NextRequest) {
     try {
@@ -263,38 +249,217 @@ export async function POST(request: NextRequest) {
 
         const username = (session.user as any)?.username || 'system';
 
-        // ใช้ transaction เพื่อความ consistent
-        const result = await prisma.$transaction(async (tx) => {
-            const lanes: any[] = [];
-            const updatedTransactionIds: string[] = [];
-            const createdTransactionIds: string[] = [];
+        const result = await prisma.$transaction(
+            async (tx) => {
+                const lanes: any[] = [];
+                const updatedTransactionIds: string[] = [];
+                const createdTransactionIds: string[] = [];
 
-            // 1. ดึง layout เก่ามาตรวจสอบว่ามี transaction ไหนถูกลบออกไปบ้าง
-            const oldLayoutRecord = await tx.swapTransaction.findFirst({
-                where: { year, swapType: BOARD_LAYOUT_TYPE },
-            });
+                const oldLayoutRecord = await tx.swapTransaction.findFirst({
+                    where: { year, swapType: BOARD_LAYOUT_TYPE },
+                });
 
-            let oldTransactionIds: string[] = [];
-            if (oldLayoutRecord && oldLayoutRecord.notes) {
-                try {
-                    const oldLayout = JSON.parse(oldLayoutRecord.notes);
-                    oldTransactionIds = oldLayout.lanes?.map((l: any) => l.transactionId).filter(Boolean) || [];
-                } catch (e) {
-                    console.error('Error parsing old layout:', e);
+                let oldTransactionIds: string[] = [];
+                if (oldLayoutRecord && oldLayoutRecord.notes) {
+                    try {
+                        const oldLayout = JSON.parse(oldLayoutRecord.notes);
+                        oldTransactionIds = oldLayout.lanes?.map((l: any) => l.transactionId).filter(Boolean) || [];
+                    } catch (e) {
+                        console.error('Error parsing old layout:', e);
+                    }
                 }
-            }
 
-            for (const column of columns) {
-                // Check if this lane is linked to an existing SwapTransaction
-                if (column.linkedTransactionId && column.linkedTransactionType) {
-                    // ตรวจสอบว่า transaction มีอยู่จริงก่อน
-                    const existingTransaction = await tx.swapTransaction.findUnique({
-                        where: { id: column.linkedTransactionId }
-                    });
+                for (const column of columns) {
+                    if (column.linkedTransactionId && column.linkedTransactionType) {
+                        const existingTransaction = await tx.swapTransaction.findUnique({
+                            where: { id: column.linkedTransactionId }
+                        });
 
-                    if (!existingTransaction) {
-                        // Transaction ไม่มีอยู่แล้ว - skip การ update แต่ยังเพิ่มลง layout
-                        console.warn(`Transaction ${column.linkedTransactionId} not found, skipping update but adding to layout`);
+                        if (!existingTransaction) {
+                            console.warn(`Transaction ${column.linkedTransactionId} not found, skipping update but adding to layout`);
+                            lanes.push({
+                                index: lanes.length,
+                                transactionId: column.linkedTransactionId,
+                                title: column.title,
+                                vacantPosition: column.vacantPosition,
+                                isCompleted: column.isCompleted || false,
+                            });
+                            continue;
+                        }
+
+                        updatedTransactionIds.push(column.linkedTransactionId);
+
+                        const existingDetails = await tx.swapTransactionDetail.findMany({
+                            where: { transactionId: column.linkedTransactionId },
+                            orderBy: { sequence: 'asc' }
+                        });
+
+                        for (let i = 0; i < column.itemIds.length; i++) {
+                            const itemId = column.itemIds[i];
+                            const personnel = personnelMap[itemId];
+
+                            // Ensure personnelId is strictly string or null, checking placeholder
+                            const personnelIdParam = (!personnel || personnel.isPlaceholder || !personnel.originalId || String(personnel.originalId).startsWith('placeholder-')) ? null : String(personnel.originalId);
+
+                            // Calculate toPosition based on transaction type and chain sequence
+                            let toPosition: string | null = null;
+                            let toPositionNumber: string | null = null;
+                            let toUnit: string | null = null;
+                            let toPosCodeId: number | null = null;
+
+                            const isSwapType = existingTransaction.swapType === 'two-way' || existingTransaction.swapType === 'three-way';
+
+                            if (isSwapType) {
+                                // For two-way swap: A -> B's position, B -> A's position
+                                // For three-way swap: A -> B, B -> C, C -> A
+                                if (existingTransaction.swapType === 'two-way' && column.itemIds.length === 2) {
+                                    // Get the OTHER person's position
+                                    const otherIndex = i === 0 ? 1 : 0;
+                                    const otherItemId = column.itemIds[otherIndex];
+                                    const otherPersonnel = personnelMap[otherItemId];
+                                    if (otherPersonnel) {
+                                        toPosition = otherPersonnel.position || null;
+                                        toPositionNumber = otherPersonnel.positionNumber || null;
+                                        toUnit = otherPersonnel.unit || null;
+                                        toPosCodeId = safeRelationId(otherPersonnel.posCodeId);
+                                    }
+                                } else if (existingTransaction.swapType === 'three-way' && column.itemIds.length === 3) {
+                                    // A(0) -> B(1), B(1) -> C(2), C(2) -> A(0)
+                                    const targetIndex = (i + 1) % 3;
+                                    const targetItemId = column.itemIds[targetIndex];
+                                    const targetPersonnel = personnelMap[targetItemId];
+                                    if (targetPersonnel) {
+                                        toPosition = targetPersonnel.position || null;
+                                        toPositionNumber = targetPersonnel.positionNumber || null;
+                                        toUnit = targetPersonnel.unit || null;
+                                        toPosCodeId = safeRelationId(targetPersonnel.posCodeId);
+                                    }
+                                }
+                            } else {
+                                // Promotion chain or transfer: First person goes to vacant, subsequent go to previous person's position
+                                if (i === 0) {
+                                    // First person goes to the vacant position
+                                    toPosition = column.vacantPosition?.position || null;
+                                    toPositionNumber = column.vacantPosition?.positionNumber || null;
+                                    toUnit = column.vacantPosition?.unit || null;
+                                    toPosCodeId = safeRelationId(column.vacantPosition?.posCodeMaster?.id || column.vacantPosition?.posCodeId);
+                                } else {
+                                    // Subsequent persons replace the previous person's position
+                                    const prevItemId = column.itemIds[i - 1];
+                                    const prevPersonnel = personnelMap[prevItemId];
+                                    if (prevPersonnel) {
+                                        toPosition = prevPersonnel.position || null;
+                                        toPositionNumber = prevPersonnel.positionNumber || null;
+                                        toUnit = prevPersonnel.unit || null;
+                                        toPosCodeId = safeRelationId(prevPersonnel.posCodeId);
+                                    }
+                                }
+                            }
+
+                            if (personnel && existingDetails[i]) {
+                                await tx.swapTransactionDetail.update({
+                                    where: { id: existingDetails[i].id },
+                                    data: {
+                                        sequence: i,
+                                        personnelId: personnelIdParam,
+                                        noId: safeInt(personnel.noId),
+                                        nationalId: personnel.nationalId || null,
+                                        fullName: personnel.fullName || 'Unknown',
+                                        rank: personnel.rank || null,
+                                        seniority: personnel.seniority || null,
+                                        posCodeId: safeRelationId(personnel.posCodeId),
+                                        // Personal info
+                                        birthDate: personnel.birthDate || null,
+                                        age: personnel.age || null,
+                                        education: personnel.education || null,
+                                        // Appointment info
+                                        lastAppointment: personnel.lastAppointment || null,
+                                        currentRankSince: personnel.currentRankSince || null,
+                                        enrollmentDate: personnel.enrollmentDate || null,
+                                        retirementDate: personnel.retirementDate || null,
+                                        yearsOfService: personnel.yearsOfService || null,
+                                        // Training info
+                                        trainingLocation: personnel.trainingLocation || null,
+                                        trainingCourse: personnel.trainingCourse || null,
+                                        // Support info
+                                        supportName: personnel.supporterName || null,
+                                        supportReason: personnel.supportReason || null,
+                                        requestedPosition: personnel.requestedPosition || null,
+                                        // From position
+                                        fromPosition: personnel.position || null,
+                                        fromPositionNumber: personnel.positionNumber || null,
+                                        fromUnit: personnel.unit || null,
+                                        fromActingAs: personnel.actingAs || null,
+                                        // To position (calculated)
+                                        toPosCodeId,
+                                        toPosition,
+                                        toPositionNumber,
+                                        toUnit,
+                                        toActingAs: personnel.toActingAs || null,
+                                        notes: personnel.notes || null,
+                                    },
+                                });
+                            } else if (personnel && !existingDetails[i]) {
+                                await tx.swapTransactionDetail.create({
+                                    data: {
+                                        transactionId: column.linkedTransactionId,
+                                        sequence: i,
+                                        personnelId: personnelIdParam,
+                                        noId: safeInt(personnel.noId),
+                                        nationalId: personnel.nationalId || null,
+                                        fullName: personnel.fullName || 'Unknown',
+                                        rank: personnel.rank || null,
+                                        seniority: personnel.seniority || null,
+                                        posCodeId: safeRelationId(personnel.posCodeId),
+                                        // Personal info
+                                        birthDate: personnel.birthDate || null,
+                                        age: personnel.age || null,
+                                        education: personnel.education || null,
+                                        // Appointment info
+                                        lastAppointment: personnel.lastAppointment || null,
+                                        currentRankSince: personnel.currentRankSince || null,
+                                        enrollmentDate: personnel.enrollmentDate || null,
+                                        retirementDate: personnel.retirementDate || null,
+                                        yearsOfService: personnel.yearsOfService || null,
+                                        // Training info
+                                        trainingLocation: personnel.trainingLocation || null,
+                                        trainingCourse: personnel.trainingCourse || null,
+                                        // Support info
+                                        supportName: personnel.supporterName || null,
+                                        supportReason: personnel.supportReason || null,
+                                        requestedPosition: personnel.requestedPosition || null,
+                                        // From position
+                                        fromPosition: personnel.position || null,
+                                        fromPositionNumber: personnel.positionNumber || null,
+                                        fromUnit: personnel.unit || null,
+                                        fromActingAs: personnel.actingAs || null,
+                                        // To position (calculated)
+                                        toPosCodeId,
+                                        toPosition,
+                                        toPositionNumber,
+                                        toUnit,
+                                        toActingAs: personnel.toActingAs || null,
+                                        notes: personnel.notes || null,
+                                    },
+                                });
+                            }
+                        }
+
+                        if (existingDetails.length > column.itemIds.length) {
+                            const idsToDelete = existingDetails.slice(column.itemIds.length).map(d => d.id);
+                            await tx.swapTransactionDetail.deleteMany({
+                                where: { id: { in: idsToDelete } }
+                            });
+                        }
+
+                        await tx.swapTransaction.update({
+                            where: { id: column.linkedTransactionId },
+                            data: {
+                                groupName: column.title,
+                                updatedBy: username,
+                            }
+                        });
+
                         lanes.push({
                             index: lanes.length,
                             transactionId: column.linkedTransactionId,
@@ -302,222 +467,143 @@ export async function POST(request: NextRequest) {
                             vacantPosition: column.vacantPosition,
                             isCompleted: column.isCompleted || false,
                         });
-                        continue;
-                    }
+                    } else {
+                        const newTransaction = await tx.swapTransaction.create({
+                            data: {
+                                year,
+                                swapDate: new Date(),
+                                swapType: 'promotion-chain',
+                                groupName: column.title,
+                                groupNumber: column.groupNumber || null,
+                                status: 'active',
+                                isCompleted: column.itemIds.length > 0,
+                                createdBy: username,
+                            },
+                        });
 
-                    // This is linked to existing SwapTransaction - update it directly
-                    updatedTransactionIds.push(column.linkedTransactionId);
+                        createdTransactionIds.push(newTransaction.id);
 
-                    // Get existing details
-                    const existingDetails = await tx.swapTransactionDetail.findMany({
-                        where: { transactionId: column.linkedTransactionId },
-                        orderBy: { sequence: 'asc' }
-                    });
+                        for (let i = 0; i < column.itemIds.length; i++) {
+                            const itemId = column.itemIds[i];
+                            const personnel = personnelMap[itemId];
 
-                    // Update each detail with new personnel from board
-                    for (let i = 0; i < column.itemIds.length; i++) {
-                        const itemId = column.itemIds[i];
-                        const personnel = personnelMap[itemId];
+                            if (personnel) {
+                                const personnelIdParam = (!personnel || personnel.isPlaceholder || !personnel.originalId || String(personnel.originalId).startsWith('placeholder-')) ? null : String(personnel.originalId);
 
-                        if (personnel && existingDetails[i]) {
-                            // Update existing detail
-                            await tx.swapTransactionDetail.update({
-                                where: { id: existingDetails[i].id },
-                                data: {
-                                    sequence: i,
-                                    personnelId: (personnel.isPlaceholder || !personnel.originalId) ? null : personnel.originalId, // Only save real person's originalId
-                                    noId: personnel.noId ? parseInt(String(personnel.noId), 10) : null,
-                                    nationalId: personnel.nationalId || null,
-                                    fullName: personnel.fullName || 'Unknown',
-                                    rank: personnel.rank || null,
-                                    seniority: personnel.seniority || null,
-                                    posCodeId: personnel.posCodeId || null,
-                                    supportName: personnel.supporterName || null,
-                                    supportReason: personnel.supportReason || null,
-                                    requestedPosition: personnel.requestedPosition || null,
-                                    fromPosition: personnel.position || null,
-                                    fromPositionNumber: personnel.positionNumber || null,
-                                    fromUnit: personnel.unit || null,
-                                    fromActingAs: personnel.actingAs || null,
-                                    // Add toPosition fields
-                                    toPosCodeId: personnel.toPosCodeId || null,
-                                    toPosition: personnel.toPosition || null,
-                                    toPositionNumber: personnel.toPositionNumber || null,
-                                    toUnit: personnel.toUnit || null,
-                                    toActingAs: personnel.toActingAs || null,
-                                    notes: personnel.notes || null,
-                                },
-                            });
-                        } else if (personnel && !existingDetails[i]) {
-                            // Create new detail
-                            await tx.swapTransactionDetail.create({
-                                data: {
-                                    transactionId: column.linkedTransactionId,
-                                    sequence: i,
-                                    personnelId: (personnel.isPlaceholder || !personnel.originalId) ? null : personnel.originalId,
-                                    noId: personnel.noId ? parseInt(String(personnel.noId), 10) : null,
-                                    nationalId: personnel.nationalId || null,
-                                    fullName: personnel.fullName || 'Unknown',
-                                    rank: personnel.rank || null,
-                                    seniority: personnel.seniority || null,
-                                    posCodeId: personnel.posCodeId || null,
-                                    supportName: personnel.supporterName || null,
-                                    supportReason: personnel.supportReason || null,
-                                    requestedPosition: personnel.requestedPosition || null,
-                                    fromPosition: personnel.position || null,
-                                    fromPositionNumber: personnel.positionNumber || null,
-                                    fromUnit: personnel.unit || null,
-                                    fromActingAs: personnel.actingAs || null,
-                                    // Add toPosition fields
-                                    toPosCodeId: personnel.toPosCodeId || null,
-                                    toPosition: personnel.toPosition || null,
-                                    toPositionNumber: personnel.toPositionNumber || null,
-                                    toUnit: personnel.toUnit || null,
-                                    toActingAs: personnel.toActingAs || null,
-                                    notes: personnel.notes || null,
-                                },
-                            });
+                                // Calculate toPosition based on chain sequence:
+                                // - First person (i=0) goes to the vacant position
+                                // - Subsequent persons (i>0) replace the previous person's position
+                                let toPosition: string | null = null;
+                                let toPositionNumber: string | null = null;
+                                let toUnit: string | null = null;
+                                let toPosCodeId: number | null = null;
+
+                                if (i === 0) {
+                                    // First person goes to the vacant position
+                                    toPosition = column.vacantPosition?.position || null;
+                                    toPositionNumber = column.vacantPosition?.positionNumber || null;
+                                    toUnit = column.vacantPosition?.unit || null;
+                                    toPosCodeId = safeRelationId(column.vacantPosition?.posCodeMaster?.id || column.vacantPosition?.posCodeId);
+                                } else {
+                                    // Subsequent persons replace the previous person's position
+                                    const prevItemId = column.itemIds[i - 1];
+                                    const prevPersonnel = personnelMap[prevItemId];
+                                    if (prevPersonnel) {
+                                        toPosition = prevPersonnel.position || null;
+                                        toPositionNumber = prevPersonnel.positionNumber || null;
+                                        toUnit = prevPersonnel.unit || null;
+                                        toPosCodeId = safeRelationId(prevPersonnel.posCodeId);
+                                    }
+                                }
+
+                                await tx.swapTransactionDetail.create({
+                                    data: {
+                                        transactionId: newTransaction.id,
+                                        sequence: i,
+                                        personnelId: personnelIdParam,
+                                        noId: safeInt(personnel.noId),
+                                        nationalId: personnel.nationalId || null,
+                                        fullName: personnel.fullName || 'Unknown',
+                                        rank: personnel.rank || null,
+                                        seniority: personnel.seniority || null,
+                                        posCodeId: safeRelationId(personnel.posCodeId),
+                                        birthDate: personnel.birthDate || null,
+                                        age: personnel.age || null,
+                                        education: personnel.education || null,
+                                        lastAppointment: personnel.lastAppointment || null,
+                                        currentRankSince: personnel.currentRankSince || null,
+                                        enrollmentDate: personnel.enrollmentDate || null,
+                                        retirementDate: personnel.retirementDate || null,
+                                        yearsOfService: personnel.yearsOfService || null,
+                                        trainingLocation: personnel.trainingLocation || null,
+                                        trainingCourse: personnel.trainingCourse || null,
+                                        supportName: personnel.supporterName || null,
+                                        supportReason: personnel.supportReason || null,
+                                        requestedPosition: personnel.requestedPosition || null,
+                                        fromPosition: personnel.position || null,
+                                        fromPositionNumber: personnel.positionNumber || null,
+                                        fromUnit: personnel.unit || null,
+                                        fromActingAs: personnel.actingAs || null,
+                                        toPosition,
+                                        toPositionNumber,
+                                        toUnit,
+                                        toPosCodeId,
+                                        notes: personnel.notes || null,
+                                    },
+                                });
+                            }
                         }
-                    }
 
-                    // Delete extra details if board has fewer items
-                    if (existingDetails.length > column.itemIds.length) {
-                        const idsToDelete = existingDetails.slice(column.itemIds.length).map(d => d.id);
-                        await tx.swapTransactionDetail.deleteMany({
-                            where: { id: { in: idsToDelete } }
+                        lanes.push({
+                            index: lanes.length,
+                            transactionId: newTransaction.id,
+                            title: column.title,
+                            vacantPosition: column.vacantPosition,
+                            isCompleted: column.isCompleted || false,
                         });
                     }
+                }
 
-                    // Update transaction title
-                    await tx.swapTransaction.update({
-                        where: { id: column.linkedTransactionId },
-                        data: {
-                            groupName: column.title,
-                            updatedBy: username,
-                        }
+                const currentTransactionIds = lanes.map(l => l.transactionId).filter(Boolean);
+                const transactionsToDelete = oldTransactionIds.filter(id => !currentTransactionIds.includes(id));
+
+                if (transactionsToDelete.length > 0) {
+                    console.log(`Cleaning up ${transactionsToDelete.length} orphan transactions:`, transactionsToDelete);
+                    await tx.swapTransactionDetail.deleteMany({
+                        where: { transactionId: { in: transactionsToDelete } }
                     });
-
-                    // Add to layout with explicit index
-                    lanes.push({
-                        index: lanes.length,
-                        transactionId: column.linkedTransactionId,
-                        title: column.title,
-                        vacantPosition: column.vacantPosition,
-                        isCompleted: column.isCompleted || false,
-                    });
-                } else {
-                    // Custom lane - create new transaction with type 'promotion-chain' or 'custom'
-                    const newTransaction = await tx.swapTransaction.create({
-                        data: {
-                            year,
-                            swapDate: new Date(),
-                            swapType: 'promotion-chain', // Use promotion-chain for board-created lanes
-                            groupName: column.title,
-                            groupNumber: column.groupNumber || null,
-                            status: 'active',
-                            isCompleted: column.itemIds.length > 0,
-                            createdBy: username,
-                        },
-                    });
-
-                    createdTransactionIds.push(newTransaction.id);
-
-                    // Create details
-                    for (let i = 0; i < column.itemIds.length; i++) {
-                        const itemId = column.itemIds[i];
-                        const personnel = personnelMap[itemId];
-
-                        if (personnel) {
-                            await tx.swapTransactionDetail.create({
-                                data: {
-                                    transactionId: newTransaction.id,
-                                    sequence: i,
-                                    personnelId: (personnel.isPlaceholder || !personnel.originalId) ? null : personnel.originalId,
-                                    noId: personnel.noId ? parseInt(String(personnel.noId), 10) : null,
-                                    nationalId: personnel.nationalId || null,
-                                    fullName: personnel.fullName || 'Unknown',
-                                    rank: personnel.rank || null,
-                                    seniority: personnel.seniority || null,
-                                    posCodeId: personnel.posCodeId || null,
-                                    birthDate: personnel.birthDate || null,
-                                    age: personnel.age || null,
-                                    education: personnel.education || null,
-                                    lastAppointment: personnel.lastAppointment || null,
-                                    currentRankSince: personnel.currentRankSince || null,
-                                    enrollmentDate: personnel.enrollmentDate || null,
-                                    retirementDate: personnel.retirementDate || null,
-                                    yearsOfService: personnel.yearsOfService || null,
-                                    trainingLocation: personnel.trainingLocation || null,
-                                    trainingCourse: personnel.trainingCourse || null,
-                                    supportName: personnel.supporterName || null,
-                                    supportReason: personnel.supportReason || null,
-                                    requestedPosition: personnel.requestedPosition || null,
-                                    fromPosition: personnel.position || null,
-                                    fromPositionNumber: personnel.positionNumber || null,
-                                    fromUnit: personnel.unit || null,
-                                    fromActingAs: personnel.actingAs || null,
-                                    toPosition: column.vacantPosition?.position || null,
-                                    toPositionNumber: column.vacantPosition?.positionNumber || null,
-                                    toUnit: column.vacantPosition?.unit || null,
-                                    toPosCodeId: column.vacantPosition?.posCodeMaster?.id || null,
-                                    notes: personnel.notes || null,
-                                },
-                            });
-                        }
-                    }
-
-                    // Add to layout with explicit index
-                    lanes.push({
-                        index: lanes.length,
-                        transactionId: newTransaction.id,
-                        title: column.title,
-                        vacantPosition: column.vacantPosition,
-                        isCompleted: column.isCompleted || false,
+                    await tx.swapTransaction.deleteMany({
+                        where: { id: { in: transactionsToDelete } }
                     });
                 }
-            }
 
-            // Cleanup: ลบ TransactionId ที่เคยอยู่ใน layout เก่า แต่ไม่อยู่ใน layout ใหม่แล้ว
-            const currentTransactionIds = lanes.map(l => l.transactionId).filter(Boolean);
-            const transactionsToDelete = oldTransactionIds.filter(id => !currentTransactionIds.includes(id));
-
-            if (transactionsToDelete.length > 0) {
-                console.log(`Cleaning up ${transactionsToDelete.length} orphan transactions:`, transactionsToDelete);
-                // ลบ details ก่อน (Cascade delete handles it but better be safe)
-                await tx.swapTransactionDetail.deleteMany({
-                    where: { transactionId: { in: transactionsToDelete } }
-                });
-                // ลบ transactions
                 await tx.swapTransaction.deleteMany({
-                    where: { id: { in: transactionsToDelete } }
+                    where: {
+                        year,
+                        swapType: BOARD_LAYOUT_TYPE,
+                    },
                 });
+
+                await tx.swapTransaction.create({
+                    data: {
+                        year,
+                        swapDate: new Date(),
+                        swapType: BOARD_LAYOUT_TYPE,
+                        groupName: `Board Layout ${year}`,
+                        status: 'active',
+                        isCompleted: true,
+                        notes: JSON.stringify({ lanes }),
+                        createdBy: username,
+                    },
+                });
+
+                return { updatedTransactionIds, createdTransactionIds, lanes, lanesCount: lanes.length };
+            },
+            {
+                maxWait: 10000, // 10 seconds max wait to acquire connection
+                timeout: 60000, // 60 seconds max transaction time
             }
-
-            // Delete old layout record
-            await tx.swapTransaction.deleteMany({
-                where: {
-                    year,
-                    swapType: BOARD_LAYOUT_TYPE,
-                },
-            });
-
-
-            // Create new layout record
-            await tx.swapTransaction.create({
-                data: {
-                    year,
-                    swapDate: new Date(),
-                    swapType: BOARD_LAYOUT_TYPE,
-                    groupName: `Board Layout ${year}`,
-                    status: 'active',
-                    isCompleted: true,
-                    notes: JSON.stringify({ lanes }),
-                    createdBy: username,
-                },
-            });
-
-            return { updatedTransactionIds, createdTransactionIds, lanes, lanesCount: lanes.length };
-        });
+        );
 
         return NextResponse.json({
             success: true,
@@ -525,7 +611,7 @@ export async function POST(request: NextRequest) {
             updatedTransactionsCount: result.updatedTransactionIds.length,
             createdTransactionsCount: result.createdTransactionIds.length,
             lanesCount: result.lanesCount,
-            lanes: result.lanes, // ส่ง lanes กลับไปให้ frontend update state
+            lanes: result.lanes,
         });
 
     } catch (error: any) {
@@ -538,9 +624,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE /api/personnel-board?year={year}
- * ลบข้อมูล Personnel Board Layout ของปีที่ระบุ
- * (ไม่ลบ SwapTransaction จริงๆ - แค่ลบ layout)
+ * DELETE /api/personnel-board
  */
 export async function DELETE(request: NextRequest) {
     try {
@@ -561,7 +645,6 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid year parameter' }, { status: 400 });
         }
 
-        // ลบเฉพาะ layout record (ไม่ลบ SwapTransaction จริงๆ)
         const deleted = await prisma.swapTransaction.deleteMany({
             where: {
                 year,

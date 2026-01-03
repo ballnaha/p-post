@@ -61,14 +61,14 @@ function LoginPage() {
         // เข้าสู่ระบบสำเร็จ - ตรวจสอบ role
         const session = await getSession();
         console.log('Login successful:', session);
-        
+
         // ตรวจสอบว่าเป็น admin หรือไม่
         if (session?.user?.role !== 'admin') {
           setError('คุณไม่มีสิทธิ์เข้าถึงระบบ ต้องเป็น Admin เท่านั้น');
           setLoading(false);
           return;
         }
-        
+
         router.push('/');
         router.refresh();
       }
@@ -187,9 +187,9 @@ function LoginPage() {
           },
         }}
       >
-        <Box 
-          sx={{ 
-            width: '100%', 
+        <Box
+          sx={{
+            width: '100%',
             // Wider login box
             '@media (min-width: 768px)': {
               maxWidth: 480,
@@ -199,251 +199,201 @@ function LoginPage() {
             },
           }}
         >
-        {/* Login Form */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: { xs: 4, sm: 6 },
-            borderRadius: 3,
-            // Desktop: Enhanced styling with better theme integration
-            '@media (min-width: 768px)': {
-              backgroundColor: '#ffffff',
-              border: `1px solid ${alpha('#2196f3', 0.1)}`,
-              boxShadow: `
+          {/* Login Form */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 4, sm: 6 },
+              borderRadius: 3,
+              // Desktop: Enhanced styling with better theme integration
+              '@media (min-width: 768px)': {
+                backgroundColor: '#ffffff',
+                border: `1px solid ${alpha('#2196f3', 0.1)}`,
+                boxShadow: `
                 0 12px 40px ${alpha('#2196f3', 0.08)},
                 0 4px 20px ${alpha('#000000', 0.06)},
                 inset 0 1px 0 ${alpha('#ffffff', 0.8)}
               `,
-              backdropFilter: 'blur(8px)',
-            },
-            // Mobile: Enhanced glassmorphism
-            '@media (max-width: 767px)': {
-              backgroundColor: alpha('#ffffff', 0.95),
-              backdropFilter: 'blur(24px)',
-              border: `1px solid ${alpha('#2196f3', 0.2)}`,
-              boxShadow: `
+                backdropFilter: 'blur(8px)',
+              },
+              // Mobile: Enhanced glassmorphism
+              '@media (max-width: 767px)': {
+                backgroundColor: alpha('#ffffff', 0.95),
+                backdropFilter: 'blur(24px)',
+                border: `1px solid ${alpha('#2196f3', 0.2)}`,
+                boxShadow: `
                 0 12px 40px ${alpha('#2196f3', 0.1)},
                 0 4px 20px ${alpha('#000000', 0.08)},
                 inset 0 1px 0 ${alpha('#ffffff', 0.7)}
               `,
-            },
-          }}
-        >
-          <Box sx={{ textAlign: 'center', mb: 4 }}>
-            
-            <Typography 
-              variant="h4" 
-              sx={{ 
-                fontWeight: 300, 
-                color: '#1a1a1a',
-                mb: 1,
-                letterSpacing: '-0.02em'
-              }}
-            >
-              <img src="/images/logo_4.png" alt="P POST Logo" style={{ height: 65 }} />
-            </Typography>
-            <Typography 
-              variant="body1" 
-              sx={{ 
-                color: alpha('#000000', 0.6),
-                fontWeight: 400,
-                fontSize: '0.95rem'
-              }}
-            >
-              เข้าสู่ระบบ
-            </Typography>
-          </Box>
+              },
+            }}
+          >
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              {error}
-            </Alert>
-          )}
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 300,
+                  color: '#1a1a1a',
+                  mb: 1,
+                  letterSpacing: '-0.02em'
+                }}
+              >
+                <img src="/images/logo_4.png" alt="P POST Logo" style={{ height: 65 }} />
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: alpha('#000000', 0.6),
+                  fontWeight: 400,
+                  fontSize: '0.95rem'
+                }}
+              >
+                เข้าสู่ระบบ
+              </Typography>
+            </Box>
 
-          <form onSubmit={handleSubmit}>
-            <TextField
-              fullWidth
-              label="Username"
-              variant="outlined"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              sx={{ 
-                mb: 2.5,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 1,
-                  backgroundColor: alpha('#ffffff', 0.8),
-                  backdropFilter: 'blur(8px)',
-                  '& fieldset': {
-                    borderColor: alpha('#000000', 0.1),
-                    borderWidth: '1px',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: alpha('#2196f3', 0.3),
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#2196f3',
-                    borderWidth: '2px',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: alpha('#000000', 0.7),
-                  '&.Mui-focused': {
-                    color: '#2196f3',
-                  },
-                },
-              }}
-              disabled={loading}
-              autoComplete="username"
-            />
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                {error}
+              </Alert>
+            )}
 
-            <TextField
-              fullWidth
-              label="Password"
-              type="password"
-              variant="outlined"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              sx={{ 
-                mb: 3.5,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 1,
-                  backgroundColor: alpha('#ffffff', 0.8),
-                  backdropFilter: 'blur(8px)',
-                  '& fieldset': {
-                    borderColor: alpha('#000000', 0.1),
-                    borderWidth: '1px',
+            <form onSubmit={handleSubmit}>
+              <TextField
+                fullWidth
+                label="Username"
+                variant="outlined"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                sx={{
+                  mb: 2.5,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 1,
+                    backgroundColor: alpha('#ffffff', 0.8),
+                    backdropFilter: 'blur(8px)',
+                    '& fieldset': {
+                      borderColor: alpha('#000000', 0.1),
+                      borderWidth: '1px',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: alpha('#2196f3', 0.3),
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#2196f3',
+                      borderWidth: '2px',
+                    },
                   },
-                  '&:hover fieldset': {
-                    borderColor: alpha('#2196f3', 0.3),
+                  '& .MuiInputLabel-root': {
+                    color: alpha('#000000', 0.7),
+                    '&.Mui-focused': {
+                      color: '#2196f3',
+                    },
                   },
-                  '&.Mui-focused fieldset': {
-                    borderColor: '#2196f3',
-                    borderWidth: '2px',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: alpha('#000000', 0.7),
-                  '&.Mui-focused': {
-                    color: '#2196f3',
-                  },
-                },
-              }}
-              disabled={loading}
-              autoComplete="current-password"
-            />
+                }}
+                disabled={loading}
+                autoComplete="username"
+              />
 
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              size="large"
-              disabled={loading}
-              sx={{
-                py: 1.8,
-                fontSize: '1rem',
-                fontWeight: 500,
-                borderRadius: 2,
-                textTransform: 'none',
-                background: `linear-gradient(135deg, #2196f3 0%, #1976d2 100%)`,
-                border: `1px solid ${alpha('#2196f3', 0.3)}`,
-                boxShadow: `
+              <TextField
+                fullWidth
+                label="Password"
+                type="password"
+                variant="outlined"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                sx={{
+                  mb: 3.5,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 1,
+                    backgroundColor: alpha('#ffffff', 0.8),
+                    backdropFilter: 'blur(8px)',
+                    '& fieldset': {
+                      borderColor: alpha('#000000', 0.1),
+                      borderWidth: '1px',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: alpha('#2196f3', 0.3),
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#2196f3',
+                      borderWidth: '2px',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: alpha('#000000', 0.7),
+                    '&.Mui-focused': {
+                      color: '#2196f3',
+                    },
+                  },
+                }}
+                disabled={loading}
+                autoComplete="current-password"
+              />
+
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                size="large"
+                disabled={loading}
+                sx={{
+                  py: 1.8,
+                  fontSize: '1rem',
+                  fontWeight: 500,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  background: `linear-gradient(135deg, #2196f3 0%, #1976d2 100%)`,
+                  border: `1px solid ${alpha('#2196f3', 0.3)}`,
+                  boxShadow: `
                   0 4px 16px ${alpha('#2196f3', 0.2)},
                   0 2px 8px ${alpha('#2196f3', 0.1)},
                   inset 0 1px 0 ${alpha('#ffffff', 0.3)}
                 `,
-                backdropFilter: 'blur(8px)',
-                '&:hover': {
-                  background: `linear-gradient(135deg, #1976d2 0%, #1565c0 100%)`,
-                  boxShadow: `
+                  backdropFilter: 'blur(8px)',
+                  '&:hover': {
+                    background: `linear-gradient(135deg, #1976d2 0%, #1565c0 100%)`,
+                    boxShadow: `
                     0 6px 20px ${alpha('#2196f3', 0.25)},
                     0 3px 12px ${alpha('#2196f3', 0.15)},
                     inset 0 1px 0 ${alpha('#ffffff', 0.3)}
                   `,
-                  transform: 'translateY(-1px)',
-                },
-                '&:disabled': {
-                  background: alpha('#000000', 0.1),
-                  color: alpha('#000000', 0.4),
-                },
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              }}
-            >
-              {loading ? (
-                <>
-                  <CircularProgress size={18} sx={{ mr: 1, color: 'currentColor' }} />
-                  กำลังเข้าสู่ระบบ...
-                </>
-              ) : (
-                'เข้าสู่ระบบ'
-              )}
-            </Button>
-          </form>
+                    transform: 'translateY(-1px)',
+                  },
+                  '&:disabled': {
+                    background: alpha('#000000', 0.1),
+                    color: alpha('#000000', 0.4),
+                  },
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+              >
+                {loading ? (
+                  <>
+                    <CircularProgress size={18} sx={{ mr: 1, color: 'currentColor' }} />
+                    กำลังเข้าสู่ระบบ...
+                  </>
+                ) : (
+                  'เข้าสู่ระบบ'
+                )}
+              </Button>
+            </form>
 
-          <Divider 
-            sx={{ 
-              my: 4,
-              borderColor: alpha('#000000', 0.08),
-              '&::before, &::after': {
-                borderColor: alpha('#000000', 0.08),
-              }
-            }}
-          >
-            <Typography 
-              variant="body2" 
-              sx={{ 
+          </Paper>
+
+          {/* Footer */}
+          <Box sx={{ textAlign: 'center', mt: 4 }}>
+            <Typography
+              variant="body2"
+              sx={{
                 color: alpha('#000000', 0.4),
                 fontSize: '0.85rem',
                 fontWeight: 400
               }}
             >
-              หรือ
-            </Typography>
-          </Divider>
-
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                color: alpha('#000000', 0.6),
-                mb: 2.5,
-                fontSize: '0.9rem'
-              }}
-            >
-              ยังไม่มีบัญชีผู้ใช้?
-            </Typography>
-            <Button
-              variant="text"
-              onClick={() => router.push('/register')}
-              sx={{
-                p: 0,
-                minWidth: 'auto',
-                color: '#2196f3',
-                fontWeight: 500,
-                textTransform: 'none',
-                '&:hover': {
-                  backgroundColor: 'transparent',
-                  textDecoration: 'underline',
-                },
-              }}
-            >
-              สมัครสมาชิก
-            </Button>
-          </Box>
-        </Paper>
-
-        {/* Footer */}
-        <Box sx={{ textAlign: 'center', mt: 4 }}>
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              color: alpha('#000000', 0.4),
-              fontSize: '0.85rem',
-              fontWeight: 400
-            }}
-            >
               © 2025 Police Position Management System.
-          </Typography>
-        </Box>
+            </Typography>
+          </Box>
         </Box>
       </Box>
     </Box>

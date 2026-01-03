@@ -39,6 +39,7 @@ export interface InOutRecord {
         fromPosition: string | null;
         fromUnit: string | null;
         posCode: string | null;
+        posCodeId: number | null;
     } | null;
     currentHolder: {
         personnelId: string;
@@ -69,7 +70,7 @@ export interface InOutRecord {
         requestedPosition: string | null;
         supporter: string | null;
     } | null;
-    status: 'filled' | 'vacant' | 'reserved' | 'swap' | 'promotion' | 'pending';
+    status: 'filled' | 'vacant' | 'reserved' | 'swap' | 'three-way' | 'promotion' | 'pending';
     remark: string | null;
     swapType: string | null;
 }
@@ -90,12 +91,6 @@ interface InOutTableProps {
 // Status configuration
 const getStatusConfig = (status: InOutRecord['status'], theme: any) => {
     const configs: Record<string, any> = {
-        filled: {
-            bg: alpha(theme.palette.success.main, 0.1),
-            color: theme.palette.success.dark,
-            label: 'บรรจุแล้ว',
-            icon: <CheckCircleIcon sx={{ fontSize: 14 }} />,
-        },
         vacant: {
             bg: alpha(theme.palette.error.main, 0.12),
             color: theme.palette.error.main,
@@ -114,17 +109,17 @@ const getStatusConfig = (status: InOutRecord['status'], theme: any) => {
             label: 'สับเปลี่ยน',
             icon: <SwapHorizIcon sx={{ fontSize: 14 }} />,
         },
+        'three-way': {
+            bg: alpha(theme.palette.secondary.main, 0.12),
+            color: theme.palette.secondary.dark,
+            label: 'สามเส้า',
+            icon: <SwapHorizIcon sx={{ fontSize: 14 }} />,
+        },
         promotion: {
             bg: alpha(theme.palette.warning.main, 0.12),
             color: theme.palette.warning.dark,
             label: 'เลื่อน',
             icon: <TrendingUpIcon sx={{ fontSize: 14 }} />,
-        },
-        pending: {
-            bg: alpha(theme.palette.grey[500], 0.1),
-            color: theme.palette.grey[600],
-            label: 'รอดำเนินการ',
-            icon: <AccessTimeIcon sx={{ fontSize: 14 }} />,
         },
     };
     return configs[status] || configs.pending;
@@ -335,9 +330,25 @@ export default function InOutTable({
                                         {/* คนเข้า - ตำแหน่งเดิม */}
                                         <TableCell sx={{ py: 1.5, px: 1.5, borderRight: `2px solid ${theme.palette.success.main}` }}>
                                             {record.incomingPerson?.fromPosition ? (
-                                                <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.secondary, lineHeight: 1.4 }}>
-                                                    {record.incomingPerson.fromPosition}
-                                                </Typography>
+                                                <Box>
+                                                    <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.secondary, lineHeight: 1.4 }}>
+                                                        {record.incomingPerson.fromPosition}
+                                                    </Typography>
+                                                    {record.incomingPerson.posCode && (
+                                                        <Chip
+                                                            label={record.incomingPerson.posCodeId ? `${record.incomingPerson.posCodeId} - ${record.incomingPerson.posCode}` : record.incomingPerson.posCode}
+                                                            size="small"
+                                                            sx={{
+                                                                mt: 0.5,
+                                                                height: 18,
+                                                                fontSize: '0.65rem',
+                                                                fontWeight: 500,
+                                                                bgcolor: alpha(theme.palette.success.main, 0.1),
+                                                                color: theme.palette.success.dark,
+                                                            }}
+                                                        />
+                                                    )}
+                                                </Box>
                                             ) : (
                                                 <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
                                             )}

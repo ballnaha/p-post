@@ -71,7 +71,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterUnit, setFilterUnit] = useState<string>('all');
     const [filterPosCode, setFilterPosCode] = useState<string>('all');
-    const [selectedYear, setSelectedYear] = useState<number>(initialYear || 2568);
+    const [selectedYear, setSelectedYear] = useState<number>(initialYear || new Date().getFullYear() + 543);
 
     // Sync selectedYear when initialYear prop changes
     useEffect(() => {
@@ -608,12 +608,11 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                             onChange={(e) => setFilterStatus(e.target.value)}
                         >
                             <MenuItem value="all">ทั้งหมด</MenuItem>
-                            <MenuItem value="filled">บรรจุแล้ว</MenuItem>
                             <MenuItem value="vacant">ว่าง</MenuItem>
                             <MenuItem value="reserved">ว่าง (กันตำแหน่ง)</MenuItem>
                             <MenuItem value="swap">สับเปลี่ยน</MenuItem>
+                            <MenuItem value="three-way">สามเส้า</MenuItem>
                             <MenuItem value="promotion">เลื่อน</MenuItem>
-                            <MenuItem value="pending">รอดำเนินการ</MenuItem>
                         </Select>
                     </FormControl>
 

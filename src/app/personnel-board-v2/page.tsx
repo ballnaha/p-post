@@ -2583,14 +2583,18 @@ export default function PersonnelBoardV2Page() {
             let suggestedPosCode = targetPosCodeId;
             let recommendationType = `สืบต่อลำดับที่ ${chainLevel}`;
 
-            // Rule 1: For Vacant Position or Promotion Chain -> Suggest 1 step higher (numerically)
-            // Rule 2: For Swap (2-way) or Three-way -> Suggest SAME rank
+            // Detect lane types
             const isSwapOrThreeWay = column.chainType === 'swap' ||
                 column.chainType === 'three-way' ||
                 (column.vacantPosition?.isTransaction &&
                     (column.vacantPosition.transactionType === 'two-way' ||
                         column.vacantPosition.transactionType === 'three-way'));
 
+            const isTransferLane = column.chainType === 'transfer' ||
+                (column.vacantPosition?.isTransaction && column.vacantPosition.transactionType === 'transfer');
+
+            // Rule 1: For Vacant Position, Promotion Chain, or Transfer -> Suggest 1 step higher (numerically)
+            // Rule 2: For Swap (2-way) or Three-way -> Suggest SAME rank
             if (!isSwapOrThreeWay) {
                 // Find the NEXT available posCode from options
                 const nextPossibleId = posCodeOptions
@@ -2607,6 +2611,11 @@ export default function PersonnelBoardV2Page() {
                     suggestedPosCode = targetPosCodeId;
                 } else {
                     suggestedPosCode = nextPossibleId;
+                }
+
+                // Set specific message for transfer lanes
+                if (isTransferLane) {
+                    recommendationType = `ผู้มาทดแทนลำดับที่ ${chainLevel} (ย้ายหน่วย)`;
                 }
             } else {
                 recommendationType = (column.chainType === 'three-way' || column.vacantPosition?.transactionType === 'three-way')

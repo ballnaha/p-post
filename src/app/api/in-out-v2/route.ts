@@ -148,6 +148,37 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        // Pre-filter transaction-based statuses at DB level to avoid fetching 40,000+ records
+        if (status === 'swap' || status === 'three-way' || status === 'promotion') {
+            const mappedType = status === 'swap' ? 'two-way' : (status === 'three-way' ? 'three-way' : 'promotion-chain');
+            const relevantDetails = await prisma.swapTransactionDetail.findMany({
+                where: {
+                    transaction: {
+                        year,
+                        swapType: mappedType,
+                        status: { in: ['completed', 'active'] }
+                    }
+                },
+                select: { nationalId: true, fromPositionNumber: true }
+            });
+
+            const ids = relevantDetails.map(d => d.nationalId).filter(Boolean) as string[];
+            const posNums = relevantDetails.map(d => d.fromPositionNumber).filter(Boolean) as string[];
+
+            const statusQuery = {
+                OR: [
+                    { nationalId: { in: ids } },
+                    { positionNumber: { in: posNums } }
+                ]
+            };
+
+            if (where.AND) {
+                where.AND.push(statusQuery);
+            } else {
+                where.AND = [statusQuery];
+            }
+        }
+
         // NOTE: Search filter is NOT applied at DB level because we need to search groupNumber
         // which comes from SwapTransaction, not PolicePersonnel. 
         // All search filtering is done in post-filter stage below.
@@ -221,34 +252,61 @@ export async function GET(request: NextRequest) {
         const swapDetailsByNationalId = new Map<string, any>();
         const incomingByPositionNumber = new Map<string, any>();
         const swapDetailsByFromPositionNumber = new Map<string, any>();
+        const swapPartnerLookup = new Map<string, any>(); // key: transactionId_toPositionNumber
 
         for (const detail of allSwapDetails) {
             if (detail.nationalId) {
                 swapDetailsByNationalId.set(detail.nationalId, detail);
             }
             // Build incoming person lookup: toPositionNumber -> detail (person moving IN)
-            if (detail.toPositionNumber) {
-                const normPosNum = normalizePositionNumber(detail.toPositionNumber);
-                if (normPosNum) {
-                    incomingByPositionNumber.set(normPosNum, detail);
+            const normToPosNum = normalizePositionNumber(detail.toPositionNumber);
+            if (normToPosNum) {
+                incomingByPositionNumber.set(normToPosNum, detail);
+
+                // For swap partner lookup
+                if (detail.transactionId) {
+                    swapPartnerLookup.set(`${detail.transactionId}_${normToPosNum}`, detail);
                 }
             }
             // Build outgoing move lookup: fromPositionNumber -> detail (person moving OUT)
-            if (detail.fromPositionNumber) {
-                const normFromPosNum = normalizePositionNumber(detail.fromPositionNumber);
-                if (normFromPosNum) {
-                    swapDetailsByFromPositionNumber.set(normFromPosNum, detail);
-                }
+            const normFromPosNum = normalizePositionNumber(detail.fromPositionNumber);
+            if (normFromPosNum) {
+                swapDetailsByFromPositionNumber.set(normFromPosNum, detail);
             }
         }
 
-        // Fetch all position names for lookup to ensure we show actual position names even if transaction says "ว่าง"
-        const allPositions = await prisma.policePersonnel.findMany({
-            where: { year, isActive: true },
+        // Fetch position names ONLY for positions involved in transactions to save memory and time
+        const involvedPosNumbers = new Set<string>();
+        for (const detail of allSwapDetails) {
+            if (detail.fromPositionNumber) {
+                const norm = normalizePositionNumber(detail.fromPositionNumber);
+                if (norm) involvedPosNumbers.add(norm);
+            }
+            if (detail.toPositionNumber) {
+                const norm = normalizePositionNumber(detail.toPositionNumber);
+                if (norm) involvedPosNumbers.add(norm);
+            }
+        }
+
+        // Also add position numbers from the main query results (personnel)
+        for (const p of personnel) {
+            if (p.positionNumber) {
+                const norm = normalizePositionNumber(p.positionNumber);
+                if (norm) involvedPosNumbers.add(norm);
+            }
+        }
+
+        const involvedPositions = await prisma.policePersonnel.findMany({
+            where: {
+                year,
+                isActive: true,
+                positionNumber: { in: Array.from(involvedPosNumbers) }
+            },
             select: { positionNumber: true, position: true, unit: true },
         });
+
         const positionNamesMap = new Map<string, { position: string, unit: string }>();
-        for (const p of allPositions) {
+        for (const p of involvedPositions) {
             if (p.positionNumber) {
                 const norm = normalizePositionNumber(p.positionNumber);
                 if (norm) {
@@ -259,6 +317,7 @@ export async function GET(request: NextRequest) {
                 }
             }
         }
+        console.log(`[in-out-v2] Position lookup map built with ${positionNamesMap.size} entries`);
 
         // Transform personnel to InOutRecords
         let finalRecords: InOutRecord[];
@@ -288,25 +347,26 @@ export async function GET(request: NextRequest) {
 
             if (isSwapTransaction && swapDetail?.transactionId) {
                 // Find other person(s) in this swap transaction who is moving TO this position
-                const swapPartner = allSwapDetails.find(d =>
-                    d.transactionId === swapDetail.transactionId &&
-                    d.id !== swapDetail.id &&
-                    normalizePositionNumber(d.toPositionNumber) === normPosNum
-                );
+                // Use Map lookup instead of .find()
+                const swapPartner = swapPartnerLookup.get(`${swapDetail.transactionId}_${normPosNum}`);
 
-                if (swapPartner && swapPartner.fullName) {
-                    const partnerName = swapPartner.fullName?.trim() || '';
+                // If the found person is the same person (can happen with positions), 
+                // we might need more complex logic, but usually this is the partner
+                const partnerToUse = (swapPartner && swapPartner.id !== swapDetail.id) ? swapPartner : null;
+
+                if (partnerToUse && partnerToUse.fullName) {
+                    const partnerName = partnerToUse.fullName?.trim() || '';
                     const isPlaceholder = ['ว่าง', 'ว่าง (กันตำแหน่ง)', 'ว่าง(กันตำแหน่ง)', ''].includes(partnerName);
 
                     if (!isPlaceholder) {
                         incomingPerson = {
-                            personnelId: swapPartner.personnelId || swapPartner.id,
-                            name: swapPartner.fullName || '',
-                            rank: swapPartner.rank || null,
-                            fromPosition: swapPartner.fromPosition || null,
-                            fromUnit: swapPartner.fromUnit || null,
-                            posCode: swapPartner.posCodeMaster?.name || null,
-                            posCodeId: swapPartner.posCodeId || null,
+                            personnelId: partnerToUse.personnelId || partnerToUse.id,
+                            name: partnerToUse.fullName || '',
+                            rank: partnerToUse.rank || null,
+                            fromPosition: partnerToUse.fromPosition || null,
+                            fromUnit: partnerToUse.fromUnit || null,
+                            posCode: partnerToUse.posCodeMaster?.name || null,
+                            posCodeId: partnerToUse.posCodeId || null,
                         };
                     }
                 }
@@ -362,6 +422,7 @@ export async function GET(request: NextRequest) {
 
             if (isSwapTransaction && swapDetail?.transactionId && (!toPosition || !toPositionNumber)) {
                 // Find swap partner to get their original position as our target
+                // For a 2-way swap, it's the only other person in the transaction
                 const swapPartner = allSwapDetails.find(d =>
                     d.transactionId === swapDetail.transactionId &&
                     d.id !== swapDetail.id
@@ -464,6 +525,7 @@ export async function GET(request: NextRequest) {
             vacant: 0,
             reserved: 0,
             swap: 0,
+            'three-way': 0,
             promotion: 0,
             pending: 0,
         };

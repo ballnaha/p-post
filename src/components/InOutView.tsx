@@ -45,6 +45,7 @@ interface ApiResponse {
             vacant: number;
             reserved: number;
             swap: number;
+            'three-way': number;
             promotion: number;
             pending: number;
         };
@@ -88,6 +89,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
         vacant: 0,
         reserved: 0,
         swap: 0,
+        'three-way': 0,
         promotion: 0,
         pending: 0,
     });
@@ -499,6 +501,19 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                                     '& .MuiChip-icon': { color: theme.palette.primary.main },
                                 }}
                             />
+                            {summary['three-way'] > 0 && (
+                                <Chip
+                                    icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
+                                    label={`สามเส้า ${summary['three-way']}`}
+                                    size="small"
+                                    sx={{
+                                        bgcolor: alpha(theme.palette.secondary.main, 0.1),
+                                        color: theme.palette.secondary.dark,
+                                        fontWeight: 500,
+                                        '& .MuiChip-icon': { color: theme.palette.secondary.dark },
+                                    }}
+                                />
+                            )}
                             <Chip
                                 icon={<TrendingUpIcon sx={{ fontSize: 16 }} />}
                                 label={`เลื่อน ${summary.promotion}`}

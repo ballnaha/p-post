@@ -783,9 +783,19 @@ export default function PersonnelBoardV2Page() {
                             }
                         }
 
-                        // For promotion lanes: set toPosition from vacantPosition
+                        // For three-way lanes: set transaction metadata
                         const isSwapLane = targetLane?.chainType === 'swap' || (targetLane?.vacantPosition?.isTransaction && targetLane?.vacantPosition.transactionType === 'two-way');
                         const isThreeWayLane = targetLane?.chainType === 'three-way' || (targetLane?.vacantPosition?.isTransaction && targetLane?.vacantPosition.transactionType === 'three-way');
+
+                        if (isThreeWayLane) {
+                            newPerson = {
+                                ...newPerson,
+                                transactionType: 'three-way',
+                                transactionId: targetLane?.vacantPosition?.id || targetLane?.id
+                            };
+                        }
+
+                        // For promotion lanes: set toPosition from vacantPosition
                         if (!isSwapLane && !isThreeWayLane && targetLane?.vacantPosition) {
                             newPerson = {
                                 ...newPerson,
@@ -804,9 +814,20 @@ export default function PersonnelBoardV2Page() {
                             let newTitle = c.title;
                             const newItemIds = [...c.itemIds, boardId];
 
-                            // Update title if it's a swap lane and this is the first person
-                            if (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way' && c.itemIds.length === 0) {
-                                newTitle = `สลับ: ${newPerson.fullName} ↔ ?`;
+                            const isSwapLane = c.chainType === 'swap' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way');
+                            const isThreeWayLane = c.chainType === 'three-way' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'three-way');
+
+                            // Update title for swap lanes
+                            if (isSwapLane) {
+                                const names = newItemIds.map(itemId => {
+                                    if (itemId === boardId) return newPerson.fullName || '?';
+                                    return personnelMap[itemId]?.fullName || '?';
+                                });
+                                if (names.length === 1) {
+                                    newTitle = `สลับ: ${names[0]} ↔ ?`;
+                                } else if (names.length === 2) {
+                                    newTitle = `สลับ: ${names[0]} ↔ ${names[1]}`;
+                                }
                             }
 
                             // Update title for three-way lanes
@@ -822,7 +843,11 @@ export default function PersonnelBoardV2Page() {
                         }));
 
                         if (targetLane) {
-                            triggerChainReaction(newPerson, targetLane);
+                            const updatedLane = {
+                                ...targetLane,
+                                itemIds: [...targetLane.itemIds, boardId]
+                            };
+                            triggerChainReaction(newPerson, updatedLane as Column);
                         }
                     }
                     // Dropped on another card to insert at specific position
@@ -847,7 +872,13 @@ export default function PersonnelBoardV2Page() {
                                     toPosition: targetPerson?.toPosition || targetPerson?.position,
                                     toPositionNumber: targetPerson?.toPositionNumber || targetPerson?.positionNumber,
                                     toUnit: targetPerson?.toUnit || targetPerson?.unit,
+                                    toActingAs: targetPerson?.toActingAs,
+                                    // Preserve transaction metadata
+                                    swapDetailId: targetPerson?.swapDetailId,
+                                    transactionId: targetPerson?.transactionId,
+                                    transactionType: targetPerson?.transactionType || (destColumn.chainType === 'three-way' ? 'three-way' : (destColumn.chainType === 'swap' ? 'two-way' : undefined)),
                                 };
+
 
                                 // Remove placeholder from personnelMap
                                 setPersonnelMap(prev => {
@@ -862,7 +893,30 @@ export default function PersonnelBoardV2Page() {
                                         const newItemIds = c.itemIds.map(id =>
                                             id === destPersonnelId ? boardId : id
                                         );
-                                        return { ...c, itemIds: newItemIds };
+
+                                        let newTitle = c.title;
+                                        const isSwapLane = c.chainType === 'swap' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way');
+                                        const isThreeWayLane = c.chainType === 'three-way' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'three-way');
+
+                                        if (isSwapLane) {
+                                            const names = newItemIds.map(itemId => {
+                                                if (itemId === boardId) return newPerson.fullName || '?';
+                                                return personnelMap[itemId]?.fullName || '?';
+                                            });
+                                            if (names.length === 1) {
+                                                newTitle = `สลับ: ${names[0]} ↔ ?`;
+                                            } else if (names.length === 2) {
+                                                newTitle = `สลับ: ${names[0]} ↔ ${names[1]}`;
+                                            }
+                                        } else if (isThreeWayLane) {
+                                            const names = newItemIds.map(itemId => {
+                                                if (itemId === boardId) return newPerson.fullName || '?';
+                                                return personnelMap[itemId]?.fullName || '?';
+                                            });
+                                            newTitle = `สามเส้า: ${names.join(' → ')}`;
+                                        }
+
+                                        return { ...c, title: newTitle, itemIds: newItemIds };
                                     }
                                     return c;
                                 }));
@@ -883,7 +937,11 @@ export default function PersonnelBoardV2Page() {
                                     severity: 'success'
                                 });
 
-                                triggerChainReaction(newPerson, destColumn);
+                                const updatedColumn = {
+                                    ...destColumn,
+                                    itemIds: destColumn.itemIds.map(id => id === destPersonnelId ? boardId : id)
+                                };
+                                triggerChainReaction(newPerson, updatedColumn);
                                 return; // Exit early - replacement done
                             }
                             // Enforce limits for Swap (2) and Three-way (3)
@@ -946,7 +1004,8 @@ export default function PersonnelBoardV2Page() {
                                             if (c.id === destColumn.id) {
                                                 const newItemIds = [...c.itemIds];
                                                 newItemIds.splice(destIndex, 0, boardId);
-                                                return { ...c, itemIds: newItemIds };
+                                                const newTitle = `สลับ: ${existingPerson.fullName} ↔ ${newPerson.fullName}`;
+                                                return { ...c, title: newTitle, itemIds: newItemIds };
                                             }
                                             return c;
                                         }));
@@ -960,19 +1019,30 @@ export default function PersonnelBoardV2Page() {
                             let destIndex = destColumn.itemIds.indexOf(destPersonnelId);
                             if (edge === 'bottom') destIndex++;
 
+                            const newItemIds = [...destColumn.itemIds];
+                            newItemIds.splice(destIndex, 0, boardId);
+
                             setPersonnelMap(prev => ({ ...prev, [boardId]: newPerson }));
                             setColumns(prev => prev.map(c => {
                                 if (c.id === destColumn.id) {
-                                    const newItemIds = [...c.itemIds];
-                                    newItemIds.splice(destIndex, 0, boardId);
-
                                     let newTitle = c.title;
-                                    // Update title for three-way lanes
+                                    const isSwapLane = c.chainType === 'swap' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way');
                                     const isThreeWayLane = c.chainType === 'three-way' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'three-way');
-                                    if (isThreeWayLane) {
+
+                                    if (isSwapLane) {
                                         const names = newItemIds.map(itemId => {
                                             if (itemId === boardId) return newPerson.fullName || '?';
-                                            return personnelMap[itemId]?.fullName || '?';
+                                            return (personnelMap[itemId]?.fullName || '?');
+                                        });
+                                        if (names.length === 1) {
+                                            newTitle = `สลับ: ${names[0]} ↔ ?`;
+                                        } else if (names.length === 2) {
+                                            newTitle = `สลับ: ${names[0]} ↔ ${names[1]}`;
+                                        }
+                                    } else if (isThreeWayLane) {
+                                        const names = newItemIds.map(itemId => {
+                                            if (itemId === boardId) return newPerson.fullName || '?';
+                                            return (personnelMap[itemId]?.fullName || '?');
                                         });
                                         newTitle = `สามเส้า: ${names.join(' → ')}`;
                                     }
@@ -982,8 +1052,10 @@ export default function PersonnelBoardV2Page() {
                                 return c;
                             }));
 
-                            triggerChainReaction(newPerson, destColumn);
+                            const updatedColumn = { ...destColumn, itemIds: newItemIds };
+                            triggerChainReaction(newPerson, updatedColumn);
                         }
+
                     }
                 }
 
@@ -1240,59 +1312,101 @@ export default function PersonnelBoardV2Page() {
                 (vacantPos?.transactionType === 'transfer' || vacantPos?.transactionType === 'promotion-chain') ||
                 (vacantPos && !vacantPos.isTransaction);
 
+            const isSwap = activeColumn?.chainType === 'swap' || (vacantPos?.isTransaction && vacantPos.transactionType === 'two-way');
+            const isThreeWay = activeColumn?.chainType === 'three-way' || (vacantPos?.isTransaction && vacantPos.transactionType === 'three-way');
+
             const newMap = { ...prevMap };
 
-            if (!isChain) {
-                // Not a chain lane: if it's not a swap/three-way either, we might want to clear destinations
-                // However, swap/three-way have their own logic in onDrop/handleMove to set toPosition.
+            if (!isChain && !isSwap && !isThreeWay) {
                 return prevMap;
             }
 
-            if (!vacantPos) return prevMap;
+            if (isChain && vacantPos) {
+                itemIds.forEach((itemId, index) => {
+                    const person = newMap[itemId];
+                    if (!person) return;
 
-            itemIds.forEach((itemId, index) => {
-                const person = newMap[itemId];
-                if (!person) return;
-
-                if (index === 0) {
-                    // Level 1 -> Points to the Vacant Position / Destination Unit
-                    newMap[itemId] = {
-                        ...person,
-                        toPosCodeId: vacantPos.posCodeMaster?.id || vacantPos.posCodeId || null,
-                        toPosCodeMaster: vacantPos.posCodeMaster || null,
-                        toPosition: vacantPos.position || null,
-                        toPositionNumber: vacantPos.positionNumber || null,
-                        toUnit: vacantPos.unit || null,
-                        toActingAs: vacantPos.actingAs || null
-                    };
-                } else {
-                    // Level 2+ -> Points to the previous person's ORIGINAL position (succession)
-                    const prevId = itemIds[index - 1];
-                    const prevPerson = newMap[prevId];
-                    if (prevPerson) {
+                    if (index === 0) {
+                        // Level 1 -> Points to the Vacant Position / Destination Unit
                         newMap[itemId] = {
                             ...person,
-                            toPosCodeId: prevPerson.posCodeId || null,
-                            toPosCodeMaster: prevPerson.posCodeMaster || null,
-                            toPosition: prevPerson.position || null,
-                            toPositionNumber: prevPerson.positionNumber || null,
-                            toUnit: prevPerson.unit || null,
-                            toActingAs: prevPerson.actingAs || null
+                            toPosCodeId: vacantPos.posCodeMaster?.id || vacantPos.posCodeId || null,
+                            toPosCodeMaster: vacantPos.posCodeMaster || null,
+                            toPosition: vacantPos.position || null,
+                            toPositionNumber: vacantPos.positionNumber || null,
+                            toUnit: vacantPos.unit || null,
+                            toActingAs: vacantPos.actingAs || null
                         };
                     } else {
-                        // If previous person not found (placeholder missing data?), clear destination
+                        // Level 2+ -> Points to the previous person's ORIGINAL position (succession)
+                        const prevId = itemIds[index - 1];
+                        const prevPerson = newMap[prevId];
+                        if (prevPerson) {
+                            newMap[itemId] = {
+                                ...person,
+                                toPosCodeId: prevPerson.posCodeId || null,
+                                toPosCodeMaster: prevPerson.posCodeMaster || null,
+                                toPosition: prevPerson.position || null,
+                                toPositionNumber: prevPerson.positionNumber || null,
+                                toUnit: prevPerson.unit || null,
+                                toActingAs: prevPerson.actingAs || null
+                            };
+                        } else {
+                            newMap[itemId] = {
+                                ...person,
+                                toPosCodeId: null,
+                                toPosCodeMaster: null,
+                                toPosition: null,
+                                toPositionNumber: null,
+                                toUnit: null,
+                                toActingAs: null
+                            };
+                        }
+                    }
+                });
+            } else if (isSwap && itemIds.length === 2) {
+                // Circular swap A <-> B
+                itemIds.forEach((itemId, index) => {
+                    const person = newMap[itemId];
+                    if (!person) return;
+
+                    const otherItemId = itemIds[index === 0 ? 1 : 0];
+                    const otherPerson = newMap[otherItemId];
+                    if (otherPerson) {
                         newMap[itemId] = {
                             ...person,
-                            toPosCodeId: null,
-                            toPosCodeMaster: null,
-                            toPosition: null,
-                            toPositionNumber: null,
-                            toUnit: null,
-                            toActingAs: null
+                            toPosCodeId: otherPerson.posCodeId || null,
+                            toPosCodeMaster: otherPerson.posCodeMaster || null,
+                            toPosition: otherPerson.position || null,
+                            toPositionNumber: otherPerson.positionNumber || null,
+                            toUnit: otherPerson.unit || null,
+                            toActingAs: otherPerson.actingAs || null
                         };
                     }
-                }
-            });
+                });
+            } else if (isThreeWay && itemIds.length === 3) {
+                // Circular swap A -> B -> C -> A
+                itemIds.forEach((itemId, index) => {
+                    const person = newMap[itemId];
+                    if (!person) return;
+
+                    const nextIndex = (index + 1) % 3;
+                    const nextItemId = itemIds[nextIndex];
+                    const nextPerson = newMap[nextItemId];
+                    if (nextPerson) {
+                        newMap[itemId] = {
+                            ...person,
+                            toPosCodeId: nextPerson.posCodeId || null,
+                            toPosCodeMaster: nextPerson.posCodeMaster || null,
+                            toPosition: nextPerson.position || null,
+                            toPositionNumber: nextPerson.positionNumber || null,
+                            toUnit: nextPerson.unit || null,
+                            toActingAs: nextPerson.actingAs || null
+                        };
+                    }
+                });
+            }
+
             return newMap;
         });
     }, [columns]);
@@ -1531,24 +1645,18 @@ export default function PersonnelBoardV2Page() {
 
                 if (isSwapLane && col.itemIds.length === 2) {
                     // Swap: 2 people - format "สลับ: A ↔ B"
-                    setPersonnelMap(currentMap => {
-                        const p1 = col.itemIds[0] === id ? { ...currentMap[col.itemIds[0]], ...updates } : currentMap[col.itemIds[0]];
-                        const p2 = col.itemIds[1] === id ? { ...currentMap[col.itemIds[1]], ...updates } : currentMap[col.itemIds[1]];
-                        const newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ${p2?.fullName || '?'}`;
-                        setColumns(prevCols => prevCols.map(c => c.id === col.id ? { ...c, title: newTitle } : c));
-                        return currentMap;
-                    });
+                    const p1 = col.itemIds[0] === id ? { ...personnelMap[col.itemIds[0]], ...updates } : personnelMap[col.itemIds[0]];
+                    const p2 = col.itemIds[1] === id ? { ...personnelMap[col.itemIds[1]], ...updates } : personnelMap[col.itemIds[1]];
+                    const newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ${p2?.fullName || '?'}`;
+                    return { ...col, title: newTitle };
                 } else if (isThreeWayLane && col.itemIds.length >= 2) {
                     // Three-way: up to 3 people - format "สามเส้า: A → B → C"
-                    setPersonnelMap(currentMap => {
-                        const names = col.itemIds.map(itemId => {
-                            if (itemId === id) return updates.fullName;
-                            return currentMap[itemId]?.fullName || '?';
-                        });
-                        const newTitle = `สามเส้า: ${names.join(' → ')}`;
-                        setColumns(prevCols => prevCols.map(c => c.id === col.id ? { ...c, title: newTitle } : c));
-                        return currentMap;
+                    const names = col.itemIds.map(itemId => {
+                        if (itemId === id) return updates.fullName;
+                        return personnelMap[itemId]?.fullName || '?';
                     });
+                    const newTitle = `สามเส้า: ${names.join(' → ')}`;
+                    return { ...col, title: newTitle };
                 }
 
                 return col;
@@ -1708,7 +1816,13 @@ export default function PersonnelBoardV2Page() {
 
     const triggerChainReaction = useCallback((personnel: Personnel, targetColumn: Column) => {
         // Trigger if dropping into a vacant position OR a promotion chain
-        if (!targetColumn.vacantPosition) return;
+        if (!targetColumn.vacantPosition) {
+            // Even without vacantPosition, we might need to recalculate if it's a swap/three-way
+            if (targetColumn.chainType === 'swap' || targetColumn.chainType === 'three-way') {
+                recalculateColumnToPositions(targetColumn.id, targetColumn.itemIds, targetColumn.vacantPosition, targetColumn);
+            }
+            return;
+        }
 
         // If it's a promotion-type lane, mark it if not already
         const isPromotionType = targetColumn.chainType === 'promotion' ||
@@ -1721,7 +1835,10 @@ export default function PersonnelBoardV2Page() {
                     : c
             ));
         }
-    }, []);
+
+        // Recalculate toPosition for the whole column
+        recalculateColumnToPositions(targetColumn.id, targetColumn.itemIds, targetColumn.vacantPosition, targetColumn);
+    }, [recalculateColumnToPositions]);
 
     // Add new lane
     const handleMovePersonToLane = useCallback((personId: string, targetLaneId: string) => {
@@ -1827,14 +1944,19 @@ export default function PersonnelBoardV2Page() {
                 let newTitle = c.title;
                 const newItemIds = [...c.itemIds, boardId];
 
-                // Update title for two-way (swap) lanes
-                if (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way' && c.itemIds.length === 0) {
-                    newTitle = `สลับ: ${newPerson.fullName} ↔ ?`;
-                }
-
-                // Update title for three-way lanes
+                const isSwapLane = c.chainType === 'swap' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way');
                 const isThreeWayLane = c.chainType === 'three-way' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'three-way');
-                if (isThreeWayLane) {
+
+                // Update title for two-way (swap) lanes
+                if (isSwapLane) {
+                    if (newItemIds.length === 1) {
+                        newTitle = `สลับ: ${newPerson.fullName || '?'} ↔ ?`;
+                    } else if (newItemIds.length === 2) {
+                        const p1 = personnelMap[newItemIds[0]] || newPerson;
+                        const p2 = newItemIds[1] === boardId ? newPerson : personnelMap[newItemIds[1]];
+                        newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ${p2?.fullName || '?'}`;
+                    }
+                } else if (isThreeWayLane) {
                     // Get all person names including the new one
                     const names = newItemIds.map(itemId => {
                         if (itemId === boardId) return newPerson.fullName || '?';
@@ -1842,6 +1964,7 @@ export default function PersonnelBoardV2Page() {
                     });
                     newTitle = `สามเส้า: ${names.join(' → ')}`;
                 }
+
 
                 return { ...c, title: newTitle, itemIds: newItemIds };
             }
@@ -2401,7 +2524,12 @@ export default function PersonnelBoardV2Page() {
                         originalId: originalPerson.id,
                         swapDetailId: detail.id,
                         transactionId: transactionId,
-                        transactionType: 'three-way'
+                        transactionType: 'three-way',
+                        toPosition: detail.toPosition,
+                        toPositionNumber: detail.toPositionNumber,
+                        toUnit: detail.toUnit,
+                        toPosCodeId: detail.toPosCodeId,
+                        toPosCodeMaster: detail.toPosCodeMaster,
                     };
                     newPersonnel[detail.id] = boardPerson;
                     itemIds.push(detail.id);

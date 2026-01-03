@@ -468,11 +468,16 @@ export async function POST(request: NextRequest) {
                             isCompleted: column.isCompleted || false,
                         });
                     } else {
+                        // Map chainType to database swapType
+                        let dbSwapType = 'promotion-chain';
+                        if (column.chainType === 'swap') dbSwapType = 'two-way';
+                        else if (column.chainType === 'three-way') dbSwapType = 'three-way';
+
                         const newTransaction = await tx.swapTransaction.create({
                             data: {
                                 year,
                                 swapDate: new Date(),
-                                swapType: 'promotion-chain',
+                                swapType: dbSwapType,
                                 groupName: column.title,
                                 groupNumber: column.groupNumber || null,
                                 status: 'active',

@@ -26,6 +26,7 @@ export interface InOutRecord {
         posCode: string | null;
         posCodeId: number | null;
         age: string | null;
+        img?: string | null;
     } | null;
     vacantPosition: {
         position: string | null;
@@ -148,43 +149,65 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // Pre-filter transaction-based statuses at DB level to avoid fetching 40,000+ records
-        if (status === 'swap' || status === 'three-way' || status === 'promotion') {
-            const mappedType = status === 'swap' ? 'two-way' : (status === 'three-way' ? 'three-way' : 'promotion-chain');
-            const relevantDetails = await prisma.swapTransactionDetail.findMany({
+        // Search logic - Moved to DB level
+        if (search) {
+            // 1. Find relevant swap details (for Incoming Person search or Group Number search)
+            // Find transactions with matching groupNumber OR details with matching fullName/rank
+            const matchedDetails = await prisma.swapTransactionDetail.findMany({
                 where: {
                     transaction: {
                         year,
-                        swapType: mappedType,
                         status: { in: ['completed', 'active'] }
-                    }
+                    },
+                    OR: [
+                        { fullName: { contains: search } }, // Incoming Person Name match
+                        { rank: { contains: search } }, // Check rank too
+                        { transaction: { groupNumber: { contains: search } } }, // Group Number match
+                        { transaction: { groupName: { contains: search } } },
+                        { toPosition: { contains: search } } // Outgoing position (from card perspective)
+                    ]
                 },
-                select: { nationalId: true, fromPositionNumber: true }
+                select: {
+                    fromPositionNumber: true,
+                    toPositionNumber: true,
+                }
             });
 
-            const ids = relevantDetails.map(d => d.nationalId).filter(Boolean) as string[];
-            const posNums = relevantDetails.map(d => d.fromPositionNumber).filter(Boolean) as string[];
+            const searchPosNums = new Set<string>();
+            for (const d of matchedDetails) {
+                if (d.fromPositionNumber) searchPosNums.add(normalizePositionNumber(d.fromPositionNumber));
+                if (d.toPositionNumber) searchPosNums.add(normalizePositionNumber(d.toPositionNumber));
+            }
 
-            const statusQuery = {
+            const searchPosNumArray = Array.from(searchPosNums);
+
+            // 2. Build the main where clause
+            const searchCondition: any = {
                 OR: [
-                    { nationalId: { in: ids } },
-                    { positionNumber: { in: posNums } }
+                    // Direct fields on PolicePersonnel
+                    { fullName: { contains: search } },
+                    { position: { contains: search } }, // Current position name
+                    { unit: { contains: search } },
+                    { positionNumber: { contains: search } },
+                    { rank: { contains: search } },
                 ]
             };
 
+            // Add matches from swap/incoming logic
+            if (searchPosNumArray.length > 0) {
+                searchCondition.OR.push({ positionNumber: { in: searchPosNumArray } });
+            }
+
             if (where.AND) {
-                where.AND.push(statusQuery);
+                where.AND.push(searchCondition);
             } else {
-                where.AND = [statusQuery];
+                where.AND = [searchCondition];
             }
         }
 
-        // NOTE: Search filter is NOT applied at DB level because we need to search groupNumber
-        // which comes from SwapTransaction, not PolicePersonnel. 
-        // All search filtering is done in post-filter stage below.
-
-        // Check if we need to do post-query filtering (for swap/promotion/three-way status or search with groupNumber)
-        const needsPostFilter = status === 'swap' || status === 'three-way' || status === 'promotion' || status === 'filled' || status === 'pending' || !!search;
+        // Check if we need to do post-query filtering (for swap/promotion/three-way status)
+        // Note: Search relies on DB filtering now, so we don't need post-filter for search
+        const needsPostFilter = status === 'swap' || status === 'three-way' || status === 'promotion' || status === 'filled' || status === 'pending';
         const skip = page * pageSize;
 
         // Main query - use DB pagination when possible
@@ -452,6 +475,7 @@ export async function GET(request: NextRequest) {
                     posCode: person.posCodeMaster?.name || null,
                     posCodeId: person.posCodeId,
                     age: person.age,
+                    img: person.avatarUrl,
                 },
                 vacantPosition: (isVacant || isReserved) ? {
                     position: person.position,
@@ -478,37 +502,19 @@ export async function GET(request: NextRequest) {
         };
 
         if (needsPostFilter) {
-            // Transform all and filter by status and/or search
+            // Transform all and filter by status
             const allRecords = personnel.map(transformPerson);
-            let filteredRecords = allRecords;
 
-            // Filter by status if not 'all'
-            if (status !== 'all') {
-                filteredRecords = filteredRecords.filter((r: InOutRecord) => r.status === status);
-            }
+            // Since needsPostFilter is true, status matches one of the values requiring post-processing
+            let filteredRecords = allRecords.filter((r: InOutRecord) => r.status === status);
+            // specific to the results. However, because we paginate AFTER filter in needsPostFilter mode,
+            // we must be careful.
+            // If needsPostFilter is true (e.g. status='swap'), we fetched ALL swaps (maybe filtered by search in DB).
+            // So we just return them paginated.
 
-            // Filter by search term including groupNumber
-            if (search) {
-                const searchLower = search.toLowerCase();
-                filteredRecords = filteredRecords.filter((r: InOutRecord) => {
-                    // Check if groupNumber matches (additional search field not in DB)
-                    if (r.group && r.group.toLowerCase().includes(searchLower)) {
-                        return true;
-                    }
-                    // Check other fields (already filtered at DB level, but keep for consistency)
-                    if (r.currentHolder?.name?.toLowerCase().includes(searchLower)) return true;
-                    if (r.currentHolder?.position?.toLowerCase().includes(searchLower)) return true;
-                    if (r.currentHolder?.unit?.toLowerCase().includes(searchLower)) return true;
-                    if (r.vacantPosition?.position?.toLowerCase().includes(searchLower)) return true;
-                    if (r.vacantPosition?.unit?.toLowerCase().includes(searchLower)) return true;
-                    if (r.positionNumber?.toLowerCase().includes(searchLower)) return true;
-                    // Check incoming person
-                    if (r.incomingPerson?.name?.toLowerCase().includes(searchLower)) return true;
-                    // Check outgoing position
-                    if (r.outgoingPerson?.toPosition?.toLowerCase().includes(searchLower)) return true;
-                    return false;
-                });
-            }
+            // Note: If we had a search, the DB query already filtered the personnel.
+            // So 'filteredRecords' only contains people matching the search.
+            // We just need to slice.
 
             finalTotal = filteredRecords.length;
             finalRecords = filteredRecords.slice(skip, skip + pageSize);
@@ -541,7 +547,7 @@ export async function GET(request: NextRequest) {
         }
 
         const endTime = Date.now();
-        console.log(`[in-out-v2] Query took ${endTime - startTime}ms for ${finalRecords.length} records (status: ${status})`);
+        console.log(`[in-out-v2] Query took ${endTime - startTime}ms for ${finalRecords.length} records (status: ${status}, search: ${search})`);
 
         return NextResponse.json({
             success: true,

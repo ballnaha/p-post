@@ -2100,8 +2100,8 @@ export default function PersonnelBoardV2Page() {
                 posCodeMaster: data.posCodeMaster,
                 actingAs: data.actingAs
             };
-        } else if (addLaneTab === 3) {
-            // Manual mode
+        } else if (addLaneTab === 4) {
+            // Manual mode (สร้างเอง - Tab index 4)
             if (!newLaneTitle.trim()) return;
             laneTitle = newLaneTitle.trim();
         } else {

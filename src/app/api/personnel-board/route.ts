@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
                 year,
                 swapType: BOARD_LAYOUT_TYPE,
             },
+            select: { notes: true },
         });
 
         if (!layoutRecord || !layoutRecord.notes) {
@@ -72,41 +73,106 @@ export async function GET(request: NextRequest) {
         const transactionIds = boardLayout.lanes?.map((l: any) => l.transactionId).filter(Boolean) || [];
         const sortedLanes = [...(boardLayout.lanes || [])].sort((a: any, b: any) => (a.index ?? 999) - (b.index ?? 999));
 
-        const transactions = await prisma.swapTransaction.findMany({
+        // ✅ Optimized: ใช้ select แทน include เพื่อดึงเฉพาะ field ที่ใช้
+        const transactions: any[] = await prisma.swapTransaction.findMany({
             where: {
                 id: { in: transactionIds },
             },
-            include: {
+            select: {
+                id: true,
+                groupName: true,
+                groupNumber: true,
+                swapType: true,
                 swapDetails: {
-                    include: {
-                        posCodeMaster: true,
-                        toPosCodeMaster: true
+                    select: {
+                        id: true,
+                        personnelId: true,
+                        noId: true,
+                        nationalId: true,
+                        fullName: true,
+                        rank: true,
+                        seniority: true,
+                        age: true,
+                        birthDate: true,
+                        education: true,
+                        lastAppointment: true,
+                        currentRankSince: true,
+                        enrollmentDate: true,
+                        retirementDate: true,
+                        yearsOfService: true,
+                        trainingLocation: true,
+                        trainingCourse: true,
+                        supportName: true,
+                        supportReason: true,
+                        requestedPosition: true,
+                        notes: true,
+                        fromPosition: true,
+                        fromPositionNumber: true,
+                        fromUnit: true,
+                        fromActingAs: true,
+                        toPosition: true,
+                        toPositionNumber: true,
+                        toUnit: true,
+                        toActingAs: true,
+                        posCodeId: true,
+                        posCodeMaster: { select: { id: true, name: true } },
+                        toPosCodeId: true,
+                        toPosCodeMaster: { select: { id: true, name: true } },
                     },
                     orderBy: { sequence: 'asc' },
                 },
             },
         });
 
-        const txMap = new Map(transactions.map(tx => [tx.id, tx]));
-        const personnelIds: string[] = [];
+        const txMap = new Map(transactions.map((tx: any) => [tx.id, tx]));
+
+        // Collect unique personnel IDs for batch lookup
+        const personnelIdSet = new Set<string>();
         transactions.forEach(tx => {
-            tx.swapDetails.forEach(detail => {
+            tx.swapDetails.forEach((detail: any) => {
                 if (detail.personnelId) {
-                    personnelIds.push(detail.personnelId);
+                    personnelIdSet.add(detail.personnelId);
                 }
             });
         });
+        const personnelIds = Array.from(personnelIdSet);
 
-        const personnelDetails = await prisma.policePersonnel.findMany({
-            where: {
-                id: { in: personnelIds }
-            },
-            include: {
-                posCodeMaster: true,
-            }
-        });
+        // ✅ Optimized: ใช้ select เฉพาะ field ที่ใช้ + ไม่ query ถ้าไม่มี personnelIds
+        const personnelDetails: any[] = personnelIds.length > 0
+            ? await prisma.policePersonnel.findMany({
+                where: { id: { in: personnelIds } },
+                select: {
+                    id: true,
+                    noId: true,
+                    nationalId: true,
+                    fullName: true,
+                    rank: true,
+                    position: true,
+                    positionNumber: true,
+                    unit: true,
+                    seniority: true,
+                    age: true,
+                    birthDate: true,
+                    education: true,
+                    lastAppointment: true,
+                    currentRankSince: true,
+                    enrollmentDate: true,
+                    retirementDate: true,
+                    yearsOfService: true,
+                    trainingLocation: true,
+                    trainingCourse: true,
+                    supporterName: true,
+                    supportReason: true,
+                    requestedPosition: true,
+                    notes: true,
+                    actingAs: true,
+                    posCodeId: true,
+                    posCodeMaster: { select: { id: true, name: true } },
+                },
+            })
+            : [];
 
-        const personnelDetailMap = new Map(personnelDetails.map(p => [p.id, p]));
+        const personnelDetailMap = new Map(personnelDetails.map((p: any) => [p.id, p]));
         const columns: any[] = [];
         const personnelMap: Record<string, any> = {};
 
@@ -250,7 +316,7 @@ export async function POST(request: NextRequest) {
         const username = (session.user as any)?.username || 'system';
 
         const result = await prisma.$transaction(
-            async (tx) => {
+            async (tx: any) => {
                 const lanes: any[] = [];
                 const updatedTransactionIds: string[] = [];
                 const createdTransactionIds: string[] = [];
@@ -446,7 +512,7 @@ export async function POST(request: NextRequest) {
                         }
 
                         if (existingDetails.length > column.itemIds.length) {
-                            const idsToDelete = existingDetails.slice(column.itemIds.length).map(d => d.id);
+                            const idsToDelete = existingDetails.slice(column.itemIds.length).map((d: any) => d.id);
                             await tx.swapTransactionDetail.deleteMany({
                                 where: { id: { in: idsToDelete } }
                             });

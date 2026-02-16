@@ -39,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigation } from './NavigationContext';
 import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
 const drawerWidth = 250;
 
 const Sidebar: React.FC = () => {
@@ -238,18 +239,25 @@ const Sidebar: React.FC = () => {
                   <Box key={item.key}>
                     <ListItemButton
                       selected={!!item.href && isActive(item.href)}
-                      onClick={() => {
+                      {...(!hasChildren && item.href ? {
+                        component: Link,
+                        href: item.href,
+                      } : {})}
+                      onClick={(e: React.MouseEvent) => {
                         if (hasChildren) {
                           toggleExpand(item.key);
                         } else if (item.href) {
-                          router.push(item.href);
-                          if (isMobile) closeAllMenus();
+                          // ถ้า Ctrl+Click หรือ Middle Click ให้เปิดแท็บใหม่ (Link จัดการให้อัตโนมัติ)
+                          // ถ้า click ปกติ ให้ปิด sidebar บน mobile
+                          if (isMobile && !e.ctrlKey && !e.metaKey) closeAllMenus();
                         }
                       }}
                       sx={{
                         borderRadius: 2,
                         mx: 1,
                         mb: hasChildren ? 0 : 0.5,
+                        textDecoration: 'none',
+                        color: 'inherit',
                         '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
                         '&.Mui-selected': {
                           backgroundColor: 'rgba(99, 102, 241, 0.15)',
@@ -281,16 +289,21 @@ const Sidebar: React.FC = () => {
                               <ListItemButton
                                 key={child.key}
                                 selected={childActive}
-                                onClick={() => {
+                                {...(child.href ? {
+                                  component: Link,
+                                  href: child.href,
+                                } : {})}
+                                onClick={(e: React.MouseEvent) => {
                                   if (child.href) {
-                                    router.push(child.href);
-                                    if (isMobile) closeAllMenus();
+                                    if (isMobile && !e.ctrlKey && !e.metaKey) closeAllMenus();
                                   }
                                 }}
                                 sx={{
                                   borderRadius: 2,
                                   mx: 2,
                                   mb: 0.5,
+                                  textDecoration: 'none',
+                                  color: 'inherit',
                                   '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
                                   '&.Mui-selected': {
                                     backgroundColor: 'rgba(99, 102, 241, 0.15)',
@@ -419,13 +432,13 @@ const Sidebar: React.FC = () => {
                 <Tooltip key={`mini-${item.key}`} title={item.label} placement="right">
                   <ListItemButton
                     selected={activeCollapsed}
-                    onClick={() => {
-                      if (item.href) {
-                        router.push(item.href);
-                      } else if (item.children && item.children[0]?.href) {
-                        router.push(item.children[0].href);
-                      }
-                    }}
+                    {...(item.href ? {
+                      component: Link,
+                      href: item.href,
+                    } : item.children?.[0]?.href ? {
+                      component: Link,
+                      href: item.children[0].href,
+                    } : {})}
                     sx={{
                       position: 'relative',
                       my: 0.5,

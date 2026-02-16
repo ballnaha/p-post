@@ -116,6 +116,9 @@ model PolicePersonnel {
   @@index([supporterName]) // Index for supporter search
   @@index([rank, posCodeId, fullName]) // Composite index for drawer query optimization
   @@index([unit, posCodeId, fullName]) // Composite index for unit filter with posCode
+  @@index([year, rank]) // Composite index for candidates query (rank IS NOT NULL + year)
+  @@index([year, isActive, rank]) // Composite index for vacant position query
+  @@index([year, posCodeId]) // Composite index for year + posCode filter
   @@map("police_personnel")
 }
 
@@ -198,6 +201,7 @@ model SwapTransaction {
   @@index([status])
   @@index([year, status]) // Composite index for common query
   @@index([swapType])
+  @@index([year, swapType]) // Composite index for board queries (year + type filter)
   @@map("swap_transaction")
 }
 

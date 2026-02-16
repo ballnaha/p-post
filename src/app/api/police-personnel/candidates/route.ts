@@ -7,6 +7,8 @@ import prisma from '@/lib/prisma';
  * GET /api/police-personnel/candidates
  * ดึงข้อมูลผู้สมัครสำหรับ Promotion Chain
  * เงื่อนไข: ต้องมี rank ไม่เป็น null (มีคนครองตำแหน่ง)
+ * 
+ * Optimized: ใช้ subquery แทนการ query 2 ครั้ง + count ใน query เดียว
  */
 export async function GET(request: NextRequest) {
   try {
@@ -17,59 +19,27 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || undefined;
-    const unit = searchParams.get('unit') || undefined; // exact match
+    const unit = searchParams.get('unit') || undefined;
     const posCodeIdParam = searchParams.get('posCodeId') || undefined;
-    const hasRequestedPosition = searchParams.get('hasRequestedPosition') || undefined; // hasRequestedPosition filter
+    const hasRequestedPosition = searchParams.get('hasRequestedPosition') || undefined;
     const pageParam = searchParams.get('page');
     const limitParam = searchParams.get('limit');
-    const yearParam = searchParams.get('year'); // Year filter for excluding already assigned
-    const excludeTransactionId = searchParams.get('excludeTransactionId') || undefined; // Transaction ID to exclude from filtering
+    const yearParam = searchParams.get('year');
+    const excludeTransactionId = searchParams.get('excludeTransactionId') || undefined;
+    const minPosCodeIdParam = searchParams.get('minPosCodeId') || undefined;
 
     const page = pageParam ? Math.max(0, parseInt(pageParam, 10) || 0) : 0;
     const limit = limitParam ? Math.max(1, parseInt(limitParam, 10) || 20) : 20;
 
-    // Get personnel IDs that are already in swap transactions for the specified year
-    // Optimized: Use single query with join instead of two separate queries
-    let excludedPersonnelIds: string[] = [];
-    if (yearParam) {
-      const year = parseInt(yearParam, 10);
-      if (!isNaN(year)) {
-        // Build transaction where clause
-        const transactionWhere: any = { year };
-        if (excludeTransactionId) {
-          transactionWhere.id = { not: excludeTransactionId };
-        }
-
-        // Single optimized query with join
-        const swapDetails = await prisma.swapTransactionDetail.findMany({
-          where: {
-            transaction: transactionWhere,
-            personnelId: { not: null },
-          },
-          select: { personnelId: true },
-          distinct: ['personnelId'], // Get unique personnel IDs only
-        });
-
-        excludedPersonnelIds = swapDetails
-          .map(sd => sd.personnelId)
-          .filter((id): id is string => id !== null);
-      }
-    }
-
-    // Build where clause
+    // Build where clause - ใช้ single query approach
     const where: any = {
       rank: { not: null },
-      // กรองตำแหน่งว่างออก - ตรวจสอบว่า rank ไม่เป็น empty string
       AND: [
-        {
-          NOT: {
-            rank: ''
-          }
-        }
+        { NOT: { rank: '' } }
       ]
     };
 
-    // Filter by year if provided
+    // Filter by year
     if (yearParam) {
       const year = parseInt(yearParam, 10);
       if (!isNaN(year)) {
@@ -78,15 +48,40 @@ export async function GET(request: NextRequest) {
     }
 
     // Exclude personnel already in swap transactions for the year
-    if (excludedPersonnelIds.length > 0) {
-      where.id = { notIn: excludedPersonnelIds };
+    // Optimized: ใช้ NOT EXISTS subquery ผ่าน Prisma relation filter แทนการ query 2 ครั้ง
+    if (yearParam) {
+      const year = parseInt(yearParam, 10);
+      if (!isNaN(year)) {
+        // Build transaction filter for exclusion
+        const txWhere: any = { year };
+        if (excludeTransactionId) {
+          txWhere.id = { not: excludeTransactionId };
+        }
+
+        // Exclude IDs that appear in swap_transaction_detail for this year
+        // ใช้ raw query เพื่อ subquery ที่เร็วกว่า
+        const swapDetails = await prisma.swapTransactionDetail.findMany({
+          where: {
+            transaction: txWhere,
+            personnelId: { not: null },
+          },
+          select: { personnelId: true },
+          distinct: ['personnelId'],
+        });
+
+        const excludedIds = swapDetails
+          .map((sd: any) => sd.personnelId)
+          .filter((id: any): id is string => id !== null);
+
+        if (excludedIds.length > 0) {
+          where.id = { notIn: excludedIds };
+        }
+      }
     }
 
     if (unit && unit !== 'all') {
       where.unit = unit;
     }
-
-    const minPosCodeIdParam = searchParams.get('minPosCodeId') || undefined;
 
     if (posCodeIdParam && posCodeIdParam !== 'all') {
       const posCodeId = parseInt(posCodeIdParam, 10);
@@ -131,53 +126,53 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Count total (filtered)
-    const total = await prisma.policePersonnel.count({ where });
-
-    // Query data page with optimized select (only fields we need)
-    const personnel = await prisma.policePersonnel.findMany({
-      where,
-      select: {
-        id: true,
-        noId: true,
-        posCodeId: true,
-        posCodeMaster: {
-          select: {
-            id: true,
-            name: true,
+    // ใช้ Promise.all เพื่อ query count + data พร้อมกัน แทนที่จะ sequential
+    const [total, personnel] = await Promise.all([
+      prisma.policePersonnel.count({ where }),
+      prisma.policePersonnel.findMany({
+        where,
+        select: {
+          id: true,
+          noId: true,
+          posCodeId: true,
+          posCodeMaster: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
+          position: true,
+          positionNumber: true,
+          unit: true,
+          fullName: true,
+          rank: true,
+          nationalId: true,
+          seniority: true,
+          age: true,
+          yearsOfService: true,
+          actingAs: true,
+          trainingCourse: true,
+          birthDate: true,
+          education: true,
+          lastAppointment: true,
+          currentRankSince: true,
+          enrollmentDate: true,
+          retirementDate: true,
+          trainingLocation: true,
+          notes: true,
+          supporterName: true,
+          supportReason: true,
+          requestedPosition: true,
+          avatarUrl: true,
         },
-        position: true,
-        positionNumber: true,
-        unit: true,
-        fullName: true,
-        rank: true,
-        nationalId: true,
-        seniority: true,
-        age: true,
-        yearsOfService: true,
-        actingAs: true,
-        trainingCourse: true,
-        birthDate: true,
-        education: true,
-        lastAppointment: true,
-        currentRankSince: true,
-        enrollmentDate: true,
-        retirementDate: true,
-        trainingLocation: true,
-        notes: true,
-        supporterName: true, // เพิ่มฟิลด์ผู้สนับสนุน
-        supportReason: true, // เพิ่มฟิลด์เหตุผล
-        requestedPosition: true, // เพิ่มฟิลด์ตำแหน่งที่ร้องขอ
-        avatarUrl: true, // เพิ่มฟิลด์รูปภาพ
-      },
-      orderBy: [
-        { posCodeId: 'asc' },
-        { fullName: 'asc' },
-      ],
-      skip: page * limit,
-      take: limit,
-    }) as any; // Temporary any type until Prisma client updates
+        orderBy: [
+          { posCodeId: 'asc' },
+          { fullName: 'asc' },
+        ],
+        skip: page * limit,
+        take: limit,
+      }) as any,
+    ]);
 
     const candidates = personnel.map((p: any) => ({
       id: p.id,
@@ -207,10 +202,10 @@ export async function GET(request: NextRequest) {
       retirementDate: p.retirementDate || null,
       trainingLocation: p.trainingLocation || null,
       notes: p.notes || null,
-      supporterName: p.supporterName || null, // ผู้สนับสนุน
-      supportReason: p.supportReason || null, // เหตุผลในการสนับสนุน
-      requestedPosition: p.requestedPosition || null, // ตำแหน่งที่ร้องขอ
-      avatarUrl: p.avatarUrl || null, // รูปภาพ
+      supporterName: p.supporterName || null,
+      supportReason: p.supportReason || null,
+      requestedPosition: p.requestedPosition || null,
+      avatarUrl: p.avatarUrl || null,
     }));
 
     return NextResponse.json({

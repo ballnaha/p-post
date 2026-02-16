@@ -5,6 +5,12 @@ import prisma from '@/lib/prisma';
  * GET - ดึงรายการตำแหน่งว่างที่พร้อมใช้งาน
  * สำหรับใช้ในหน้า promotion-chain และหน้าอื่นๆ ที่ต้องการตำแหน่งว่างที่ยังไม่ถูกจับคู่
  * 
+ * ✅ Optimized v2:
+ * - ใช้ select แทน include เพื่อลดขนาดข้อมูล
+ * - ใช้ Promise.all สำหรับ count + data + assignedPositions
+ * - กรอง unassigned ใน JS แทน subquery เพราะ Prisma ไม่รองรับ NOT EXISTS subquery
+ * - ลดจำนวนฟิลด์ที่ดึงจาก posCodeMaster
+ * 
  * Query Parameters:
  * - year: ปีงบประมาณ (required)
  * - unassignedOnly: true/false - กรองเฉพาะตำแหน่งที่ยังไม่ถูกจับคู่ (default: true)
@@ -14,22 +20,18 @@ import prisma from '@/lib/prisma';
  * - posCodeId: กรองตาม posCodeId (optional)
  * - unit: กรองตามหน่วยงาน (optional)
  * - status: กรองตามสถานะ 'vacant' หรือ 'reserved' (optional)
- * - minRankLevel: เลขระดับยศขั้นต่ำ (optional)
- * - maxRankLevel: เลขระดับยศสูงสุด (optional)
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const year = searchParams.get('year');
-    const unassignedOnly = searchParams.get('unassignedOnly') !== 'false'; // default true
+    const unassignedOnly = searchParams.get('unassignedOnly') !== 'false';
     const pageParam = searchParams.get('page');
     const limitParam = searchParams.get('limit');
     const search = searchParams.get('search');
     const posCodeId = searchParams.get('posCodeId');
     const unit = searchParams.get('unit');
-    const status = searchParams.get('status'); // 'vacant', 'reserved', or 'all'
-    const minRankLevel = searchParams.get('minRankLevel');
-    const maxRankLevel = searchParams.get('maxRankLevel');
+    const status = searchParams.get('status');
 
     if (!year) {
       return NextResponse.json(
@@ -38,16 +40,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Parse pagination parameters
+    const yearInt = parseInt(year);
+
+    // Parse pagination
     const page = pageParam ? parseInt(pageParam, 10) : undefined;
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
     const usePagination = page !== undefined && limit !== undefined;
 
-    // Build status filter based on status parameter
+    // Build status filter
     let fullNameFilter: any[];
     if (status === 'vacant') {
-      // Only regular vacant positions (not reserved)
-      // Must match /api/police-personnel logic: fullName is null/empty OR doesn't contain 'กันตำแหน่ง'
       fullNameFilter = [
         { fullName: null },
         { fullName: '' },
@@ -61,13 +63,11 @@ export async function GET(request: NextRequest) {
         }
       ];
     } else if (status === 'reserved') {
-      // Only reserved positions
       fullNameFilter = [
         { fullName: { contains: 'ว่าง (กันตำแหน่ง)' } },
         { fullName: { contains: 'ว่าง(กันตำแหน่ง)' } }
       ];
     } else {
-      // All vacant positions (default)
       fullNameFilter = [
         { fullName: null },
         { fullName: '' },
@@ -77,18 +77,11 @@ export async function GET(request: NextRequest) {
     }
 
     const whereClause: any = {
-      year: parseInt(year),
-      isActive: true, // Only current active data
+      year: yearInt,
+      isActive: true,
       AND: [
-        {
-          OR: [
-            { rank: null },
-            { rank: '' }
-          ]
-        },
-        {
-          OR: fullNameFilter
-        }
+        { OR: [{ rank: null }, { rank: '' }] },
+        { OR: fullNameFilter }
       ]
     };
 
@@ -112,62 +105,74 @@ export async function GET(request: NextRequest) {
     // Filter by posCodeId
     if (posCodeId) {
       const pId = parseInt(posCodeId);
-      if (whereClause.AND) {
-        whereClause.AND.push({ posCodeId: pId });
-      } else {
-        whereClause.AND = [{ posCodeId: pId }];
-      }
+      whereClause.AND.push({ posCodeId: pId });
     }
 
-    // counts
-    const totalCount = await prisma.policePersonnel.count({
-      where: whereClause,
-    });
-
-    const queryOptions: any = {
-      where: whereClause,
-      include: {
-        posCodeMaster: true,
-      },
-      orderBy: [
-        { posCodeId: 'asc' },
-        { position: 'asc' },
-        { noId: 'asc' }
-      ],
-    };
-
-    // pagination
-    if (usePagination) {
-      queryOptions.skip = page * limit;
-      queryOptions.take = limit;
-    }
-
-    const vacantPositions = await prisma.policePersonnel.findMany(queryOptions);
-
-    // ถ้าต้องการเฉพาะตำแหน่งที่ยังไม่ถูกจับคู่ ให้กรองออกตำแหน่งที่มีใน swap_transaction_detail
-    let filteredPositions = vacantPositions;
-    if (unassignedOnly) {
-      // ดึงรายการตำแหน่งที่ถูกจับคู่แล้ว (จาก swap_transaction_detail)
-      const assignedPositions = await prisma.swapTransactionDetail.findMany({
-        where: {
-          transaction: {
-            year: parseInt(year)
-          },
-          toPosition: { not: null }
-        },
+    // ✅ Optimized: Run count + data + assigned in parallel
+    const queries: Promise<any>[] = [
+      // Query 1: Count
+      prisma.policePersonnel.count({ where: whereClause }),
+      // Query 2: Data with select (ลดขนาดข้อมูล)
+      prisma.policePersonnel.findMany({
+        where: whereClause,
         select: {
-          toPosition: true,
-          toUnit: true,
-          toPositionNumber: true
-        }
-      });
+          id: true,
+          noId: true,
+          position: true,
+          positionNumber: true,
+          unit: true,
+          rank: true,
+          fullName: true,
+          nationalId: true,
+          actingAs: true,
+          supporterName: true,
+          notes: true,
+          posCodeId: true,
+          posCodeMaster: {
+            select: {
+              id: true,
+              name: true,
+            }
+          },
+        },
+        orderBy: [
+          { posCodeId: 'asc' },
+          { position: 'asc' },
+          { noId: 'asc' }
+        ],
+        ...(usePagination ? { skip: page * limit, take: limit } : {}),
+      }),
+    ];
 
-      // สร้าง Set สำหรับเช็คว่าตำแหน่งถูกจับคู่แล้วหรือไม่
+    // Query 3: Assigned positions (only if needed)
+    if (unassignedOnly) {
+      queries.push(
+        prisma.swapTransactionDetail.findMany({
+          where: {
+            transaction: { year: yearInt },
+            toPosition: { not: null }
+          },
+          select: {
+            toPosition: true,
+            toUnit: true,
+            toPositionNumber: true
+          }
+        })
+      );
+    }
+
+    const results = await Promise.all(queries);
+    const totalCount = results[0] as number;
+    const vacantPositions = results[1] as any[];
+
+    // Filter unassigned
+    let filteredPositions = vacantPositions;
+    if (unassignedOnly && results[2]) {
+      const assignedPositions = results[2] as any[];
       const assignedSet = new Set(
         assignedPositions.map(p => `${p.toPosition}-${p.toUnit}-${p.toPositionNumber}`)
       );
 
-      // กรองออกตำแหน่งที่ถูกจับคู่แล้ว
       filteredPositions = vacantPositions.filter(position =>
         !assignedSet.has(`${position.position}-${position.unit}-${position.positionNumber}`)
       );
@@ -175,14 +180,14 @@ export async function GET(request: NextRequest) {
 
     // จัดกลุ่มตามตำแหน่ง
     const groupedPositions = filteredPositions.reduce((acc, position: any) => {
-      const posCodeId = position.posCodeMaster?.id;
-      const posCodeName = position.posCodeMaster?.name;
-      const key = `${posCodeId}-${posCodeName}`;
+      const pcId = position.posCodeMaster?.id;
+      const pcName = position.posCodeMaster?.name;
+      const key = `${pcId}-${pcName}`;
 
       if (!acc[key]) {
         acc[key] = {
-          posCodeId: posCodeId,
-          posCodeName: posCodeName,
+          posCodeId: pcId,
+          posCodeName: pcName,
           positions: [],
         };
       }
@@ -211,7 +216,7 @@ export async function GET(request: NextRequest) {
       });
 
     return NextResponse.json({
-      year: parseInt(year),
+      year: yearInt,
       total: totalCount,
       count: filteredPositions.length,
       unassignedOnly,

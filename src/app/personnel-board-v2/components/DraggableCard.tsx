@@ -109,46 +109,56 @@ const DraggableCard = memo(({
                 ref={ref}
                 elevation={0}
                 sx={{
-                    mb: 1,
-                    border: (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? '2px dashed' : '2px solid',
-                    borderColor: isSelected ? 'primary.main'
-                        : closestEdge ? 'primary.main'
-                            : isDragging ? 'primary.main'
+                    mb: 1.5,
+                    border: '1px solid',
+                    borderColor: isSelected ? '#3b82f6'
+                        : closestEdge ? '#3b82f6'
+                            : isDragging ? '#3b82f6'
                                 : (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? '#f59e0b'
-                                    : 'grey.200',
-                    bgcolor: isSelected ? alpha('#3b82f6', 0.12)
-                        : closestEdge ? alpha('#3b82f6', 0.08)
+                                    : '#e2e8f0',
+                    bgcolor: isSelected ? alpha('#3b82f6', 0.08)
+                        : closestEdge ? alpha('#3b82f6', 0.05)
                             : isDragging ? alpha('#3b82f6', 0.05)
-                                : (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? alpha('#f59e0b', 0.05)
-                                    : 'background.paper',
-                    borderRadius: 1.5,
-                    transition: 'all 0.15s ease',
+                                : (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? alpha('#f59e0b', 0.03)
+                                    : 'white',
+                    borderRadius: 3,
+                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                     display: 'flex',
                     alignItems: 'stretch',
-                    opacity: isDragging ? 0.5 : 1,
+                    opacity: isDragging ? 0.6 : 1,
                     cursor: 'default',
                     position: 'relative',
-                    borderWidth: isSelected ? '3px' : '2px',
-                    margin: isSelected ? '-1px 0 7px 0' : '0 0 8px 0',
+                    boxShadow: isSelected ? '0 10px 15px -3px rgba(37, 99, 235, 0.2)' : '0 1px 3px rgba(0,0,0,0.05)',
                     '&:hover': {
-                        borderColor: (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? '#d97706' : 'primary.main',
-                        bgcolor: (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? alpha('#f59e0b', 0.1) : undefined,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                        borderColor: '#3b82f6',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 12px 20px -10px rgba(0,0,0,0.1)',
+                        '& .drag-handle-card': {
+                            bgcolor: alpha('#3b82f6', 0.1),
+                            color: '#3b82f6'
+                        }
                     },
-                    overflow: 'visible',
-                    backgroundClip: 'padding-box',
+                    overflow: 'hidden'
                 }}
             >
+                {/* Status Indicator Strip */}
+                <Box sx={{
+                    width: 5,
+                    bgcolor: (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? '#f59e0b'
+                        : personnel.requestedPosition ? '#6366f1'
+                            : '#94a3b8',
+                    borderRadius: '4px 0 0 4px'
+                }} />
+
                 {/* Top Drop Indicator (Absolute) */}
                 {closestEdge === 'top' && (
                     <Box sx={{
                         position: 'absolute',
-                        top: -5,
+                        top: 0,
                         left: 0,
                         right: 0,
-                        height: 4,
-                        bgcolor: 'primary.main',
-                        borderRadius: 1,
+                        height: 3,
+                        bgcolor: '#3b82f6',
                         zIndex: 10,
                         pointerEvents: 'none',
                     }} />
@@ -158,33 +168,28 @@ const DraggableCard = memo(({
                 {closestEdge === 'bottom' && (
                     <Box sx={{
                         position: 'absolute',
-                        bottom: -5,
+                        bottom: 0,
                         left: 0,
                         right: 0,
-                        height: 4,
-                        bgcolor: 'primary.main',
-                        borderRadius: 1,
+                        height: 3,
+                        bgcolor: '#3b82f6',
                         zIndex: 10,
                         pointerEvents: 'none',
                     }} />
                 )}
 
-                {/* Drag Handle - Click to toggle selection */}
+                {/* Drag Handle */}
                 <Box
+                    className="drag-handle-card"
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        px: 0.75,
-                        bgcolor: isSelected ? alpha('#3b82f6', 0.15) : '#f8fafc',
-                        borderRight: '1px solid #e2e8f0',
-                        color: isSelected ? 'primary.main' : 'text.disabled',
-                        borderRadius: '10px 0 0 10px',
+                        px: 1,
+                        bgcolor: isSelected ? alpha('#3b82f6', 0.1) : '#f8fafc',
+                        borderRight: '1px solid #f1f5f9',
+                        color: isSelected ? '#3b82f6' : '#94a3b8',
                         cursor: isReadOnly ? 'default' : 'grab',
-                        transition: 'all 0.15s ease',
-                        '&:hover': {
-                            bgcolor: alpha('#3b82f6', 0.1),
-                            color: 'primary.main',
-                        }
+                        transition: '0.2s'
                     }}
                     onClick={(e) => {
                         e.stopPropagation();
@@ -193,92 +198,84 @@ const DraggableCard = memo(({
                         }
                     }}
                 >
-                    <DragIndicatorIcon fontSize="small" />
+                    <DragIndicatorIcon sx={{ fontSize: 18 }} />
                 </Box>
 
-                {/* Content - Click to open modal */}
+                {/* Content */}
                 <Box
-                    sx={{ flex: 1, p: 1.5, minWidth: 0, cursor: 'pointer' }}
+                    sx={{ flex: 1, p: 2, minWidth: 0, cursor: 'pointer' }}
                     onClick={(e) => {
                         e.stopPropagation();
                         onCardClick?.(personnel, targetInfo);
                     }}
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         {isChain && (
                             <Chip
-                                label={`Lv ${index + 1}`}
+                                label={index + 1}
                                 size="small"
-                                color="error"
-                                sx={{ height: 16, fontSize: '0.6rem', fontWeight: 900, px: 0 }}
+                                sx={{
+                                    height: 18,
+                                    width: 18,
+                                    minWidth: 18,
+                                    fontSize: '0.6rem',
+                                    fontWeight: 900,
+                                    p: 0,
+                                    bgcolor: '#1e293b',
+                                    color: '#fff',
+                                    '& .MuiChip-label': { px: 0 }
+                                }}
                             />
                         )}
-                        <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                        <Typography variant="subtitle2" noWrap sx={{ fontWeight: 800, fontSize: '0.95rem', color: '#1e293b' }}>
                             {personnel.rank} {personnel.fullName}
                         </Typography>
+                        {(personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) && (
+                            <Chip label="ตัวอย่าง" size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 900, bgcolor: '#fef3c7', color: '#b45309' }} />
+                        )}
                     </Box>
-                    <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: '0.8rem' }}>
+
+                    <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.8rem', fontWeight: 500, mb: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {personnel.position || '-'} {personnel.actingAs && `(${personnel.actingAs})`}
                     </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
+
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
                         <Chip
-                            label={personnel.posCodeId ? `${personnel.posCodeId} - ${personnel.posCodeMaster?.name || '-'}` : (personnel.posCodeMaster?.name || '-')}
+                            label={personnel.posCodeId || '-'}
                             size="small"
-                            sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, bgcolor: 'primary.50', color: 'primary.main' }}
+                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, bgcolor: '#f1f5f9', color: '#475569' }}
                         />
                         <Chip
                             label={personnel.unit || 'ไม่ระบุหน่วย'}
                             size="small"
-                            sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, bgcolor: 'grey.100' }}
+                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, bgcolor: alpha('#3b82f6', 0.05), color: '#3b82f6' }}
                         />
                     </Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontSize: '0.7rem' }}>
-                        อายุ: {personnel.age || '-'} | อาวุโส: {personnel.seniority || '-'}
-                    </Typography>
-                    {(personnel.requestedPosition || personnel.supporterName || personnel.supportReason) && (
-                        <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.65rem' }}>
-                                📍 ร้องขอ: {personnel.requestedPosition || personnel.supporterName || 'มีการร้องขอตำแหน่ง'}
+
+                    {personnel.requestedPosition && (
+                        <Box sx={{ mt: 1.5, p: 1, bgcolor: alpha('#6366f1', 0.03), borderRadius: 2, border: '1px solid', borderColor: alpha('#6366f1', 0.1) }}>
+                            <Typography variant="caption" sx={{ color: '#4f46e5', fontWeight: 800, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <StarIcon sx={{ fontSize: 12 }} /> ร้องขอ: {personnel.requestedPosition}
                             </Typography>
                         </Box>
                     )}
 
-                    {/* Target Info (For chains) - More Professional Integration */}
+                    {/* Target Info Path - Professional Design */}
                     {targetInfo && (
-                        <Box sx={{
-                            mt: 1.5,
-                            pt: 1.5,
-                            borderTop: '1px solid',
-                            borderColor: alpha('#e2e8f0', 0.6),
-                            position: 'relative'
-                        }}>
-                            <Box sx={{
-                                position: 'absolute',
-                                top: -8,
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                bgcolor: 'white',
-                                px: 1,
-                                display: 'flex',
-                                alignItems: 'center'
-                            }}>
-                                <ArrowDownwardIcon sx={{ fontSize: 14, color: 'success.main' }} />
-                            </Box>
-
-                            <Box sx={{
-                                bgcolor: alpha('#f0fdf4', 0.5),
-                                p: 1,
-                                borderRadius: 1.5,
-                                border: '1px solid',
-                                borderColor: alpha('#bbf7d0', 0.5)
-                            }}>
-                                <Typography variant="caption" sx={{ fontWeight: 800, color: 'success.dark', fontSize: '0.65rem', display: 'block', mb: 0.5, opacity: 0.8 }}>
-                                    ตำแหน่งเป้าหมาย
+                        <Box sx={{ mt: 2, pt: 1.5, borderTop: '2px dashed #f1f5f9' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                <Box sx={{ width: 20, height: 20, borderRadius: '50%', bgcolor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <ArrowForwardIcon sx={{ fontSize: 12, color: '#166534' }} />
+                                </Box>
+                                <Typography variant="caption" sx={{ fontWeight: 800, color: '#64748b', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Target Destination
                                 </Typography>
-                                <Typography variant="caption" display="block" sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.2, color: '#166534' }}>
+                            </Box>
+                            <Box sx={{ p: 1, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #f1f5f9' }}>
+                                <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.75rem', color: '#334155', lineHeight: 1.3 }}>
                                     {targetInfo.position || targetInfo.posCodeMaster?.name || 'ตำแหน่งว่าง'}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
+                                <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, fontSize: '0.7rem' }}>
                                     {targetInfo.unit || 'ไม่ระบุหน่วย'}
                                 </Typography>
                             </Box>

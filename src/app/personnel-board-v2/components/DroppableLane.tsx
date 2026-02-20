@@ -506,6 +506,12 @@ const DroppableLane = memo(({
                                     const previousPerson = personnelMap[column.itemIds[index - 1]];
                                     targetInfo = previousPerson;
                                 }
+                            } else if (column.chainType === 'custom') {
+                                // Manual/Custom lane follows succession display from level 2 onward
+                                if (index > 0) {
+                                    const previousPerson = personnelMap[column.itemIds[index - 1]];
+                                    targetInfo = previousPerson;
+                                }
                             } else if (column.vacantPosition?.isTransaction) {
                                 // Logic for Swap (2-way), Three-way, and Transfer
                                 const type = column.vacantPosition.transactionType;
@@ -538,7 +544,7 @@ const DroppableLane = memo(({
                                     onToggle={onToggleSelection}
                                     onRemove={() => onRemoveItem(itemId)}
                                     targetInfo={targetInfo}
-                                    isChain={column.chainType === 'promotion'}
+                                    isChain={column.chainType === 'promotion' || column.chainType === 'custom'}
                                     onSuggest={onSuggest ? (data) => onSuggest({ ...column, vacantPosition: data }) : undefined}
                                     onUpdate={onUpdateItem}
                                     onCardClick={onCardClick}
@@ -552,7 +558,12 @@ const DroppableLane = memo(({
                         })}
 
                         {/* Next Level Slot Placeholder - Professional "Ghost Slot" UI - Hide in read-only mode */}
-                        {(column.chainType === 'promotion' || column.chainType === 'transfer' || isTransfer) && !isReadOnly && (
+                        {(
+                            column.chainType === 'promotion' ||
+                            column.chainType === 'transfer' ||
+                            isTransfer ||
+                            (column.chainType === 'custom' && column.itemIds.length >= 2)
+                        ) && !isReadOnly && (
                             <Box
                                 onClick={() => onSuggest?.(column)}
                                 sx={{

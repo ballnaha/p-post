@@ -1348,12 +1348,16 @@ export default function PersonnelBoardV2Page() {
                 (vacantPos?.transactionType === 'transfer' || vacantPos?.transactionType === 'promotion-chain') ||
                 (vacantPos && !vacantPos.isTransaction);
 
+            // Manual/Custom lane: treat it like a succession chain even without a vacant destination
+            // Level 1 has no explicit destination, Level 2+ points to previous person's original position
+            const isCustomChain = activeColumn?.chainType === 'custom' && !vacantPos;
+
             const isSwap = activeColumn?.chainType === 'swap' || (vacantPos?.isTransaction && vacantPos.transactionType === 'two-way');
             const isThreeWay = activeColumn?.chainType === 'three-way' || (vacantPos?.isTransaction && vacantPos.transactionType === 'three-way');
 
             const newMap = { ...prevMap };
 
-            if (!isChain && !isSwap && !isThreeWay) {
+            if (!isChain && !isCustomChain && !isSwap && !isThreeWay) {
                 return prevMap;
             }
 
@@ -1398,6 +1402,50 @@ export default function PersonnelBoardV2Page() {
                                 toActingAs: null
                             };
                         }
+                    }
+                });
+            } else if (isCustomChain) {
+                itemIds.forEach((itemId, index) => {
+                    const person = newMap[itemId];
+                    if (!person) return;
+
+                    if (index === 0) {
+                        // Level 1: no explicit vacant destination in a manual lane
+                        newMap[itemId] = {
+                            ...person,
+                            toPosCodeId: null,
+                            toPosCodeMaster: null,
+                            toPosition: null,
+                            toPositionNumber: null,
+                            toUnit: null,
+                            toActingAs: null
+                        };
+                        return;
+                    }
+
+                    // Level 2+: points to previous person's ORIGINAL position
+                    const prevId = itemIds[index - 1];
+                    const prevPerson = newMap[prevId];
+                    if (prevPerson) {
+                        newMap[itemId] = {
+                            ...person,
+                            toPosCodeId: prevPerson.posCodeId || null,
+                            toPosCodeMaster: prevPerson.posCodeMaster || null,
+                            toPosition: prevPerson.position || null,
+                            toPositionNumber: prevPerson.positionNumber || null,
+                            toUnit: prevPerson.unit || null,
+                            toActingAs: prevPerson.actingAs || null
+                        };
+                    } else {
+                        newMap[itemId] = {
+                            ...person,
+                            toPosCodeId: null,
+                            toPosCodeMaster: null,
+                            toPosition: null,
+                            toPositionNumber: null,
+                            toUnit: null,
+                            toActingAs: null
+                        };
                     }
                 });
             } else if (isSwap && itemIds.length === 2) {
@@ -1446,6 +1494,20 @@ export default function PersonnelBoardV2Page() {
             return newMap;
         });
     }, [columns]);
+
+    const customLaneSigRef = useRef<Record<string, string>>({});
+    useEffect(() => {
+        // Ensure custom lanes compute succession targets immediately after any drag/drop or reorder.
+        columns.forEach(col => {
+            if (col.chainType !== 'custom') return;
+            const sig = col.itemIds.join('|');
+            if (customLaneSigRef.current[col.id] === sig) return;
+            const hasAllPersonnel = col.itemIds.every(id => Boolean(personnelMap[id]));
+            if (!hasAllPersonnel) return;
+            customLaneSigRef.current[col.id] = sig;
+            recalculateColumnToPositions(col.id, col.itemIds, undefined, col);
+        });
+    }, [columns, personnelMap, recalculateColumnToPositions]);
 
     const handleAddToLane = useCallback((person: Personnel, laneId: string) => {
         commitAction();
@@ -1876,7 +1938,7 @@ export default function PersonnelBoardV2Page() {
         // Trigger if dropping into a vacant position OR a promotion chain
         if (!targetColumn.vacantPosition) {
             // Even without vacantPosition, we might need to recalculate if it's a swap/three-way
-            if (targetColumn.chainType === 'swap' || targetColumn.chainType === 'three-way') {
+            if (targetColumn.chainType === 'swap' || targetColumn.chainType === 'three-way' || targetColumn.chainType === 'custom') {
                 recalculateColumnToPositions(targetColumn.id, targetColumn.itemIds, targetColumn.vacantPosition, targetColumn);
             }
             return;
@@ -2823,6 +2885,30 @@ export default function PersonnelBoardV2Page() {
             });
         }
     }, [personnelMap, posCodeOptions, setFilterPosCode, setFilterMinPosCode, setFilterUnit, setPage, setIsFilterCollapsed, setIsLeftPanelCollapsed, setSnackbar]);
+
+    // Auto-suggest for Manual/Custom lanes:
+    // When the first person is dropped into an empty custom lane, suggest the next person to fill that person's original position.
+    const prevCustomLaneCountsRef = useRef<Record<string, number>>({});
+    useEffect(() => {
+        const prevCounts = prevCustomLaneCountsRef.current;
+
+        columns.forEach(col => {
+            if (col.chainType !== 'custom') return;
+            const prevCount = prevCounts[col.id] ?? 0;
+            const nextCount = col.itemIds.length;
+            const hasAllPersonnel = col.itemIds.every(id => Boolean(personnelMap[id]));
+
+            // Wait until dropped personnel exist in map; otherwise 0->1 transition can be consumed too early.
+            if (!hasAllPersonnel) return;
+
+            // Trigger only on 0 -> 1 transition
+            if (prevCount === 0 && nextCount === 1) {
+                handleSuggest(col);
+            }
+
+            prevCounts[col.id] = nextCount;
+        });
+    }, [columns, personnelMap, handleSuggest]);
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
@@ -3890,21 +3976,23 @@ export default function PersonnelBoardV2Page() {
                         />
                     ) : addLaneTab === 4 ? (
                         /* Manual mode (Index 4) */
-                        <Box sx={{ p: 3 }}>
-                            <Paper elevation={0} sx={{ p: 3, border: '2px dashed #e2e8f0', borderRadius: 3, textAlign: 'center', bgcolor: alpha('#f8fafc', 0.5) }}>
-                                <Typography variant="h6" sx={{ mb: 1, fontWeight: 800, color: '#0f172a' }}>🛠️ สร้างเลนกำหนดเอง</Typography>
-                                <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>ระบุชื่อเลนที่คุณต้องการเพื่อจัดการตำแหน่งด้วยตนเอง</Typography>
-
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                            <Box sx={{ px: 2, py: 2, bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                 <TextField
                                     autoFocus
                                     fullWidth
-                                    variant="outlined"
-                                    label="ชื่อเลน"
+                                    size="small"
+                                    label="ชื่อเลนกำหนดเอง"
                                     placeholder="เช่น ฝ่ายบริหาร, ฝ่ายสอบสวน, วงจรพิเศษ..."
                                     value={newLaneTitle}
                                     onChange={(e) => setNewLaneTitle(e.target.value)}
                                     InputProps={{
-                                        sx: { borderRadius: 2, bgcolor: 'white' }
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon sx={{ fontSize: 18 }} color="action" />
+                                            </InputAdornment>
+                                        ),
+                                        sx: { bgcolor: 'white' }
                                     }}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && newLaneTitle.trim()) {
@@ -3913,24 +4001,93 @@ export default function PersonnelBoardV2Page() {
                                         }
                                     }}
                                 />
-                                <Button
-                                    fullWidth
-                                    variant="contained"
-                                    onClick={() => handleAddLane()}
-                                    disabled={!newLaneTitle.trim()}
+                            </Box>
+
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    px: 2,
+                                    py: 1,
+                                    my: 1,
+                                    mx: 2,
+                                    bgcolor: alpha('#64748b', 0.08),
+                                    color: '#334155',
+                                    fontWeight: 700,
+                                    borderRadius: 1.5,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                🛠️ พรีวิวเลนกำหนดเอง
+                            </Typography>
+
+                            <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5, px: 2 }}>
+                                <Paper
+                                    elevation={0}
                                     sx={{
-                                        mt: 3,
-                                        py: 1.5,
-                                        fontWeight: 800,
-                                        borderRadius: 2.5,
-                                        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
-                                        textTransform: 'none',
-                                        fontSize: '1rem'
+                                        p: 1,
+                                        mb: 1,
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: 1.5,
+                                        transition: 'all 0.15s ease',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                        overflow: 'hidden',
+                                        '&:hover': {
+                                            borderColor: '#64748b',
+                                            bgcolor: alpha('#64748b', 0.03),
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                                        }
                                     }}
                                 >
-                                    ยืนยันสร้างเลน
-                                </Button>
-                            </Paper>
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                                            <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b', flex: 1 }}>
+                                                {newLaneTitle.trim() || 'ยังไม่ได้ระบุชื่อเลน'}
+                                            </Typography>
+                                            <Chip
+                                                label="CUSTOM"
+                                                size="small"
+                                                variant="outlined"
+                                                sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700, '& .MuiChip-label': { px: 0.5 } }}
+                                            />
+                                        </Box>
+
+                                        <Typography variant="caption" noWrap sx={{ display: 'block', fontSize: '0.7rem', color: '#64748b', mb: 0.25 }}>
+                                            สร้างเลนแบบกำหนดเองเพื่อจัดการรายการด้วยตนเอง
+                                        </Typography>
+
+                                        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <Chip
+                                                label="เลนทั่วไป"
+                                                size="small"
+                                                sx={{ height: 16, fontSize: '0.65rem', fontWeight: 700, bgcolor: alpha('#64748b', 0.12), color: '#475569', '& .MuiChip-label': { px: 0.5 } }}
+                                            />
+                                            <Typography variant="caption" noWrap sx={{ fontSize: '0.75rem', color: '#64748b', maxWidth: 160 }}>
+                                                เพิ่มบุคลากรแล้วจัดทอดตำแหน่งต่อได้ทันที
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => handleAddLane()}
+                                        disabled={!newLaneTitle.trim()}
+                                        sx={{
+                                            width: 32,
+                                            height: 32,
+                                            bgcolor: alpha('#64748b', 0.1),
+                                            color: '#475569',
+                                            '&:hover': { bgcolor: alpha('#64748b', 0.2) },
+                                            '&.Mui-disabled': { bgcolor: '#f1f5f9', color: '#cbd5e1' }
+                                        }}
+                                    >
+                                        <AddIcon sx={{ fontSize: 18 }} />
+                                    </IconButton>
+                                </Paper>
+                            </Box>
                         </Box>
                     ) : null
                     }

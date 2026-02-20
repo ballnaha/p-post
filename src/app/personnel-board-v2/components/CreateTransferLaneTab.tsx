@@ -181,9 +181,11 @@ export default function CreateTransferLaneTab({
                         </Typography>
 
                         <Autocomplete
+                            freeSolo
                             options={allUnits}
                             value={targetUnit}
                             onChange={(_, newValue) => setTargetUnit(newValue || '')}
+                            onInputChange={(_, newInputValue) => setTargetUnit(newInputValue || '')}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}

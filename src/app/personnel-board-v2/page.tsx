@@ -98,9 +98,33 @@ import TransferSummaryReport from './components/TransferSummaryReport';
 export default function PersonnelBoardV2Page() {
     const currentYear = new Date().getFullYear() + 543;
 
+    const getTransferLaneTitle = useCallback((col: Column, itemIds: string[], map: Record<string, Personnel>) => {
+        const firstPersonId = itemIds[0];
+        const personName = firstPersonId ? (map[firstPersonId]?.fullName || '?') : '?';
+        const toUnit = (col.vacantPosition?.unit as string | undefined) || (firstPersonId ? (map[firstPersonId]?.toUnit as string | undefined) : undefined);
+        if (toUnit) return `ย้ายหน่วย: ${personName} → ${toUnit}`;
+        return `ย้ายหน่วย: ${personName}`;
+    }, []);
+
     const [selectedYear, setSelectedYear] = useState<number>(currentYear);
     const [columns, setColumns] = useState<Column[]>([]);
     const [personnelMap, setPersonnelMap] = useState<Record<string, Personnel>>({});
+
+    useEffect(() => {
+        setColumns(prev => {
+            let changed = false;
+            const next = prev.map(col => {
+                const isTransferLane = col.chainType === 'transfer' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'transfer');
+                if (!isTransferLane) return col;
+
+                const nextTitle = getTransferLaneTitle(col, col.itemIds, personnelMap);
+                if (col.title === nextTitle) return col;
+                changed = true;
+                return { ...col, title: nextTitle };
+            });
+            return changed ? next : prev;
+        });
+    }, [columns, personnelMap, getTransferLaneTitle]);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -819,6 +843,7 @@ export default function PersonnelBoardV2Page() {
 
                             const isSwapLane = c.chainType === 'swap' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way');
                             const isThreeWayLane = c.chainType === 'three-way' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'three-way');
+                            const isTransferLane = c.chainType === 'transfer' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'transfer');
 
                             // Update title for swap lanes
                             if (isSwapLane) {
@@ -840,6 +865,14 @@ export default function PersonnelBoardV2Page() {
                                     return personnelMap[itemId]?.fullName || '?';
                                 });
                                 newTitle = `สามเส้า: ${names.join(' → ')}`;
+                            }
+
+                            if (isTransferLane) {
+                                const nextMap: Record<string, Personnel> = {
+                                    ...personnelMap,
+                                    [boardId]: newPerson,
+                                };
+                                newTitle = getTransferLaneTitle(c, newItemIds, nextMap);
                             }
 
                             return { ...c, title: newTitle, itemIds: newItemIds };
@@ -1549,6 +1582,15 @@ export default function PersonnelBoardV2Page() {
                 }
             }
 
+            const isTransferLane = c.chainType === 'transfer' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'transfer');
+            if (isTransferLane) {
+                const nextMap: Record<string, Personnel> = {
+                    ...personnelMap,
+                    [boardId]: newPerson,
+                };
+                newTitle = getTransferLaneTitle(c, newItemIds, nextMap);
+            }
+
             return { ...c, title: newTitle, itemIds: newItemIds };
         }));
         setHasUnsavedChanges(true);
@@ -1601,6 +1643,11 @@ export default function PersonnelBoardV2Page() {
                 }
             }
 
+            const isTransferLane = col.chainType === 'transfer' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'transfer');
+            if (isTransferLane) {
+                newTitle = getTransferLaneTitle(col, newItemIds, personnelMap);
+            }
+
             return { ...col, title: newTitle, itemIds: newItemIds };
         }));
 
@@ -1645,6 +1692,7 @@ export default function PersonnelBoardV2Page() {
 
                 const isSwapLane = col.chainType === 'swap' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'two-way');
                 const isThreeWayLane = col.chainType === 'three-way' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'three-way');
+                const isTransferLane = col.chainType === 'transfer' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'transfer');
 
                 if (isSwapLane && col.itemIds.length === 2) {
                     // Swap: 2 people - format "สลับ: A ↔ B"
@@ -1659,6 +1707,13 @@ export default function PersonnelBoardV2Page() {
                         return personnelMap[itemId]?.fullName || '?';
                     });
                     const newTitle = `สามเส้า: ${names.join(' → ')}`;
+                    return { ...col, title: newTitle };
+                } else if (isTransferLane) {
+                    const nextMap: Record<string, Personnel> = {
+                        ...personnelMap,
+                        [id]: { ...personnelMap[id], ...updates },
+                    };
+                    const newTitle = getTransferLaneTitle(col, col.itemIds, nextMap);
                     return { ...col, title: newTitle };
                 }
 
@@ -2968,7 +3023,7 @@ export default function PersonnelBoardV2Page() {
                             }
                         }}
                     >
-                        สรุปการย้าย
+                        รายงาน
                     </Button>
 
                     <Button

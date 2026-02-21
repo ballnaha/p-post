@@ -26,7 +26,10 @@ interface TransferSummaryReportProps {
 export default function TransferSummaryReport({ columns, personnelMap, selectedYear }: TransferSummaryReportProps) {
 
     const handlePrint = () => {
+        const originalTitle = document.title;
+        document.title = `รายงานสรุปผลการพิจารณาหมุนเวียนและแต่งตั้งบุคลากร ประจำปี พ.ศ. ${selectedYear}`;
         window.print();
+        document.title = originalTitle;
     };
 
     const printTime = new Date().toLocaleString('th-TH', {
@@ -40,29 +43,150 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');
 
+                /* ===== Shared Web & Print Rules ===== */
+                .print-container {
+                    font-family: "TH Sarabun New", "Sarabun", sans-serif !important;
+                    font-size: 10pt !important;
+                    color: #000 !important;
+                    line-height: 1.2 !important;
+                    background-color: white !important;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+
+                .print-container * {
+                    box-sizing: border-box !important;
+                    font-family: "TH Sarabun New", "Sarabun", sans-serif !important;
+                }
+
+                /* Document header */
+                .print-container .doc-header {
+                    text-align: center !important;
+                    margin-bottom: 12px !important;
+                    padding-bottom: 6px !important;
+                    border-bottom: 1.5px solid #000 !important;
+                }
+
+                .print-container .doc-title {
+                    font-size: 1rem !important;
+                    font-weight: 800 !important;
+                    line-height: 1.5 !important;
+                    margin: 0 !important;
+                    padding-top: 4px !important;
+                    color: #000 !important;
+                }
+
+                .print-container .doc-subtitle {
+                    font-size: 0.85rem !important;
+                    font-weight: 400 !important;
+                    line-height: 1.5 !important;
+                    margin-top: 2px !important;
+                    color: #333 !important;
+                }
+
+                /* Section header */
+                .print-container .section-header {
+                    display: flex !important;
+                    justify-content: space-between !important;
+                    align-items: baseline !important;
+                    border: 0.5pt solid #000 !important;
+                    border-bottom: none !important;
+                    padding: 2pt 4pt !important;
+                    margin-top: 6pt !important;
+                    page-break-after: avoid !important;
+                    background-color: white !important;
+                }
+
+                .print-container .section-num {
+                    font-size: 9.5pt !important;
+                    font-weight: 700 !important;
+                    color: #000 !important;
+                }
+
+                .print-container .section-type {
+                    font-size: 8.5pt !important;
+                    color: #333 !important;
+                }
+
+                /* Table */
+                .print-container .report-table {
+                    width: 100% !important;
+                    border-collapse: collapse !important;
+                    border: 0.5pt solid #000 !important;
+                    table-layout: fixed !important;
+                    page-break-inside: avoid !important;
+                    background-color: white !important;
+                }
+
+                .print-container .report-table th {
+                    font-size: 8.5pt !important;
+                    font-weight: 700 !important;
+                    padding: 2pt 4pt !important;
+                    border: 0.5pt solid #000 !important;
+                    text-align: left !important;
+                    background-color: white !important;
+                    color: #000 !important;
+                }
+
+                .print-container .report-table td {
+                    font-size: 9.5pt !important;
+                    padding: 2pt 4pt !important;
+                    border: 0.5pt solid #000 !important;
+                    vertical-align: top !important;
+                    background-color: white !important;
+                }
+
+                .print-container .cell-name {
+                    font-size: 9.5pt !important;
+                    font-weight: 700 !important;
+                    line-height: 1.1 !important;
+                    color: #000 !important;
+                }
+
+                .print-container .cell-detail {
+                    font-size: 8.5pt !important;
+                    color: #222 !important;
+                }
+
+                .print-container .cell-unit {
+                    font-size: 8pt !important;
+                    color: #444 !important;
+                }
+
+                .print-container .arrow-col {
+                    width: 20pt !important;
+                    text-align: center !important;
+                    vertical-align: middle !important;
+                    padding: 0 !important;
+                    border: 0.5pt solid #000 !important;
+                }
+
+                .print-container .arrow-col::after {
+                    content: '→';
+                    font-size: 12pt !important;
+                    color: #333 !important;
+                }
+
+                /* Footer */
+                .print-container .print-footer {
+                    margin-top: 6pt !important;
+                    padding-top: 2pt !important;
+                    border-top: 0.5pt solid #000 !important;
+                    font-size: 7.5pt !important;
+                    color: #555 !important;
+                    text-align: right !important;
+                }
+
+                /* ===== Print-only rules ===== */
                 @media print {
                     @page {
                         size: A4 portrait;
                         margin: 0;
                     }
 
-                    * { box-sizing: border-box !important; }
-
                     body {
-                        margin: 1.2cm 1cm !important;
+                        margin: 0.8cm 0.8cm !important;
                         padding: 0 !important;
-                        background: white !important;
-                        font-family: "TH Sarabun New", "Sarabun", sans-serif !important;
-                        font-size: 11pt !important;
-                        color: #000 !important;
-                        line-height: 1.3 !important;
-                        -webkit-print-color-adjust: exact;
-                        print-color-adjust: exact;
-                    }
-
-                    /* Force white background */
-                    * {
-                        background-color: white !important;
                         background: white !important;
                     }
 
@@ -81,113 +205,9 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                         border-radius: 0 !important;
                         min-height: unset !important;
                     }
-
-                    /* Document header */
-                    .doc-header {
-                        text-align: center !important;
-                        margin-bottom: 10pt !important;
-                        padding-bottom: 6pt !important;
-                        border-bottom: 1pt solid #000 !important;
-                    }
-
-                    .doc-title {
-                        font-size: 14pt !important;
-                        font-weight: 700 !important;
-                        line-height: 1.3 !important;
-                        margin: 0 !important;
-                        color: #000 !important;
-                    }
-
-                    .doc-subtitle {
-                        font-size: 11pt !important;
-                        font-weight: 400 !important;
-                        margin-top: 2pt !important;
-                        color: #000 !important;
-                    }
-
-                    /* Section header */
-                    .section-header {
-                        border: 0.5pt solid #000 !important;
-                        border-bottom: none !important;
-                        padding: 3pt 6pt !important;
-                        margin-top: 8pt !important;
-                        page-break-after: avoid !important;
-                    }
-
-                    .section-num {
-                        font-size: 10pt !important;
-                        font-weight: 700 !important;
-                        color: #000 !important;
-                    }
-
-                    .section-type {
-                        font-size: 9pt !important;
-                        color: #333 !important;
-                    }
-
-                    /* Table */
-                    .report-table {
-                        width: 100% !important;
-                        border-collapse: collapse !important;
-                        border: 0.5pt solid #000 !important;
-                        table-layout: fixed !important;
-                        page-break-inside: avoid !important;
-                    }
-
-                    .report-table th {
-                        font-size: 9pt !important;
-                        font-weight: 700 !important;
-                        padding: 3pt 5pt !important;
-                        border: 0.5pt solid #000 !important;
-                        text-align: left !important;
-                    }
-
-                    .report-table td {
-                        font-size: 10pt !important;
-                        padding: 3pt 5pt !important;
-                        border: 0.5pt solid #000 !important;
-                        vertical-align: top !important;
-                    }
-
-                    .cell-name {
-                        font-size: 10pt !important;
-                        font-weight: 700 !important;
-                        line-height: 1.2 !important;
-                    }
-
-                    .cell-detail {
-                        font-size: 9pt !important;
-                        color: #222 !important;
-                    }
-
-                    .cell-unit {
-                        font-size: 8.5pt !important;
-                        color: #444 !important;
-                    }
-
-                    .arrow-col {
-                        width: 24pt !important;
-                        text-align: center !important;
-                        vertical-align: middle !important;
-                        padding: 0 !important;
-                        border: 0.5pt solid #000 !important;
-                    }
-
-                    .arrow-col::after {
-                        content: '→';
-                        font-size: 14pt !important;
-                        color: #333 !important;
-                    }
-
-                    /* Footer */
-                    .print-footer {
+                    
+                    .print-container .print-footer {
                         display: block !important;
-                        margin-top: 10pt !important;
-                        padding-top: 4pt !important;
-                        border-top: 0.5pt solid #000 !important;
-                        font-size: 8pt !important;
-                        color: #555 !important;
-                        text-align: right !important;
                     }
                 }
             `}</style>
@@ -232,17 +252,17 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
             }}>
 
                 {/* Document Header */}
-                <Box className="doc-header" sx={{ textAlign: 'center', mb: 3, pb: 1.5, borderBottom: '2px solid #000' }}>
-                    <Typography className="doc-title" sx={{ fontWeight: 800, fontSize: '1.3rem', color: '#000' }}>
+                <Box className="doc-header">
+                    <Typography className="doc-title">
                         รายงานสรุปผลการพิจารณาหมุนเวียนและแต่งตั้งบุคลากร
                     </Typography>
-                    <Typography className="doc-subtitle" sx={{ fontSize: '1rem', color: '#333', mt: 0.5 }}>
-                        ประจำปีงบประมาณ พ.ศ. {selectedYear}
+                    <Typography className="doc-subtitle">
+                        ประจำปี พ.ศ. {selectedYear}
                     </Typography>
                 </Box>
 
                 {/* Transfer Sections */}
-                <Stack spacing={1.5}>
+                <Stack spacing={0.5}>
                     {columns.map((column, colIdx) => {
                         const items = column.itemIds.map(id => personnelMap[id]).filter(Boolean);
                         if (items.length === 0) return null;
@@ -255,41 +275,25 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                         return (
                             <Box key={column.id} sx={{ pageBreakInside: 'avoid' }}>
                                 {/* Section Header */}
-                                <Box className="section-header" sx={{
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-                                    border: '1px solid #999', borderBottom: 'none', px: 1, py: 0.5
-                                }}>
-                                    <Typography className="section-num" sx={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                                <Box className="section-header">
+                                    <Typography className="section-num">
                                         {colIdx + 1}. {column.title}
                                     </Typography>
-                                    <Typography className="section-type" sx={{ fontSize: '0.75rem', color: '#555' }}>
+                                    <Typography className="section-type">
                                         {typeLabel}
                                     </Typography>
                                 </Box>
 
                                 {/* Table */}
                                 <TableContainer component={Box} sx={{ border: 'none' }}>
-                                    <Table size="small" className="report-table" sx={{
-                                        border: '1px solid #999',
-                                        borderCollapse: 'collapse',
-                                        tableLayout: 'fixed',
-                                        width: '100%'
-                                    }}>
+                                    <Table size="small" className="report-table">
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell sx={{
-                                                    width: '46%', fontWeight: 700, fontSize: '0.78rem',
-                                                    border: '1px solid #999', py: 0.4, px: 0.8
-                                                }}>
+                                                <TableCell sx={{ width: '46%' }}>
                                                     บุคลากร / ตำแหน่งเดิม
                                                 </TableCell>
-                                                <TableCell className="arrow-col" sx={{
-                                                    width: 30, border: '1px solid #999', p: 0, textAlign: 'center'
-                                                }} />
-                                                <TableCell sx={{
-                                                    fontWeight: 700, fontSize: '0.78rem',
-                                                    border: '1px solid #999', py: 0.4, px: 0.8
-                                                }}>
+                                                <TableCell className="arrow-col" />
+                                                <TableCell>
                                                     ตำแหน่งใหม่ / สังกัด
                                                 </TableCell>
                                             </TableRow>
@@ -320,29 +324,24 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
 
                                                 return (
                                                     <TableRow key={`${person.id}-${idx}`}>
-                                                        <TableCell sx={{ border: '1px solid #999', py: 0.6, px: 0.8, verticalAlign: 'top' }}>
-                                                            <Typography className="cell-name" sx={{ fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.2 }}>
+                                                        <TableCell>
+                                                            <Typography className="cell-name">
                                                                 {person.rank ? `${person.rank} ` : ''}{person.fullName}
                                                             </Typography>
-                                                            <Typography className="cell-detail" sx={{ fontSize: '0.78rem', color: '#222' }}>
+                                                            <Typography className="cell-detail">
                                                                 {person.position || '-'}
                                                             </Typography>
-                                                            <Typography className="cell-unit" sx={{ fontSize: '0.72rem', color: '#555' }}>
-                                                                {person.unit || '-'}
+                                                            <Typography className="cell-unit">
+                                                                หน่วย: {person.unit || '-'}
                                                             </Typography>
                                                         </TableCell>
-                                                        <TableCell className="arrow-col" sx={{
-                                                            border: '1px solid #999', p: 0,
-                                                            textAlign: 'center', verticalAlign: 'middle', width: 30
-                                                        }}>
-                                                            <ArrowForwardIcon className="no-print" sx={{ fontSize: 14, color: '#aaa' }} />
-                                                        </TableCell>
-                                                        <TableCell sx={{ border: '1px solid #999', py: 0.6, px: 0.8, verticalAlign: 'top' }}>
-                                                            <Typography className="cell-name" sx={{ fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.2 }}>
+                                                        <TableCell className="arrow-col" />
+                                                        <TableCell>
+                                                            <Typography className="cell-name">
                                                                 {targetPos}
                                                             </Typography>
-                                                            <Typography className="cell-unit" sx={{ fontSize: '0.72rem', color: '#555' }}>
-                                                                {targetUnit}
+                                                            <Typography className="cell-unit">
+                                                                หน่วย: {targetUnit}
                                                             </Typography>
                                                         </TableCell>
                                                     </TableRow>
@@ -357,7 +356,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 </Stack>
 
                 {/* Print footer */}
-                <Box className="print-footer" sx={{ display: 'none' }}>
+                <Box className="print-footer">
                     พิมพ์เมื่อ: {printTime}
                 </Box>
             </Paper>

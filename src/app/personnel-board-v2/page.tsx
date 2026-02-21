@@ -4418,7 +4418,7 @@ export default function PersonnelBoardV2Page() {
                 onClose={() => setIsReportOpen(false)}
                 TransitionComponent={Transition}
             >
-                <AppBar sx={{ position: 'relative', bgcolor: 'white', color: 'text.primary', boxShadow: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <AppBar className="no-print" sx={{ position: 'relative', bgcolor: 'white', color: 'text.primary', boxShadow: 1, borderBottom: '1px solid #e0e0e0' }}>
                     <Toolbar>
                         <IconButton
                             edge="start"
@@ -4428,8 +4428,8 @@ export default function PersonnelBoardV2Page() {
                         >
                             <CloseIcon />
                         </IconButton>
-                        <Typography sx={{ ml: 2, flex: 1, fontWeight: 700 }} variant="h6" component="div">
-                            รายงานสรุปการย้ายตำแหน่ง
+                        <Typography sx={{ ml: 2, flex: 1, fontWeight: 700, fontSize: '0.7rem' }} variant="h6" component="div">
+                            รายงานสรุปผลการพิจารณาหมุนเวียนและแต่งตั้งบุคลากร
                         </Typography>
                         <Button autoFocus color="primary" variant="contained" onClick={() => setIsReportOpen(false)} sx={{ borderRadius: 2 }}>
                             ปิดหน้าต่าง

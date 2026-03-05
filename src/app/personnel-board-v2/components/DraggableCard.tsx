@@ -224,20 +224,20 @@ const DraggableCard = memo(({
                         <Chip
                             label={personnel.posCodeId ? `${personnel.posCodeId} - ${personnel.posCodeMaster?.name || '-'}` : (personnel.posCodeMaster?.name || '-')}
                             size="small"
-                            sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, bgcolor: 'primary.50', color: 'primary.main' }}
+                            sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600, bgcolor: 'primary.50', color: 'primary.main' }}
                         />
                         <Chip
                             label={personnel.unit || 'ไม่ระบุหน่วย'}
                             size="small"
-                            sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, bgcolor: 'grey.100' }}
+                            sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600, bgcolor: 'grey.100' }}
                         />
                     </Box>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontSize: '0.7rem' }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontSize: '0.75rem' }}>
                         อายุ: {personnel.age || '-'} | อาวุโส: {personnel.seniority || '-'}
                     </Typography>
                     {(personnel.requestedPosition || personnel.supporterName || personnel.supportReason) && (
                         <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.65rem' }}>
+                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.72rem' }}>
                                 📍 ร้องขอ: {personnel.requestedPosition || personnel.supporterName || 'มีการร้องขอตำแหน่ง'}
                             </Typography>
                         </Box>

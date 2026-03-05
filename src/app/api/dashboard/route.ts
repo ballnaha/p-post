@@ -246,10 +246,9 @@ export async function GET(request: NextRequest) {
       ? (matchedVacantPositions * 100 / totalApplicants)
       : 0;
 
-    // สถานะการจับคู่ (Completed vs Incomplete)
+    // สถานะการจับคู่ (Completed vs Incomplete) - รวมทุกประเภท transaction
     const transactionStatusWhere: any = {
-      year: yearNumber,
-      swapType: { in: ['transfer', 'promotion-chain'] }
+      year: yearNumber
     };
     
     // ถ้ามีการกรองหน่วย ต้องเช็คว่า transaction นั้นมี detail ที่เกี่ยวข้องกับหน่วยนั้นหรือไม่

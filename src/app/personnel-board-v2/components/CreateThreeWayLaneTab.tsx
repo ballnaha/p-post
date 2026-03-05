@@ -29,13 +29,15 @@ interface CreateThreeWayLaneTabProps {
     allUnits: string[];
     posCodeOptions: Array<{ id: number; name: string }>;
     onCreate: (person1: Personnel, person2: Personnel, person3: Personnel, title: string) => void;
+    loading?: boolean;
 }
 
 export default function CreateThreeWayLaneTab({
     selectedYear,
     allUnits,
     posCodeOptions,
-    onCreate
+    onCreate,
+    loading = false
 }: CreateThreeWayLaneTabProps) {
     // State
     const [person1, setPerson1] = useState<Personnel | null>(null);
@@ -293,6 +295,8 @@ export default function CreateThreeWayLaneTab({
                     fullWidth
                     variant="contained"
                     onClick={handleCreate}
+                    disabled={loading}
+                    startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
                     sx={{
                         mb: 1.5,
                         py: 1.25,
@@ -305,7 +309,7 @@ export default function CreateThreeWayLaneTab({
                         fontSize: '0.9rem'
                     }}
                 >
-                    ✅ สร้างเลนสลับสามเส้า
+                    {loading ? 'กำลังสร้างเลน...' : '✅ สร้างเลนสลับสามเส้า'}
                 </Button>
             )}
 

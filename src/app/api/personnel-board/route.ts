@@ -147,6 +147,7 @@ export async function GET(request: NextRequest) {
                     nationalId: true,
                     fullName: true,
                     rank: true,
+                    avatarUrl: true,
                     position: true,
                     positionNumber: true,
                     unit: true,
@@ -206,6 +207,7 @@ export async function GET(request: NextRequest) {
                         nationalId: original?.nationalId || detail.nationalId,
                         fullName: original?.fullName || detail.fullName,
                         rank: original?.rank || detail.rank,
+                        avatarUrl: original?.avatarUrl || null,
                         position: original?.position || detail.fromPosition,
                         unit: original?.unit || detail.fromUnit,
                         positionNumber: original?.positionNumber || detail.fromPositionNumber,
@@ -522,6 +524,7 @@ export async function POST(request: NextRequest) {
                             where: { id: column.linkedTransactionId },
                             data: {
                                 groupName: column.title,
+                                isCompleted: column.isCompleted || false,
                                 updatedBy: username,
                             }
                         });

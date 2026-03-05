@@ -31,13 +31,15 @@ interface CreateTransferLaneTabProps {
     allUnits: string[];
     posCodeOptions: Array<{ id: number; name: string }>;
     onCreate: (person: Personnel, toUnit: string, laneTitle: string) => void;
+    loading?: boolean;
 }
 
 export default function CreateTransferLaneTab({
     selectedYear,
     allUnits,
     posCodeOptions,
-    onCreate
+    onCreate,
+    loading = false
 }: CreateTransferLaneTabProps) {
     // State
     const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
@@ -236,6 +238,8 @@ export default function CreateTransferLaneTab({
                             variant="contained"
                             size="large"
                             onClick={handleCreate}
+                            disabled={loading}
+                            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
                             sx={{
                                 py: 1.25,
                                 fontWeight: 800,
@@ -246,7 +250,7 @@ export default function CreateTransferLaneTab({
                                 textTransform: 'none',
                             }}
                         >
-                            ✅ สร้างรายการย้ายหน่วย
+                            {loading ? 'กำลังสร้างเลน...' : '✅ สร้างรายการย้ายหน่วย'}
                         </Button>
                     </Box>
                 )}

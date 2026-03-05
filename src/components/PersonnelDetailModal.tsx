@@ -41,6 +41,7 @@ import { useSnackbar } from '@/contexts/SnackbarContext';
 // Interface สำหรับข้อมูลบุคลากร (รองรับทั้ง police-personnel, swap-list, three-way-swap, vacant-position)
 export interface PersonnelData {
   id?: string;
+  isPlaceholder?: boolean;
   noId?: number | string | null;
   posCodeId?: number | null;
   posCodeMaster?: {
@@ -166,6 +167,11 @@ export default function PersonnelDetailModal({
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { showSnackbar } = useSnackbar();
   const isVacant = variant === 'vacant';
+  const isPlaceholderPersonnel = Boolean(
+    personnel?.isPlaceholder ||
+    personnel?.id?.startsWith('placeholder-') ||
+    (personnel as any)?.originalId?.startsWith('placeholder-')
+  );
 
   // Avatar state
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -294,6 +300,11 @@ export default function PersonnelDetailModal({
   };
 
   const handleSaveSupporter = async () => {
+    if (isPlaceholderPersonnel) {
+      setIsEditingSupporter(false);
+      return;
+    }
+
     if (!originalId) {
       showSnackbar('ไม่สามารถบันทึกได้ เนื่องจากไม่พบ ID บุคลากร', 'error');
       return;
@@ -406,6 +417,11 @@ export default function PersonnelDetailModal({
   };
 
   const handleSaveNotes = async () => {
+    if (isPlaceholderPersonnel) {
+      setIsEditingNotes(false);
+      return;
+    }
+
     if (!originalId) {
       showSnackbar('ไม่สามารถบันทึกได้ เนื่องจากไม่พบ ID บุคลากร', 'error');
       return;
@@ -1004,7 +1020,7 @@ export default function PersonnelDetailModal({
               </Box>
 
               {/* ข้อมูลการเสนอชื่อ - Full Width - แก้ไขได้ */}
-              {!isVacant && (
+              {!isVacant && !isPlaceholderPersonnel && (
                 <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'primary.50', borderRadius: 1, border: 1, borderColor: 'primary.200' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', fontSize: '0.938rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -1120,7 +1136,7 @@ export default function PersonnelDetailModal({
                     หมายเหตุเพิ่มเติม
                   </Typography>
                   {!isEditingNotes ? (
-                    <IconButton size="small" onClick={handleEditNotes} sx={{ p: 0.5 }}>
+                    <IconButton size="small" onClick={handleEditNotes} sx={{ p: 0.5 }} disabled={isPlaceholderPersonnel || !originalId}>
                       <EditIcon sx={{ fontSize: 20 }} />
                     </IconButton>
                   ) : (

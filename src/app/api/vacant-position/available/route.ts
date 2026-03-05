@@ -125,7 +125,9 @@ export async function GET(request: NextRequest) {
           fullName: true,
           nationalId: true,
           actingAs: true,
+          requestedPosition: true,
           supporterName: true,
+          supportReason: true,
           notes: true,
           posCodeId: true,
           posCodeMaster: {
@@ -202,7 +204,9 @@ export async function GET(request: NextRequest) {
         fullName: position.fullName,
         nationalId: position.nationalId,
         actingAs: position.actingAs,
+        requestedPosition: position.requestedPosition,
         supporterName: position.supporterName,
+        supportReason: position.supportReason,
         notes: position.notes,
       });
 

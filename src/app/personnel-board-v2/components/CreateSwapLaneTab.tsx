@@ -29,13 +29,15 @@ interface CreateSwapLaneTabProps {
     allUnits: string[];
     posCodeOptions: Array<{ id: number; name: string }>;
     onCreate: (person1: Personnel, person2: Personnel, title: string) => void;
+    loading?: boolean;
 }
 
 export default function CreateSwapLaneTab({
     selectedYear,
     allUnits,
     posCodeOptions,
-    onCreate
+    onCreate,
+    loading = false
 }: CreateSwapLaneTabProps) {
     // State
     const [swapCreateMode, setSwapCreateMode] = useState<'select1' | 'select2' | 'confirm'>('select1');
@@ -283,6 +285,8 @@ export default function CreateSwapLaneTab({
                     fullWidth
                     variant="contained"
                     onClick={handleCreate}
+                    disabled={loading}
+                    startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
                     sx={{
                         mb: 1.5,
                         py: 1,
@@ -295,7 +299,7 @@ export default function CreateSwapLaneTab({
                         fontSize: '0.9rem'
                     }}
                 >
-                    ✅ สร้างเลนสลับตำแหน่ง
+                    {loading ? 'กำลังสร้างเลน...' : '✅ สร้างเลนสลับตำแหน่ง'}
                 </Button>
             )}
 

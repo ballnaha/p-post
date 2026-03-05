@@ -608,7 +608,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                             <MenuItem value="all">ทั้งหมด</MenuItem>
                             {filterOptions.positionCodes.map((pos) => (
                                 <MenuItem key={pos.id} value={pos.id.toString()}>
-                                    {pos.name}
+                                    {pos.id} - {pos.name}
                                 </MenuItem>
                             ))}
                         </Select>

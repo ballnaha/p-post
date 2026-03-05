@@ -30,6 +30,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -39,8 +44,10 @@ import {
   ExpandMore as ExpandMoreIcon,
   Update as UpdateIcon,
   Refresh as RefreshIcon,
+  DeleteForever as DeleteForeverIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 
 type ImportMode = 'full' | 'supporter';
 
@@ -53,6 +60,11 @@ export default function ImportPolicePersonnelPage() {
   const [importMode, setImportMode] = useState<ImportMode>('full');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [existingRecordCount, setExistingRecordCount] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+  const { showSnackbar } = useSnackbar();
 
   // Generate available years (from 2568 to current year) - same as swap-list
   const availableYears = useMemo(() => {
@@ -85,12 +97,7 @@ export default function ImportPolicePersonnelPage() {
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) {
-      setError('กรุณาเลือกไฟล์');
-      return;
-    }
-
+  const performUpload = async () => {
     setLoading(true);
     setError('');
     setResult(null);
@@ -98,10 +105,9 @@ export default function ImportPolicePersonnelPage() {
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', file!);
       formData.append('year', selectedYear.toString());
 
-      // เลือก API endpoint ตาม import mode
       const apiEndpoint = importMode === 'supporter'
         ? '/api/police-personnel/import-supporter'
         : '/api/police-personnel/import';
@@ -114,7 +120,6 @@ export default function ImportPolicePersonnelPage() {
       const data = await response.json();
 
       if (data.success && data.jobId) {
-        // เริ่ม polling
         pollJobStatus(data.jobId);
       } else {
         setError(data.error || 'เกิดข้อผิดพลาด');
@@ -125,6 +130,29 @@ export default function ImportPolicePersonnelPage() {
       setError(err.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
       setLoading(false);
     }
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      setError('กรุณาเลือกไฟล์');
+      return;
+    }
+
+    try {
+      const checkRes = await fetch(`/api/police-personnel?year=${selectedYear}&limit=1`);
+      const checkData = await checkRes.json();
+      const existing = checkData.pagination?.total ?? 0;
+
+      if (existing > 0) {
+        setExistingRecordCount(existing);
+        setImportConfirmOpen(true);
+        return;
+      }
+    } catch {
+      // ถ้าตรวจสอบไม่ได้ ให้ดำเนินการต่อ
+    }
+
+    performUpload();
   };
 
   // Polling function
@@ -172,6 +200,30 @@ export default function ImportPolicePersonnelPage() {
 
     // Cleanup ถ้า component unmount
     return () => clearInterval(intervalId);
+  };
+
+  const handleDeleteYear = async () => {
+    setDeleteConfirmOpen(false);
+    setDeleting(true);
+    setError('');
+    setResult(null);
+
+    try {
+      const res = await fetch(`/api/police-personnel?year=${selectedYear}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showSnackbar(data.message, 'success');
+      } else {
+        setError(data.error || 'ลบข้อมูลไม่สำเร็จ');
+      }
+    } catch (err: any) {
+      setError(err.message || 'เกิดข้อผิดพลาดในการลบข้อมูล');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const downloadTemplate = async () => {
@@ -403,13 +455,22 @@ export default function ImportPolicePersonnelPage() {
 
         {/* Upload Section */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+          <Box sx={{ display: 'flex', gap: 2, mb: 3, justifyContent: 'space-between', flexWrap: 'wrap' }}>
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
               onClick={downloadTemplate}
             >
               ดาวน์โหลด Template
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={deleting ? <CircularProgress size={16} color="error" /> : <DeleteForeverIcon />}
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={deleting || loading}
+            >
+              ลบข้อมูลทั้งหมดปี {selectedYear}
             </Button>
           </Box>
 
@@ -660,6 +721,49 @@ export default function ImportPolicePersonnelPage() {
           </Paper>
         )}
       </Box>
+        {/* Delete Year Confirm Dialog */}
+        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+          <DialogTitle sx={{ color: 'error.main' }}>⚠️ ยืนยันการลบข้อมูล</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              คุณต้องการลบข้อมูลบุคลากร<strong>ทั้งหมด</strong>ในปี <strong>{selectedYear}</strong> ออกจากระบบหรือไม่?
+            </DialogContentText>
+            <Alert severity="error" sx={{ mt: 2 }}>
+              การดำเนินการนี้<strong>ไม่สามารถย้อนกลับได้</strong> ข้อมูลที่ถูกลบจะหายไปถาวร
+              รวมถึงข้อมูลที่อาจเชื่อมโยงกับการแลกเปลี่ยนตำแหน่งต่างๆ
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteConfirmOpen(false)}>ยกเลิก</Button>
+            <Button onClick={handleDeleteYear} color="error" variant="contained">
+              ยืนยัน ลบทั้งหมด
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Import Over Existing Data Confirm Dialog */}
+        <Dialog open={importConfirmOpen} onClose={() => setImportConfirmOpen(false)}>
+          <DialogTitle>📋 พบข้อมูลในระบบแล้ว</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              พบข้อมูลบุคลากรในปี <strong>{selectedYear}</strong> จำนวน <strong>{existingRecordCount.toLocaleString()}</strong> รายการอยู่ในระบบแล้ว
+            </DialogContentText>
+            <Alert severity="info" sx={{ mt: 2 }}>
+              ระบบจะ <strong>อัปเดต (UPSERT)</strong> ข้อมูลที่มีอยู่แล้ว และเพิ่มข้อมูลใหม่ที่ยังไม่มี
+              โดยจะ<strong>ไม่ลบ</strong>ข้อมูลเดิม ต้องการดำเนินการต่อหรือไม่?
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setImportConfirmOpen(false)}>ยกเลิก</Button>
+            <Button
+              onClick={() => { setImportConfirmOpen(false); performUpload(); }}
+              variant="contained"
+            >
+              ยืนยัน นำเข้าข้อมูล
+            </Button>
+          </DialogActions>
+        </Dialog>
+
     </Layout>
   );
 }

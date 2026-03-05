@@ -131,6 +131,7 @@ const DroppableLane = memo(({
     const isThreeWay = column.chainType === 'three-way' || column.vacantPosition?.transactionType === 'three-way';
     const isTransfer = column.vacantPosition?.transactionType === 'transfer';
     const isVacant = hasVacantPosition && !isTransaction;
+    const canOpenVacantDetail = isVacant;
     const isCustom = !hasVacantPosition && column.chainType === 'custom';
 
     // Check if lane has placeholder
@@ -241,13 +242,13 @@ const DroppableLane = memo(({
                             sx={{
                                 flex: 1,
                                 minWidth: 0,
-                                cursor: hasVacantPosition && (!isTransaction || column.vacantPosition?.transactionType === 'promotion-chain') ? 'pointer' : 'default',
+                                cursor: canOpenVacantDetail ? 'pointer' : 'default',
                                 display: 'flex',
                                 alignItems: 'flex-start',
                                 gap: 1
                             }}
                             onClick={() => {
-                                if (hasVacantPosition && onHeaderClick && !isSwap && !isThreeWay) {
+                                if (canOpenVacantDetail && onHeaderClick) {
                                     onHeaderClick(column.vacantPosition);
                                 }
                             }}

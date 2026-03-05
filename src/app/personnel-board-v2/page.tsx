@@ -33,6 +33,7 @@ import {
     Slide,
     AppBar,
     Toolbar,
+    Popover,
 } from '@mui/material';
 import { TransitionProps } from '@mui/material/transitions';
 import InOutView from '@/components/InOutView';
@@ -124,9 +125,19 @@ export default function PersonnelBoardV2Page() {
             });
             return changed ? next : prev;
         });
-    }, [columns, personnelMap, getTransferLaneTitle]);
+    // NOTE: 'columns' intentionally omitted — functional updater receives latest prev directly
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [personnelMap, getTransferLaneTitle]);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+    // Stable refs — updated synchronously every render so callbacks don't need board state in deps
+    const columnsRef = useRef(columns);
+    columnsRef.current = columns;
+    const personnelMapRef = useRef(personnelMap);
+    personnelMapRef.current = personnelMap;
+    const selectedIdsRef = useRef(selectedIds);
+    selectedIdsRef.current = selectedIds;
 
     // History Hook
     const { takeSnapshot, undo, redo, canUndo, canRedo, clearHistory } = useBoardHistory(columns, personnelMap, selectedIds);
@@ -153,10 +164,10 @@ export default function PersonnelBoardV2Page() {
         }
     }, [redo, columns, personnelMap, selectedIds]);
 
-    // Helper to commit changes with history
+    // Helper to commit changes with history — uses refs so this callback is stable
     const commitAction = useCallback((actionName?: string) => {
-        takeSnapshot(columns, personnelMap, selectedIds);
-    }, [columns, personnelMap, selectedIds, takeSnapshot]);
+        takeSnapshot(columnsRef.current, personnelMapRef.current, selectedIdsRef.current);
+    }, [takeSnapshot]);
 
     // Left Panel State
     const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
@@ -176,6 +187,8 @@ export default function PersonnelBoardV2Page() {
     const [filterMinPosCode, setFilterMinPosCode] = useState<string | null>(null);
     const [allUnits, setAllUnits] = useState<string[]>([]);
     const [posCodeOptions, setPosCodeOptions] = useState<Array<{ id: number; name: string }>>([]);
+    const posCodeOptionsRef = useRef(posCodeOptions);
+    posCodeOptionsRef.current = posCodeOptions;
 
     // Dialog State
     const [isNewLaneDialogOpen, setIsNewLaneDialogOpen] = useState(false);
@@ -258,11 +271,11 @@ export default function PersonnelBoardV2Page() {
     }, [commitAction]);
 
     const clearSelection = useCallback(() => {
-        if (selectedIds.length > 0) {
+        if (selectedIdsRef.current.length > 0) {
             commitAction();
             setSelectedIds([]);
         }
-    }, [selectedIds, commitAction]);
+    }, [commitAction]);
 
     // Snackbar State
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>(
@@ -273,6 +286,7 @@ export default function PersonnelBoardV2Page() {
     const [loadingBoard, setLoadingBoard] = useState(false);
     const [savingBoard, setSavingBoard] = useState(false);
     const [isDeletingLane, setIsDeletingLane] = useState(false);
+    const [isCreatingLane, setIsCreatingLane] = useState(false);
     const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -426,13 +440,22 @@ export default function PersonnelBoardV2Page() {
             params.set('limit', rowsPerPage.toString());
 
             const res = await fetch(`/api/police-personnel/candidates?${params.toString()}`);
-            if (!res.ok) throw new Error('API Error');
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+                console.error('API Error:', res.status, errorData);
+                setSnackbar({ 
+                    open: true, 
+                    message: `ไม่สามารถโหลดข้อมูลบุคลากรได้: ${errorData.error || 'Unknown error'}`, 
+                    severity: 'error' 
+                });
+                throw new Error(`API Error: ${res.status} - ${errorData.error || 'Unknown error'}`);
+            }
             const data = await res.json();
 
             setPersonnelList(Array.isArray(data?.data) ? data.data : []);
             setTotalPersonnel(data?.total || 0);
         } catch (err) {
-            console.error(err);
+            console.error('Error fetching personnel list:', err);
         } finally {
             setListLoading(false);
         }
@@ -614,6 +637,7 @@ export default function PersonnelBoardV2Page() {
 
     // Auto-save (debounced)
     const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const vacantDetailRequestRef = useRef(0);
     useEffect(() => {
         if (!hasUnsavedChanges || savingBoard) {
             if (autoSaveTimeoutRef.current) {
@@ -1802,6 +1826,45 @@ export default function PersonnelBoardV2Page() {
         setSelectedPersonnelDetail({ personnel: person, targetInfo });
     }, []);
 
+    // Handle vacant detail click (fetch latest supporter/notes before opening modal)
+    const handleOpenVacantDetail = useCallback(async (vacantPos: any) => {
+        if (!vacantPos) return;
+        if (vacantPos.isTransaction) return;
+
+        const requestId = ++vacantDetailRequestRef.current;
+
+        const recordId = vacantPos.originalId || vacantPos.id;
+        if (!recordId) {
+            if (requestId !== vacantDetailRequestRef.current) return;
+            setSelectedVacantDetail(vacantPos);
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/police-personnel/${recordId}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data?.success && data?.data) {
+                    if (requestId !== vacantDetailRequestRef.current) return;
+                    setSelectedVacantDetail({
+                        ...vacantPos,
+                        ...data.data,
+                        originalId: data.data.id,
+                    });
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching vacant detail:', error);
+        }
+
+        if (requestId !== vacantDetailRequestRef.current) return;
+        setSelectedVacantDetail({
+            ...vacantPos,
+            originalId: vacantPos.originalId || vacantPos.id || null,
+        });
+    }, []);
+
     // Add placeholder card to a lane
     const handleAddPlaceholder = useCallback((columnId: string) => {
         commitAction();
@@ -2276,6 +2339,7 @@ export default function PersonnelBoardV2Page() {
 
     // Create new swap lane from selected 2 personnel (Called from Component)
     const handleCreateSwapLane = async (p1: Personnel, p2: Personnel, laneTitle: string) => {
+        setIsCreatingLane(true);
         commitAction();
         // Find max existing SWAP number to avoid duplicates
         const existingSwapNumbers = columns
@@ -2475,11 +2539,14 @@ export default function PersonnelBoardV2Page() {
         } catch (error) {
             console.error('Error creating swap lane:', error);
             setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการสร้างเลน', severity: 'error' });
+        } finally {
+            setIsCreatingLane(false);
         }
     };
 
     // Create new 3-way swap lane (Called from Component)
     const handleCreateThreeWayLane = async (p1: Personnel, p2: Personnel, p3: Personnel, laneTitle: string) => {
+        setIsCreatingLane(true);
         commitAction();
         // Find max existing THREE number to avoid duplicates
         const existingThreeNumbers = columns
@@ -2682,11 +2749,14 @@ export default function PersonnelBoardV2Page() {
         } catch (error) {
             console.error('Error creating three-way lane:', error);
             setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการสร้างเลน', severity: 'error' });
+        } finally {
+            setIsCreatingLane(false);
         }
     };
 
     // Create new transfer lane (Called from Component)
     const handleCreateTransferLane = async (p1: Personnel, toUnit: string, laneTitle: string) => {
+        setIsCreatingLane(true);
         commitAction();
         // Find max existing TF number to avoid duplicates
         const existingTransferNumbers = columns
@@ -2786,6 +2856,8 @@ export default function PersonnelBoardV2Page() {
         } catch (error) {
             console.error('Error creating transfer lane:', error);
             setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการสร้างเลน', severity: 'error' });
+        } finally {
+            setIsCreatingLane(false);
         }
     };
 
@@ -2811,7 +2883,7 @@ export default function PersonnelBoardV2Page() {
         // Priority 2: If it's a real column from the board with items, check the last person
         else if (column.id && column.itemIds && column.itemIds.length > 0) {
             const lastPersonId = column.itemIds[column.itemIds.length - 1];
-            const lastPerson = personnelMap[lastPersonId];
+            const lastPerson = personnelMapRef.current[lastPersonId];
             if (lastPerson) {
                 targetPosCodeId = lastPerson.posCodeId || undefined;
                 targetUnit = lastPerson.unit as string | undefined;
@@ -2845,8 +2917,8 @@ export default function PersonnelBoardV2Page() {
             // Rule 2: For Swap (2-way) or Three-way -> Suggest SAME rank
             if (!isSwapOrThreeWay) {
                 // Find the NEXT available posCode from options
-                const nextPossibleId = posCodeOptions
-                    .map(o => o.id)
+                const nextPossibleId = posCodeOptionsRef.current
+                    ?.map(o => o.id)
                     .sort((a, b) => a - b)
                     .find(id => id > targetPosCodeId!);
 
@@ -2884,7 +2956,8 @@ export default function PersonnelBoardV2Page() {
                 severity: 'info'
             });
         }
-    }, [personnelMap, posCodeOptions, setFilterPosCode, setFilterMinPosCode, setFilterUnit, setPage, setIsFilterCollapsed, setIsLeftPanelCollapsed, setSnackbar]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // personnelMap/posCodeOptions accessed via refs — stable callback
 
     // Auto-suggest for Manual/Custom lanes:
     // When the first person is dropped into an empty custom lane, suggest the next person to fill that person's original position.
@@ -2896,7 +2969,7 @@ export default function PersonnelBoardV2Page() {
             if (col.chainType !== 'custom') return;
             const prevCount = prevCounts[col.id] ?? 0;
             const nextCount = col.itemIds.length;
-            const hasAllPersonnel = col.itemIds.every(id => Boolean(personnelMap[id]));
+            const hasAllPersonnel = col.itemIds.every(id => Boolean(personnelMapRef.current[id]));
 
             // Wait until dropped personnel exist in map; otherwise 0->1 transition can be consumed too early.
             if (!hasAllPersonnel) return;
@@ -2908,7 +2981,8 @@ export default function PersonnelBoardV2Page() {
 
             prevCounts[col.id] = nextCount;
         });
-    }, [columns, personnelMap, handleSuggest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [columns]); // personnelMap accessed via ref; handleSuggest is now stable
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
@@ -3037,6 +3111,16 @@ export default function PersonnelBoardV2Page() {
 
                 {/* Right Section: Controls */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    {/* Undo / Redo */}
+                    <UndoRedoControls
+                        canUndo={canUndo}
+                        canRedo={canRedo}
+                        onUndo={handleUndo}
+                        onRedo={handleRedo}
+                    />
+
+                    <Divider orientation="vertical" flexItem sx={{ height: 24, my: 'auto' }} />
+
                     {/* Year Select - Minimal */}
                     <FormControl size="small">
                         <Select
@@ -3349,8 +3433,15 @@ export default function PersonnelBoardV2Page() {
                                 {listLoading ? (
                                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
                                 ) : filteredPersonnelList.length === 0 ? (
-                                    <Box sx={{ textAlign: 'center', mt: 4, opacity: 0.6 }}>
-                                        <Typography>ไม่พบข้อมูล</Typography>
+                                    <Box sx={{ textAlign: 'center', mt: 4, p: 3 }}>
+                                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                                            ไม่พบข้อมูลบุคลากรสำหรับปี {selectedYear}
+                                        </Typography>
+                                        {totalPersonnel === 0 && (
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                                                💡 กรุณานำเข้าข้อมูลบุคลากรสำหรับปี {selectedYear} ที่หน้า Import Data
+                                            </Typography>
+                                        )}
                                     </Box>
                                 ) : (
                                     <>
@@ -3364,13 +3455,15 @@ export default function PersonnelBoardV2Page() {
                                         ))}
 
                                         {/* Pagination */}
-                                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3, mb: 1 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 1.5, mb: 0.5 }}>
                                             <Pagination
                                                 count={Math.ceil(totalPersonnel / rowsPerPage)}
                                                 page={page + 1}
                                                 onChange={(e, p) => setPage(p - 1)}
                                                 size="small"
                                                 color="primary"
+                                                siblingCount={0}
+                                                boundaryCount={1}
                                             />
                                         </Box>
                                     </>
@@ -3416,13 +3509,25 @@ export default function PersonnelBoardV2Page() {
                                     '&:hover fieldset': { borderColor: 'primary.main' }
                                 }
                             }}
-                            sx={{ width: 360 }}
+                            sx={{ width: { xs: 200, sm: 280, md: 360 }, flexShrink: 1 }}
                         />
                         <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
                             {boardSearchTerm && `พบ ${filteredColumns.length} เลน`}
                         </Typography>
 
                         <Box sx={{ flex: 1 }} />
+
+                        {/* Board Summary Stats */}
+                        {columns.length > 0 && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, py: 0.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.78rem' }}>
+                                    {showCompletedLanes
+                                        ? `${columns.filter(c => c.isCompleted).length} เลนเสร็จแล้ว`
+                                        : `${columns.filter(c => !c.isCompleted).length} เลน · ${columns.filter(c => !c.isCompleted).reduce((sum, col) => sum + col.itemIds.length, 0)} รายการ`
+                                    }
+                                </Typography>
+                            </Box>
+                        )}
 
                         {/* Lane Summary Button */}
                         <LaneSummaryButton
@@ -3469,20 +3574,23 @@ export default function PersonnelBoardV2Page() {
                                 </Button>
 
                                 {/* Dropdown Menu */}
-                                {boardFilterAnchor && (
-                                    <Paper
-                                        sx={{
-                                            position: 'fixed',
-                                            zIndex: 1300,
-                                            top: boardFilterAnchor.getBoundingClientRect().bottom + 4,
-                                            left: boardFilterAnchor.getBoundingClientRect().left,
+                                <Popover
+                                    open={Boolean(boardFilterAnchor)}
+                                    anchorEl={boardFilterAnchor}
+                                    onClose={() => setBoardFilterAnchor(null)}
+                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                                    PaperProps={{
+                                        sx: {
                                             minWidth: 280,
                                             maxWidth: 320,
                                             boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                                             borderRadius: 2,
                                             overflow: 'hidden',
-                                        }}
-                                    >
+                                            mt: 0.5,
+                                        }
+                                    }}
+                                >
                                         {/* Sort Section */}
                                         <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
                                             <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -3598,10 +3706,7 @@ export default function PersonnelBoardV2Page() {
                                             </Box>
                                         )}
 
-                                        {/* Backdrop to close menu */}
-                                        <Box sx={{ position: 'fixed', inset: 0, zIndex: -1 }} onClick={() => setBoardFilterAnchor(null)} />
-                                    </Paper>
-                                )}
+                                </Popover>
 
                                 <Button
                                     variant="outlined"
@@ -3660,6 +3765,36 @@ export default function PersonnelBoardV2Page() {
                                 <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', mt: 10 }} >
                                     <CircularProgress />
                                 </Box >
+                            ) : columns.length === 0 && !showCompletedLanes ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 400, gap: 2 }}>
+                                    <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: 'primary.50', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <TableChartIcon sx={{ fontSize: 32, color: 'primary.main', opacity: 0.5 }} />
+                                    </Box>
+                                    <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.secondary' }}>ยังไม่มีเลนบนกระดาน</Typography>
+                                    <Typography variant="body2" color="text.disabled" sx={{ textAlign: 'center', maxWidth: 320 }}>
+                                        เริ่มต้นโดยเพิ่มเลนใหม่จากตำแหน่งว่าง, การสลับตำแหน่ง หรือสร้างเองจาก Drawer ด้านขวา
+                                    </Typography>
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<AddIcon />}
+                                        onClick={(e) => { e.stopPropagation(); setIsNewLaneDrawerOpen(true); }}
+                                        sx={{ borderRadius: 3, px: 3, py: 1, fontWeight: 700, textTransform: 'none', boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}
+                                    >
+                                        เพิ่มเลนใหม่
+                                    </Button>
+                                </Box>
+                            ) : filteredColumns.length === 0 && columns.length > 0 ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 400, gap: 2 }}>
+                                    <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.secondary' }}>ไม่พบเลนที่ตรงกับตัวกรอง</Typography>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={(e) => { e.stopPropagation(); setFilterBoardType('all'); setBoardSearchTerm(''); setShowOnlyWithPlaceholder(false); }}
+                                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                                    >
+                                        ล้างตัวกรองทั้งหมด
+                                    </Button>
+                                </Box>
                             ) : (
                                 <>
                                     {filteredColumns
@@ -3674,7 +3809,7 @@ export default function PersonnelBoardV2Page() {
                                                 selectedIds={selectedIds}
                                                 onSuggest={handleSuggest}
                                                 onToggleSelection={toggleSelection}
-                                                onHeaderClick={(vacantPos) => setSelectedVacantDetail(vacantPos)}
+                                                onHeaderClick={handleOpenVacantDetail}
                                                 onUpdateItem={handleUpdatePersonnel}
                                                 onCardClick={handleCardClick}
                                                 onToggleComplete={handleToggleComplete}
@@ -3880,7 +4015,7 @@ export default function PersonnelBoardV2Page() {
                                                 {/* Content - Click to open detail */}
                                                 <Box
                                                     sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-                                                    onClick={() => setSelectedVacantDetail(pos)}
+                                                    onClick={() => handleOpenVacantDetail(pos)}
                                                 >
                                                     {/* Row 1: Position Name + Position Number */}
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
@@ -3913,7 +4048,7 @@ export default function PersonnelBoardV2Page() {
                                                             หน่วย: {pos.unit || 'ไม่ระบุหน่วย'}
                                                         </Typography>
                                                         {(pos.fullName || '').includes('กันตำแหน่ง') && (
-                                                            <Chip label="กัน" size="small" color="warning" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 700, '& .MuiChip-label': { px: 0.5 } }} />
+                                                            <Chip label="กันตำแหน่ง" size="small" color="warning" sx={{ height: 16, fontSize: '0.65rem', fontWeight: 400, '& .MuiChip-label': { px: 0.5 } }} />
                                                         )}
                                                     </Box>
                                                 </Box>
@@ -3957,6 +4092,7 @@ export default function PersonnelBoardV2Page() {
                             allUnits={allUnits}
                             posCodeOptions={posCodeOptions}
                             onCreate={handleCreateSwapLane}
+                            loading={isCreatingLane}
                         />
                     ) : addLaneTab === 2 ? (
                         /* Create Three-way Lane (Index 2) */
@@ -3965,6 +4101,7 @@ export default function PersonnelBoardV2Page() {
                             allUnits={allUnits}
                             posCodeOptions={posCodeOptions}
                             onCreate={handleCreateThreeWayLane}
+                            loading={isCreatingLane}
                         />
                     ) : addLaneTab === 3 ? (
                         /* Create Transfer Lane (Index 3) */
@@ -3973,6 +4110,7 @@ export default function PersonnelBoardV2Page() {
                             allUnits={allUnits}
                             posCodeOptions={posCodeOptions}
                             onCreate={handleCreateTransferLane}
+                            loading={isCreatingLane}
                         />
                     ) : addLaneTab === 4 ? (
                         /* Manual mode (Index 4) */
@@ -4334,8 +4472,80 @@ export default function PersonnelBoardV2Page() {
             {/* Vacant Position Detail Modal */}
             <PersonnelDetailModal
                 open={!!selectedVacantDetail}
-                onClose={() => setSelectedVacantDetail(null)}
-                personnel={selectedVacantDetail || null}
+                onClose={() => {
+                    vacantDetailRequestRef.current += 1;
+                    setSelectedVacantDetail(null);
+                }}
+                personnel={selectedVacantDetail ? {
+                    ...selectedVacantDetail,
+                    originalId: selectedVacantDetail.originalId || selectedVacantDetail.id || null,
+                } : null}
+                variant="vacant"
+                onSupporterUpdate={(reqPos, name, reason) => {
+                    if (!selectedVacantDetail?.id) return;
+
+                    // Update current opened detail state
+                    setSelectedVacantDetail((prev: any) => prev ? ({
+                        ...prev,
+                        requestedPosition: reqPos,
+                        supporterName: name,
+                        supportReason: reason,
+                    }) : prev);
+
+                    // Update lane vacantPosition snapshot (so reopen sees latest value)
+                    setColumns(prev => prev.map(col => {
+                        if (String(col.vacantPosition?.id || '') !== String(selectedVacantDetail.id)) return col;
+                        return {
+                            ...col,
+                            vacantPosition: {
+                                ...col.vacantPosition,
+                                requestedPosition: reqPos,
+                                supporterName: name,
+                                supportReason: reason,
+                            }
+                        };
+                    }));
+
+                    // Update drawer source list when same position exists there
+                    setVacantPositions(prev => prev.map((pos: any) =>
+                        String(pos.id) === String(selectedVacantDetail.id)
+                            ? {
+                                ...pos,
+                                requestedPosition: reqPos,
+                                supporterName: name,
+                                supportReason: reason,
+                            }
+                            : pos
+                    ));
+                }}
+                onNotesUpdate={(notes) => {
+                    if (!selectedVacantDetail?.id) return;
+
+                    // Update current opened detail state
+                    setSelectedVacantDetail((prev: any) => prev ? ({
+                        ...prev,
+                        notes,
+                    }) : prev);
+
+                    // Update lane vacantPosition snapshot
+                    setColumns(prev => prev.map(col => {
+                        if (String(col.vacantPosition?.id || '') !== String(selectedVacantDetail.id)) return col;
+                        return {
+                            ...col,
+                            vacantPosition: {
+                                ...col.vacantPosition,
+                                notes,
+                            }
+                        };
+                    }));
+
+                    // Update drawer source list when same position exists there
+                    setVacantPositions(prev => prev.map((pos: any) =>
+                        String(pos.id) === String(selectedVacantDetail.id)
+                            ? { ...pos, notes }
+                            : pos
+                    ));
+                }}
                 onSuggest={(data) => {
                     handleSuggest({ vacantPosition: data } as any);
                     setSelectedVacantDetail(null);
@@ -4366,13 +4576,6 @@ export default function PersonnelBoardV2Page() {
                 }}
             />
 
-            {/* Undo/Redo Controls */}
-            <UndoRedoControls
-                canUndo={canUndo}
-                canRedo={canRedo}
-                onUndo={handleUndo}
-                onRedo={handleRedo}
-            />
 
             {/* Lane Summary Modal */}
             <LaneSummaryModal

@@ -292,13 +292,9 @@ export default function HomePage() {
 
   const handleStatusClick = (status: any) => {
     if (status.transactions && status.transactions.length > 0) {
-      // Filter to show only promotion and promotion-chain
-      const filteredTransactions = status.transactions.filter((tx: any) =>
-        ['transfer', 'promotion-chain'].includes(tx.swapType)
-      );
-
+      // Show all transaction types
       setDrilldownTitle(status.label);
-      setDrilldownData(filteredTransactions);
+      setDrilldownData(status.transactions);
       setDrilldownFilterType('all');
       setDrilldownOpen(true);
     }
@@ -308,6 +304,10 @@ export default function HomePage() {
   const filteredDrilldownData = useMemo(() => {
     if (drilldownFilterType === 'all') {
       return drilldownData;
+    }
+    if (drilldownFilterType === 'other') {
+      // อื่นๆ = ทุกอย่างที่ไม่ใช่ two-way, three-way, transfer, promotion-chain
+      return drilldownData.filter((tx) => !['two-way', 'three-way', 'transfer', 'promotion-chain'].includes(tx.swapType));
     }
     return drilldownData.filter((tx) => tx.swapType === drilldownFilterType);
   }, [drilldownData, drilldownFilterType]);
@@ -2744,6 +2744,7 @@ export default function HomePage() {
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.2, fontSize: '0.7rem' }}>
                       ปี {selectedYear}{selectedUnit !== 'all' && ` • ${selectedUnit}`}
                     </Typography>
+                    
                     <Typography variant="caption" color="primary.main" display="block" sx={{ mt: 0.15, fontSize: '0.65rem', fontWeight: 600 }}>
                       คลิกสถานะแต่ละแถวเพื่อดูรายละเอียด
                     </Typography>
@@ -3046,8 +3047,11 @@ export default function HomePage() {
                 onChange={(e) => setDrilldownFilterType(e.target.value)}
               >
                 <MenuItem value="all">ทั้งหมด</MenuItem>
+                <MenuItem value="two-way">สลับตำแหน่ง</MenuItem>
+                <MenuItem value="three-way">สามเส้า</MenuItem>
                 <MenuItem value="transfer">ย้ายหน่วย</MenuItem>
-                <MenuItem value="promotion-chain">จัดคนเข้าตำแหน่งว่าง</MenuItem>
+                <MenuItem value="promotion-chain">เลื่อนตำแหน่ง</MenuItem>
+                
               </Select>
             </FormControl>
 
@@ -3058,7 +3062,6 @@ export default function HomePage() {
                     <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 700 }}>Group No.</TableCell>
                     <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 700 }}>Group Name</TableCell>
                     <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 700 }}>Type</TableCell>
-                    <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 700 }} align="center">Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -3077,32 +3080,11 @@ export default function HomePage() {
                           sx={{ borderRadius: 1, fontSize: '0.75rem', height: 24 }}
                         />
                       </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          component={Link}
-                          size="small"
-                          variant="outlined"
-                          href={
-                            tx.swapType === 'two-way'
-                              ? `/police-personnel/swap-list`
-                              : tx.swapType === 'three-way'
-                                ? `/police-personnel/three-way-swap`
-                                : tx.swapType === 'transfer'
-                                  ? `/police-personnel/promotion/${tx.id}/edit`
-                                  : tx.swapType === 'promotion-chain'
-                                    ? `/police-personnel/promotion-chain/${tx.id}/edit`
-                                    : `/new-in-out?search=${tx.groupNumber || tx.id}`
-                          }
-                          sx={{ width: 28, height: 28, fontSize: '0.75rem' }}
-                        >
-                          <EastIcon sx={{ fontSize: 16 }} />
-                        </Button>
-                      </TableCell>
                     </TableRow>
                   ))}
                   {filteredDrilldownData.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                      <TableCell colSpan={3} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                         ไม่พบข้อมูล
                       </TableCell>
                     </TableRow>

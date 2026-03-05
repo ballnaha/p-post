@@ -86,30 +86,30 @@ const Sidebar: React.FC = () => {
     {
       title: 'Swap Management', key: 'group-swap',
       items: [
-        {
-          label: 'สลับตำแหน่ง',
-          href: '/police-personnel/swap-list',
-          icon: <SwapIcon sx={{ fontSize: 20 }} />,
-          key: 'swap-list'
-        },
-        {
-          label: 'สามเส้า',
-          href: '/police-personnel/three-way-swap',
-          icon: <ThreeWayIcon sx={{ fontSize: 20 }} />,
-          key: 'three-way-swap'
-        },
+        // {
+        //   label: 'สลับตำแหน่ง',
+        //   href: '/police-personnel/swap-list',
+        //   icon: <SwapIcon sx={{ fontSize: 20 }} />,
+        //   key: 'swap-list'
+        // },
+        // {
+        //   label: 'สามเส้า',
+        //   href: '/police-personnel/three-way-swap',
+        //   icon: <ThreeWayIcon sx={{ fontSize: 20 }} />,
+        //   key: 'three-way-swap'
+        // },
         // {
         //   label: 'จัดคนเข้าตำแหน่งว่าง',
         //   href: '/police-personnel/promotion-chain',
         //   icon: <VacantIcon sx={{ fontSize: 20 }} />,
         //   key: 'vacant-filling'
         // },
-        {
-          label: 'ย้ายหน่วย',
-          href: '/police-personnel/promotion',
-          icon: <TrendingUpIcon sx={{ fontSize: 20 }} />,
-          key: 'transfer'
-        },
+        // {
+        //   label: 'ย้ายหน่วย',
+        //   href: '/police-personnel/promotion',
+        //   icon: <TrendingUpIcon sx={{ fontSize: 20 }} />,
+        //   key: 'transfer'
+        // },
         {
           label: 'In-Out',
           href: '/in-out-v2',
@@ -140,12 +140,17 @@ const Sidebar: React.FC = () => {
           icon: <ImportIcon sx={{ fontSize: 20 }} />,
           key: 'police-import'
         },
-
+        // {
+        //   label: 'Sync ตำแหน่งว่าง',
+        //   href: '/police-personnel/vacant-position/sync',
+        //   icon: <SyncIcon sx={{ fontSize: 20 }} />,
+        //   key: 'vacant-sync'
+        // },
         {
-          label: 'Sync ตำแหน่งว่าง',
-          href: '/police-personnel/vacant-position/sync',
-          icon: <SyncIcon sx={{ fontSize: 20 }} />,
-          key: 'vacant-sync'
+          label: 'รหัสตำแหน่ง',
+          href: '/pos-code-master',
+          icon: <SettingsIcon sx={{ fontSize: 20 }} />,
+          key: 'pos-code-master'
         },
       ]
     },

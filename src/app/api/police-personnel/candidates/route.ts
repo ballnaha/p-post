@@ -44,7 +44,12 @@ export async function GET(request: NextRequest) {
       const year = parseInt(yearParam, 10);
       if (!isNaN(year)) {
         where.year = year;
+        console.log(`[Candidates API] Filtering by year: ${year}`);
+      } else {
+        console.warn(`[Candidates API] Invalid year parameter: ${yearParam}`);
       }
+    } else {
+      console.log('[Candidates API] No year parameter provided');
     }
 
     // Exclude personnel already in swap transactions for the year
@@ -107,9 +112,11 @@ export async function GET(request: NextRequest) {
         });
       } else if (hasRequestedPosition === 'without-supporter') {
         where.AND.push({
-          supporterName: { in: [null, ''] },
-          supportReason: { in: [null, ''] },
-          requestedPosition: { in: [null, ''] },
+          AND: [
+            { OR: [{ supporterName: null }, { supporterName: '' }] },
+            { OR: [{ supportReason: null }, { supportReason: '' }] },
+            { OR: [{ requestedPosition: null }, { requestedPosition: '' }] },
+          ]
         });
       }
     }
@@ -173,6 +180,14 @@ export async function GET(request: NextRequest) {
         take: limit,
       }) as any,
     ]);
+
+    console.log(`[Candidates API] Found ${total} total candidates, returning ${personnel.length} records (page ${page}, limit ${limit})`);
+
+    // If no data found and year was specified, provide helpful message
+    if (total === 0 && yearParam) {
+      const year = parseInt(yearParam, 10);
+      console.warn(`[Candidates API] No candidates found for year ${year}. Check if data has been imported for this year.`);
+    }
 
     const candidates = personnel.map((p: any) => ({
       id: p.id,

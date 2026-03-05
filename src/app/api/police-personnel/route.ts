@@ -319,6 +319,50 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  try {
+    const authCheck = await checkAdminAuth();
+    if (!authCheck.authorized) {
+      return authCheck.response;
+    }
+
+    const { searchParams } = new URL(request.url);
+    const yearParam = searchParams.get('year');
+
+    if (!yearParam) {
+      return NextResponse.json({ success: false, error: 'กรุณาระบุปี' }, { status: 400 });
+    }
+
+    const year = parseInt(yearParam);
+    if (isNaN(year)) {
+      return NextResponse.json({ success: false, error: 'ปีไม่ถูกต้อง' }, { status: 400 });
+    }
+
+    const count = await prisma.policePersonnel.count({ where: { year } });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { success: false, error: `ไม่พบข้อมูลบุคลากรในปี ${year}` },
+        { status: 404 }
+      );
+    }
+
+    const deleted = await prisma.policePersonnel.deleteMany({ where: { year } });
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: deleted.count,
+      message: `ลบข้อมูลบุคลากรปี ${year} สำเร็จ จำนวน ${deleted.count} รายการ`,
+    });
+  } catch (error: any) {
+    console.error('Delete by year error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'เกิดข้อผิดพลาดในการลบข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // ตรวจสอบว่าเป็น admin

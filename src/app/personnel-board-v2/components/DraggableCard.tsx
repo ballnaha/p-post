@@ -60,6 +60,7 @@ const DraggableCard = memo(({
     const ref = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
+    const [justDropped, setJustDropped] = useState(false);
 
     useEffect(() => {
         const el = ref.current;
@@ -75,7 +76,11 @@ const DraggableCard = memo(({
                     personnel
                 }),
                 onDragStart: () => setIsDragging(true),
-                onDrop: () => setIsDragging(false),
+                onDrop: () => {
+                    setIsDragging(false);
+                    setJustDropped(true);
+                    setTimeout(() => setJustDropped(false), 600);
+                },
             }),
             dropTargetForElements({
                 element: el,
@@ -98,7 +103,11 @@ const DraggableCard = memo(({
                     setClosestEdge(edge);
                 },
                 onDragLeave: () => setClosestEdge(null),
-                onDrop: () => setClosestEdge(null),
+                onDrop: () => {
+                    setClosestEdge(null);
+                    setJustDropped(true);
+                    setTimeout(() => setJustDropped(false), 600);
+                },
             })
         );
     }, [personnel.id, index, personnel, isReadOnly]);
@@ -111,18 +120,20 @@ const DraggableCard = memo(({
                 sx={{
                     mb: 1,
                     border: (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? '2px dashed' : '2px solid',
-                    borderColor: isSelected ? 'primary.main'
-                        : closestEdge ? 'primary.main'
-                            : isDragging ? 'primary.main'
-                                : (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? '#f59e0b'
-                                    : 'grey.200',
-                    bgcolor: isSelected ? alpha('#3b82f6', 0.12)
-                        : closestEdge ? alpha('#3b82f6', 0.08)
-                            : isDragging ? alpha('#3b82f6', 0.05)
-                                : (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? alpha('#f59e0b', 0.05)
-                                    : 'background.paper',
+                    borderColor: justDropped ? '#22c55e'
+                        : isSelected ? 'primary.main'
+                            : closestEdge ? 'primary.main'
+                                : isDragging ? 'primary.main'
+                                    : (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? '#f59e0b'
+                                        : 'grey.200',
+                    bgcolor: justDropped ? alpha('#22c55e', 0.1)
+                        : isSelected ? alpha('#3b82f6', 0.12)
+                            : closestEdge ? alpha('#3b82f6', 0.08)
+                                : isDragging ? alpha('#3b82f6', 0.05)
+                                    : (personnel.isPlaceholder || personnel.id.startsWith('placeholder-')) ? alpha('#f59e0b', 0.05)
+                                        : 'background.paper',
                     borderRadius: 1.5,
-                    transition: 'all 0.15s ease',
+                    transition: 'all 0.2s ease',
                     display: 'flex',
                     alignItems: 'stretch',
                     opacity: isDragging ? 0.5 : 1,
@@ -143,30 +154,82 @@ const DraggableCard = memo(({
                 {closestEdge === 'top' && (
                     <Box sx={{
                         position: 'absolute',
-                        top: -5,
+                        top: -18,
                         left: 0,
                         right: 0,
-                        height: 4,
-                        bgcolor: 'primary.main',
-                        borderRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 0.5,
                         zIndex: 10,
                         pointerEvents: 'none',
-                    }} />
+                    }}>
+                        <Box sx={{
+                            height: 4,
+                            flex: 1,
+                            bgcolor: 'primary.main',
+                            borderRadius: 1,
+                        }} />
+                        <Typography variant="caption" sx={{
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: 1,
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap'
+                        }}>
+                            วางที่นี่ ↑
+                        </Typography>
+                        <Box sx={{
+                            height: 4,
+                            flex: 1,
+                            bgcolor: 'primary.main',
+                            borderRadius: 1,
+                        }} />
+                    </Box>
                 )}
 
                 {/* Bottom Drop Indicator (Absolute) */}
                 {closestEdge === 'bottom' && (
                     <Box sx={{
                         position: 'absolute',
-                        bottom: -5,
+                        bottom: -18,
                         left: 0,
                         right: 0,
-                        height: 4,
-                        bgcolor: 'primary.main',
-                        borderRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 0.5,
                         zIndex: 10,
                         pointerEvents: 'none',
-                    }} />
+                    }}>
+                        <Box sx={{
+                            height: 4,
+                            flex: 1,
+                            bgcolor: 'primary.main',
+                            borderRadius: 1,
+                        }} />
+                        <Typography variant="caption" sx={{
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: 1,
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap'
+                        }}>
+                            วางที่นี่ ↓
+                        </Typography>
+                        <Box sx={{
+                            height: 4,
+                            flex: 1,
+                            bgcolor: 'primary.main',
+                            borderRadius: 1,
+                        }} />
+                    </Box>
                 )}
 
                 {/* Drag Handle - Click to toggle selection */}
@@ -217,7 +280,18 @@ const DraggableCard = memo(({
                             {personnel.rank} {personnel.fullName}
                         </Typography>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: '0.8rem' }}>
+                    <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        sx={{ 
+                            fontSize: '0.8rem',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            lineHeight: 1.3
+                        }}
+                    >
                         {personnel.position || '-'} {personnel.actingAs && `(${personnel.actingAs})`}
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, alignItems: 'center' }}>

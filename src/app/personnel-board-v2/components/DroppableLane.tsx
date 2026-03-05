@@ -76,6 +76,7 @@ const DroppableLane = memo(({
     const [isDraggingLane, setIsDraggingLane] = useState(false);
     const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [justDropped, setJustDropped] = useState(false);
     const open = Boolean(anchorEl);
 
     const handleClickMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -94,7 +95,11 @@ const DroppableLane = memo(({
                 element: el,
                 getInitialData: () => ({ type: 'lane', laneId: column.id, index }), // Use passed index
                 onDragStart: () => setIsDraggingLane(true),
-                onDrop: () => setIsDraggingLane(false),
+                onDrop: () => {
+                    setIsDraggingLane(false);
+                    setJustDropped(true);
+                    setTimeout(() => setJustDropped(false), 600);
+                },
             }),
             dropTargetForElements({
                 element: el,
@@ -120,6 +125,8 @@ const DroppableLane = memo(({
                 onDrop: () => {
                     setIsOver(false);
                     setClosestEdge(null);
+                    setJustDropped(true);
+                    setTimeout(() => setJustDropped(false), 600);
                 },
             })
         );
@@ -184,14 +191,14 @@ const DroppableLane = memo(({
                 width: 320,
                 minWidth: 320,
                 flexShrink: 0,
-                bgcolor: column.isCompleted ? alpha('#22c55e', 0.05) : isOver ? alpha(styles.accent, 0.08) : styles.bg,
+                bgcolor: justDropped ? alpha('#22c55e', 0.08) : column.isCompleted ? alpha('#22c55e', 0.05) : isOver ? alpha(styles.accent, 0.08) : styles.bg,
                 opacity: isDraggingLane ? 0.4 : 1,
                 borderRadius: '0 0 12px 12px',
                 border: column.isCompleted ? '3px solid' : '2px solid',
-                borderColor: column.isCompleted ? '#22c55e' : isOver ? styles.accent : alpha(styles.accent, 0.2),
+                borderColor: justDropped ? '#22c55e' : column.isCompleted ? '#22c55e' : isOver ? styles.accent : alpha(styles.accent, 0.2),
                 display: 'flex',
                 flexDirection: 'column',
-                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition: 'all 0.2s ease',
                 transform: isOver ? 'translateY(-6px)' : 'translateY(0)',
                 boxShadow: isOver ? `0 12px 24px ${alpha(styles.accent, 0.15)}` : '0 2px 4px rgba(0,0,0,0.02)',
                 backgroundClip: 'padding-box',
@@ -204,8 +211,9 @@ const DroppableLane = memo(({
                     left: 0,
                     right: 0,
                     height: 4,
-                    bgcolor: styles.accent,
-                    opacity: 0.8
+                    bgcolor: justDropped ? '#22c55e' : styles.accent,
+                    opacity: 0.8,
+                    transition: 'all 0.2s ease'
                 }
             }}
         >
@@ -425,7 +433,24 @@ const DroppableLane = memo(({
                                     label={`${column.vacantPosition.posCodeMaster.id} - ${column.vacantPosition.posCodeMaster.name}`}
                                     size="small"
                                     variant="outlined"
-                                    sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700, color: 'text.secondary', borderColor: alpha(styles.accent, 0.1), bgcolor: 'white', maxWidth: 180 }}
+                                    sx={{ 
+                                        height: 'auto', 
+                                        minHeight: 18,
+                                        fontSize: '0.62rem', 
+                                        fontWeight: 700, 
+                                        color: 'text.secondary', 
+                                        borderColor: alpha(styles.accent, 0.1), 
+                                        bgcolor: 'white',
+                                        '& .MuiChip-label': {
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical',
+                                            overflow: 'hidden',
+                                            whiteSpace: 'normal',
+                                            lineHeight: 1.3,
+                                            py: 0.25
+                                        }
+                                    }}
                                 />
                             )}
                             {column.vacantPosition?.actingAs && (
@@ -473,14 +498,30 @@ const DroppableLane = memo(({
                         border: '2px dashed',
                         borderColor: isOver ? 'primary.main' : '#e2e8f0',
                         borderRadius: 1.5,
-                        bgcolor: isOver ? alpha('#3b82f6', 0.1) : 'transparent',
+                        bgcolor: isOver ? alpha('#3b82f6', 0.15) : 'transparent',
                         transition: 'all 0.15s ease',
+                        position: 'relative',
                     }}>
                         {isOver ? (
                             <>
-                                <AddIcon sx={{ fontSize: 28, color: 'primary.main', mb: 0.5 }} />
-                                <Typography variant="caption" color="primary.main" fontWeight={600}>
-                                    วางบุคลากรที่นี่
+                                <Box sx={{
+                                    bgcolor: 'primary.main',
+                                    color: 'white',
+                                    px: 2,
+                                    py: 1,
+                                    borderRadius: 2,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                                }}>
+                                    <AddIcon sx={{ fontSize: 24 }} />
+                                    <Typography variant="body2" fontWeight={700}>
+                                        วางบุคลากรที่นี่
+                                    </Typography>
+                                </Box>
+                                <Typography variant="caption" color="primary.main" fontWeight={600} sx={{ mt: 1, opacity: 0.8 }}>
+                                    ปล่อยเพื่อเพิ่มเข้าเลน
                                 </Typography>
                             </>
                         ) : (

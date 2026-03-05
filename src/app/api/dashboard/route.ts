@@ -266,14 +266,16 @@ export async function GET(request: NextRequest) {
     const completedTransactionsCount = await prisma.swapTransaction.count({
       where: {
         ...transactionStatusWhere,
-        isCompleted: true
+        isCompleted: true,
+        swapType: { not: 'board-layout' } // Exclude internal board-layout transactions
       }
     });
 
     const incompleteTransactionsCount = await prisma.swapTransaction.count({
       where: {
         ...transactionStatusWhere,
-        isCompleted: false
+        isCompleted: false,
+        swapType: { not: 'board-layout' } // Exclude internal board-layout transactions
       }
     });
 
@@ -281,7 +283,8 @@ export async function GET(request: NextRequest) {
     const completedTransactions = await prisma.swapTransaction.findMany({
       where: {
         ...transactionStatusWhere,
-        isCompleted: true
+        isCompleted: true,
+        swapType: { not: 'board-layout' } // Exclude internal board-layout transactions
       },
       select: {
         id: true,
@@ -297,7 +300,8 @@ export async function GET(request: NextRequest) {
     const incompleteTransactions = await prisma.swapTransaction.findMany({
       where: {
         ...transactionStatusWhere,
-        isCompleted: false
+        isCompleted: false,
+        swapType: { not: 'board-layout' } // Exclude internal board-layout transactions
       },
       select: {
         id: true,

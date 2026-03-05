@@ -302,14 +302,17 @@ export default function HomePage() {
 
   // Filter drilldown data based on selected type
   const filteredDrilldownData = useMemo(() => {
+    // First filter: only show entries with non-empty group_name
+    const dataWithGroupName = drilldownData.filter((tx) => tx.groupName && tx.groupName.trim() !== '');
+    
     if (drilldownFilterType === 'all') {
-      return drilldownData;
+      return dataWithGroupName;
     }
     if (drilldownFilterType === 'other') {
       // อื่นๆ = ทุกอย่างที่ไม่ใช่ two-way, three-way, transfer, promotion-chain
-      return drilldownData.filter((tx) => !['two-way', 'three-way', 'transfer', 'promotion-chain'].includes(tx.swapType));
+      return dataWithGroupName.filter((tx) => !['two-way', 'three-way', 'transfer', 'promotion-chain'].includes(tx.swapType));
     }
-    return drilldownData.filter((tx) => tx.swapType === drilldownFilterType);
+    return dataWithGroupName.filter((tx) => tx.swapType === drilldownFilterType);
   }, [drilldownData, drilldownFilterType]);
 
   // Pagination handlers for Supported Personnel

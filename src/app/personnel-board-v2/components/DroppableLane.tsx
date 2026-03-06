@@ -471,15 +471,25 @@ const DroppableLane = memo(({
                         </Box>
 
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Box sx={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: '50%',
-                                bgcolor: column.itemIds.length > 0 ? 'success.main' : 'grey.300',
-                            }} />
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.65rem' }}>
-                                {column.itemIds.length} รายการ
-                            </Typography>
+                            {(() => {
+                                const realPersonnelCount = column.itemIds.filter(id => {
+                                    const person = personnelMap[id];
+                                    return person && !person.isPlaceholder && !id.startsWith('placeholder-');
+                                }).length;
+                                return (
+                                    <>
+                                        <Box sx={{
+                                            width: 6,
+                                            height: 6,
+                                            borderRadius: '50%',
+                                            bgcolor: realPersonnelCount > 0 ? 'success.main' : 'grey.300',
+                                        }} />
+                                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.65rem' }}>
+                                            {realPersonnelCount} รายการ
+                                        </Typography>
+                                    </>
+                                );
+                            })()}
                         </Box>
                     </Box>
                 </Box>

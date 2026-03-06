@@ -314,6 +314,9 @@ export default function PersonnelBoardV2Page() {
         // We only care about unique persons (originalId)
         const uniqueOnBoard = new Set();
         Object.values(personnelMap).forEach(p => {
+            // Skip placeholders
+            if (p.isPlaceholder || p.id?.startsWith('placeholder-')) return;
+            
             // Apply current filters to people on board
             if (searchTerm && !p.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) && !p.position?.toLowerCase().includes(searchTerm.toLowerCase())) return;
             if (filterUnit !== 'all' && p.unit !== filterUnit) return;
@@ -3142,13 +3145,11 @@ export default function PersonnelBoardV2Page() {
                                 </Box>
                             )}
                         >
-                            {Array.from({ length: 6 }, (_, i) => currentYear - i).map(year => (
+                            {Array.from({ length: currentYear - 2568 + 1 }, (_, i) => currentYear - i).map(year => (
                                 <MenuItem key={year} value={year} sx={{ fontWeight: 600 }}>ปี {year}</MenuItem>
                             ))}
                         </Select>
                     </FormControl>
-
-
 
                     <Button
                         variant="outlined"

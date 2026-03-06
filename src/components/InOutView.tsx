@@ -110,7 +110,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
     // Available years
     const availableYears = useMemo(() => {
         const currentYear = new Date().getFullYear() + 543;
-        return Array.from({ length: 5 }, (_, i) => currentYear - i);
+        return Array.from({ length: currentYear - 2568 + 1 }, (_, i) => currentYear - i);
     }, []);
 
     // Debounced search text to prevent excessive API calls

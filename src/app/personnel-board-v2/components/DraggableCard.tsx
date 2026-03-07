@@ -280,10 +280,10 @@ const DraggableCard = memo(({
                             {personnel.rank} {personnel.fullName}
                         </Typography>
                     </Box>
-                    <Typography 
-                        variant="body2" 
-                        color="text.secondary" 
-                        sx={{ 
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
                             fontSize: '0.8rem',
                             display: '-webkit-box',
                             WebkitLineClamp: 2,
@@ -374,6 +374,11 @@ const DraggableCard = memo(({
                             <MoveToLaneButton
                                 availableLanes={availableLanes}
                                 onMove={onMoveToLane}
+                                personName={`${personnel.rank || ''} ${personnel.fullName || ''}`}
+                                personPosition={personnel.position || ''}
+                                personPosCode={personnel.posCodeId?.toString()}
+                                personPosName={personnel.posCodeMaster?.name || ''}
+                                personUnit={personnel.unit || ''}
                             />
                         )}
                     </Box>

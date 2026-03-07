@@ -130,6 +130,11 @@ const DraggablePersonnelItem = memo(({
                                     groupNumber: col.groupNumber
                                 }))
                             }
+                            personName={`${person.rank || ''} ${person.fullName || ''}`}
+                            personPosition={person.position || ''}
+                            personPosCode={person.posCodeId?.toString()}
+                            personPosName={person.posCodeMaster?.name || ''}
+                            personUnit={person.unit || ''}
                             onMove={(laneId) => onAddToLane(person, laneId)}
                         />
                     </Box>

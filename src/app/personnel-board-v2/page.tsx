@@ -125,8 +125,8 @@ export default function PersonnelBoardV2Page() {
             });
             return changed ? next : prev;
         });
-    // NOTE: 'columns' intentionally omitted — functional updater receives latest prev directly
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // NOTE: 'columns' intentionally omitted — functional updater receives latest prev directly
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [personnelMap, getTransferLaneTitle]);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -316,7 +316,7 @@ export default function PersonnelBoardV2Page() {
         Object.values(personnelMap).forEach(p => {
             // Skip placeholders
             if (p.isPlaceholder || p.id?.startsWith('placeholder-')) return;
-            
+
             // Apply current filters to people on board
             if (searchTerm && !p.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) && !p.position?.toLowerCase().includes(searchTerm.toLowerCase())) return;
             if (filterUnit !== 'all' && p.unit !== filterUnit) return;
@@ -446,10 +446,10 @@ export default function PersonnelBoardV2Page() {
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
                 console.error('API Error:', res.status, errorData);
-                setSnackbar({ 
-                    open: true, 
-                    message: `ไม่สามารถโหลดข้อมูลบุคลากรได้: ${errorData.error || 'Unknown error'}`, 
-                    severity: 'error' 
+                setSnackbar({
+                    open: true,
+                    message: `ไม่สามารถโหลดข้อมูลบุคลากรได้: ${errorData.error || 'Unknown error'}`,
+                    severity: 'error'
                 });
                 throw new Error(`API Error: ${res.status} - ${errorData.error || 'Unknown error'}`);
             }
@@ -2959,7 +2959,7 @@ export default function PersonnelBoardV2Page() {
                 severity: 'info'
             });
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // personnelMap/posCodeOptions accessed via refs — stable callback
 
     // Auto-suggest for Manual/Custom lanes:
@@ -2984,237 +2984,269 @@ export default function PersonnelBoardV2Page() {
 
             prevCounts[col.id] = nextCount;
         });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [columns]); // personnelMap accessed via ref; handleSuggest is now stable
+
+    // --- Performance Optimizations for 500+ lanes ---
+
+    // 1. Pre-calculate available lanes list once per render cycle (Prevents re-calculating inside each of 500 lanes)
+    const memoizedAvailableLanes = useMemo(() => {
+        return columns
+            .filter(l => !l.isCompleted)
+            .map(l => ({ id: l.id, title: l.title, groupNumber: l.groupNumber }));
+    }, [columns]);
+
+    // 2. Pre-calculate personnel for each lane to avoid reference changes for lanes whose content hasn't changed.
+    // Memoizing this means DroppableLane (wrapped in React.memo) can skip rendering if it gets the same personnel array.
+    const lanePersonnelMap = useMemo(() => {
+        const map: Record<string, Personnel[]> = {};
+        columns.forEach(col => {
+            map[col.id] = col.itemIds
+                .map(id => personnelMap[id])
+                .filter((p): p is Personnel => !!p);
+        });
+        return map;
+    }, [columns, personnelMap]);
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
-            {/* Header - Professional Layout */}
+            {/* Header - Professional Organized Layout */}
             <Box sx={{
                 px: 3,
                 height: 72,
                 borderBottom: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'rgba(255,255,255,0.8)',
-                backdropFilter: 'blur(12px)',
+                borderColor: '#e2e8f0',
+                bgcolor: 'rgba(255,255,255,0.9)',
+                backdropFilter: 'blur(16px)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 2,
                 position: 'sticky',
                 top: 0,
                 zIndex: 1100,
-                boxShadow: '0 4px 20px -10px rgba(0,0,0,0.05)'
+                boxShadow: '0 4px 15px -10px rgba(0,0,0,0.08)'
             }}>
-                {/* Left Section: Brand & Status */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {/* 1. Brand & Status Group */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
                     <Link href="/" passHref>
-                        <IconButton
-                            size="small"
-                            sx={{
-                                width: 36,
-                                height: 36,
-                                border: '1px solid',
-                                borderColor: 'grey.200',
-                                borderRadius: 3,
-                                color: 'text.secondary',
-                                bgcolor: 'white',
-                                '&:hover': { bgcolor: 'primary.50', color: 'primary.main', borderColor: 'primary.main' }
-                            }}
-                        >
-                            <HomeIcon fontSize="small" />
-                        </IconButton>
+                        <Tooltip title="กลับหน้าแรก">
+                            <IconButton
+                                size="small"
+                                sx={{
+                                    width: 40,
+                                    height: 40,
+                                    border: '1.5px solid',
+                                    borderColor: '#e2e8f0',
+                                    borderRadius: 2.5,
+                                    color: '#64748b',
+                                    transition: 'all 0.2s',
+                                    '&:hover': { bgcolor: 'primary.50', color: 'primary.main', borderColor: 'primary.main' }
+                                }}
+                            >
+                                <HomeIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Link>
-
-                    <Divider orientation="vertical" flexItem sx={{ height: 24, my: 'auto' }} />
 
                     <Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1, fontSize: '1.1rem', letterSpacing: '-0.5px' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '1rem', letterSpacing: '-0.2px' }}>
                                 Personnel Board
                             </Typography>
-                            <Chip label="V2.0" size="small" color="primary" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 800, borderRadius: 1 }} />
+                            <Chip label="v2.0" size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 900, borderRadius: 1.5, bgcolor: '#f1f5f9', color: '#64748b' }} />
                         </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.5, minWidth: 140 }}>
-                            {/* Status */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
                             {savingBoard ? (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                     <CircularProgress size={10} color="info" />
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>กำลังบันทึก...</Typography>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>Syncing...</Typography>
                                 </Box>
                             ) : hasUnsavedChanges ? (
-                                <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'warning.main' }} />
-                                    ยังไม่ได้บันทึก
+                                <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#f59e0b' }} />
+                                    มีข้อมูลรอการบันทึก
                                 </Typography>
                             ) : lastSavedAt ? (
-                                <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'success.main' }} />
-                                    บันทึกแล้ว {lastSavedAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                <Typography variant="caption" sx={{ color: '#64748b', opacity: 0.8, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#10b981' }} />
+                                    อัปเดตล่าสุด {lastSavedAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                                 </Typography>
                             ) : (
-                                <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.5 }}>พร้อมใช้งาน</Typography>
+                                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500 }}>System Ready</Typography>
                             )}
                         </Box>
                     </Box>
                 </Box>
 
-                {/* Center Section: View Toggle */}
+                {/* 2. Center Section: Tab Switcher (Thematic Group) */}
                 <Box sx={{
                     bgcolor: '#f1f5f9',
                     p: 0.5,
                     borderRadius: 3,
                     display: 'flex',
-                    border: '1px solid',
+                    border: '1.5px solid',
                     borderColor: '#e2e8f0'
                 }}>
                     <Button
-                        variant={!showCompletedLanes ? 'contained' : 'text'}
+                        variant="text"
                         size="small"
                         onClick={() => setShowCompletedLanes(false)}
                         sx={{
                             borderRadius: 2.5,
                             px: 3,
-                            py: 0.5,
-                            fontSize: '0.85rem',
-                            fontWeight: 700,
+                            py: 0.75,
+                            fontSize: '0.825rem',
+                            fontWeight: 800,
                             textTransform: 'none',
                             bgcolor: !showCompletedLanes ? 'white' : 'transparent',
-                            color: !showCompletedLanes ? 'primary.main' : 'text.secondary',
-                            boxShadow: !showCompletedLanes ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
-                            '&:hover': {
-                                bgcolor: !showCompletedLanes ? 'white' : 'rgba(0,0,0,0.02)',
-                            }
+                            color: !showCompletedLanes ? '#3b82f6' : '#64748b',
+                            boxShadow: !showCompletedLanes ? '0 4px 10px rgba(0,0,0,0.06)' : 'none',
+                            '&:hover': { bgcolor: !showCompletedLanes ? 'white' : alpha('#64748b', 0.05) }
                         }}
                     >
                         🔄 ดำเนินการ ({columns.filter(c => !c.isCompleted).length})
                     </Button>
                     <Button
-                        variant={showCompletedLanes ? 'contained' : 'text'}
+                        variant="text"
                         size="small"
                         onClick={() => setShowCompletedLanes(true)}
                         sx={{
                             borderRadius: 2.5,
                             px: 3,
-                            py: 0.5,
-                            fontSize: '0.85rem',
-                            fontWeight: 700,
+                            py: 0.75,
+                            fontSize: '0.825rem',
+                            fontWeight: 800,
                             textTransform: 'none',
                             bgcolor: showCompletedLanes ? 'white' : 'transparent',
-                            color: showCompletedLanes ? 'success.main' : 'text.secondary',
-                            boxShadow: showCompletedLanes ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
-                            '&:hover': {
-                                bgcolor: showCompletedLanes ? 'white' : 'rgba(0,0,0,0.02)',
-                            }
+                            color: showCompletedLanes ? '#10b981' : '#64748b',
+                            boxShadow: showCompletedLanes ? '0 4px 10px rgba(0,0,0,0.06)' : 'none',
+                            '&:hover': { bgcolor: showCompletedLanes ? 'white' : alpha('#64748b', 0.05) }
                         }}
                     >
                         ✅ เสร็จสิ้น ({columns.filter(c => c.isCompleted).length})
                     </Button>
                 </Box>
 
-                {/* Right Section: Controls */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    {/* Undo / Redo */}
-                    <UndoRedoControls
-                        canUndo={canUndo}
-                        canRedo={canRedo}
-                        onUndo={handleUndo}
-                        onRedo={handleRedo}
-                    />
+                {/* 3. Right Controls: Action Center */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
 
-                    <Divider orientation="vertical" flexItem sx={{ height: 24, my: 'auto' }} />
+                    {/* History & Configuration Subgroup */}
+                    <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        bgcolor: alpha('#f8fafc', 0.5),
+                        p: 0.75,
+                        borderRadius: 2.5,
+                        border: '1px solid #e2e8f0'
+                    }}>
+                        <UndoRedoControls
+                            canUndo={canUndo}
+                            canRedo={canRedo}
+                            onUndo={handleUndo}
+                            onRedo={handleRedo}
+                        />
 
-                    {/* Year Select - Minimal */}
-                    <FormControl size="small">
-                        <Select
-                            value={selectedYear}
-                            onChange={(e) => setSelectedYear(e.target.value as number)}
-                            variant="standard"
-                            disableUnderline
+                        <Divider orientation="vertical" flexItem sx={{ height: 20, my: 'auto', bgcolor: '#e2e8f0' }} />
+
+                        <FormControl size="small">
+                            <Select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(e.target.value as number)}
+                                variant="standard"
+                                disableUnderline
+                                sx={{
+                                    fontWeight: 800,
+                                    fontSize: '0.85rem',
+                                    color: '#334155',
+                                    '& .MuiSelect-select': { py: 0.25, pl: 1, pr: 2.5, display: 'flex', alignItems: 'center', gap: 0.75 },
+                                    '&:hover': { color: 'primary.main' }
+                                }}
+                                renderValue={(value) => (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                        <CalendarMonthIcon sx={{ fontSize: 16, color: '#64748b' }} />
+                                        <span>ปี {value}</span>
+                                    </Box>
+                                )}
+                            >
+                                {Array.from({ length: currentYear - 2568 + 1 }, (_, i) => currentYear - i).map(year => (
+                                    <MenuItem key={year} value={year} sx={{ fontWeight: 700, fontSize: '0.85rem' }}>ปี {year}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Box>
+
+                    {/* View Tools Group */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<TableChartIcon sx={{ fontSize: 18 }} />}
+                            onClick={() => setIsInOutTableOpen(true)}
                             sx={{
+                                borderRadius: 2,
+                                px: 2,
+                                height: 38,
                                 fontWeight: 800,
-                                fontSize: '0.9rem',
-                                color: 'text.primary',
-                                '& .MuiSelect-select': { py: 0.5, pl: 1, pr: 3, display: 'flex', alignItems: 'center', gap: 1 },
-                                '&:hover': { bgcolor: 'grey.50', borderRadius: 1 }
+                                fontSize: '0.8rem',
+                                textTransform: 'none',
+                                bgcolor: 'white',
+                                borderColor: '#e2e8f0',
+                                color: '#475569',
+                                '&:hover': { bgcolor: '#f8fafc', borderColor: '#cbd5e1' }
                             }}
-                            renderValue={(value) => (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <CalendarMonthIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                    <span>ปี {value}</span>
-                                </Box>
-                            )}
                         >
-                            {Array.from({ length: currentYear - 2568 + 1 }, (_, i) => currentYear - i).map(year => (
-                                <MenuItem key={year} value={year} sx={{ fontWeight: 600 }}>ปี {year}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
+                            ตาราง In-Out
+                        </Button>
+                        <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<PrintIcon sx={{ fontSize: 18 }} />}
+                            onClick={() => setIsReportOpen(true)}
+                            sx={{
+                                borderRadius: 2,
+                                px: 2,
+                                height: 38,
+                                fontWeight: 800,
+                                fontSize: '0.8rem',
+                                textTransform: 'none',
+                                bgcolor: '#334155',
+                                color: 'white',
+                                boxShadow: 'none',
+                                '&:hover': { bgcolor: '#1e293b', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }
+                            }}
+                        >
+                            รายงาน
+                        </Button>
+                    </Box>
 
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<TableChartIcon />}
-                        onClick={() => setIsInOutTableOpen(true)}
-                        sx={{
-                            borderRadius: 3,
-                            px: 2,
-                            height: 40,
-                            fontWeight: 700,
-                            textTransform: 'none',
-                            bgcolor: 'white',
-                            border: '1px solid',
-                            borderColor: 'grey.300',
-                            color: 'text.primary',
-                            '&:hover': {
-                                bgcolor: 'grey.50',
-                                borderColor: 'primary.main',
-                                color: 'primary.main',
-                            }
-                        }}
-                    >
-                        ตาราง In-Out
-                    </Button>
-
+                    {/* Primary Save Action */}
                     <Button
                         variant="contained"
-                        size="small"
-                        startIcon={<PrintIcon fontSize="small" />}
-                        onClick={() => setIsReportOpen(true)}
-                        sx={{
-                            borderRadius: 3,
-                            px: 2,
-                            height: 40,
-                            fontWeight: 700,
-                            textTransform: 'none',
-                            bgcolor: '#1e293b',
-                            color: '#fff',
-                            '&:hover': {
-                                bgcolor: '#0f172a',
-                            }
-                        }}
-                    >
-                        รายงาน
-                    </Button>
-
-                    <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={savingBoard ? <CircularProgress size={16} color="inherit" /> : <SaveIcon fontSize="small" />}
+                        size="medium"
+                        startIcon={savingBoard ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
                         onClick={handleSaveData}
                         disabled={savingBoard || loadingBoard}
                         sx={{
-                            borderRadius: 3,
+                            borderRadius: 2,
                             px: 3,
-                            height: 40,
-                            minWidth: 230,
-                            fontWeight: 700,
-                            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                            height: 42,
+                            minWidth: 180,
+                            fontWeight: 900,
+                            fontSize: '0.9rem',
                             textTransform: 'none',
-                            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                            color: 'white',
+                            boxShadow: '0 4px 15px rgba(37, 99, 235, 0.25)',
+                            transition: 'all 0.2s',
+                            '&:hover': {
+                                transform: 'translateY(-1px)',
+                                boxShadow: '0 6px 20px rgba(37, 99, 235, 0.35)',
+                                background: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
+                            },
                         }}
                     >
-                        {savingBoard ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
+                        {savingBoard ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
                     </Button>
                 </Box>
             </Box>
@@ -3592,120 +3624,120 @@ export default function PersonnelBoardV2Page() {
                                         }
                                     }}
                                 >
-                                        {/* Sort Section */}
-                                        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
-                                            <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                                จัดเรียง
-                                            </Typography>
-                                        </Box>
-                                        <MenuItem
-                                            onClick={() => { handleSortByType(); setBoardFilterAnchor(null); }}
-                                            sx={{ py: 1.5, fontSize: '0.9rem' }}
-                                        >
-                                            <SortIcon sx={{ mr: 1.5, fontSize: 18, color: 'text.secondary' }} />
-                                            จัดกลุ่มตามประเภท
-                                        </MenuItem>
+                                    {/* Sort Section */}
+                                    <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            จัดเรียง
+                                        </Typography>
+                                    </Box>
+                                    <MenuItem
+                                        onClick={() => { handleSortByType(); setBoardFilterAnchor(null); }}
+                                        sx={{ py: 1.5, fontSize: '0.9rem' }}
+                                    >
+                                        <SortIcon sx={{ mr: 1.5, fontSize: 18, color: 'text.secondary' }} />
+                                        จัดกลุ่มตามประเภท
+                                    </MenuItem>
 
-                                        {/* Filter Section */}
-                                        <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
-                                            <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                                กรองประเภทเลน
-                                            </Typography>
-                                        </Box>
-                                        <MenuItem
-                                            onClick={() => { setFilterBoardType('all'); }}
-                                            selected={filterBoardType === 'all'}
-                                            sx={{ py: 1, fontSize: '0.85rem' }}
-                                        >
-                                            <Box sx={{ width: 18, mr: 1.5 }} />
-                                            ทั้งหมด
-                                        </MenuItem>
-                                        <MenuItem
-                                            onClick={() => { setFilterBoardType('swap'); }}
-                                            selected={filterBoardType === 'swap'}
-                                            sx={{ py: 1, fontSize: '0.85rem' }}
-                                        >
-                                            <Box sx={{ width: 18, mr: 1.5, color: '#f59e0b' }}>🔄</Box>
-                                            สลับตำแหน่ง
-                                        </MenuItem>
-                                        <MenuItem
-                                            onClick={() => { setFilterBoardType('three-way'); }}
-                                            selected={filterBoardType === 'three-way'}
-                                            sx={{ py: 1, fontSize: '0.85rem' }}
-                                        >
-                                            <Box sx={{ width: 18, mr: 1.5, color: '#f43f5e' }}>🔺</Box>
-                                            สามเส้า
-                                        </MenuItem>
-                                        <MenuItem
-                                            onClick={() => { setFilterBoardType('promotion'); }}
-                                            selected={filterBoardType === 'promotion'}
-                                            sx={{ py: 1, fontSize: '0.85rem' }}
-                                        >
-                                            <Box sx={{ width: 18, mr: 1.5, color: '#10b981' }}>📈</Box>
-                                            เลื่อนตำแหน่ง
-                                        </MenuItem>
-                                        <MenuItem
-                                            onClick={() => { setFilterBoardType('custom'); }}
-                                            selected={filterBoardType === 'custom'}
-                                            sx={{ py: 1, fontSize: '0.85rem' }}
-                                        >
-                                            <Box sx={{ width: 18, mr: 1.5, color: '#6366f1' }}>📦</Box>
-                                            อื่นๆ
-                                        </MenuItem>
+                                    {/* Filter Section */}
+                                    <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            กรองประเภทเลน
+                                        </Typography>
+                                    </Box>
+                                    <MenuItem
+                                        onClick={() => { setFilterBoardType('all'); }}
+                                        selected={filterBoardType === 'all'}
+                                        sx={{ py: 1, fontSize: '0.85rem' }}
+                                    >
+                                        <Box sx={{ width: 18, mr: 1.5 }} />
+                                        ทั้งหมด
+                                    </MenuItem>
+                                    <MenuItem
+                                        onClick={() => { setFilterBoardType('swap'); }}
+                                        selected={filterBoardType === 'swap'}
+                                        sx={{ py: 1, fontSize: '0.85rem' }}
+                                    >
+                                        <Box sx={{ width: 18, mr: 1.5, color: '#f59e0b' }}>🔄</Box>
+                                        สลับตำแหน่ง
+                                    </MenuItem>
+                                    <MenuItem
+                                        onClick={() => { setFilterBoardType('three-way'); }}
+                                        selected={filterBoardType === 'three-way'}
+                                        sx={{ py: 1, fontSize: '0.85rem' }}
+                                    >
+                                        <Box sx={{ width: 18, mr: 1.5, color: '#f43f5e' }}>🔺</Box>
+                                        สามเส้า
+                                    </MenuItem>
+                                    <MenuItem
+                                        onClick={() => { setFilterBoardType('promotion'); }}
+                                        selected={filterBoardType === 'promotion'}
+                                        sx={{ py: 1, fontSize: '0.85rem' }}
+                                    >
+                                        <Box sx={{ width: 18, mr: 1.5, color: '#10b981' }}>📈</Box>
+                                        เลื่อนตำแหน่ง
+                                    </MenuItem>
+                                    <MenuItem
+                                        onClick={() => { setFilterBoardType('custom'); }}
+                                        selected={filterBoardType === 'custom'}
+                                        sx={{ py: 1, fontSize: '0.85rem' }}
+                                    >
+                                        <Box sx={{ width: 18, mr: 1.5, color: '#6366f1' }}>📦</Box>
+                                        อื่นๆ
+                                    </MenuItem>
 
-                                        {/* Placeholder Filter */}
-                                        <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
-                                            <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                                กรองสถานะ
-                                            </Typography>
-                                        </Box>
-                                        <MenuItem
-                                            onClick={() => { setShowOnlyWithPlaceholder(!showOnlyWithPlaceholder); }}
-                                            selected={showOnlyWithPlaceholder}
-                                            sx={{
-                                                py: 1.5,
-                                                fontSize: '0.85rem',
-                                                bgcolor: showOnlyWithPlaceholder ? alpha('#f59e0b', 0.1) : 'transparent',
-                                                '&:hover': {
-                                                    bgcolor: showOnlyWithPlaceholder ? alpha('#f59e0b', 0.15) : 'action.hover',
-                                                }
-                                            }}
-                                        >
-                                            <PlaceholderIcon sx={{ mr: 1.5, fontSize: 18, color: showOnlyWithPlaceholder ? 'warning.main' : 'text.disabled' }} />
-                                            <Typography sx={{
-                                                fontWeight: showOnlyWithPlaceholder ? 700 : 400,
-                                                color: showOnlyWithPlaceholder ? 'warning.dark' : 'text.primary'
-                                            }}>
-                                                เฉพาะที่มี Placeholder
-                                            </Typography>
-                                            {lanesWithPlaceholderCount > 0 && (
-                                                <Chip
-                                                    label={lanesWithPlaceholderCount}
-                                                    size="small"
-                                                    color="warning"
-                                                    sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.5 } }}
-                                                />
-                                            )}
-                                        </MenuItem>
-
-                                        {/* Clear Filters */}
-                                        {(filterBoardType !== 'all' || showOnlyWithPlaceholder) && (
-                                            <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0' }}>
-                                                <Button
-                                                    fullWidth
-                                                    size="small"
-                                                    variant="outlined"
-                                                    onClick={() => {
-                                                        setFilterBoardType('all');
-                                                        setShowOnlyWithPlaceholder(false);
-                                                        setBoardFilterAnchor(null);
-                                                    }}
-                                                    sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1.5 }}
-                                                >
-                                                    ล้างตัวกรองทั้งหมด
-                                                </Button>
-                                            </Box>
+                                    {/* Placeholder Filter */}
+                                    <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            กรองสถานะ
+                                        </Typography>
+                                    </Box>
+                                    <MenuItem
+                                        onClick={() => { setShowOnlyWithPlaceholder(!showOnlyWithPlaceholder); }}
+                                        selected={showOnlyWithPlaceholder}
+                                        sx={{
+                                            py: 1.5,
+                                            fontSize: '0.85rem',
+                                            bgcolor: showOnlyWithPlaceholder ? alpha('#f59e0b', 0.1) : 'transparent',
+                                            '&:hover': {
+                                                bgcolor: showOnlyWithPlaceholder ? alpha('#f59e0b', 0.15) : 'action.hover',
+                                            }
+                                        }}
+                                    >
+                                        <PlaceholderIcon sx={{ mr: 1.5, fontSize: 18, color: showOnlyWithPlaceholder ? 'warning.main' : 'text.disabled' }} />
+                                        <Typography sx={{
+                                            fontWeight: showOnlyWithPlaceholder ? 700 : 400,
+                                            color: showOnlyWithPlaceholder ? 'warning.dark' : 'text.primary'
+                                        }}>
+                                            เฉพาะที่มี Placeholder
+                                        </Typography>
+                                        {lanesWithPlaceholderCount > 0 && (
+                                            <Chip
+                                                label={lanesWithPlaceholderCount}
+                                                size="small"
+                                                color="warning"
+                                                sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.5 } }}
+                                            />
                                         )}
+                                    </MenuItem>
+
+                                    {/* Clear Filters */}
+                                    {(filterBoardType !== 'all' || showOnlyWithPlaceholder) && (
+                                        <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0' }}>
+                                            <Button
+                                                fullWidth
+                                                size="small"
+                                                variant="outlined"
+                                                onClick={() => {
+                                                    setFilterBoardType('all');
+                                                    setShowOnlyWithPlaceholder(false);
+                                                    setBoardFilterAnchor(null);
+                                                }}
+                                                sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1.5 }}
+                                            >
+                                                ล้างตัวกรองทั้งหมด
+                                            </Button>
+                                        </Box>
+                                    )}
 
                                 </Popover>
 
@@ -3804,7 +3836,7 @@ export default function PersonnelBoardV2Page() {
                                                 key={column.id}
                                                 column={column}
                                                 index={index}
-                                                personnelMap={personnelMap}
+                                                lanePersonnel={lanePersonnelMap[column.id] || []}
                                                 onRemoveItem={handleRemoveFromBoard}
                                                 onRemoveLane={() => confirmRemoveLane(column.id)}
                                                 selectedIds={selectedIds}
@@ -3816,7 +3848,7 @@ export default function PersonnelBoardV2Page() {
                                                 onToggleComplete={handleToggleComplete}
                                                 onAddPlaceholder={handleAddPlaceholder}
                                                 isReadOnly={showCompletedLanes}
-                                                allLanes={columns}
+                                                availableLanes={memoizedAvailableLanes}
                                                 onMoveItem={handleMovePersonToLane}
                                                 onViewSummary={setSelectedLaneSummary}
                                             />

@@ -34,7 +34,7 @@ import { Personnel, Column } from '../types';
 
 interface DroppableLaneProps {
     column: Column;
-    personnelMap: Record<string, Personnel>;
+    lanePersonnel: Personnel[]; // Optimized: Only people in this lane
     onRemoveItem: (itemId: string) => void;
     onRemoveLane: () => void;
     selectedIds: string[];
@@ -45,16 +45,16 @@ interface DroppableLaneProps {
     onCardClick?: (personnel: Personnel, targetInfo?: any) => void;
     onToggleComplete?: (columnId: string) => void;
     onAddPlaceholder?: (columnId: string) => void;
-    isReadOnly?: boolean; // Disable drag-drop in completed view
+    isReadOnly?: boolean;
     index: number;
-    allLanes?: Column[];
+    availableLanes?: { id: string; title: string; groupNumber?: string }[]; // Optimized: Pre-calculated
     onMoveItem?: (itemId: string, targetLaneId: string) => void;
     onViewSummary?: (column: Column) => void;
 }
 
 const DroppableLane = memo(({
     column,
-    personnelMap,
+    lanePersonnel,
     onRemoveItem,
     onRemoveLane,
     selectedIds,
@@ -67,7 +67,7 @@ const DroppableLane = memo(({
     onAddPlaceholder,
     isReadOnly = false,
     index,
-    allLanes = [],
+    availableLanes = [],
     onMoveItem,
     onViewSummary
 }: DroppableLaneProps) => {
@@ -142,9 +142,8 @@ const DroppableLane = memo(({
     const isCustom = !hasVacantPosition && column.chainType === 'custom';
 
     // Check if lane has placeholder
-    const hasPlaceholder = column.itemIds.some(id => {
-        const person = personnelMap[id];
-        return person?.isPlaceholder || id.startsWith('placeholder-');
+    const hasPlaceholder = lanePersonnel.some(person => {
+        return person?.isPlaceholder || person?.id.startsWith('placeholder-');
     });
 
     // Premium Color Mapping
@@ -433,13 +432,13 @@ const DroppableLane = memo(({
                                     label={`${column.vacantPosition.posCodeMaster.id} - ${column.vacantPosition.posCodeMaster.name}`}
                                     size="small"
                                     variant="outlined"
-                                    sx={{ 
-                                        height: 'auto', 
+                                    sx={{
+                                        height: 'auto',
                                         minHeight: 18,
-                                        fontSize: '0.62rem', 
-                                        fontWeight: 700, 
-                                        color: 'text.secondary', 
-                                        borderColor: alpha(styles.accent, 0.1), 
+                                        fontSize: '0.62rem',
+                                        fontWeight: 700,
+                                        color: 'text.secondary',
+                                        borderColor: alpha(styles.accent, 0.1),
                                         bgcolor: 'white',
                                         '& .MuiChip-label': {
                                             display: '-webkit-box',
@@ -470,11 +469,10 @@ const DroppableLane = memo(({
                             )}
                         </Box>
 
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Box sx={{ display: 'center', alignItems: 'center', gap: 0.5 }}>
                             {(() => {
-                                const realPersonnelCount = column.itemIds.filter(id => {
-                                    const person = personnelMap[id];
-                                    return person && !person.isPlaceholder && !id.startsWith('placeholder-');
+                                const realPersonnelCount = lanePersonnel.filter(person => {
+                                    return person && !person.isPlaceholder && !person.id.startsWith('placeholder-');
                                 }).length;
                                 return (
                                     <>
@@ -542,47 +540,39 @@ const DroppableLane = memo(({
                     </Box>
                 ) : (
                     <>
-                        {column.itemIds.map((itemId, index) => {
-                            const personnel = personnelMap[itemId];
+                        {lanePersonnel.map((personnel, idx) => {
                             if (!personnel) return null;
+                            const itemId = personnel.id;
 
                             // Logic for promotion chain target:
-                            // Lv 1 (index 0) fills the header's vacant position
-                            // Lv 2 (index 1) fills Lv 1's former position (personnelMap[itemIds[0]])
-                            // and so on...
+                            // Lv 1 (idx 0) fills the header's vacant position
+                            // Lv 2 (idx 1) fills Lv 1's former position
                             let targetInfo = null;
                             if (column.chainType === 'promotion') {
-                                if (index === 0) {
+                                if (idx === 0) {
                                     targetInfo = column.vacantPosition;
                                 } else {
-                                    const previousPerson = personnelMap[column.itemIds[index - 1]];
+                                    const previousPerson = lanePersonnel[idx - 1];
                                     targetInfo = previousPerson;
                                 }
                             } else if (column.chainType === 'custom') {
-                                // Manual/Custom lane follows succession display from level 2 onward
-                                if (index > 0) {
-                                    const previousPerson = personnelMap[column.itemIds[index - 1]];
+                                if (idx > 0) {
+                                    const previousPerson = lanePersonnel[idx - 1];
                                     targetInfo = previousPerson;
                                 }
                             } else if (column.vacantPosition?.isTransaction) {
-                                // Logic for Swap (2-way), Three-way, and Transfer
                                 const type = column.vacantPosition.transactionType;
-                                if (type === 'two-way' && column.itemIds.length === 2) {
-                                    // A -> B, B -> A
-                                    targetInfo = personnelMap[column.itemIds[index === 0 ? 1 : 0]];
-                                } else if (type === 'three-way' && column.itemIds.length === 3) {
-                                    // A -> B, B -> C, C -> A
-                                    if (index === 0) targetInfo = personnelMap[column.itemIds[1]];
-                                    else if (index === 1) targetInfo = personnelMap[column.itemIds[2]];
-                                    else if (index === 2) targetInfo = personnelMap[column.itemIds[0]];
+                                if (type === 'two-way' && lanePersonnel.length === 2) {
+                                    targetInfo = lanePersonnel[idx === 0 ? 1 : 0];
+                                } else if (type === 'three-way' && lanePersonnel.length === 3) {
+                                    if (idx === 0) targetInfo = lanePersonnel[1];
+                                    else if (idx === 1) targetInfo = lanePersonnel[2];
+                                    else if (idx === 2) targetInfo = lanePersonnel[0];
                                 } else if (type === 'transfer') {
-                                    // Transfer follows chain logic: 
-                                    // Lv 1 -> Destination Unit
-                                    // Lv 2+ -> Previous person
-                                    if (index === 0) {
+                                    if (idx === 0) {
                                         targetInfo = column.vacantPosition;
                                     } else {
-                                        targetInfo = personnelMap[column.itemIds[index - 1]];
+                                        targetInfo = lanePersonnel[idx - 1];
                                     }
                                 }
                             }
@@ -591,7 +581,7 @@ const DroppableLane = memo(({
                                 <DraggableCard
                                     key={itemId}
                                     personnel={personnel}
-                                    index={index}
+                                    index={idx}
                                     isSelected={selectedIds.includes(itemId)}
                                     onToggle={onToggleSelection}
                                     onRemove={() => onRemoveItem(itemId)}
@@ -601,9 +591,7 @@ const DroppableLane = memo(({
                                     onUpdate={onUpdateItem}
                                     onCardClick={onCardClick}
                                     isReadOnly={isReadOnly}
-                                    availableLanes={allLanes
-                                        .filter(l => l.id !== column.id && !l.isCompleted)
-                                        .map(l => ({ id: l.id, title: l.title, groupNumber: l.groupNumber }))}
+                                    availableLanes={availableLanes.filter(l => l.id !== column.id)}
                                     onMoveToLane={(targetLaneId) => onMoveItem?.(itemId, targetLaneId)}
                                 />
                             );
@@ -616,37 +604,37 @@ const DroppableLane = memo(({
                             isTransfer ||
                             (column.chainType === 'custom' && column.itemIds.length >= 2)
                         ) && !isReadOnly && (
-                            <Box
-                                onClick={() => onSuggest?.(column)}
-                                sx={{
-                                    py: 1.5,
-                                    px: 1,
-                                    border: '1.5px dashed',
-                                    borderColor: alpha('#3b82f6', 0.15),
-                                    borderRadius: 3,
-                                    bgcolor: alpha('#f8fafc', 0.3),
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 1,
-                                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    mt: 1,
-                                    mb: 2,
-                                    '&:hover': {
-                                        borderColor: 'primary.main',
-                                        bgcolor: alpha('#3b82f6', 0.05),
-                                        transform: 'scale(0.98)',
-                                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
-                                    }
-                                }}
-                            >
-                                <AutoFixHighIcon sx={{ fontSize: 16, color: 'primary.main', opacity: 0.5 }} />
-                                <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', opacity: 0.7, fontSize: '0.7rem' }}>
-                                    หาคนสืบต่อลำดับที่ {column.itemIds.length + 1}
-                                </Typography>
-                            </Box>
-                        )}
+                                <Box
+                                    onClick={() => onSuggest?.(column)}
+                                    sx={{
+                                        py: 1.5,
+                                        px: 1,
+                                        border: '1.5px dashed',
+                                        borderColor: alpha('#3b82f6', 0.15),
+                                        borderRadius: 3,
+                                        bgcolor: alpha('#f8fafc', 0.3),
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 1,
+                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        mt: 1,
+                                        mb: 2,
+                                        '&:hover': {
+                                            borderColor: 'primary.main',
+                                            bgcolor: alpha('#3b82f6', 0.05),
+                                            transform: 'scale(0.98)',
+                                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                                        }
+                                    }}
+                                >
+                                    <AutoFixHighIcon sx={{ fontSize: 16, color: 'primary.main', opacity: 0.5 }} />
+                                    <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', opacity: 0.7, fontSize: '0.7rem' }}>
+                                        หาคนสืบต่อลำดับที่ {column.itemIds.length + 1}
+                                    </Typography>
+                                </Box>
+                            )}
 
                         {/* Drop zone at bottom */}
                         {isOver && (

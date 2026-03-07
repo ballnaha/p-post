@@ -18,6 +18,8 @@ import {
     alpha,
     useTheme,
     Skeleton,
+    Button,
+    CircularProgress,
 } from '@mui/material';
 import {
     Search as SearchIcon,
@@ -28,6 +30,7 @@ import {
     PersonOff as PersonOffIcon,
     AccessTime as AccessTimeIcon,
     Refresh as RefreshIcon,
+    FileDownload as FileDownloadIcon,
 } from '@mui/icons-material';
 import InOutTable, { InOutRecord } from '@/components/InOutTable';
 import PersonnelDetailModal, { PersonnelData } from '@/components/PersonnelDetailModal';
@@ -106,6 +109,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
     const [detailModalOpen, setDetailModalOpen] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailVariant, setDetailVariant] = useState<'default' | 'vacant'>('default');
+    const [exportLoading, setExportLoading] = useState(false);
 
     // Available years
     const availableYears = useMemo(() => {
@@ -373,6 +377,220 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
         setTimeout(() => setSelectedPersonnel(null), 300);
     };
 
+    // Export to Excel
+    const handleExportExcel = async () => {
+        if (exportLoading) return;
+        setExportLoading(true);
+
+        try {
+            const ExcelJS = await import('exceljs');
+
+            // Fetch ข้อมูลทั้งหมด (ไม่จำกัด pagination)
+            const params = new URLSearchParams({
+                year: selectedYear.toString(),
+                unit: filterUnit,
+                posCodeId: filterPosCode,
+                status: filterStatus,
+                search: debouncedSearchText,
+                page: '0',
+                pageSize: '999999', // ดึงทั้งหมด
+            });
+
+            const response = await fetch(`/api/in-out-v2?${params}`);
+            const result = await response.json();
+
+            if (!result.success || !result.data) {
+                alert('ไม่สามารถดึงข้อมูลได้');
+                return;
+            }
+
+            const allData = result.data.records;
+
+            // สร้าง workbook
+            const wb = new ExcelJS.Workbook();
+            wb.creator = 'P-Post System';
+            wb.created = new Date();
+
+            const ws = wb.addWorksheet('ตาราง In-Out', {
+                views: [{ state: 'frozen', ySplit: 1 }],
+            });
+
+            // --- Header labels ---
+            const headers = [
+                'คนเข้า',
+                'ตำแหน่งเดิม (เข้า)',
+                'รหัสตำแหน่ง (เข้า)',
+                'คนครอง',
+                'ตำแหน่งปัจจุบัน',
+                'เลขที่ตำแหน่ง',
+                'รหัสตำแหน่ง',
+                'อายุ',
+                'กลุ่ม',
+                'ตำแหน่งใหม่ (ออก)',
+                'เลขที่ตำแหน่ง (ออก)',
+                'รหัสตำแหน่ง (ออก)',
+                'หน่วยใหม่ (ออก)',
+                'ตำแหน่งที่ร้องขอ',
+                'ผู้สนับสนุน',
+                'หมายเหตุ'
+            ];
+
+            // ปรับความกว้างคอลัมน์
+            const colWidths = [28, 35, 22, 28, 35, 15, 22, 8, 12, 35, 15, 22, 28, 28, 28, 35];
+            ws.columns = headers.map((header, i) => ({
+                header,
+                key: `col${i}`,
+                width: colWidths[i],
+            }));
+
+            // --- Header color per section ---
+            const getHeaderColor = (colIdx: number): string => {
+                if (colIdx <= 2) return '1B5E20';       // คนเข้า: deep green
+                if (colIdx <= 8) return 'E65100';       // คนครอง: deep orange
+                if (colIdx <= 14) return 'B71C1C';      // คนออก: deep red
+                return '37474F';                         // หมายเหตุ: blue-grey
+            };
+
+            // Style header row
+            const headerRow = ws.getRow(1);
+            headerRow.height = 36;
+            headerRow.eachCell((cell, colNumber) => {
+                const colIdx = colNumber - 1;
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 13, name: 'Tahoma' };
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: `FF${getHeaderColor(colIdx)}` },
+                };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FF000000' } },
+                    bottom: { style: 'medium', color: { argb: 'FF000000' } },
+                    left: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+                    right: { style: 'thin', color: { argb: 'FFFFFFFF' } },
+                };
+            });
+
+            // --- Add data rows ---
+            allData.forEach((record: InOutRecord) => {
+                // คนเข้า
+                const incomingName = record.incomingPerson
+                    ? `${record.incomingPerson.rank || ''} ${record.incomingPerson.name}`.trim()
+                    : '-';
+                const incomingFromPosition = record.incomingPerson?.fromPosition || '-';
+                const incomingPosCode = record.incomingPerson?.posCodeId
+                    ? `${record.incomingPerson.posCodeId} - ${record.incomingPerson.posCode || ''}`
+                    : (record.incomingPerson?.posCode || '-');
+
+                // คนครอง
+                const isVacant = record.status === 'vacant' || record.status === 'reserved';
+                const currentName = isVacant
+                    ? (record.status === 'vacant' ? 'ว่าง' : 'ว่าง (กันตำแหน่ง)')
+                    : (record.currentHolder
+                        ? `${record.currentHolder.rank || ''} ${record.currentHolder.name}`.trim()
+                        : '-');
+                const currentPosition = record.currentHolder?.position || record.vacantPosition?.position || '-';
+                const positionNumber = record.positionNumber || '-';
+                const currentPosCode = (() => {
+                    const posCodeId = record.currentHolder?.posCodeId || record.vacantPosition?.posCodeId;
+                    const posCode = record.currentHolder?.posCode || record.vacantPosition?.posCode;
+                    return posCodeId ? `${posCodeId} - ${posCode || ''}` : (posCode || '-');
+                })();
+                const age = record.currentHolder?.age || '-';
+                const group = record.group || '-';
+
+                // คนออก
+                const outgoingPosition = record.outgoingPerson?.toPosition || '-';
+                const outgoingPositionNumber = record.outgoingPerson?.toPositionNumber || '-';
+                const outgoingPosCode = record.outgoingPerson?.toPosCodeId
+                    ? `${record.outgoingPerson.toPosCodeId} - ${record.outgoingPerson.toPosCode || ''}`
+                    : (record.outgoingPerson?.toPosCode || '-');
+                const outgoingUnit = record.outgoingPerson?.toUnit || '-';
+                const requestedPosition = record.outgoingPerson?.requestedPosition || '-';
+                const supporter = record.outgoingPerson?.supporter || '-';
+                const remark = record.remark || '-';
+
+                ws.addRow([
+                    incomingName, incomingFromPosition, incomingPosCode,
+                    currentName, currentPosition, positionNumber, currentPosCode, age, group,
+                    outgoingPosition, outgoingPositionNumber, outgoingPosCode, outgoingUnit,
+                    requestedPosition, supporter, remark
+                ]);
+            });
+
+            // --- Section color palettes (even row / odd row) ---
+            const getSectionFill = (colIdx: number, isEven: boolean): { argb: string } => {
+                if (colIdx <= 2) return { argb: isEven ? 'FFE8F5E9' : 'FFC8E6C9' };       // เขียวอ่อน
+                if (colIdx <= 8) return { argb: isEven ? 'FFFFF8E1' : 'FFFFECB3' };       // เหลืองอำพัน
+                if (colIdx <= 14) return { argb: isEven ? 'FFFBE9E7' : 'FFFFCCBC' };      // แดง/ส้มอ่อน
+                return { argb: isEven ? 'FFF5F5F5' : 'FFEEEEEE' };                         // เทาอ่อน
+            };
+
+            const getSectionBorder = (colIdx: number): string => {
+                if (colIdx <= 2) return 'FFA5D6A7';
+                if (colIdx <= 8) return 'FFFFE082';
+                if (colIdx <= 14) return 'FFEF9A9A';
+                return 'FFBDBDBD';
+            };
+
+            // Style data rows (row 2 onwards)
+            for (let rowIdx = 2; rowIdx <= ws.rowCount; rowIdx++) {
+                const row = ws.getRow(rowIdx);
+                const isEven = rowIdx % 2 === 0;
+                // ไม่ตั้ง row.height เพื่อให้ Excel ปรับความสูงอัตโนมัติตาม wrapText
+
+                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                    const colIdx = colNumber - 1;
+                    const borderArgb = getSectionBorder(colIdx);
+
+                    cell.font = { size: 12, color: { argb: 'FF212121' }, name: 'Tahoma' };
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: getSectionFill(colIdx, isEven),
+                    };
+                    cell.alignment = {
+                        horizontal: (colIdx === 5 || colIdx === 7 || colIdx === 8 || colIdx === 10) ? 'center' : 'left',
+                        vertical: 'middle',
+                        wrapText: true,
+                    };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: borderArgb } },
+                        bottom: { style: 'thin', color: { argb: borderArgb } },
+                        left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                        right: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                    };
+                });
+            }
+
+            // Enable auto-filter on header row
+            ws.autoFilter = {
+                from: { row: 1, column: 1 },
+                to: { row: 1, column: headers.length },
+            };
+
+            // Generate file and download
+            const buffer = await wb.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `ตาราง_In-Out_${selectedYear}_ทั้งหมด_${allData.length}_รายการ.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+            alert('เกิดข้อผิดพลาดในการ export Excel');
+        } finally {
+            setExportLoading(false);
+        }
+    };
+
     return (
         <Box
             sx={{
@@ -421,18 +639,40 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                         </Typography>
 
                     </Box>
-                    <IconButton
-                        onClick={handleRefresh}
-                        disabled={loading}
-                        sx={{
-                            bgcolor: alpha(theme.palette.primary.main, 0.1),
-                            '&:hover': {
-                                bgcolor: alpha(theme.palette.primary.main, 0.2),
-                            },
-                        }}
-                    >
-                        <RefreshIcon sx={{ color: theme.palette.primary.main }} />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={exportLoading ? <CircularProgress size={16} color="inherit" /> : <FileDownloadIcon />}
+                            onClick={handleExportExcel}
+                            disabled={loading || exportLoading || data.length === 0}
+                            sx={{
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                fontWeight: 500,
+                                borderColor: theme.palette.primary.main,
+                                color: theme.palette.primary.main,
+                                '&:hover': {
+                                    borderColor: theme.palette.primary.dark,
+                                    bgcolor: alpha(theme.palette.primary.main, 0.05),
+                                },
+                            }}
+                        >
+                            {exportLoading ? 'กำลัง Export...' : 'Export Excel'}
+                        </Button>
+                        <IconButton
+                            onClick={handleRefresh}
+                            disabled={loading}
+                            sx={{
+                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                '&:hover': {
+                                    bgcolor: alpha(theme.palette.primary.main, 0.2),
+                                },
+                            }}
+                        >
+                            <RefreshIcon sx={{ color: theme.palette.primary.main }} />
+                        </IconButton>
+                    </Box>
                 </Box>
 
                 {/* Summary chips */}

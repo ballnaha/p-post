@@ -197,6 +197,23 @@ export default function PersonnelBoardV2Page() {
     const [addLaneTab, setAddLaneTab] = useState(0); // 0: Manual, 1: Vacant Position
     const [selectedVacantPosition, setSelectedVacantPosition] = useState<any | null>(null);
     const [isNewLaneDrawerOpen, setIsNewLaneDrawerOpen] = useState(false);
+    const [drawerOpenCounter, setDrawerOpenCounter] = useState(0); // Force re-fetch เมื่อเปิด Drawer ใหม่
+
+    // เปิด Drawer พร้อม reset filters + force re-fetch ทุกครั้ง
+    const openNewLaneDrawer = useCallback(() => {
+        // Reset all drawer filters to defaults
+        setVacantSearch('');
+        setDebouncedVacantSearch('');
+        setVacantFilterUnit('all');
+        setVacantFilterPosCode('all');
+        setVacantFilterStatus('all');
+        setVacantPage(0);
+        setIsVacantFilterCollapsed(true);
+        setNewLaneTitle('');
+        // Open drawer + bump counter to force re-fetch
+        setIsNewLaneDrawerOpen(true);
+        setDrawerOpenCounter(c => c + 1);
+    }, []);
     const [forceAvailableIds, setForceAvailableIds] = useState<string[]>([]);
     const [showCompletedLanes, setShowCompletedLanes] = useState(false); // Toggle to show/hide completed lanes
     const [isInOutTableOpen, setIsInOutTableOpen] = useState(false); // State for In-Out Table Dialog
@@ -524,11 +541,12 @@ export default function PersonnelBoardV2Page() {
     }, [selectedYear, vacantPage, vacantRowsPerPage, debouncedVacantSearch, vacantFilterPosCode, vacantFilterUnit, vacantFilterStatus, forceAvailableIds]);
 
     // Fetch vacant positions when drawer is open or filters change
+    // drawerOpenCounter ensures fresh data on every drawer open
     useEffect(() => {
         if (isNewLaneDrawerOpen && addLaneTab === 0) {
             fetchVacantPositions();
         }
-    }, [isNewLaneDrawerOpen, addLaneTab, fetchVacantPositions]);
+    }, [isNewLaneDrawerOpen, addLaneTab, fetchVacantPositions, drawerOpenCounter]);
 
     // Fetch swap transactions
     const fetchSwapTransactions = useCallback(async () => {
@@ -715,24 +733,12 @@ export default function PersonnelBoardV2Page() {
         }
     }, [columns, personnelMap, selectedYear, saveBoardData]);
 
-    // Manual save
+    // Manual save — ใช้ saveBoardData เพื่ออัปเดต linkedTransactionId ป้องกัน Drawer นับซ้ำ
     const handleSaveData = async () => {
-        setSavingBoard(true);
-        try {
-            const res = await fetch('/api/personnel-board', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ year: selectedYear, columns, personnelMap }),
-            });
-            if (!res.ok) throw new Error('API Error');
-            setLastSavedAt(new Date());
-            setHasUnsavedChanges(false);
+        const success = await saveBoardData(selectedYear, columns, personnelMap);
+        if (success) {
             setForceAvailableIds([]); // ล้างรายการที่บังคับคืนชีพเมื่อบันทึกจริงแล้ว
             setSnackbar({ open: true, message: `บันทึกข้อมูลปี ${selectedYear} เรียบร้อยแล้ว`, severity: 'success' });
-        } catch (err) {
-            setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการบันทึก', severity: 'error' });
-        } finally {
-            setSavingBoard(false);
         }
     };
 
@@ -3797,7 +3803,7 @@ export default function PersonnelBoardV2Page() {
                                     variant="contained"
                                     size="small"
                                     startIcon={<AddIcon fontSize="small" />}
-                                    onClick={() => setIsNewLaneDrawerOpen(true)}
+                                    onClick={() => openNewLaneDrawer()}
                                     disabled={savingBoard || loadingBoard}
                                     sx={{
                                         borderRadius: 2,
@@ -3840,7 +3846,7 @@ export default function PersonnelBoardV2Page() {
                                     <Button
                                         variant="contained"
                                         startIcon={<AddIcon />}
-                                        onClick={(e) => { e.stopPropagation(); setIsNewLaneDrawerOpen(true); }}
+                                        onClick={(e) => { e.stopPropagation(); openNewLaneDrawer(); }}
                                         sx={{ borderRadius: 3, px: 3, py: 1, fontWeight: 700, textTransform: 'none', boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}
                                     >
                                         เพิ่มเลนใหม่

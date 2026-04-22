@@ -21,12 +21,16 @@ export const useBoardHistory = (
         selectedIds: string[]
     ) => {
         setPast(prev => {
+            const cloneCols = typeof structuredClone === 'function' ? structuredClone(columns) : JSON.parse(JSON.stringify(columns));
+            const cloneMap = typeof structuredClone === 'function' ? structuredClone(personnelMap) : JSON.parse(JSON.stringify(personnelMap));
+            
             const newPast = [...prev, {
-                columns: JSON.parse(JSON.stringify(columns)),
-                personnelMap: JSON.parse(JSON.stringify(personnelMap)),
+                columns: cloneCols,
+                personnelMap: cloneMap,
                 selectedIds: [...selectedIds]
             }];
-            if (newPast.length > 50) return newPast.slice(newPast.length - 50);
+            // Reduce max history states from 50 to 15 for 200+ lanes performance
+            if (newPast.length > 15) return newPast.slice(newPast.length - 15);
             return newPast;
         });
         setFuture([]);
@@ -44,11 +48,16 @@ export const useBoardHistory = (
 
         if (previousState) {
             setPast(newPast);
-            setFuture(prev => [{
-                columns: JSON.parse(JSON.stringify(currentColumns)),
-                personnelMap: JSON.parse(JSON.stringify(currentPersonnelMap)),
-                selectedIds: [...currentSelectedIds]
-            }, ...prev]);
+            setFuture(prev => {
+                const cloneCols = typeof structuredClone === 'function' ? structuredClone(currentColumns) : JSON.parse(JSON.stringify(currentColumns));
+                const cloneMap = typeof structuredClone === 'function' ? structuredClone(currentPersonnelMap) : JSON.parse(JSON.stringify(currentPersonnelMap));
+                
+                return [{
+                    columns: cloneCols,
+                    personnelMap: cloneMap,
+                    selectedIds: [...currentSelectedIds]
+                }, ...prev].slice(0, 15);
+            });
             return previousState;
         }
         return null;
@@ -66,11 +75,16 @@ export const useBoardHistory = (
 
         if (nextState) {
             setFuture(newFuture);
-            setPast(prev => [...prev, {
-                columns: JSON.parse(JSON.stringify(currentColumns)),
-                personnelMap: JSON.parse(JSON.stringify(currentPersonnelMap)),
-                selectedIds: [...currentSelectedIds]
-            }]);
+            setPast(prev => {
+                const cloneCols = typeof structuredClone === 'function' ? structuredClone(currentColumns) : JSON.parse(JSON.stringify(currentColumns));
+                const cloneMap = typeof structuredClone === 'function' ? structuredClone(currentPersonnelMap) : JSON.parse(JSON.stringify(currentPersonnelMap));
+                
+                return [...prev, {
+                    columns: cloneCols,
+                    personnelMap: cloneMap,
+                    selectedIds: [...currentSelectedIds]
+                }].slice(-15);
+            });
             return nextState;
         }
         return null;

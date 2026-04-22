@@ -267,16 +267,28 @@ const DraggableCard = memo(({
                         onCardClick?.(personnel, targetInfo);
                     }}
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.25, minWidth: 0 }}>
                         {isChain && (
                             <Chip
                                 label={`Lv ${index + 1}`}
                                 size="small"
                                 color="error"
-                                sx={{ height: 16, fontSize: '0.6rem', fontWeight: 900, px: 0 }}
+                                sx={{ height: 16, fontSize: '0.6rem', fontWeight: 900, px: 0, flexShrink: 0 }}
                             />
                         )}
-                        <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                        <Typography 
+                            variant="subtitle2" 
+                            sx={{ 
+                                fontWeight: 700, 
+                                fontSize: '0.95rem', 
+                                lineHeight: 1.3,
+                                flex: 1,
+                                minWidth: 0,
+                                whiteSpace: 'normal',
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
+                            }}
+                        >
                             {personnel.rank} {personnel.fullName}
                         </Typography>
                     </Box>
@@ -285,11 +297,14 @@ const DraggableCard = memo(({
                         color="text.secondary"
                         sx={{
                             fontSize: '0.8rem',
+                            lineHeight: 1.3,
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
                             display: '-webkit-box',
                             WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
-                            lineHeight: 1.3
                         }}
                     >
                         {personnel.position || '-'} {personnel.actingAs && `(${personnel.actingAs})`}
@@ -298,12 +313,43 @@ const DraggableCard = memo(({
                         <Chip
                             label={personnel.posCodeId ? `${personnel.posCodeId} - ${personnel.posCodeMaster?.name || '-'}` : (personnel.posCodeMaster?.name || '-')}
                             size="small"
-                            sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600, bgcolor: 'primary.50', color: 'primary.main' }}
+                            sx={{
+                                height: 'auto',
+                                minHeight: 22,
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                bgcolor: 'primary.50',
+                                color: 'primary.main',
+                                '& .MuiChip-label': {
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'normal',
+                                    lineHeight: 1.3,
+                                    py: 0.25,
+                                }
+                            }}
                         />
                         <Chip
                             label={personnel.unit || 'ไม่ระบุหน่วย'}
                             size="small"
-                            sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600, bgcolor: 'grey.100' }}
+                            sx={{
+                                height: 'auto',
+                                minHeight: 22,
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                bgcolor: 'grey.100',
+                                '& .MuiChip-label': {
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'normal',
+                                    lineHeight: 1.3,
+                                    py: 0.25,
+                                }
+                            }}
                         />
                     </Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontSize: '0.75rem' }}>

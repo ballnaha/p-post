@@ -268,24 +268,18 @@ const DroppableLane = memo(({
                                     sx={{ height: 18, fontSize: '0.65rem', fontWeight: 900, mt: 0.25, bgcolor: styles.accent, color: 'white' }}
                                 />
                             )}
-                            <Box sx={{ minWidth: 0 }}>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
                                 <Typography 
                                     variant="subtitle2" 
                                     sx={{ 
                                         fontWeight: 800, 
                                         color: '#0f172a', 
-                                        lineHeight: 1.2, 
+                                        lineHeight: 1.3, 
                                         mb: 0.5,
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: 'vertical',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'normal', // Force normal wrapping
-                                        wordBreak: 'break-all', // Force break anywhere (for long Thai strings)
-                                        overflowWrap: 'anywhere', // Strongest wrap option
+                                        whiteSpace: 'normal',
+                                        wordBreak: 'break-word',
+                                        overflowWrap: 'anywhere',
                                         width: '100%',
-                                        minHeight: '2.4em'
                                     }}
                                 >
                                     {column.title}
@@ -476,7 +470,22 @@ const DroppableLane = memo(({
                                     label={`ทำหน้าที่: ${column.vacantPosition.actingAs}`}
                                     size="small"
                                     variant="outlined"
-                                    sx={{ height: 18, fontSize: '0.62rem', fontWeight: 600, color: 'text.secondary' }}
+                                    sx={{
+                                        height: 'auto',
+                                        minHeight: 18,
+                                        fontSize: '0.62rem',
+                                        fontWeight: 600,
+                                        color: 'text.secondary',
+                                        '& .MuiChip-label': {
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical',
+                                            overflow: 'hidden',
+                                            whiteSpace: 'normal',
+                                            lineHeight: 1.3,
+                                            py: 0.25,
+                                        }
+                                    }}
                                 />
                             )}
                             {hasVacantPosition && !isSwap && !isThreeWay && (

@@ -88,22 +88,77 @@ const DraggablePersonnelItem = memo(({
                     sx={{ flex: 1, p: 1.5, minWidth: 0, cursor: 'pointer' }}
                     onClick={() => setIsDetailOpen(true)}
                 >
-                    <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                    <Typography 
+                        variant="subtitle2" 
+                        sx={{ 
+                            fontWeight: 700, 
+                            fontSize: '0.95rem', 
+                            lineHeight: 1.3,
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
+                        }}
+                    >
                         {person.rank} {person.fullName}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: '0.8rem' }}>
+                    <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        sx={{ 
+                            fontSize: '0.8rem',
+                            lineHeight: 1.3,
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                        }}
+                    >
                         {person.position}
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
                         <Chip
                             label={person.posCodeId ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}` : (person.posCodeMaster?.name || '-')}
                             size="small"
-                            sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600, bgcolor: 'primary.50', color: 'primary.main' }}
+                            sx={{
+                                height: 'auto',
+                                minHeight: 22,
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                bgcolor: 'primary.50',
+                                color: 'primary.main',
+                                '& .MuiChip-label': {
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'normal',
+                                    lineHeight: 1.3,
+                                    py: 0.25,
+                                }
+                            }}
                         />
                         <Chip
                             label={person.unit || 'ไม่ระบุหน่วย'}
                             size="small"
-                            sx={{ height: 22, fontSize: '0.75rem', fontWeight: 600, bgcolor: 'grey.100' }}
+                            sx={{
+                                height: 'auto',
+                                minHeight: 22,
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                bgcolor: 'grey.100',
+                                '& .MuiChip-label': {
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'normal',
+                                    lineHeight: 1.3,
+                                    py: 0.25,
+                                }
+                            }}
                         />
                     </Box>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontSize: '0.75rem' }}>

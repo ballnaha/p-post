@@ -115,7 +115,8 @@ const DroppableLane = memo(({
                 onDragEnter: () => setIsOver(true),
                 onDrag: ({ source, location }) => {
                     if (source.data.type === 'lane') {
-                        setClosestEdge(extractClosestEdge(location.current.dropTargets[0].data));
+                        const edge = extractClosestEdge(location.current.dropTargets[0].data);
+                        setClosestEdge(prev => prev !== edge ? edge : prev);
                     }
                 },
                 onDragLeave: () => {
@@ -268,7 +269,25 @@ const DroppableLane = memo(({
                                 />
                             )}
                             <Box sx={{ minWidth: 0 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2, mb: 0.5 }}>
+                                <Typography 
+                                    variant="subtitle2" 
+                                    sx={{ 
+                                        fontWeight: 800, 
+                                        color: '#0f172a', 
+                                        lineHeight: 1.2, 
+                                        mb: 0.5,
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'normal', // Force normal wrapping
+                                        wordBreak: 'break-all', // Force break anywhere (for long Thai strings)
+                                        overflowWrap: 'anywhere', // Strongest wrap option
+                                        width: '100%',
+                                        minHeight: '2.4em'
+                                    }}
+                                >
                                     {column.title}
                                 </Typography>
                                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>

@@ -142,22 +142,26 @@ export async function GET(request: NextRequest) {
           { position: 'asc' },
           { noId: 'asc' }
         ],
-        ...(usePagination ? { skip: page * limit, take: limit } : {}),
+        // ลบการแบ่งหน้าในระดับ DB ออก เพื่อไปแบ่งหน้าหลังจากการกรอง (Filter) ด้วย JavaScript 
+        // จะทำให้จำนวนต่อหน้าแสดงผลได้ครบถ้วนอย่างมืออาชีพ
       }),
     ];
 
     // Query 3: Assigned positions (only if needed)
+    const includeIds = searchParams.get('includeIds')?.split(',') || [];
+
     if (unassignedOnly) {
       queries.push(
         prisma.swapTransactionDetail.findMany({
           where: {
             transaction: { year: yearInt },
-            toPosition: { not: null }
+            toPosition: { not: null },
+            isPlaceholder: false // ✅ ไม่นับรายการที่เป็นตำแหน่งว่างจำลอง (Placeholder)
           },
           select: {
             toPosition: true,
             toUnit: true,
-            toPositionNumber: true
+            toPositionNumber: true,
           }
         })
       );
@@ -171,17 +175,37 @@ export async function GET(request: NextRequest) {
     let filteredPositions = vacantPositions;
     if (unassignedOnly && results[2]) {
       const assignedPositions = results[2] as any[];
-      const assignedSet = new Set(
-        assignedPositions.map(p => `${p.toPosition}-${p.toUnit}-${p.toPositionNumber}`)
-      );
+      
+      // สร้าง Map นับจำนวนโควต้าการจองเพื่อหักลบแบบ 1-ต่อ-1
+      const assignedCounts: Record<string, number> = {};
+      assignedPositions.forEach(p => {
+        const key = `${p.toPosition}-${p.toUnit}-${p.toPositionNumber}`;
+        assignedCounts[key] = (assignedCounts[key] || 0) + 1;
+      });
 
-      filteredPositions = vacantPositions.filter(position =>
-        !assignedSet.has(`${position.position}-${position.unit}-${position.positionNumber}`)
-      );
+      filteredPositions = vacantPositions.filter(position => {
+        if (includeIds.includes(String(position.id))) return true;
+
+        const key = `${position.position}-${position.unit}-${position.positionNumber}`;
+        if (assignedCounts[key] > 0) {
+            assignedCounts[key]--; // หักโควต้าแล้วตัดออก
+            return false;
+        }
+        return true;
+      });
+    }
+
+    // ✅ นำการแบ่งหน้า (Pagination) มาไว้ในส่วน JS แทน
+    // เพื่อให้เวลาถูกหักลบตำแหน่งที่ใช้ออกไปแล้ว ระบบยังคงเติมตำแหน่งที่เหลือให้เต็มหน้าจอ
+    let paginatedPositions = filteredPositions;
+    if (usePagination) {
+      const startIndex = page * limit;
+      const endIndex = startIndex + limit;
+      paginatedPositions = filteredPositions.slice(startIndex, endIndex);
     }
 
     // จัดกลุ่มตามตำแหน่ง
-    const groupedPositions = filteredPositions.reduce((acc, position: any) => {
+    const groupedPositions = paginatedPositions.reduce((acc, position: any) => {
       const pcId = position.posCodeMaster?.id;
       const pcName = position.posCodeMaster?.name;
       const key = `${pcId}-${pcName}`;
@@ -219,9 +243,58 @@ export async function GET(request: NextRequest) {
         return (a.posCodeName || '').localeCompare(b.posCodeName || '', 'th');
       });
 
+    // ✅ ปรับปรุงการคำนวณ Total ให้แม่นยำ 100%
+    // 1. ดึง Key ของตำแหน่งที่ตรงตามเงื่อนไข Filter ทั้งหมด (โดยไม่แบ่งหน้า)
+    const allMatchingKeys = await prisma.policePersonnel.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        position: true,
+        unit: true,
+        positionNumber: true,
+      }
+    });
+
+    // 2. กรองเฉพาะที่ยังไม่ถูก Assigned
+    // 2. กรองเฉพาะที่ยังไม่ถูก Assigned โดยจับคู่แบบ 1-ต่อ-1
+    let trueUnassignedCount = 0;
+    if (unassignedOnly && results[2]) {
+      const assignedPositions = results[2] as any[];
+      // นับจำนวนครั้งที่แต่ละตำแหน่งถูกจอง
+      const assignedCounts: Record<string, number> = {};
+      assignedPositions.forEach(p => {
+        const key = `${p.toPosition}-${p.toUnit}-${p.toPositionNumber}`;
+        assignedCounts[key] = (assignedCounts[key] || 0) + 1;
+      });
+
+      let debugLog = `--- DEBUG ASSIGNED COUNTS ---\nTotal Matching Keys: ${allMatchingKeys.length}\nAssigned Positions: ${assignedPositions.length}\n`;
+      debugLog += `Assigned Counts Map: ${JSON.stringify(assignedCounts)}\n`;
+
+      let removedKeys: string[] = [];
+      trueUnassignedCount = allMatchingKeys.filter(position => {
+        if (includeIds.includes(String(position.id))) return true;
+
+        const key = `${position.position}-${position.unit}-${position.positionNumber}`;
+        if (assignedCounts[key] > 0) {
+          assignedCounts[key]--; // หักโควต้าที่ถูกจองไป 1
+          removedKeys.push(key);
+          return false; // ตัดรายการนี้ออก
+        }
+        return true;
+      }).length;
+      
+      debugLog += `Removed Keys: ${JSON.stringify(removedKeys)}\n`;
+      debugLog += `True Unassigned Count: ${trueUnassignedCount}\n`;
+      
+      const fs = require('fs');
+      fs.writeFileSync('debug-vacant.txt', debugLog);
+    } else {
+      trueUnassignedCount = allMatchingKeys.length;
+    }
+
     return NextResponse.json({
       year: yearInt,
-      total: totalCount,
+      total: trueUnassignedCount,
       count: filteredPositions.length,
       unassignedOnly,
       groups: formattedData,
@@ -229,7 +302,7 @@ export async function GET(request: NextRequest) {
         pagination: {
           page,
           limit,
-          totalPages: Math.ceil(filteredPositions.length / (limit || 1)),
+          totalPages: Math.ceil(trueUnassignedCount / (limit || 1)),
         }
       }),
     });

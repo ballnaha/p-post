@@ -35,6 +35,7 @@ import {
     Toolbar,
     Popover,
 } from '@mui/material';
+import { Virtuoso } from 'react-virtuoso';
 import { TransitionProps } from '@mui/material/transitions';
 import InOutView from '@/components/InOutView';
 import {
@@ -196,6 +197,7 @@ export default function PersonnelBoardV2Page() {
     const [addLaneTab, setAddLaneTab] = useState(0); // 0: Manual, 1: Vacant Position
     const [selectedVacantPosition, setSelectedVacantPosition] = useState<any | null>(null);
     const [isNewLaneDrawerOpen, setIsNewLaneDrawerOpen] = useState(false);
+    const [forceAvailableIds, setForceAvailableIds] = useState<string[]>([]);
     const [showCompletedLanes, setShowCompletedLanes] = useState(false); // Toggle to show/hide completed lanes
     const [isInOutTableOpen, setIsInOutTableOpen] = useState(false); // State for In-Out Table Dialog
     const [isReportOpen, setIsReportOpen] = useState(false); // State for Report Dialog
@@ -301,9 +303,18 @@ export default function PersonnelBoardV2Page() {
         return ids.filter(Boolean);
     }, [personnelMap]);
 
-    // Filter Vacant Position IDs already on board
+    // Filter ALL Vacant Position IDs on board (for display only)
+    const allAssignedVacantIds = useMemo(() => {
+        return columns
+            .map(c => c.vacantPosition?.id)
+            .filter(Boolean)
+            .map(id => String(id));
+    }, [columns]);
+
+    // Filter Vacant Position IDs already on board (ONLY UNSAVED ONES to avoid double-counting with API)
     const assignedVacantIds = useMemo(() => {
         return columns
+            .filter(c => !c.linkedTransactionId) // Only count unsaved lanes
             .map(c => c.vacantPosition?.id)
             .filter(Boolean)
             .map(id => String(id));
@@ -484,6 +495,7 @@ export default function PersonnelBoardV2Page() {
             if (vacantFilterPosCode && vacantFilterPosCode !== 'all') params.set('posCodeId', vacantFilterPosCode);
             if (vacantFilterUnit && vacantFilterUnit !== 'all') params.set('unit', vacantFilterUnit);
             if (vacantFilterStatus && vacantFilterStatus !== 'all') params.set('status', vacantFilterStatus);
+            if (forceAvailableIds.length > 0) params.set('includeIds', forceAvailableIds.join(','));
 
             const res = await fetch(`/api/vacant-position/available?${params.toString()}`);
             if (!res.ok) throw new Error('API Error');
@@ -509,7 +521,7 @@ export default function PersonnelBoardV2Page() {
         } finally {
             setLoadingVacantPositions(false);
         }
-    }, [selectedYear, vacantPage, vacantRowsPerPage, debouncedVacantSearch, vacantFilterPosCode, vacantFilterUnit, vacantFilterStatus]);
+    }, [selectedYear, vacantPage, vacantRowsPerPage, debouncedVacantSearch, vacantFilterPosCode, vacantFilterUnit, vacantFilterStatus, forceAvailableIds]);
 
     // Fetch vacant positions when drawer is open or filters change
     useEffect(() => {
@@ -600,14 +612,22 @@ export default function PersonnelBoardV2Page() {
             // อัปเดต columns state ด้วยข้อมูลใหม่ที่ได้จาก API (ที่มี linkedTransactionId แล้ว)
             if (resData.lanes && Array.isArray(resData.lanes)) {
                 setColumns(prev => {
+                    const tempLanes = [...resData.lanes];
                     const newCols = prev.map(col => {
-                        const matcher = resData.lanes.find((l: any) => l.title === col.title && (l.transactionId === col.linkedTransactionId || !col.linkedTransactionId));
-                        if (matcher) {
+                        const matchIdx = tempLanes.findIndex((l: any) => {
+                            const isTitleMatch = l.title === col.title;
+                            const isVacantMatch = l.vacantPosition?.id === col.vacantPosition?.id && col.vacantPosition != null;
+                            const isLinkMatch = l.transactionId === col.linkedTransactionId || !col.linkedTransactionId;
+                            return (isVacantMatch || isTitleMatch) && isLinkMatch;
+                        });
+                        if (matchIdx > -1) {
+                            const matcher = tempLanes[matchIdx];
+                            tempLanes.splice(matchIdx, 1); // Remove to prevent duplicate matching
                             return {
                                 ...col,
                                 linkedTransactionId: matcher.transactionId,
                                 linkedTransactionType: col.linkedTransactionType || 'promotion-chain',
-                                id: matcher.transactionId, // ใช้ transactionId เป็น ID ของเลนเลยเพื่อให้ sync กัน
+                                id: matcher.transactionId,
                             };
                         }
                         return col;
@@ -638,9 +658,10 @@ export default function PersonnelBoardV2Page() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedYear]);
 
-    // Auto-save (debounced)
-    const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const vacantDetailRequestRef = useRef(0);
+    // Auto-save disabled as per user request to improve performance
+    /*
+    const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     useEffect(() => {
         if (!hasUnsavedChanges || savingBoard) {
             if (autoSaveTimeoutRef.current) {
@@ -661,6 +682,7 @@ export default function PersonnelBoardV2Page() {
             }
         };
     }, [hasUnsavedChanges, savingBoard, personnelMap, columns, selectedYear, saveBoardData]);
+    */
 
     // Sort lanes by type
     const handleSortByType = useCallback(async () => {
@@ -705,6 +727,7 @@ export default function PersonnelBoardV2Page() {
             if (!res.ok) throw new Error('API Error');
             setLastSavedAt(new Date());
             setHasUnsavedChanges(false);
+            setForceAvailableIds([]); // ล้างรายการที่บังคับคืนชีพเมื่อบันทึกจริงแล้ว
             setSnackbar({ open: true, message: `บันทึกข้อมูลปี ${selectedYear} เรียบร้อยแล้ว`, severity: 'success' });
         } catch (err) {
             setSnackbar({ open: true, message: 'เกิดข้อผิดพลาดในการบันทึก', severity: 'error' });
@@ -1954,6 +1977,11 @@ export default function PersonnelBoardV2Page() {
         try {
             const lane = columns.find(c => c.id === laneId);
             if (lane) {
+                // เก็บ ID ของตำแหน่งว่างไว้เพื่อให้กลับเข้าไปอยู่ใน Drawer ได้ทันที
+                if (lane.vacantPosition?.id) {
+                    setForceAvailableIds(prev => [...new Set([...prev, String(lane.vacantPosition!.id)])]);
+                }
+
                 lane.itemIds.forEach(id => {
                     setPersonnelMap(prev => {
                         const next = { ...prev };
@@ -2174,6 +2202,8 @@ export default function PersonnelBoardV2Page() {
         setSnackbar({ open: true, message: `ย้าย ${person.fullName} ไปยัง ${targetLane.title} แล้ว`, severity: 'success' });
 
     }, [columns, personnelMap, triggerChainReaction, commitAction, recalculateColumnToPositions]);
+
+
 
     // Add new lane
     const handleAddLane = (data?: any) => {
@@ -3741,6 +3771,7 @@ export default function PersonnelBoardV2Page() {
 
                                 </Popover>
 
+
                                 <Button
                                     variant="outlined"
                                     size="small"
@@ -3788,9 +3819,8 @@ export default function PersonnelBoardV2Page() {
                         )}
                     </Box>
 
-                    {/* Scrollable Board Area */}
                     <Box
-                        sx={{ flex: 1, display: 'flex', gap: 2, p: 3, overflow: 'auto', alignItems: 'flex-start', bgcolor: '#f1f5f9' }}
+                        sx={{ flex: 1, display: 'flex', bgcolor: '#f1f5f9', overflow: 'hidden' }}
                         onClick={() => clearSelection()}
                     >
                         {
@@ -3829,9 +3859,12 @@ export default function PersonnelBoardV2Page() {
                                     </Button>
                                 </Box>
                             ) : (
-                                <>
-                                    {filteredColumns
-                                        .map((column, index) => (
+                                <Virtuoso
+                                    horizontalDirection
+                                    data={filteredColumns}
+                                    style={{ flex: 1, height: '100%' }}
+                                    itemContent={(index, column) => (
+                                        <Box sx={{ p: 1.5, pt: 3, display: 'flex', height: '100%', width: 350, alignItems: 'flex-start', flexShrink: 0 }}>
                                             <DroppableLane
                                                 key={column.id}
                                                 column={column}
@@ -3852,11 +3885,9 @@ export default function PersonnelBoardV2Page() {
                                                 onMoveItem={handleMovePersonToLane}
                                                 onViewSummary={setSelectedLaneSummary}
                                             />
-                                        ))}
-
-                                    {/* Add Lane Button - Only show in "In Progress" view */}
-                                    {/* Removed Add Lane Card from here */}
-                                </>
+                                        </Box>
+                                    )}
+                                />
                             )}
                     </Box>
                 </Box >
@@ -4009,20 +4040,20 @@ export default function PersonnelBoardV2Page() {
                             </Collapse>
 
                             <Typography variant="caption" sx={{ px: 2, py: 1, my: 1, mx: 2, bgcolor: alpha('#3b82f6', 0.05), color: 'primary.dark', fontWeight: 700, borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                🔍 พบ {Math.max(0, vacantTotal - assignedVacantIds.length)} ตำแหน่งว่าง {assignedVacantIds.length > 0 && `(บนบอร์ดแล้ว ${assignedVacantIds.length})`}
+                                🔍 พบ {Math.max(0, vacantTotal - assignedVacantIds.length)} ตำแหน่งว่าง {allAssignedVacantIds.length > 0 && `(บนบอร์ดแล้ว ${allAssignedVacantIds.length})`}
                             </Typography>
 
                             {/* Vacant List */}
                             <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5 }}>
                                 {loadingVacantPositions ? (
                                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress size={24} /></Box>
-                                ) : vacantPositions.filter(pos => !assignedVacantIds.includes(String(pos.id))).length === 0 ? (
+                                ) : vacantPositions.filter(pos => !allAssignedVacantIds.includes(String(pos.id))).length === 0 ? (
                                     <Box sx={{ textAlign: 'center', py: 8, opacity: 0.5 }}>
                                         <Typography variant="body2">ไม่พบตำแหน่งที่ตรงตามเงื่อนไข (หรือถูกจัดลงบอร์ดแล้ว)</Typography>
                                     </Box>
                                 ) : (
                                     vacantPositions
-                                        .filter(pos => !assignedVacantIds.includes(String(pos.id)))
+                                        .filter(pos => !allAssignedVacantIds.includes(String(pos.id)))
                                         .map((pos) => (
                                             <Paper
                                                 key={pos.id}

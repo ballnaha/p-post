@@ -1,0 +1,6 @@
+--- DEBUG ASSIGNED COUNTS ---
+Total Matching Keys: 109
+Assigned Positions: 1
+Assigned Counts Map: {"ผกก.(สอบสวน) กลุ่มงานสอบสวน บก.น.2-น-1004 08203 0130":1}
+Removed Keys: ["ผกก.(สอบสวน) กลุ่มงานสอบสวน บก.น.2-น-1004 08203 0130"]
+True Unassigned Count: 108

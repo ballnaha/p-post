@@ -38,7 +38,21 @@ interface DraggableCardProps {
     onUpdate?: (id: string, updates: Partial<Personnel>) => void;
     onCardClick?: (personnel: Personnel, targetInfo?: any) => void;
     isReadOnly?: boolean;
-    availableLanes?: { id: string; title: string; groupNumber?: string }[];
+    availableLanes?: { 
+        id: string; 
+        title: string; 
+        groupNumber?: string; 
+        occupants?: {
+            name: string;
+            currentPosition: string;
+            currentUnit: string;
+            targetPosition: string;
+            targetUnit: string;
+            age?: string | number | null;
+            seniority?: string | number | null;
+            requestedPosition?: string | null;
+        }[]; 
+    }[];
     onMoveToLane?: (laneId: string) => void;
 }
 
@@ -395,7 +409,23 @@ const DraggableCard = memo(({
                                 <Typography variant="caption" sx={{ fontWeight: 800, color: 'success.dark', fontSize: '0.65rem', display: 'block', mb: 0.5, opacity: 0.8 }}>
                                     ตำแหน่งเป้าหมาย
                                 </Typography>
-                                <Typography variant="caption" display="block" sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.2, color: '#166534' }}>
+                                <Typography 
+                                    variant="caption" 
+                                    display="block" 
+                                    sx={{ 
+                                        fontWeight: 700, 
+                                        fontSize: '0.75rem', 
+                                        lineHeight: 1.2, 
+                                        color: '#166534',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
+                                        whiteSpace: 'normal',
+                                        wordBreak: 'break-word',
+                                        overflowWrap: 'anywhere',
+                                    }}
+                                >
                                     {targetInfo.position || targetInfo.posCodeMaster?.name || 'ตำแหน่งว่าง'}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.7rem', fontWeight: 600 }}>

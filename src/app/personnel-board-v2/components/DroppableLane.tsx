@@ -47,7 +47,21 @@ interface DroppableLaneProps {
     onAddPlaceholder?: (columnId: string) => void;
     isReadOnly?: boolean;
     index: number;
-    availableLanes?: { id: string; title: string; groupNumber?: string }[]; // Optimized: Pre-calculated
+    availableLanes?: { 
+        id: string; 
+        title: string; 
+        groupNumber?: string; 
+        occupants?: {
+            name: string;
+            currentPosition: string;
+            currentUnit: string;
+            targetPosition: string;
+            targetUnit: string;
+            age?: string | number | null;
+            seniority?: string | number | null;
+            requestedPosition?: string | null;
+        }[]; 
+    }[]; // Optimized: Pre-calculated
     onMoveItem?: (itemId: string, targetLaneId: string) => void;
     onViewSummary?: (column: Column) => void;
 }
@@ -276,6 +290,10 @@ const DroppableLane = memo(({
                                         color: '#0f172a', 
                                         lineHeight: 1.3, 
                                         mb: 0.5,
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden',
                                         whiteSpace: 'normal',
                                         wordBreak: 'break-word',
                                         overflowWrap: 'anywhere',

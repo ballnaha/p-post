@@ -21,12 +21,14 @@ import MoveToLaneButton from './MoveToLaneButton';
 interface DraggablePersonnelItemProps {
     person: Personnel;
     columns: Column[];
+    personnelMap: Record<string, Personnel>;
     onAddToLane: (person: Personnel, laneId: string) => void;
 }
 
 const DraggablePersonnelItem = memo(({
     person,
     columns,
+    personnelMap,
     onAddToLane
 }: DraggablePersonnelItemProps) => {
     const ref = useRef<HTMLDivElement>(null);
@@ -182,7 +184,20 @@ const DraggablePersonnelItem = memo(({
                                 .map(col => ({
                                     id: col.id,
                                     title: col.title,
-                                    groupNumber: col.groupNumber
+                                    groupNumber: col.groupNumber,
+                                    occupants: col.itemIds
+                                        .map(id => personnelMap[id])
+                                        .filter((p): p is Personnel => !!p)
+                                        .map(p => ({
+                                            name: `${p.rank || ''}${p.fullName || ''}`,
+                                            currentPosition: p.position || '-',
+                                            currentUnit: p.unit || '-',
+                                            targetPosition: p.toPosition || p.toPosCodeMaster?.name || 'ตำแหน่งว่าง',
+                                            targetUnit: p.toUnit || '-',
+                                            age: p.age,
+                                            seniority: p.seniority,
+                                            requestedPosition: p.requestedPosition
+                                        }))
                                 }))
                             }
                             personName={`${person.rank || ''} ${person.fullName || ''}`}

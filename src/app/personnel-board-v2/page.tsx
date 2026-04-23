@@ -60,6 +60,10 @@ import {
     RemoveCircleOutline as PlaceholderIcon,
     TableChart as TableChartIcon,
     Print as PrintIcon,
+    ViewKanban as KanbanIcon,
+    ViewList as ListIcon,
+    Science as ScienceIcon,
+    BugReport as BugReportIcon,
 } from '@mui/icons-material';
 
 const Transition = React.forwardRef(function Transition(
@@ -95,6 +99,7 @@ import { useBoardHistory } from './hooks/useBoardHistory';
 import UndoRedoControls from './components/UndoRedoControls';
 import LaneSummaryModal from './components/LaneSummaryModal';
 import TransferSummaryReport from './components/TransferSummaryReport';
+import BoardListView from './components/BoardListView';
 
 // --- Main Page Component ---
 export default function PersonnelBoardV2Page() {
@@ -109,6 +114,7 @@ export default function PersonnelBoardV2Page() {
     }, []);
 
     const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+    const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
     const [columns, setColumns] = useState<Column[]>([]);
     const [personnelMap, setPersonnelMap] = useState<Record<string, Personnel>>({});
 
@@ -131,6 +137,10 @@ export default function PersonnelBoardV2Page() {
     }, [personnelMap, getTransferLaneTitle]);
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+    // Simulation State for Performance Testing
+    const [isSimulationMode, setIsSimulationMode] = useState(false);
+    const [originalBoardState, setOriginalBoardState] = useState<{ columns: Column[], personnelMap: Record<string, Personnel> } | null>(null);
 
     // Stable refs — updated synchronously every render so callbacks don't need board state in deps
     const columnsRef = useRef(columns);
@@ -614,6 +624,68 @@ export default function PersonnelBoardV2Page() {
             setLoadingBoard(false);
         }
     }, [fetchVacantPositions]);
+
+    // Handle performance simulation toggle
+    const handleToggleSimulation = useCallback(() => {
+        if (isSimulationMode) {
+            // Restore original state
+            if (originalBoardState) {
+                setColumns(originalBoardState.columns);
+                setPersonnelMap(originalBoardState.personnelMap);
+                setOriginalBoardState(null);
+            }
+            setIsSimulationMode(false);
+            setSnackbar({ open: true, message: 'ปิดโหมดทดสอบประสิทธิภาพแล้ว (คืนค่าข้อมูลจริง)', severity: 'info' });
+        } else {
+            // Save current state before simulating
+            setOriginalBoardState({ columns: columnsRef.current, personnelMap: personnelMapRef.current });
+
+            // Generate 200 simulation lanes
+            const simColumns: Column[] = [];
+            const simPersonnelMap: Record<string, Personnel> = {};
+
+            const ranks = ['พ.ต.อ.', 'พ.ต.ท.', 'พ.ต.ต.', 'ร.ต.อ.', 'ร.ต.ท.', 'ร.ต.ต.', 'ด.ต.', 'จ.ส.ต.'];
+            const units = ['สภ.เมืองสมมติ', 'สภ.บ้านป่า', 'สภ.ชายทะเล', 'สภ.ขุนเขา', 'สภ.ทุ่งกว้าง', 'กก.สส.จว.', 'บก.อก.', 'ศฝร.'];
+            const positions = ['ผกก.', 'รอง ผกก.(สอบสวน)', 'สว.(สอบสวน)', 'รอง สว.(สอบสวน)', 'ผบ.หมู่(ป.)', 'ผบ.หมู่(สส.)', 'ผบ.หมู่(จร.)'];
+
+            for (let i = 1; i <= 200; i++) {
+                const laneId = `sim-lane-${i}`;
+                const personCount = 4; // 4 people per lane for performance testing
+                const itemIds: string[] = [];
+
+                for (let j = 1; j <= personCount; j++) {
+                    const pid = `sim-p-${i}-${j}`;
+                    itemIds.push(pid);
+                    simPersonnelMap[pid] = {
+                        id: pid,
+                        fullName: `ผู้จำลองที่ ${i}.${j} สมมติ`,
+                        rank: ranks[Math.floor(Math.random() * ranks.length)],
+                        position: positions[Math.floor(Math.random() * positions.length)],
+                        unit: `${units[Math.floor(Math.random() * units.length)]} สาขา ${i}`,
+                        positionNumber: `${1000 + i}/${j}`,
+                        avatarUrl: null,
+                        age: String(25 + Math.floor(Math.random() * 30)),
+                        seniority: String(i + j),
+                    };
+                }
+
+                simColumns.push({
+                    id: laneId,
+                    title: `เลนทดสอบประสิทธิภาพที่ ${i} (จำลองข้อมูลขนาดใหญ่)`,
+                    groupNumber: String(i),
+                    itemIds,
+                    chainType: i % 4 === 0 ? 'swap' : (i % 4 === 1 ? 'three-way' : (i % 4 === 2 ? 'promotion' : 'custom')),
+                    isCompleted: false
+                });
+            }
+
+            setColumns(simColumns);
+            setPersonnelMap(simPersonnelMap);
+            setIsSimulationMode(true);
+            setSelectedIds([]); // Clear selection
+            setSnackbar({ open: true, message: 'เปิดโหมดทดสอบประสิทธิภาพ (สร้างข้อมูลจำลอง 200 เลน)', severity: 'warning' });
+        }
+    }, [isSimulationMode, originalBoardState]);
 
     // Save board data to API
     const saveBoardData = useCallback(async (year: number, cols: Column[], persMap: Record<string, Personnel>) => {
@@ -3029,8 +3101,25 @@ export default function PersonnelBoardV2Page() {
     const memoizedAvailableLanes = useMemo(() => {
         return columns
             .filter(l => !l.isCompleted)
-            .map(l => ({ id: l.id, title: l.title, groupNumber: l.groupNumber }));
-    }, [columns]);
+            .map(l => ({ 
+                id: l.id, 
+                title: l.title, 
+                groupNumber: l.groupNumber,
+                occupants: l.itemIds
+                    .map(id => personnelMap[id])
+                    .filter((p): p is Personnel => !!p)
+                    .map(p => ({
+                        name: `${p.rank || ''}${p.fullName || ''}`,
+                        currentPosition: p.position || '-',
+                        currentUnit: p.unit || '-',
+                        targetPosition: p.toPosition || p.toPosCodeMaster?.name || 'ตำแหน่งว่าง',
+                        targetUnit: p.toUnit || '-',
+                        age: p.age,
+                        seniority: p.seniority,
+                        requestedPosition: p.requestedPosition
+                    }))
+            }));
+    }, [columns, personnelMap]);
 
     // 2. Pre-calculate personnel for each lane to avoid reference changes for lanes whose content hasn't changed.
     // Memoizing this means DroppableLane (wrapped in React.memo) can skip rendering if it gets the same personnel array.
@@ -3214,6 +3303,38 @@ export default function PersonnelBoardV2Page() {
 
                     {/* View Tools Group */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ display: 'flex', bgcolor: '#f1f5f9', p: 0.5, borderRadius: 2.5, mr: 1, border: '1px solid #e2e8f0' }}>
+                            <Tooltip title="มุมมองคัมบัง">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setViewMode('kanban')}
+                                    sx={{
+                                        borderRadius: 2,
+                                        bgcolor: viewMode === 'kanban' ? 'white' : 'transparent',
+                                        color: viewMode === 'kanban' ? 'primary.main' : 'text.secondary',
+                                        boxShadow: viewMode === 'kanban' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                                        '&:hover': { bgcolor: viewMode === 'kanban' ? 'white' : alpha('#000', 0.04) }
+                                    }}
+                                >
+                                    <KanbanIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="มุมมองตาราง">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setViewMode('list')}
+                                    sx={{
+                                        borderRadius: 2,
+                                        bgcolor: viewMode === 'list' ? 'white' : 'transparent',
+                                        color: viewMode === 'list' ? 'primary.main' : 'text.secondary',
+                                        boxShadow: viewMode === 'list' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                                        '&:hover': { bgcolor: viewMode === 'list' ? 'white' : alpha('#000', 0.04) }
+                                    }}
+                                >
+                                    <ListIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
                         <Button
                             variant="outlined"
                             size="small"
@@ -3519,6 +3640,7 @@ export default function PersonnelBoardV2Page() {
                                                 key={person.id}
                                                 person={person}
                                                 columns={columns}
+                                                personnelMap={personnelMap}
                                                 onAddToLane={handleAddToLane}
                                             />
                                         ))}
@@ -3641,6 +3763,33 @@ export default function PersonnelBoardV2Page() {
                                         />
                                     )}
                                 </Button>
+
+                                {/* Simulation Toggle Button */}
+                                <Tooltip title={isSimulationMode ? "ปิดโหมดทดสอบ (คืนค่าข้อมูลเดิม)" : "ทดสอบประสิทธิภาพ (จำลอง 200 เลน)"}>
+                                    <Button
+                                        variant={isSimulationMode ? "contained" : "outlined"}
+                                        color={isSimulationMode ? "warning" : "inherit"}
+                                        size="small"
+                                        startIcon={isSimulationMode ? <BugReportIcon fontSize="small" /> : <ScienceIcon fontSize="small" />}
+                                        onClick={handleToggleSimulation}
+                                        sx={{
+                                            borderRadius: 2,
+                                            px: 2,
+                                            height: 36,
+                                            fontWeight: 700,
+                                            textTransform: 'none',
+                                            borderColor: isSimulationMode ? 'warning.main' : 'divider',
+                                            color: isSimulationMode ? 'white' : 'text.secondary',
+                                            '&:hover': {
+                                                bgcolor: isSimulationMode ? 'warning.dark' : alpha('#64748b', 0.05),
+                                                borderColor: isSimulationMode ? 'warning.dark' : 'primary.main',
+                                            },
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {isSimulationMode ? "คืนค่าจริง" : "ทดสอบ 200 เลน"}
+                                    </Button>
+                                </Tooltip>
 
                                 {/* Dropdown Menu */}
                                 <Popover
@@ -3834,6 +3983,14 @@ export default function PersonnelBoardV2Page() {
                                 <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', mt: 10 }} >
                                     <CircularProgress />
                                 </Box >
+                            ) : viewMode === 'list' ? (
+                                <Box sx={{ flex: 1, p: 3, overflow: 'hidden' }}>
+                                    <BoardListView
+                                        columns={filteredColumns}
+                                        personnelMap={personnelMap}
+                                        onCardClick={handleCardClick}
+                                    />
+                                </Box>
                             ) : columns.length === 0 && !showCompletedLanes ? (
                                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 400, gap: 2 }}>
                                     <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: 'primary.50', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -3894,7 +4051,8 @@ export default function PersonnelBoardV2Page() {
                                         </Box>
                                     )}
                                 />
-                            )}
+                            )
+                        }
                     </Box>
                 </Box >
             </Box >

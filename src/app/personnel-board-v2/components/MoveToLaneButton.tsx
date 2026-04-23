@@ -13,18 +13,41 @@ import {
     ListItemText,
     Chip,
     alpha,
-    Tooltip
+    Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Avatar,
+    Paper
 } from '@mui/material';
 import {
     DriveFileMove as DriveFileMoveIcon,
     Search as SearchIcon,
     FilterList as FilterListIcon,
     Close as CloseIcon,
-    ChevronRight as ChevronRightIcon
+    ChevronRight as ChevronRightIcon,
+    Groups as GroupsIcon,
+    ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
 
 interface MoveToLaneButtonProps {
-    availableLanes: { id: string; title: string; groupNumber?: string }[];
+    availableLanes: {
+        id: string;
+        title: string;
+        groupNumber?: string;
+        occupants?: {
+            name: string;
+            currentPosition: string;
+            currentUnit: string;
+            targetPosition: string;
+            targetUnit: string;
+            age?: string | number | null;
+            seniority?: string | number | null;
+            requestedPosition?: string | null;
+        }[];
+    }[];
     onMove: (laneId: string) => void;
     personName?: string;
     personPosition?: string;
@@ -44,6 +67,7 @@ export default function MoveToLaneButton({
 }: MoveToLaneButtonProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [detailsLane, setDetailsLane] = useState<MoveToLaneButtonProps['availableLanes'][0] | null>(null);
 
     if (availableLanes.length === 0) return null;
 
@@ -245,10 +269,10 @@ export default function MoveToLaneButton({
                                         <ListItemText
                                             primary={
                                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                                    {lane.groupNumber && (
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                                        {lane.groupNumber ? (
                                                             <Chip
-                                                                label={lane.groupNumber}
+                                                                label={`กลุ่ม ${lane.groupNumber}`}
                                                                 size="small"
                                                                 sx={{
                                                                     height: 18,
@@ -261,10 +285,54 @@ export default function MoveToLaneButton({
                                                                     borderColor: alpha('#3b82f6', 0.2)
                                                                 }}
                                                             />
-                                                            <Box sx={{ flex: 1, height: '1px', bgcolor: '#f1f5f9' }} />
-                                                        </Box>
-                                                    )}
-                                                    <Typography className="lane-title" variant="body2" sx={{ fontWeight: 800, color: '#334155', lineHeight: 1.4, transition: 'color 0.2s' }}>
+                                                        ) : <Box />}
+
+                                                        {lane.occupants && lane.occupants.length > 0 && (
+                                                            <Tooltip title="คลิกเพื่อดูรายชื่อ">
+                                                                <Chip
+                                                                    icon={<GroupsIcon sx={{ fontSize: '14px !important' }} />}
+                                                                    label={`${lane.occupants.length} คน`}
+                                                                    size="small"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setDetailsLane(lane);
+                                                                    }}
+                                                                    sx={{
+                                                                        height: 22,
+                                                                        fontSize: '0.75rem',
+                                                                        fontWeight: 800,
+                                                                        bgcolor: alpha('#3b82f6', 0.1),
+                                                                        color: 'primary.main',
+                                                                        '& .MuiChip-icon': { color: 'primary.main' },
+                                                                        cursor: 'pointer',
+                                                                        transition: 'all 0.2s',
+                                                                        '&:hover': {
+                                                                            bgcolor: 'primary.main',
+                                                                            color: 'white',
+                                                                            '& .MuiChip-icon': { color: 'white' }
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </Tooltip>
+                                                        )}
+                                                    </Box>
+                                                    <Typography
+                                                        className="lane-title"
+                                                        variant="body2"
+                                                        sx={{
+                                                            fontWeight: 800,
+                                                            color: '#334155',
+                                                            lineHeight: 1.4,
+                                                            transition: 'color 0.2s',
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                            whiteSpace: 'normal',
+                                                            wordBreak: 'break-word',
+                                                            overflowWrap: 'anywhere',
+                                                        }}
+                                                    >
                                                         {lane.title}
                                                     </Typography>
                                                 </Box>
@@ -287,6 +355,123 @@ export default function MoveToLaneButton({
                     )}
                 </Box>
             </Drawer>
+
+            {/* Occupants Details Dialog */}
+            <Dialog
+                open={Boolean(detailsLane)}
+                onClose={() => setDetailsLane(null)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: { borderRadius: 3, overflow: 'hidden' }
+                }}
+            >
+                <DialogTitle sx={{
+                    bgcolor: '#f8fafc',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid #e2e8f0',
+                    py: 2
+                }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+                            <GroupsIcon />
+                        </Avatar>
+                        <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#1e293b', lineHeight: 1.2 }}>
+                                {detailsLane?.title}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                                รายชื่อบุคคลในเลน ({detailsLane?.occupants?.length || 0} คน)
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <IconButton size="small" onClick={() => setDetailsLane(null)}>
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent sx={{ p: 0, bgcolor: '#f8fafc' }}>
+                    <List disablePadding>
+                        {detailsLane?.occupants?.map((occ, i) => (
+                            <ListItem
+                                key={i}
+                                divider={i !== detailsLane.occupants!.length - 1}
+                                sx={{
+                                    py: 1.5,
+                                    px: 2,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'stretch',
+                                    gap: 1,
+                                    '&:hover': { bgcolor: alpha('#3b82f6', 0.02) }
+                                }}
+                            >
+                                {/* Row 1: Name and Basic Info */}
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a', flex: 1 }}>
+                                        {i + 1}. {occ.name}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                        <Chip label={`อายุ: ${occ.age || '-'}`} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.65rem', color: '#64748b', borderColor: '#e2e8f0' }} />
+                                        <Chip label={`อาวุโส: ${occ.seniority || '-'}`} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.65rem', color: '#64748b', borderColor: '#e2e8f0' }} />
+                                    </Box>
+                                </Box>
+
+                                {/* Row 2: From -> To (Compact Horizontal) */}
+                                <Box sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    bgcolor: 'white',
+                                    p: 1,
+                                    borderRadius: 1.5,
+                                    border: '1px solid #f1f5f9'
+                                }}>
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: '#475569', display: 'block', fontSize: '0.75rem' }}>
+                                            {occ.currentPosition}
+                                        </Typography>
+                                        <Typography variant="caption" noWrap sx={{ color: '#94a3b8', fontSize: '0.65rem' }}>
+                                            {occ.currentUnit}
+                                        </Typography>
+                                    </Box>
+
+                                    <ArrowForwardIcon sx={{ color: '#cbd5e1', fontSize: 14 }} />
+
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Typography variant="caption" noWrap sx={{ fontWeight: 800, color: '#059669', display: 'block', fontSize: '0.75rem' }}>
+                                            {occ.targetPosition}
+                                        </Typography>
+                                        <Typography variant="caption" noWrap sx={{ color: '#10b981', fontSize: '0.65rem', opacity: 0.8 }}>
+                                            {occ.targetUnit}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+
+                                {/* Row 3: Special Requests (If any) */}
+                                {occ.requestedPosition && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 0.5 }}>
+                                        <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, fontSize: '0.65rem', bgcolor: alpha('#f59e0b', 0.08), px: 0.8, py: 0.2, borderRadius: 1 }}>
+                                            📍 ร้องขอ: {occ.requestedPosition}
+                                        </Typography>
+                                    </Box>
+                                )}
+                            </ListItem>
+                        ))}
+                        {(!detailsLane?.occupants || detailsLane.occupants.length === 0) && (
+                            <Box sx={{ p: 4, textAlign: 'center' }}>
+                                <Typography variant="body2" color="text.secondary">ยังไม่มีรายชื่อในเลนนี้</Typography>
+                            </Box>
+                        )}
+                    </List>
+                </DialogContent>
+                <DialogActions sx={{ p: 1.5, bgcolor: 'white', borderTop: '1px solid #e2e8f0' }}>
+                    <Button onClick={() => setDetailsLane(null)} variant="text" color="inherit" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
+                        ปิด
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 }

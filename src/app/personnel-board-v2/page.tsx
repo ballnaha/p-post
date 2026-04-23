@@ -62,8 +62,6 @@ import {
     Print as PrintIcon,
     ViewKanban as KanbanIcon,
     ViewList as ListIcon,
-    Science as ScienceIcon,
-    BugReport as BugReportIcon,
 } from '@mui/icons-material';
 
 const Transition = React.forwardRef(function Transition(
@@ -138,9 +136,6 @@ export default function PersonnelBoardV2Page() {
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-    // Simulation State for Performance Testing
-    const [isSimulationMode, setIsSimulationMode] = useState(false);
-    const [originalBoardState, setOriginalBoardState] = useState<{ columns: Column[], personnelMap: Record<string, Personnel> } | null>(null);
 
     // Stable refs — updated synchronously every render so callbacks don't need board state in deps
     const columnsRef = useRef(columns);
@@ -423,6 +418,62 @@ export default function PersonnelBoardV2Page() {
         });
     }, [columns, showCompletedLanes, filterBoardType, showOnlyWithPlaceholder, personnelMap, boardSearchTerm]);
 
+    // Count lanes by type for the filter menu
+    const laneTypeCounts = useMemo(() => {
+        const counts: Record<string, number> = {
+            all: 0,
+            swap: 0,
+            'three-way': 0,
+            promotion: 0,
+            transfer: 0,
+            custom: 0
+        };
+
+        // Filter columns by OTHER filters (search, placeholder, completed) to show relevant counts
+        const baseFilteredColumns = columns.filter(col => {
+            if (showCompletedLanes && !col.isCompleted) return false;
+            if (!showCompletedLanes && col.isCompleted) return false;
+
+            if (showOnlyWithPlaceholder) {
+                const hasPlaceholder = col.itemIds.some(id => {
+                    const person = personnelMap[id];
+                    return person?.isPlaceholder || id.startsWith('placeholder-');
+                });
+                if (!hasPlaceholder) return false;
+            }
+
+            if (boardSearchTerm) {
+                const term = boardSearchTerm.toLowerCase();
+                const matchesGroup = col.groupNumber?.toLowerCase().includes(term);
+                const matchesTitle = col.title?.toLowerCase().includes(term);
+                const matchesPersonnel = col.itemIds.some(id => {
+                    const p = personnelMap[id];
+                    return p && (
+                        (p.fullName || '').toLowerCase().includes(term) ||
+                        (p.position || '').toLowerCase().includes(term) ||
+                        (p.rank || '').toLowerCase().includes(term)
+                    );
+                });
+                if (!matchesGroup && !matchesTitle && !matchesPersonnel) return false;
+            }
+
+            return true;
+        });
+
+        counts.all = baseFilteredColumns.length;
+
+        baseFilteredColumns.forEach(col => {
+            const type = col.chainType || 'custom';
+            if (counts[type] !== undefined) {
+                counts[type]++;
+            } else {
+                counts.custom++;
+            }
+        });
+
+        return counts;
+    }, [columns, showCompletedLanes, showOnlyWithPlaceholder, boardSearchTerm, personnelMap]);
+
     // Count lanes with placeholder
     const lanesWithPlaceholderCount = useMemo(() => {
         return columns.filter(col => !col.isCompleted).filter(col => {
@@ -432,8 +483,6 @@ export default function PersonnelBoardV2Page() {
             });
         }).length;
     }, [columns, personnelMap]);
-
-
 
     // Debounce search
     useEffect(() => {
@@ -625,67 +674,6 @@ export default function PersonnelBoardV2Page() {
         }
     }, [fetchVacantPositions]);
 
-    // Handle performance simulation toggle
-    const handleToggleSimulation = useCallback(() => {
-        if (isSimulationMode) {
-            // Restore original state
-            if (originalBoardState) {
-                setColumns(originalBoardState.columns);
-                setPersonnelMap(originalBoardState.personnelMap);
-                setOriginalBoardState(null);
-            }
-            setIsSimulationMode(false);
-            setSnackbar({ open: true, message: 'ปิดโหมดทดสอบประสิทธิภาพแล้ว (คืนค่าข้อมูลจริง)', severity: 'info' });
-        } else {
-            // Save current state before simulating
-            setOriginalBoardState({ columns: columnsRef.current, personnelMap: personnelMapRef.current });
-
-            // Generate 200 simulation lanes
-            const simColumns: Column[] = [];
-            const simPersonnelMap: Record<string, Personnel> = {};
-
-            const ranks = ['พ.ต.อ.', 'พ.ต.ท.', 'พ.ต.ต.', 'ร.ต.อ.', 'ร.ต.ท.', 'ร.ต.ต.', 'ด.ต.', 'จ.ส.ต.'];
-            const units = ['สภ.เมืองสมมติ', 'สภ.บ้านป่า', 'สภ.ชายทะเล', 'สภ.ขุนเขา', 'สภ.ทุ่งกว้าง', 'กก.สส.จว.', 'บก.อก.', 'ศฝร.'];
-            const positions = ['ผกก.', 'รอง ผกก.(สอบสวน)', 'สว.(สอบสวน)', 'รอง สว.(สอบสวน)', 'ผบ.หมู่(ป.)', 'ผบ.หมู่(สส.)', 'ผบ.หมู่(จร.)'];
-
-            for (let i = 1; i <= 200; i++) {
-                const laneId = `sim-lane-${i}`;
-                const personCount = 4; // 4 people per lane for performance testing
-                const itemIds: string[] = [];
-
-                for (let j = 1; j <= personCount; j++) {
-                    const pid = `sim-p-${i}-${j}`;
-                    itemIds.push(pid);
-                    simPersonnelMap[pid] = {
-                        id: pid,
-                        fullName: `ผู้จำลองที่ ${i}.${j} สมมติ`,
-                        rank: ranks[Math.floor(Math.random() * ranks.length)],
-                        position: positions[Math.floor(Math.random() * positions.length)],
-                        unit: `${units[Math.floor(Math.random() * units.length)]} สาขา ${i}`,
-                        positionNumber: `${1000 + i}/${j}`,
-                        avatarUrl: null,
-                        age: String(25 + Math.floor(Math.random() * 30)),
-                        seniority: String(i + j),
-                    };
-                }
-
-                simColumns.push({
-                    id: laneId,
-                    title: `เลนทดสอบประสิทธิภาพที่ ${i} (จำลองข้อมูลขนาดใหญ่)`,
-                    groupNumber: String(i),
-                    itemIds,
-                    chainType: i % 4 === 0 ? 'swap' : (i % 4 === 1 ? 'three-way' : (i % 4 === 2 ? 'promotion' : 'custom')),
-                    isCompleted: false
-                });
-            }
-
-            setColumns(simColumns);
-            setPersonnelMap(simPersonnelMap);
-            setIsSimulationMode(true);
-            setSelectedIds([]); // Clear selection
-            setSnackbar({ open: true, message: 'เปิดโหมดทดสอบประสิทธิภาพ (สร้างข้อมูลจำลอง 200 เลน)', severity: 'warning' });
-        }
-    }, [isSimulationMode, originalBoardState]);
 
     // Save board data to API
     const saveBoardData = useCallback(async (year: number, cols: Column[], persMap: Record<string, Personnel>) => {
@@ -3764,32 +3752,6 @@ export default function PersonnelBoardV2Page() {
                                     )}
                                 </Button>
 
-                                {/* Simulation Toggle Button */}
-                                <Tooltip title={isSimulationMode ? "ปิดโหมดทดสอบ (คืนค่าข้อมูลเดิม)" : "ทดสอบประสิทธิภาพ (จำลอง 200 เลน)"}>
-                                    <Button
-                                        variant={isSimulationMode ? "contained" : "outlined"}
-                                        color={isSimulationMode ? "warning" : "inherit"}
-                                        size="small"
-                                        startIcon={isSimulationMode ? <BugReportIcon fontSize="small" /> : <ScienceIcon fontSize="small" />}
-                                        onClick={handleToggleSimulation}
-                                        sx={{
-                                            borderRadius: 2,
-                                            px: 2,
-                                            height: 36,
-                                            fontWeight: 700,
-                                            textTransform: 'none',
-                                            borderColor: isSimulationMode ? 'warning.main' : 'divider',
-                                            color: isSimulationMode ? 'white' : 'text.secondary',
-                                            '&:hover': {
-                                                bgcolor: isSimulationMode ? 'warning.dark' : alpha('#64748b', 0.05),
-                                                borderColor: isSimulationMode ? 'warning.dark' : 'primary.main',
-                                            },
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        {isSimulationMode ? "คืนค่าจริง" : "ทดสอบ 200 เลน"}
-                                    </Button>
-                                </Tooltip>
 
                                 {/* Dropdown Menu */}
                                 <Popover
@@ -3836,6 +3798,11 @@ export default function PersonnelBoardV2Page() {
                                     >
                                         <Box sx={{ width: 18, mr: 1.5 }} />
                                         ทั้งหมด
+                                        <Chip
+                                            label={laneTypeCounts.all}
+                                            size="small"
+                                            sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', bgcolor: alpha('#64748b', 0.1), color: 'text.secondary' }}
+                                        />
                                     </MenuItem>
                                     <MenuItem
                                         onClick={() => { setFilterBoardType('swap'); }}
@@ -3844,6 +3811,11 @@ export default function PersonnelBoardV2Page() {
                                     >
                                         <Box sx={{ width: 18, mr: 1.5, color: '#f59e0b' }}>🔄</Box>
                                         สลับตำแหน่ง
+                                        <Chip
+                                            label={laneTypeCounts.swap}
+                                            size="small"
+                                            sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', bgcolor: alpha('#f59e0b', 0.1), color: '#b45309' }}
+                                        />
                                     </MenuItem>
                                     <MenuItem
                                         onClick={() => { setFilterBoardType('three-way'); }}
@@ -3852,6 +3824,11 @@ export default function PersonnelBoardV2Page() {
                                     >
                                         <Box sx={{ width: 18, mr: 1.5, color: '#f43f5e' }}>🔺</Box>
                                         สามเส้า
+                                        <Chip
+                                            label={laneTypeCounts['three-way']}
+                                            size="small"
+                                            sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', bgcolor: alpha('#f43f5e', 0.1), color: '#be123c' }}
+                                        />
                                     </MenuItem>
                                     <MenuItem
                                         onClick={() => { setFilterBoardType('promotion'); }}
@@ -3860,14 +3837,37 @@ export default function PersonnelBoardV2Page() {
                                     >
                                         <Box sx={{ width: 18, mr: 1.5, color: '#10b981' }}>📈</Box>
                                         เลื่อนตำแหน่ง
+                                        <Chip
+                                            label={laneTypeCounts.promotion}
+                                            size="small"
+                                            sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', bgcolor: alpha('#10b981', 0.1), color: '#047857' }}
+                                        />
+                                    </MenuItem>
+                                    <MenuItem
+                                        onClick={() => { setFilterBoardType('transfer'); }}
+                                        selected={filterBoardType === 'transfer'}
+                                        sx={{ py: 1, fontSize: '0.85rem' }}
+                                    >
+                                        <Box sx={{ width: 18, mr: 1.5, color: '#3b82f6' }}>📦</Box>
+                                        ย้ายหน่วย
+                                        <Chip
+                                            label={laneTypeCounts.transfer}
+                                            size="small"
+                                            sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', bgcolor: alpha('#3b82f6', 0.1), color: '#1d4ed8' }}
+                                        />
                                     </MenuItem>
                                     <MenuItem
                                         onClick={() => { setFilterBoardType('custom'); }}
                                         selected={filterBoardType === 'custom'}
                                         sx={{ py: 1, fontSize: '0.85rem' }}
                                     >
-                                        <Box sx={{ width: 18, mr: 1.5, color: '#6366f1' }}>📦</Box>
+                                        <Box sx={{ width: 18, mr: 1.5, color: '#6366f1' }}>🛠️</Box>
                                         อื่นๆ
+                                        <Chip
+                                            label={laneTypeCounts.custom}
+                                            size="small"
+                                            sx={{ ml: 'auto', height: 18, fontSize: '0.65rem', bgcolor: alpha('#6366f1', 0.1), color: '#4338ca' }}
+                                        />
                                     </MenuItem>
 
                                     {/* Placeholder Filter */}

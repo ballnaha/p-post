@@ -1,6 +1,6 @@
 --- DEBUG ASSIGNED COUNTS ---
 Total Matching Keys: 109
-Assigned Positions: 0
-Assigned Counts Map: {}
+Assigned Positions: 2
+Assigned Counts Map: {"ย้ายหน่วยงาน (9)-9-null":1,"รอง ผบก.น.7-น-1009 07201 0003":1}
 Removed Keys: []
 True Unassigned Count: 109

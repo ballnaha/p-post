@@ -155,7 +155,6 @@ export default function PolicePersonnelPage() {
   const [posCodeFilter, setPosCodeFilter] = useState<string>('all');
   const [unitFilter, setUnitFilter] = useState<string>('all');
   const [supporterFilter, setSupporterFilter] = useState<'all' | 'with-supporter' | 'no-supporter'>('all');
-  const [transactionTypeFilter, setTransactionTypeFilter] = useState<'all' | 'two-way' | 'three-way' | 'promotion-chain'>('all');
   const [posCodes, setPosCodes] = useState<Array<{ id: number; name: string }>>([]);
   const [units, setUnits] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState<number>(() => new Date().getFullYear() + 543);
@@ -456,7 +455,7 @@ export default function PolicePersonnelPage() {
     try {
       const searchParam = nameSearch || search || '';
       const response = await fetch(
-        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}&supporter=${supporterFilter}&transactionType=${transactionTypeFilter}&year=${yearFilter}`,
+        `/api/police-personnel?page=${page + 1}&limit=${rowsPerPage}&search=${encodeURIComponent(searchParam)}&position=${positionFilter}&posCode=${posCodeFilter}&unit=${unitFilter}&supporter=${supporterFilter}&year=${yearFilter}`,
         abortSignal ? { signal: abortSignal } : {}
       );
 
@@ -494,7 +493,7 @@ export default function PolicePersonnelPage() {
       clearTimeout(timer);
       abortController.abort();
     };
-  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter, transactionTypeFilter, yearFilter]);
+  }, [page, rowsPerPage, search, nameSearch, positionFilter, posCodeFilter, unitFilter, supporterFilter, yearFilter]);
 
   const handleCreateSuccess = () => {
     fetchData();
@@ -509,7 +508,6 @@ export default function PolicePersonnelPage() {
     setPosCodeFilter('all');
     setUnitFilter('all');
     setSupporterFilter('all');
-    setTransactionTypeFilter('all');
     setYearFilter(new Date().getFullYear() + 543);
     setPage(0);
   };
@@ -531,11 +529,6 @@ export default function PolicePersonnelPage() {
 
   const handleSupporterFilterChange = useCallback((value: 'all' | 'with-supporter' | 'no-supporter') => {
     setSupporterFilter(value);
-    setPage(0);
-  }, []);
-
-  const handleTransactionTypeFilterChange = useCallback((value: 'all' | 'two-way' | 'three-way' | 'promotion-chain') => {
-    setTransactionTypeFilter(value);
     setPage(0);
   }, []);
 
@@ -1848,27 +1841,6 @@ export default function PolicePersonnelPage() {
                 <MenuItem value="all">ทั้งหมด</MenuItem>
                 <MenuItem value="with-supporter">มีผู้สนับสนุน</MenuItem>
                 <MenuItem value="no-supporter">ไม่มีผู้สนับสนุน</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{
-              flex: {
-                xs: '1 1 100%',              // Mobile: full width
-                sm: '1 1 calc(50% - 8px)',   // Small tablet: 2 columns
-                md: '0 1 200px'              // Desktop/iPad landscape: fixed width
-              },
-              minWidth: 150
-            }}>
-              <InputLabel>ประเภทรายการ</InputLabel>
-              <Select
-                value={transactionTypeFilter}
-                label="ประเภทรายการ"
-                onChange={(e) => handleTransactionTypeFilterChange(e.target.value as 'all' | 'two-way' | 'three-way' | 'promotion-chain')}
-              >
-                <MenuItem value="all">ทั้งหมด</MenuItem>
-                <MenuItem value="two-way">สลับตำแหน่ง</MenuItem>
-                <MenuItem value="three-way">อยู่ในสามเส้า</MenuItem>
-                <MenuItem value="promotion-chain">แทนตำแหน่ง</MenuItem>
               </Select>
             </FormControl>
 

@@ -59,6 +59,12 @@ export default function CreateThreeWayLaneTab({
     // Modal
     const [viewPerson, setViewPerson] = useState<Personnel | null>(null);
 
+    const getPosCodeLabel = (person: Personnel) => (
+        person.posCodeId
+            ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}`
+            : (person.posCodeMaster?.name || '-')
+    );
+
     // Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -141,6 +147,18 @@ export default function CreateThreeWayLaneTab({
                                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.65rem', mb: 0.5 }}>
                                     {person1.position}
                                 </Typography>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                                    <Chip
+                                        label={getPosCodeLabel(person1)}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
+                                    />
+                                    <Chip
+                                        label={person1.unit || '-'}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
+                                    />
+                                </Box>
                                 {(person1.requestedPosition || person1.supporterName || person1.supportReason) && (
                                     <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main', display: 'block', mb: 0.5 }}>
                                         📍 ร้องขอ: {person1.requestedPosition || person1.supporterName || 'มีการร้องขอตำแหน่ง'}
@@ -191,6 +209,18 @@ export default function CreateThreeWayLaneTab({
                                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.65rem', mb: 0.5 }}>
                                     {person2.position}
                                 </Typography>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                                    <Chip
+                                        label={getPosCodeLabel(person2)}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
+                                    />
+                                    <Chip
+                                        label={person2.unit || '-'}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
+                                    />
+                                </Box>
                                 {(person2.requestedPosition || person2.supporterName || person2.supportReason) && (
                                     <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main', display: 'block', mb: 0.5 }}>
                                         📍 ร้องขอ: {person2.requestedPosition || person2.supporterName || 'มีการร้องขอตำแหน่ง'}
@@ -241,6 +271,18 @@ export default function CreateThreeWayLaneTab({
                                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.65rem', mb: 0.5 }}>
                                     {person3.position}
                                 </Typography>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                                    <Chip
+                                        label={getPosCodeLabel(person3)}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
+                                    />
+                                    <Chip
+                                        label={person3.unit || '-'}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
+                                    />
+                                </Box>
                                 {(person3.requestedPosition || person3.supporterName || person3.supportReason) && (
                                     <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main', display: 'block', mb: 0.5 }}>
                                         📍 ร้องขอ: {person3.requestedPosition || person3.supporterName || 'มีการร้องขอตำแหน่ง'}
@@ -442,6 +484,11 @@ export default function CreateThreeWayLaneTab({
                                         {person.position}
                                     </Typography>
                                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                                        <Chip
+                                            label={getPosCodeLabel(person)}
+                                            size="small"
+                                            sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main' }}
+                                        />
                                         <Chip
                                             label={person.unit || 'ไม่ระบุหน่วย'}
                                             size="small"

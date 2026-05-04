@@ -874,7 +874,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                     {/* Search */}
                     <TextField
                         size="small"
-                        placeholder="ค้นหาชื่อ, ตำแหน่ง..."
+                        placeholder="ค้นหาชื่อ, ตำแหน่ง, ชื่อกลุ่ม..."
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         sx={{ minWidth: 250, flexGrow: 1, maxWidth: 400 }}

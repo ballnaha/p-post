@@ -199,8 +199,14 @@ export async function GET(request: NextRequest) {
 
             const searchPosNums = new Set<string>();
             for (const d of matchedDetails) {
-                if (d.fromPositionNumber) searchPosNums.add(normalizePositionNumber(d.fromPositionNumber));
-                if (d.toPositionNumber) searchPosNums.add(normalizePositionNumber(d.toPositionNumber));
+                if (d.fromPositionNumber) {
+                    searchPosNums.add(d.fromPositionNumber);
+                    searchPosNums.add(normalizePositionNumber(d.fromPositionNumber));
+                }
+                if (d.toPositionNumber) {
+                    searchPosNums.add(d.toPositionNumber);
+                    searchPosNums.add(normalizePositionNumber(d.toPositionNumber));
+                }
             }
 
             const searchPosNumArray = Array.from(searchPosNums);

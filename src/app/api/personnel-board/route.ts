@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
 
 const BOARD_LAYOUT_TYPE = 'board-layout';
+const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 
 // Helper for safe integer parsing
 const safeInt = (val: any): number | null => {
@@ -358,8 +359,8 @@ export async function POST(request: NextRequest) {
                         toUnit = otherPersonnel.unit || null;
                         toPosCodeId = safeRelationId(otherPersonnel.posCodeId);
                     }
-                } else if (swapType === 'three-way' && column.itemIds.length === 3) {
-                    const targetIndex = (index + 1) % 3;
+                } else if (swapType === 'three-way' && column.itemIds.length >= CIRCULAR_SWAP_MIN_PERSONNEL) {
+                    const targetIndex = (index + 1) % column.itemIds.length;
                     const targetPersonnel = personnelMap[column.itemIds[targetIndex]];
                     if (targetPersonnel) {
                         toPosition = targetPersonnel.position || null;
@@ -526,6 +527,7 @@ export async function POST(request: NextRequest) {
                             title: column.title,
                             vacantPosition: column.vacantPosition,
                             isCompleted: column.isCompleted || false,
+                            transactionType: existingTransaction.swapType,
                         });
                     } else {
                         // --- New Lane (will be created in Phase 3) ---
@@ -585,7 +587,7 @@ export async function POST(request: NextRequest) {
                         // Build all detail records for this lane
                         const newDetails: any[] = [];
                         for (let j = 0; j < column.itemIds.length; j++) {
-                            const data = buildDetailData(column, j, null);
+                            const data = buildDetailData(column, j, dbSwapType);
                             if (data) {
                                 newDetails.push({ ...data, transactionId: newTransaction.id });
                             }
@@ -603,6 +605,7 @@ export async function POST(request: NextRequest) {
                             title: column.title,
                             vacantPosition: column.vacantPosition,
                             isCompleted: column.isCompleted || false,
+                            transactionType: dbSwapType,
                         };
                     }));
                 }

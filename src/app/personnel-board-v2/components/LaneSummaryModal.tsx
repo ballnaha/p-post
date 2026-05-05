@@ -74,10 +74,8 @@ export default function LaneSummaryModal({
         if (isSwap && personnelList.length === 2) {
             return personnelList[index === 0 ? 1 : 0];
         }
-        if (isThreeWay && personnelList.length === 3) {
-            if (index === 0) return personnelList[1];
-            if (index === 1) return personnelList[2];
-            if (index === 2) return personnelList[0];
+        if (isThreeWay && personnelList.length >= 3) {
+            return personnelList[(index + 1) % personnelList.length];
         }
         return null;
     };

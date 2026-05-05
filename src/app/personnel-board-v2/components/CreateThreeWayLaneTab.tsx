@@ -110,7 +110,7 @@ export default function CreateThreeWayLaneTab({
     // Handle Create
     const handleCreate = () => {
         if (person1 && person2 && person3) {
-            const defaultTitle = `สามเส้า: ${person1.fullName} → ${person2.fullName} → ${person3.fullName} → ${person1.fullName}`;
+            const defaultTitle = `วงสลับ: ${person1.fullName} → ${person2.fullName} → ${person3.fullName} → ${person1.fullName}`;
             onCreate(person1, person2, person3, laneTitle || defaultTitle);
         }
     };
@@ -351,7 +351,7 @@ export default function CreateThreeWayLaneTab({
                         fontSize: '0.9rem'
                     }}
                 >
-                    {loading ? 'กำลังสร้างเลน...' : '✅ สร้างเลนสลับสามเส้า'}
+                    {loading ? 'กำลังสร้างเลน...' : '✅ สร้างเลนวงสลับ'}
                 </Button>
             )}
 

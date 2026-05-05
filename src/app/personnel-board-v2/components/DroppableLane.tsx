@@ -32,6 +32,12 @@ import DraggableCard from './DraggableCard';
 import AddPlaceholderCardButton from './AddPlaceholderCardButton';
 import { Personnel, Column } from '../types';
 
+const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
+
+const getCircularSwapLabel = (count: number) => {
+    return 'วงสลับ';
+};
+
 interface DroppableLaneProps {
     column: Column;
     lanePersonnel: Personnel[]; // Optimized: Only people in this lane
@@ -173,7 +179,7 @@ const DroppableLane = memo(({
             bg: '#fff1f2',
             accent: '#f43f5e',
             headerBg: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)',
-            label: 'สามเส้า'
+            label: getCircularSwapLabel(lanePersonnel.length)
         };
         if (isVacant) return {
             bg: '#eff6ff',
@@ -610,10 +616,8 @@ const DroppableLane = memo(({
                                 const type = column.vacantPosition.transactionType;
                                 if (type === 'two-way' && lanePersonnel.length === 2) {
                                     targetInfo = lanePersonnel[idx === 0 ? 1 : 0];
-                                } else if (type === 'three-way' && lanePersonnel.length === 3) {
-                                    if (idx === 0) targetInfo = lanePersonnel[1];
-                                    else if (idx === 1) targetInfo = lanePersonnel[2];
-                                    else if (idx === 2) targetInfo = lanePersonnel[0];
+                                } else if (type === 'three-way' && lanePersonnel.length >= CIRCULAR_SWAP_MIN_PERSONNEL) {
+                                    targetInfo = lanePersonnel[(idx + 1) % lanePersonnel.length];
                                 } else if (type === 'transfer') {
                                     if (idx === 0) {
                                         targetInfo = column.vacantPosition;

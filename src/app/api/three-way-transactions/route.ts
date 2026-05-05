@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
+const CIRCULAR_SWAP_MAX_PERSONNEL = 10;
+
 // GET - ดึงรายการ three-way transactions (ใช้ SwapTransaction แทน)
 // Optimized: Selective field selection instead of include for better performance
 export async function GET(request: NextRequest) {
@@ -105,10 +108,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { year, swapDate, groupName, groupNumber, status, notes, swapDetails } = body;
 
-    // Validate: ต้องมี 3 คน
-    if (!swapDetails || swapDetails.length !== 3) {
+    // Validate: circular swap must have 3-10 people
+    if (!swapDetails || swapDetails.length < CIRCULAR_SWAP_MIN_PERSONNEL || swapDetails.length > CIRCULAR_SWAP_MAX_PERSONNEL) {
       return NextResponse.json(
-        { success: false, error: 'Three-way swap must have exactly 3 people' },
+        { success: false, error: `วงสลับต้องมี ${CIRCULAR_SWAP_MIN_PERSONNEL}-${CIRCULAR_SWAP_MAX_PERSONNEL} คน` },
         { status: 400 }
       );
     }

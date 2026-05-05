@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+const CIRCULAR_SWAP_MAX_PERSONNEL = 10;
+
 /**
  * GET /api/swap-transactions
  * ดึงรายการผลการสลับตำแหน่งทั้งหมด พร้อม posCodeMaster
@@ -123,10 +125,18 @@ export async function POST(request: NextRequest) {
 
     // Validate
     const effectiveSwapType = swapType || 'two-way';
-    const minDetails = (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion' || effectiveSwapType === 'transfer') ? 1 : 2;
+    const minDetails = effectiveSwapType === 'three-way'
+      ? 3
+      : (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion' || effectiveSwapType === 'transfer') ? 1 : 2;
     if (!year || !swapDate || !swapDetails || swapDetails.length < minDetails) {
       return NextResponse.json(
         { success: false, error: (effectiveSwapType === 'promotion-chain' || effectiveSwapType === 'promotion' || effectiveSwapType === 'transfer') ? 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 1 ขั้นตอน' : 'ข้อมูลไม่ครบถ้วน ต้องมีอย่างน้อย 2 คนที่สลับตำแหน่ง' },
+        { status: 400 }
+      );
+    }
+    if (effectiveSwapType === 'three-way' && swapDetails.length > CIRCULAR_SWAP_MAX_PERSONNEL) {
+      return NextResponse.json(
+        { success: false, error: `วงสลับรองรับได้สูงสุด ${CIRCULAR_SWAP_MAX_PERSONNEL} คน` },
         { status: 400 }
       );
     }

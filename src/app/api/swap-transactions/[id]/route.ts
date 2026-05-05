@@ -251,7 +251,7 @@ export async function DELETE(
         .map(detail => detail.personnelId)
         .filter((id): id is string => id !== null);
 
-      // ตรวจสอบว่าบุคลากรเหล่านี้มีการสลับตำแหน่งในปีนี้หรือไม่ (รวมทั้งสามเส้า)
+      // ตรวจสอบว่าบุคลากรเหล่านี้มีการสลับตำแหน่งในปีนี้หรือไม่ (รวมทั้งวงสลับ)
       const relatedSwapTransactions = await prisma.swapTransaction.findMany({
         where: {
           id: { not: existingTransaction.id }, // ไม่ใช่ตัวเอง

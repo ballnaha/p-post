@@ -99,6 +99,19 @@ import LaneSummaryModal from './components/LaneSummaryModal';
 import TransferSummaryReport from './components/TransferSummaryReport';
 import BoardListView from './components/BoardListView';
 
+const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
+const CIRCULAR_SWAP_MAX_PERSONNEL = 10;
+const DEFAULT_POS_CODE_ORDER = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12];
+
+const getCircularSwapLabel = (count?: number) => {
+    return 'วงสลับ';
+};
+
+const getCircularSwapTitle = (itemIds: string[], map: Record<string, Personnel>, fallback?: Record<string, Personnel>) => {
+    const names = itemIds.map(itemId => fallback?.[itemId]?.fullName || map[itemId]?.fullName || '?');
+    return `${getCircularSwapLabel(itemIds.length)}: ${names.join(' → ')}`;
+};
+
 // --- Main Page Component ---
 export default function PersonnelBoardV2Page() {
     const currentYear = new Date().getFullYear() + 543;
@@ -474,6 +487,69 @@ export default function PersonnelBoardV2Page() {
         return counts;
     }, [columns, showCompletedLanes, showOnlyWithPlaceholder, boardSearchTerm, personnelMap]);
 
+    const isSuccessionLane = useCallback((column?: Column | null) => {
+        if (!column) return false;
+
+        const vacantPos = column.vacantPosition;
+        return column.chainType === 'promotion' ||
+            column.chainType === 'transfer' ||
+            column.chainType === 'custom' ||
+            vacantPos?.transactionType === 'transfer' ||
+            vacantPos?.transactionType === 'promotion-chain' ||
+            Boolean(vacantPos && !vacantPos.isTransaction);
+    }, []);
+
+    const isAllowedSuccessionPosCode = useCallback((personPosCode: number, targetPosCode: number) => {
+        const orderedPosCodes = (posCodeOptionsRef.current.length ? posCodeOptionsRef.current.map(o => o.id) : DEFAULT_POS_CODE_ORDER)
+            .filter((id, index, ids) => ids.indexOf(id) === index)
+            .sort((a, b) => a - b);
+
+        const personIndex = orderedPosCodes.indexOf(personPosCode);
+        const targetIndex = orderedPosCodes.indexOf(targetPosCode);
+
+        if (personIndex >= 0 && targetIndex >= 0) {
+            return personIndex === targetIndex || personIndex === targetIndex + 1;
+        }
+
+        return personPosCode === targetPosCode || personPosCode === targetPosCode + 1;
+    }, []);
+
+    const validateSuccessionPosCodes = useCallback((
+        column: Column | undefined | null,
+        itemIds: string[],
+        map: Record<string, Personnel>
+    ) => {
+        if (!isSuccessionLane(column)) return { valid: true };
+
+        const vacantPosCode = Number(column?.vacantPosition?.posCodeMaster?.id ?? column?.vacantPosition?.posCodeId);
+
+        for (let index = 0; index < itemIds.length; index++) {
+            const person = map[itemIds[index]];
+            if (!person || person.isPlaceholder) continue;
+
+            const personPosCode = Number(person.posCodeId);
+            if (!Number.isFinite(personPosCode)) continue;
+
+            let targetPosCode: number | null = null;
+            if (index === 0) {
+                targetPosCode = Number.isFinite(vacantPosCode) ? vacantPosCode : null;
+            } else {
+                const previousPerson = map[itemIds[index - 1]];
+                const previousPosCode = Number(previousPerson?.posCodeId);
+                targetPosCode = Number.isFinite(previousPosCode) ? previousPosCode : null;
+            }
+
+            if (targetPosCode !== null && !isAllowedSuccessionPosCode(personPosCode, targetPosCode)) {
+                return {
+                    valid: false,
+                    message: `ไม่สามารถต่อเลนได้: ${person.rank || ''} ${person.fullName || ''} มี PosCode ${personPosCode} ต้องเลือก PosCode ${targetPosCode} หรือระดับถัดไปเท่านั้น`
+                };
+            }
+        }
+
+        return { valid: true };
+    }, [isSuccessionLane, isAllowedSuccessionPosCode]);
+
     // Count lanes with placeholder
     const lanesWithPlaceholderCount = useMemo(() => {
         return columns.filter(col => !col.isCompleted).filter(col => {
@@ -704,7 +780,7 @@ export default function PersonnelBoardV2Page() {
                             return {
                                 ...col,
                                 linkedTransactionId: matcher.transactionId,
-                                linkedTransactionType: col.linkedTransactionType || 'promotion-chain',
+                                linkedTransactionType: col.linkedTransactionType || matcher.transactionType || 'promotion-chain',
                                 id: matcher.transactionId,
                             };
                         }
@@ -856,7 +932,7 @@ export default function PersonnelBoardV2Page() {
                         // Enforce limits for Swap (2) and Three-way (3)
                         if (targetLane) {
                             const maxLimit = targetLane.chainType === 'swap' ? 2
-                                : targetLane.chainType === 'three-way' ? 3
+                                : targetLane.chainType === 'three-way' ? CIRCULAR_SWAP_MAX_PERSONNEL
                                     : Infinity;
 
                             // Also check transactionType if available (backward compatibility)
@@ -864,13 +940,29 @@ export default function PersonnelBoardV2Page() {
                             if (targetLane.chainType === 'swap' || (targetLane.vacantPosition?.transactionType === 'two-way')) {
                                 if (targetLane.itemIds.length >= 2) limitType = 'สลับตำแหน่ง (2 คน)';
                             } else if (targetLane.chainType === 'three-way' || (targetLane.vacantPosition?.transactionType === 'three-way')) {
-                                if (targetLane.itemIds.length >= 3) limitType = 'สามเส้า (3 คน)';
+                                if (targetLane.itemIds.length >= CIRCULAR_SWAP_MAX_PERSONNEL) limitType = `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`;
                             }
 
                             if (limitType || targetLane.itemIds.length >= maxLimit) {
                                 setSnackbar({
                                     open: true,
                                     message: limitType ? `❌ รายการ "${limitType}" เต็มแล้ว` : `❌ เลนนี้จำกัดสูงสุด ${maxLimit} คน`,
+                                    severity: 'error'
+                                });
+                                return;
+                            }
+                        }
+
+                        if (targetLane) {
+                            const validation = validateSuccessionPosCodes(
+                                targetLane,
+                                [...targetLane.itemIds, boardId],
+                                { ...personnelMap, [boardId]: newPerson }
+                            );
+                            if (!validation.valid) {
+                                setSnackbar({
+                                    open: true,
+                                    message: validation.message || 'ไม่สามารถต่อเลนนี้ได้',
                                     severity: 'error'
                                 });
                                 return;
@@ -976,11 +1068,7 @@ export default function PersonnelBoardV2Page() {
 
                             // Update title for three-way lanes
                             if (isThreeWayLane) {
-                                const names = newItemIds.map(itemId => {
-                                    if (itemId === boardId) return newPerson.fullName || '?';
-                                    return personnelMap[itemId]?.fullName || '?';
-                                });
-                                newTitle = `สามเส้า: ${names.join(' → ')}`;
+                                newTitle = getCircularSwapTitle(newItemIds, personnelMap, { [boardId]: newPerson });
                             }
 
                             if (isTransferLane) {
@@ -1031,6 +1119,22 @@ export default function PersonnelBoardV2Page() {
                                     transactionType: targetPerson?.transactionType || (destColumn.chainType === 'three-way' ? 'three-way' : (destColumn.chainType === 'swap' ? 'two-way' : undefined)),
                                 };
 
+                                const replacementItemIds = destColumn.itemIds.map(id =>
+                                    id === destPersonnelId ? boardId : id
+                                );
+                                const validation = validateSuccessionPosCodes(
+                                    destColumn,
+                                    replacementItemIds,
+                                    { ...personnelMap, [boardId]: newPerson }
+                                );
+                                if (!validation.valid) {
+                                    setSnackbar({
+                                        open: true,
+                                        message: validation.message || 'ไม่สามารถต่อเลนนี้ได้',
+                                        severity: 'error'
+                                    });
+                                    return;
+                                }
 
                                 // Remove placeholder from personnelMap
                                 setPersonnelMap(prev => {
@@ -1061,11 +1165,7 @@ export default function PersonnelBoardV2Page() {
                                                 newTitle = `สลับ: ${names[0]} ↔ ${names[1]}`;
                                             }
                                         } else if (isThreeWayLane) {
-                                            const names = newItemIds.map(itemId => {
-                                                if (itemId === boardId) return newPerson.fullName || '?';
-                                                return personnelMap[itemId]?.fullName || '?';
-                                            });
-                                            newTitle = `สามเส้า: ${names.join(' → ')}`;
+                                            newTitle = getCircularSwapTitle(newItemIds, personnelMap, { [boardId]: newPerson });
                                         }
 
                                         return { ...c, title: newTitle, itemIds: newItemIds };
@@ -1098,7 +1198,7 @@ export default function PersonnelBoardV2Page() {
                             }
                             // Enforce limits for Swap (2) and Three-way (3)
                             const maxLimit = destColumn.chainType === 'swap' ? 2
-                                : destColumn.chainType === 'three-way' ? 3
+                                : destColumn.chainType === 'three-way' ? CIRCULAR_SWAP_MAX_PERSONNEL
                                     : Infinity;
 
                             // Also check transactionType if available
@@ -1106,7 +1206,7 @@ export default function PersonnelBoardV2Page() {
                             if (destColumn.chainType === 'swap' || (destColumn.vacantPosition?.transactionType === 'two-way')) {
                                 if (destColumn.itemIds.length >= 2) limitType = 'สลับตำแหน่ง (2 คน)';
                             } else if (destColumn.chainType === 'three-way' || (destColumn.vacantPosition?.transactionType === 'three-way')) {
-                                if (destColumn.itemIds.length >= 3) limitType = 'สามเส้า (3 คน)';
+                                if (destColumn.itemIds.length >= CIRCULAR_SWAP_MAX_PERSONNEL) limitType = `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`;
                             }
 
                             if (limitType || destColumn.itemIds.length >= maxLimit) {
@@ -1174,6 +1274,20 @@ export default function PersonnelBoardV2Page() {
                             const newItemIds = [...destColumn.itemIds];
                             newItemIds.splice(destIndex, 0, boardId);
 
+                            const validation = validateSuccessionPosCodes(
+                                destColumn,
+                                newItemIds,
+                                { ...personnelMap, [boardId]: newPerson }
+                            );
+                            if (!validation.valid) {
+                                setSnackbar({
+                                    open: true,
+                                    message: validation.message || 'ไม่สามารถต่อเลนนี้ได้',
+                                    severity: 'error'
+                                });
+                                return;
+                            }
+
                             setPersonnelMap(prev => ({ ...prev, [boardId]: newPerson }));
                             setColumns(prev => prev.map(c => {
                                 if (c.id === destColumn.id) {
@@ -1192,11 +1306,7 @@ export default function PersonnelBoardV2Page() {
                                             newTitle = `สลับ: ${names[0]} ↔ ${names[1]}`;
                                         }
                                     } else if (isThreeWayLane) {
-                                        const names = newItemIds.map(itemId => {
-                                            if (itemId === boardId) return newPerson.fullName || '?';
-                                            return (personnelMap[itemId]?.fullName || '?');
-                                        });
-                                        newTitle = `สามเส้า: ${names.join(' → ')}`;
+                                        newTitle = getCircularSwapTitle(newItemIds, personnelMap, { [boardId]: newPerson });
                                     }
 
                                     return { ...c, title: newTitle, itemIds: newItemIds };
@@ -1241,7 +1351,7 @@ export default function PersonnelBoardV2Page() {
                         if (destCol) {
                             // Enforce limits for Swap (2) and Three-way (3)
                             const maxLimit = destCol.chainType === 'swap' ? 2
-                                : destCol.chainType === 'three-way' ? 3
+                                : destCol.chainType === 'three-way' ? CIRCULAR_SWAP_MAX_PERSONNEL
                                     : Infinity;
 
                             const currentCount = destCol.itemIds.length;
@@ -1253,7 +1363,7 @@ export default function PersonnelBoardV2Page() {
                             if (destCol.chainType === 'swap' || (destCol.vacantPosition?.transactionType === 'two-way')) {
                                 if (newProspectiveCount > 2) limitType = 'สลับตำแหน่ง (2 คน)';
                             } else if (destCol.chainType === 'three-way' || (destCol.vacantPosition?.transactionType === 'three-way')) {
-                                if (newProspectiveCount > 3) limitType = 'สามเส้า (3 คน)';
+                                if (newProspectiveCount > CIRCULAR_SWAP_MAX_PERSONNEL) limitType = `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`;
                             }
 
                             if (limitType || newProspectiveCount > maxLimit) {
@@ -1267,6 +1377,25 @@ export default function PersonnelBoardV2Page() {
                         }
 
 
+
+                        if (destCol) {
+                            const prospectiveItemIds = destCol.itemIds.filter(id => !movingIds.includes(id));
+                            const itemsRemovedBeforeTarget = destCol.itemIds
+                                .slice(0, targetIndex)
+                                .filter(id => movingIds.includes(id)).length;
+                            const actualIndex = targetIndex - itemsRemovedBeforeTarget;
+                            prospectiveItemIds.splice(actualIndex, 0, ...movingIds);
+
+                            const validation = validateSuccessionPosCodes(destCol, prospectiveItemIds, personnelMap);
+                            if (!validation.valid) {
+                                setSnackbar({
+                                    open: true,
+                                    message: validation.message || 'ไม่สามารถต่อเลนนี้ได้',
+                                    severity: 'error'
+                                });
+                                return;
+                            }
+                        }
 
                         const personObject = personnelMap[movingIds[0]]; // Just trigger for the first one if multiple
 
@@ -1329,12 +1458,11 @@ export default function PersonnelBoardV2Page() {
                                     const actualIndex = targetIndex - itemsRemovedBeforeTarget;
                                     newItemIds.splice(actualIndex, 0, ...movingIds);
 
-                                    // Update title for three-way lanes
+                                    // Update title for circular swap lanes
                                     let newTitle = c.title;
                                     const isThreeWayLane = c.chainType === 'three-way' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'three-way');
                                     if (isThreeWayLane && newItemIds.length >= 2) {
-                                        const names = newItemIds.map(itemId => personnelMap[itemId]?.fullName || '?');
-                                        newTitle = `สามเส้า: ${names.join(' → ')}`;
+                                        newTitle = getCircularSwapTitle(newItemIds, personnelMap);
                                     }
 
                                     // Update title for swap lanes
@@ -1445,7 +1573,7 @@ export default function PersonnelBoardV2Page() {
                 setHasUnsavedChanges(true);
             },
         });
-    }, [columns, selectedIds, clearSelection, commitAction, personnelMap, selectedYear, saveBoardData]);
+    }, [columns, selectedIds, clearSelection, commitAction, personnelMap, selectedYear, saveBoardData, validateSuccessionPosCodes]);
 
     // Add to lane handler
     // Recalculate 'toPosition' fields for all personnel in a specific column (for chains)
@@ -1584,13 +1712,13 @@ export default function PersonnelBoardV2Page() {
                         };
                     }
                 });
-            } else if (isThreeWay && itemIds.length === 3) {
-                // Circular swap A -> B -> C -> A
+            } else if (isThreeWay && itemIds.length >= CIRCULAR_SWAP_MIN_PERSONNEL) {
+                // Circular swap A -> B -> C -> ... -> A
                 itemIds.forEach((itemId, index) => {
                     const person = newMap[itemId];
                     if (!person) return;
 
-                    const nextIndex = (index + 1) % 3;
+                    const nextIndex = (index + 1) % itemIds.length;
                     const nextItemId = itemIds[nextIndex];
                     const nextPerson = newMap[nextItemId];
                     if (nextPerson) {
@@ -1632,7 +1760,7 @@ export default function PersonnelBoardV2Page() {
         // Enforce limits for Swap (2) and Three-way (3)
         if (lane) {
             const maxLimit = lane.chainType === 'swap' ? 2
-                : lane.chainType === 'three-way' ? 3
+                : lane.chainType === 'three-way' ? CIRCULAR_SWAP_MAX_PERSONNEL
                     : Infinity;
 
             // Also check transactionType if available
@@ -1640,7 +1768,7 @@ export default function PersonnelBoardV2Page() {
             if (lane.chainType === 'swap' || (lane.vacantPosition?.transactionType === 'two-way')) {
                 if (lane.itemIds.length >= 2) limitType = 'สลับตำแหน่ง (2 คน)';
             } else if (lane.chainType === 'three-way' || (lane.vacantPosition?.transactionType === 'three-way')) {
-                if (lane.itemIds.length >= 3) limitType = 'สามเส้า (3 คน)';
+                if (lane.itemIds.length >= CIRCULAR_SWAP_MAX_PERSONNEL) limitType = `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`;
             }
 
             if (limitType || lane.itemIds.length >= maxLimit) {
@@ -1662,6 +1790,22 @@ export default function PersonnelBoardV2Page() {
         const isSwapLane = lane?.chainType === 'swap' || (lane?.vacantPosition?.isTransaction && lane?.vacantPosition.transactionType === 'two-way');
         const isThreeWayLane = lane?.chainType === 'three-way' || (lane?.vacantPosition?.isTransaction && lane?.vacantPosition.transactionType === 'three-way');
         const isPromotionLane = lane?.chainType === 'promotion' || (!isSwapLane && !isThreeWayLane && lane?.vacantPosition);
+
+        if (lane) {
+            const validation = validateSuccessionPosCodes(
+                lane,
+                [...lane.itemIds, boardId],
+                { ...personnelMap, [boardId]: newPerson }
+            );
+            if (!validation.valid) {
+                setSnackbar({
+                    open: true,
+                    message: validation.message || 'ไม่สามารถต่อเลนนี้ได้',
+                    severity: 'error'
+                });
+                return;
+            }
+        }
 
         if (isSwapLane && lane && lane.itemIds.length === 1) {
             // Swap lane with 1 person already: set toPosition for both
@@ -1740,13 +1884,9 @@ export default function PersonnelBoardV2Page() {
             const newItemIds = [...c.itemIds, boardId];
             let newTitle = c.title;
 
-            // Update title for three-way lanes
+            // Update title for circular swap lanes
             if (isThreeWayLane) {
-                const names = newItemIds.map(itemId => {
-                    if (itemId === boardId) return newPerson.fullName || '?';
-                    return personnelMap[itemId]?.fullName || '?';
-                });
-                newTitle = `สามเส้า: ${names.join(' → ')}`;
+                newTitle = getCircularSwapTitle(newItemIds, personnelMap, { [boardId]: newPerson });
             }
 
             // Update title for swap lanes
@@ -1783,7 +1923,7 @@ export default function PersonnelBoardV2Page() {
                 return currentCols;
             });
         }, 50);
-    }, [columns, commitAction, personnelMap, recalculateColumnToPositions]);
+    }, [columns, commitAction, personnelMap, recalculateColumnToPositions, validateSuccessionPosCodes]);
 
     // Remove from board handler
     const handleRemoveFromBoard = (personId: string) => {
@@ -1798,16 +1938,15 @@ export default function PersonnelBoardV2Page() {
             const newItemIds = col.itemIds.filter(id => id !== personId);
             let newTitle = col.title;
 
-            // Update title for three-way lanes
+            // Update title for circular swap lanes
             const isThreeWayLane = col.chainType === 'three-way' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'three-way');
             if (isThreeWayLane) {
                 if (newItemIds.length >= 2) {
-                    const names = newItemIds.map(itemId => personnelMap[itemId]?.fullName || '?');
-                    newTitle = `สามเส้า: ${names.join(' → ')}`;
+                    newTitle = getCircularSwapTitle(newItemIds, personnelMap);
                 } else if (newItemIds.length === 1) {
-                    newTitle = `สามเส้า: ${personnelMap[newItemIds[0]]?.fullName || '?'} → ?`;
+                    newTitle = `วงสลับ: ${personnelMap[newItemIds[0]]?.fullName || '?'} → ?`;
                 } else {
-                    newTitle = 'สามเส้า: ? → ? → ?';
+                    newTitle = 'วงสลับ: ? → ?';
                 }
             }
 
@@ -1879,12 +2018,11 @@ export default function PersonnelBoardV2Page() {
                     const newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ${p2?.fullName || '?'}`;
                     return { ...col, title: newTitle };
                 } else if (isThreeWayLane && col.itemIds.length >= 2) {
-                    // Three-way: up to 3 people - format "สามเส้า: A → B → C"
-                    const names = col.itemIds.map(itemId => {
-                        if (itemId === id) return updates.fullName;
-                        return personnelMap[itemId]?.fullName || '?';
-                    });
-                    const newTitle = `สามเส้า: ${names.join(' → ')}`;
+                    const nextMap: Record<string, Personnel> = {
+                        ...personnelMap,
+                        [id]: { ...personnelMap[id], ...updates },
+                    };
+                    const newTitle = getCircularSwapTitle(col.itemIds, nextMap);
                     return { ...col, title: newTitle };
                 } else if (isTransferLane) {
                     const nextMap: Record<string, Personnel> = {
@@ -1966,12 +2104,12 @@ export default function PersonnelBoardV2Page() {
 
         // Check lane capacity based on type
         const maxCapacity = column.chainType === 'swap' ? 2
-            : column.chainType === 'three-way' ? 3
+            : column.chainType === 'three-way' ? CIRCULAR_SWAP_MAX_PERSONNEL
                 : Infinity; // promotion and custom have no limit
 
         if (column.itemIds.length >= maxCapacity) {
             const typeName = column.chainType === 'swap' ? 'สลับตำแหน่ง (2 คน)'
-                : column.chainType === 'three-way' ? 'สามเส้า (3 คน)'
+                : column.chainType === 'three-way' ? `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`
                     : '';
             setSnackbar({
                 open: true,
@@ -2134,14 +2272,14 @@ export default function PersonnelBoardV2Page() {
 
         // Enforce limits for Swap (2) and Three-way (3)
         const maxLimit = targetLane.chainType === 'swap' ? 2
-            : targetLane.chainType === 'three-way' ? 3
+            : targetLane.chainType === 'three-way' ? CIRCULAR_SWAP_MAX_PERSONNEL
                 : Infinity;
 
         let limitType = '';
         if (targetLane.chainType === 'swap' || (targetLane.vacantPosition?.transactionType === 'two-way')) {
             if (targetLane.itemIds.length >= 2) limitType = 'สลับตำแหน่ง (2 คน)';
         } else if (targetLane.chainType === 'three-way' || (targetLane.vacantPosition?.transactionType === 'three-way')) {
-            if (targetLane.itemIds.length >= 3) limitType = 'สามเส้า (3 คน)';
+            if (targetLane.itemIds.length >= CIRCULAR_SWAP_MAX_PERSONNEL) limitType = `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`;
         }
 
         if (limitType || targetLane.itemIds.length >= maxLimit) {
@@ -2165,6 +2303,20 @@ export default function PersonnelBoardV2Page() {
             toActingAs: null
         };
         const boardId = personId;
+
+        const validation = validateSuccessionPosCodes(
+            targetLane,
+            [...targetLane.itemIds, boardId],
+            { ...personnelMap, [boardId]: newPerson }
+        );
+        if (!validation.valid) {
+            setSnackbar({
+                open: true,
+                message: validation.message || 'ไม่สามารถต่อเลนนี้ได้',
+                severity: 'error'
+            });
+            return;
+        }
 
         // Special logic for Swap (2-way) - auto-set toPosition if 2nd person
         if (targetLane.vacantPosition?.isTransaction && targetLane.vacantPosition.transactionType === 'two-way' && targetLane.itemIds.length === 1) {
@@ -2237,12 +2389,7 @@ export default function PersonnelBoardV2Page() {
                         newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ${p2?.fullName || '?'}`;
                     }
                 } else if (isThreeWayLane) {
-                    // Get all person names including the new one
-                    const names = newItemIds.map(itemId => {
-                        if (itemId === boardId) return newPerson.fullName || '?';
-                        return personnelMap[itemId]?.fullName || '?';
-                    });
-                    newTitle = `สามเส้า: ${names.join(' → ')}`;
+                    newTitle = getCircularSwapTitle(newItemIds, personnelMap, { [boardId]: newPerson });
                 }
 
 
@@ -2267,7 +2414,7 @@ export default function PersonnelBoardV2Page() {
 
         setSnackbar({ open: true, message: `ย้าย ${person.fullName} ไปยัง ${targetLane.title} แล้ว`, severity: 'success' });
 
-    }, [columns, personnelMap, triggerChainReaction, commitAction, recalculateColumnToPositions]);
+    }, [columns, personnelMap, triggerChainReaction, commitAction, recalculateColumnToPositions, validateSuccessionPosCodes]);
 
 
 
@@ -2657,7 +2804,7 @@ export default function PersonnelBoardV2Page() {
         const maxThreeNumber = existingThreeNumbers.length > 0 ? Math.max(...existingThreeNumbers) : 0;
         const runningNumber = (maxThreeNumber + 1).toString().padStart(3, '0');
         const generatedGroupNumber = `${selectedYear}/THREE-${runningNumber}`;
-        const title = laneTitle.trim() || `สามเส้า: ${p1.fullName} → ${p2.fullName} → ${p3.fullName} → ${p1.fullName}`;
+        const title = laneTitle.trim() || `วงสลับ: ${p1.fullName} → ${p2.fullName} → ${p3.fullName} → ${p1.fullName}`;
 
         try {
             const createRes = await fetch('/api/swap-transactions', {
@@ -2843,7 +2990,7 @@ export default function PersonnelBoardV2Page() {
             setColumns(prev => [newColumn, ...prev]);
             setIsNewLaneDrawerOpen(false);
             setHasUnsavedChanges(true);
-            setSnackbar({ open: true, message: `สร้างเลน "สามเส้า" สำเร็จ`, severity: 'success' });
+            setSnackbar({ open: true, message: `สร้างเลน "วงสลับ" สำเร็จ`, severity: 'success' });
 
         } catch (error) {
             console.error('Error creating three-way lane:', error);
@@ -3038,7 +3185,7 @@ export default function PersonnelBoardV2Page() {
                 }
             } else {
                 recommendationType = (column.chainType === 'three-way' || column.vacantPosition?.transactionType === 'three-way')
-                    ? 'รายการสามเส้า' : 'สลับตำแหน่ง';
+                    ? 'รายการวงสลับ' : 'สลับตำแหน่ง';
             }
 
             // Set filters
@@ -3823,7 +3970,7 @@ export default function PersonnelBoardV2Page() {
                                         sx={{ py: 1, fontSize: '0.85rem' }}
                                     >
                                         <Box sx={{ width: 18, mr: 1.5, color: '#f43f5e' }}>🔺</Box>
-                                        สามเส้า
+                                        วงสลับ
                                         <Chip
                                             label={laneTypeCounts['three-way']}
                                             size="small"
@@ -4091,7 +4238,7 @@ export default function PersonnelBoardV2Page() {
                     >
                         <Tab label="ตำแหน่งว่าง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5 }} />
                         <Tab label="🔄 สลับตำแหน่ง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#f59e0b' }} />
-                        <Tab label="🔄 สามเส้า" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#f43f5e' }} />
+                        <Tab label="🔄 วงสลับ" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#f43f5e' }} />
                         <Tab label="📦 ย้ายหน่วย" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#3b82f6' }} />
                         <Tab label="สร้างเอง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5 }} />
                     </Tabs>

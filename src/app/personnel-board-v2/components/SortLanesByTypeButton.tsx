@@ -14,14 +14,14 @@ interface SortLanesByTypeButtonProps {
 // Define sorting order for lane types
 const TYPE_ORDER: Record<string, number> = {
     'swap': 1,        // สลับตำแหน่ง (two-way)
-    'three-way': 2,   // สามเส้า
+    'three-way': 2,   // วงสลับ
     'promotion': 3,   // เลื่อนตำแหน่ง
     'custom': 4,      // ตำแหน่งว่าง/อื่นๆ
 };
 
 const TYPE_LABELS: Record<string, string> = {
     'swap': '🔄 สลับตำแหน่ง',
-    'three-way': '🔺 สามเส้า',
+    'three-way': '🔺 วงสลับ',
     'promotion': '📈 เลื่อนตำแหน่ง',
     'custom': '📦 อื่นๆ',
 };

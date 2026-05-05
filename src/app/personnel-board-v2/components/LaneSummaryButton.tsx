@@ -55,6 +55,7 @@ interface LaneSummary {
 
 // Constants
 const LANES_PER_PAGE = 10;
+const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 
 // Sub-component for lane detail view
 const LaneDetailView = memo(({ lane, personnelMap, color, onOpenDetail }: { lane: Column; personnelMap: Record<string, Personnel>; color: string; onOpenDetail?: (person: Personnel, targetInfo?: any) => void }) => {
@@ -87,8 +88,8 @@ const LaneDetailView = memo(({ lane, personnelMap, color, onOpenDetail }: { lane
                 targetPosCodeName = otherPerson.posCodeMaster?.name || '';
                 targetUnit = otherPerson.unit || '';
             }
-        } else if (isThreeWay && lane.itemIds.length === 3) {
-            const targetIndex = (index + 1) % 3;
+        } else if (isThreeWay && lane.itemIds.length >= CIRCULAR_SWAP_MIN_PERSONNEL) {
+            const targetIndex = (index + 1) % lane.itemIds.length;
             const targetPerson = personnelMap[lane.itemIds[targetIndex]];
             targetInfo = targetPerson;
             if (targetPerson && !targetPerson.isPlaceholder) {
@@ -363,7 +364,7 @@ const LaneSummaryButton = memo(({ columns, personnelMap, onOpenDetail }: LaneSum
     const summaryData = useMemo(() => {
         const typeConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
             'swap': { label: 'สลับตำแหน่ง', icon: <SwapIcon />, color: '#a855f7' },
-            'three-way': { label: 'สามเส้า', icon: <ThreeWayIcon />, color: '#f43f5e' },
+            'three-way': { label: 'วงสลับ', icon: <ThreeWayIcon />, color: '#f43f5e' },
             'promotion': { label: 'เลื่อนตำแหน่ง', icon: <PromotionIcon />, color: '#10b981' },
             'custom': { label: 'อื่นๆ', icon: <CustomIcon />, color: '#64748b' },
         };

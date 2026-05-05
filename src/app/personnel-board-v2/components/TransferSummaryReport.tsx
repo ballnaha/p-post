@@ -35,7 +35,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
             case 'swap':
                 return 'สลับตำแหน่ง';
             case 'three-way':
-                return 'สามเส้า';
+                return 'วงสลับ';
             case 'promotion-chain':
             case 'promotion':
                 return 'การเลื่อนตำแหน่ง';
@@ -422,8 +422,8 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                                                     const other = items[idx === 0 ? 1 : 0];
                                                     targetPos = person.toPosition || other.position || '-';
                                                     targetUnit = person.toUnit || other.unit || '-';
-                                                } else if (column.chainType === 'three-way' && items.length === 3) {
-                                                    const next = items[(idx + 1) % 3];
+                                                } else if (column.chainType === 'three-way' && items.length >= 3) {
+                                                    const next = items[(idx + 1) % items.length];
                                                     targetPos = person.toPosition || next.position || '-';
                                                     targetUnit = person.toUnit || next.unit || '-';
                                                 } else if (column.chainType === 'promotion') {
@@ -450,8 +450,8 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                                                             : (other.posCodeMaster
                                                                 ? `${other.posCodeMaster.id} - ${other.posCodeMaster.name}`
                                                                 : '');
-                                                    } else if (column.chainType === 'three-way' && items.length === 3) {
-                                                        const next = items[(idx + 1) % 3];
+                                                    } else if (column.chainType === 'three-way' && items.length >= 3) {
+                                                        const next = items[(idx + 1) % items.length];
                                                         return person.toPosCodeMaster
                                                             ? `${person.toPosCodeMaster.id} - ${person.toPosCodeMaster.name}`
                                                             : (next.posCodeMaster

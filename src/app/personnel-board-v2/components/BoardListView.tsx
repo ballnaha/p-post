@@ -77,7 +77,7 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
             case 'swap':
                 return <Chip icon={<SwapIcon sx={{ fontSize: 14 }} />} label="สลับตำแหน่ง" size="small" sx={{ bgcolor: alpha('#a855f7', 0.1), color: '#a855f7', fontWeight: 700, height: 20, fontSize: '0.65rem' }} />;
             case 'three-way':
-                return <Chip icon={<ThreeWayIcon sx={{ fontSize: 14 }} />} label="สามเส้า" size="small" sx={{ bgcolor: alpha('#f43f5e', 0.1), color: '#f43f5e', fontWeight: 700, height: 20, fontSize: '0.65rem' }} />;
+                return <Chip icon={<ThreeWayIcon sx={{ fontSize: 14 }} />} label="วงสลับ" size="small" sx={{ bgcolor: alpha('#f43f5e', 0.1), color: '#f43f5e', fontWeight: 700, height: 20, fontSize: '0.65rem' }} />;
             case 'promotion':
             case 'transfer':
                 return <Chip icon={<PromotionIcon sx={{ fontSize: 14 }} />} label="เลื่อน/ย้าย" size="small" sx={{ bgcolor: alpha('#3b82f6', 0.1), color: '#3b82f6', fontWeight: 700, height: 20, fontSize: '0.65rem' }} />;

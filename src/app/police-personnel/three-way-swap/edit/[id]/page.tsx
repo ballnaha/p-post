@@ -37,6 +37,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import PersonnelDrawer from '../../add/components/PersonnelDrawer';
+import { formatBuddhistDate } from '@/utils/dateFormat';
 
 interface PolicePersonnel {
   id: string;
@@ -661,7 +662,7 @@ export default function EditThreeWaySwapPage() {
               {personnel.birthDate && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">วันเกิด</Typography>
-                  <Typography variant="body2">{personnel.birthDate}</Typography>
+                  <Typography variant="body2">{formatBuddhistDate(personnel.birthDate)}</Typography>
                 </Box>
               )}
               {personnel.age && (
@@ -689,7 +690,7 @@ export default function EditThreeWaySwapPage() {
               {personnel.enrollmentDate && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">วันบรรจุ</Typography>
-                  <Typography variant="body2">{personnel.enrollmentDate}</Typography>
+                  <Typography variant="body2">{formatBuddhistDate(personnel.enrollmentDate)}</Typography>
                 </Box>
               )}
               {personnel.yearsOfService && (
@@ -703,20 +704,20 @@ export default function EditThreeWaySwapPage() {
               {personnel.currentRankSince && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">ดำรงยศนี้ตั้งแต่</Typography>
-                  <Typography variant="body2">{personnel.currentRankSince}</Typography>
+                  <Typography variant="body2">{formatBuddhistDate(personnel.currentRankSince)}</Typography>
                 </Box>
               )}
               {personnel.lastAppointment && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">แต่งตั้งครั้งล่าสุด</Typography>
-                  <Typography variant="body2">{personnel.lastAppointment}</Typography>
+                  <Typography variant="body2">{formatBuddhistDate(personnel.lastAppointment)}</Typography>
                 </Box>
               )}
               {personnel.retirementDate && (
                 <Box>
                   <Typography variant="caption" color="text.secondary">วันเกษียณ</Typography>
                   <Typography variant="body2" color="warning.main">
-                    {personnel.retirementDate}
+                    {formatBuddhistDate(personnel.retirementDate)}
                   </Typography>
                 </Box>
               )}

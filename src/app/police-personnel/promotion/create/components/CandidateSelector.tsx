@@ -1130,7 +1130,7 @@ export default function CandidateSelector({
                                   {candidate.lastAppointment && (
                                     <Box sx={{ gridColumn: '1 / -1' }}>
                                       <Typography variant="caption" color="text.secondary">แต่งตั้งครั้งสุดท้าย</Typography>
-                                      <Typography variant="body2">{candidate.lastAppointment}</Typography>
+                                      <Typography variant="body2">{formatDate(candidate.lastAppointment)}</Typography>
                                     </Box>
                                   )}
                                 </Box>

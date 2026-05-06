@@ -1,140 +1,293 @@
 'use client';
-import { useState, useRef, useMemo } from 'react';
+
+import { useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, RefObject } from 'react';
 import {
-  Box,
-  Paper,
-  Typography,
-  Button,
   Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Divider,
+  FormControl,
+  InputLabel,
   LinearProgress,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
-  Card,
-  CardContent,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  CircularProgress,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  ToggleButtonGroup,
-  ToggleButton,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
+  Typography,
 } from '@mui/material';
 import {
-  CloudUpload as UploadIcon,
   CheckCircle as SuccessIcon,
-  Download as DownloadIcon,
-  Info as InfoIcon,
-  ExpandMore as ExpandMoreIcon,
-  Update as UpdateIcon,
-  Refresh as RefreshIcon,
+  CloudUpload as UploadIcon,
   DeleteForever as DeleteForeverIcon,
+  Download as DownloadIcon,
+  InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 
-type ImportMode = 'full' | 'supporter';
+type FileKey = 'personFile' | 'positionFile' | 'requestFile' | 'fullFile';
+
+const fileConfigs: Array<{
+  key: FileKey;
+  title: string;
+  description: string;
+  requiredColumns: string[];
+  templateName: string;
+  sampleRow: Record<string, string>;
+}> = [
+  {
+    key: 'fullFile',
+    title: 'นำเข้าข้อมูลแบบสมบูรณ์',
+    description: 'ไฟล์เดียวครบทั้งข้อมูลบุคคล ตำแหน่ง และคำร้อง เหมาะสำหรับนำเข้าข้อมูลทั้งหมดในครั้งเดียว',
+    requiredColumns: [
+      'อาวุโส',
+      'ยศ',
+      'ชื่อ สกุล',
+      'เลขประจำตัวประชาชน',
+      'แต่งตั้งครั้งสุดท้าย',
+      'ระดับนี้เมื่อ',
+      'บรรจุ',
+      'วันเกิด',
+      'คุณวุฒิ',
+      'เกษียณ',
+      'จำนวนปี',
+      'อายุ',
+      'ตท.',
+      'นรต.',
+      'หมายเหตุตัวคน',
+      'POSCODE',
+      'ตำแหน่ง',
+      'เลขตำแหน่ง',
+      'ทำหน้าที่',
+      'หน่วย',
+      'หมายเหตุตำแหน่ง',
+      'ตำแหน่งที่ร้องขอ',
+      'ชื่อผู้สนับสนุน',
+      'เหตุผลที่สนันสุนน',
+    ],
+    templateName: 'police_personnel_full_template.xlsx',
+    sampleRow: {
+      อาวุโส: '1',
+      ยศ: 'พ.ต.ท.',
+      'ชื่อ สกุล': 'สมชาย ใจดี',
+      เลขประจำตัวประชาชน: '1234567890123',
+      แต่งตั้งครั้งสุดท้าย: '01/01/2568',
+      ระดับนี้เมื่อ: '01/06/2567',
+      บรรจุ: '01/10/2543',
+      วันเกิด: '15/01/2523',
+      คุณวุฒิ: 'ศศ.บ., สว.98',
+      เกษียณ: '30/09/2583',
+      จำนวนปี: '24ป.7ด.',
+      อายุ: '45ป.',
+      'ตท.': '',
+      'นรต.': '65',
+      หมายเหตุตัวคน: 'ข้อมูลตัวอย่าง',
+      POSCODE: '11',
+      ตำแหน่ง: 'สว.ฝอ.3 บก.อก.ภ.9',
+      เลขตำแหน่ง: '1901 10318 0195',
+      ทำหน้าที่: 'อำนวยการ',
+      หน่วย: '9',
+      หมายเหตุตำแหน่ง: 'หมายเหตุตำแหน่งตัวอย่าง',
+      ตำแหน่งที่ร้องขอ: 'ร้องขอตำแหน่งใน จ.ราชบุรี',
+      ชื่อผู้สนับสนุน: 'พ.ต.อ.สมศักดิ์ รักดี',
+      เหตุผลที่สนันสุนน: 'มีความรู้ความสามารถและประสบการณ์ในการปฏิบัติงาน',
+    },
+  },
+  {
+    key: 'personFile',
+    title: '1. ไฟล์ข้อมูลบุคคล',
+    description: 'ใช้เลขตำแหน่งเพื่อเชื่อมกับไฟล์ตำแหน่ง และใช้เลขบัตรประชาชนเป็นตัวตนของคน',
+    requiredColumns: [
+      'อาวุโส',
+      'ยศ',
+      'ชื่อ สกุล',
+      'เลขประจำตัวประชาชน',
+      'เลขตำแหน่ง',
+      'แต่งตั้งครั้งสุดท้าย',
+      'ระดับนี้เมื่อ',
+      'บรรจุ',
+      'วันเกิด',
+      'คุณวุฒิ',
+      'เกษียณ',
+      'จำนวนปี',
+      'อายุ',
+      'ตท.',
+      'นรต.',
+      'หมายเหตุตัวคน',
+    ],
+    templateName: 'police_personnel_people_template.xlsx',
+    sampleRow: {
+      อาวุโส: '1',
+      ยศ: 'พ.ต.ท.',
+      'ชื่อ สกุล': 'สมชาย ใจดี',
+      เลขประจำตัวประชาชน: '1234567890123',
+      เลขตำแหน่ง: '1901 10318 0195',
+      แต่งตั้งครั้งสุดท้าย: '01/01/2568',
+      ระดับนี้เมื่อ: '01/06/2567',
+      บรรจุ: '01/10/2543',
+      วันเกิด: '15/01/2523',
+      คุณวุฒิ: 'ศศ.บ., สว.98',
+      เกษียณ: '30/09/2583',
+      จำนวนปี: '24ป.7ด.',
+      อายุ: '45ป.',
+      'ตท.': '',
+      'นรต.': '65',
+      หมายเหตุตัวคน: 'ข้อมูลตัวอย่าง',
+    },
+  },
+  {
+    key: 'positionFile',
+    title: '2. ไฟล์ข้อมูลตำแหน่ง',
+    description: 'ระบบจะนำข้อมูลตำแหน่งมาเติมให้คน โดยจับคู่จากเลขตำแหน่ง',
+    requiredColumns: ['POSCODE', 'ตำแหน่ง', 'เลขตำแหน่ง', 'ทำหน้าที่', 'หน่วย', 'หมายเหตุตำแหน่ง'],
+    templateName: 'police_personnel_positions_template.xlsx',
+    sampleRow: {
+      POSCODE: '11',
+      ตำแหน่ง: 'สว.ฝอ.3 บก.อก.ภ.9',
+      เลขตำแหน่ง: '1901 10318 0195',
+      ทำหน้าที่: 'อำนวยการ',
+      หน่วย: '9',
+      หมายเหตุตำแหน่ง: 'หมายเหตุตำแหน่งตัวอย่าง',
+    },
+  },
+  {
+    key: 'requestFile',
+    title: '3. ไฟล์คำร้องและผู้สนับสนุน',
+    description: 'ระบบจะผูกคำร้องกับคนด้วยเลขประจำตัวประชาชน',
+    requiredColumns: ['เลขประจำตัวประชาชน', 'ตำแหน่งที่ร้องขอ', 'ชื่อผู้สนับสนุน', 'เหตุผลที่สนับสนุน'],
+    templateName: 'police_personnel_requests_template.xlsx',
+    sampleRow: {
+      เลขประจำตัวประชาชน: '1234567890123',
+      ตำแหน่งที่ร้องขอ: 'ร้องขอตำแหน่งใน จ.ราชบุรี',
+      ชื่อผู้สนับสนุน: 'พ.ต.อ.สมศักดิ์ รักดี',
+      เหตุผลที่สนับสนุน: 'มีความรู้ความสามารถและประสบการณ์ในการปฏิบัติงาน',
+    },
+  },
+];
 
 export default function ImportPolicePersonnelPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [files, setFiles] = useState<Record<FileKey, File | null>>({
+    fullFile: null,
+    personFile: null,
+    positionFile: null,
+    requestFile: null,
+  });
+  const [loadingKey, setLoadingKey] = useState<FileKey | null>(null);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
-  const [importMode, setImportMode] = useState<ImportMode>('full');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  const [pendingUploadKeys, setPendingUploadKeys] = useState<FileKey[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [existingRecordCount, setExistingRecordCount] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const { showSnackbar } = useSnackbar();
 
-  // Generate available years (from 2568 to current year) - same as swap-list
+  const personInputRef = useRef<HTMLInputElement>(null);
+  const positionInputRef = useRef<HTMLInputElement>(null);
+  const requestInputRef = useRef<HTMLInputElement>(null);
+  const fullInputRef = useRef<HTMLInputElement>(null);
+
+  const inputRefs: Record<FileKey, RefObject<HTMLInputElement | null>> = {
+    fullFile: fullInputRef,
+    personFile: personInputRef,
+    positionFile: positionInputRef,
+    requestFile: requestInputRef,
+  };
+
   const availableYears = useMemo(() => {
     const currentBuddhistYear = new Date().getFullYear() + 543;
-    const startYear = 2568;
     const years: number[] = [];
 
-    for (let year = currentBuddhistYear; year >= startYear; year--) {
+    for (let year = currentBuddhistYear; year >= 2568; year--) {
       years.push(year);
     }
 
     return years;
   }, []);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (key: FileKey) => (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
-    if (selectedFile) {
-      // ตรวจสอบชนิดไฟล์
-      const validTypes = [
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel',
-      ];
-      if (!validTypes.includes(selectedFile.type)) {
-        setError('กรุณาเลือกไฟล์ Excel (.xlsx หรือ .xls)');
-        return;
-      }
-      setFile(selectedFile);
-      setError('');
-      setResult(null);
+    if (!selectedFile) return;
+
+    const isExcel = /\.(xlsx|xls)$/i.test(selectedFile.name);
+    if (!isExcel) {
+      setError('กรุณาเลือกไฟล์ Excel (.xlsx หรือ .xls)');
+      return;
     }
+
+    setFiles((prev) => ({ ...prev, [key]: selectedFile }));
+    setError('');
+    setResult(null);
   };
 
-  const performUpload = async () => {
-    setLoading(true);
+  const resetFileInputs = (keys: FileKey[]) => {
+    keys.forEach((key) => {
+      const ref = inputRefs[key];
+      if (ref.current) ref.current.value = '';
+    });
+  };
+
+  const performUpload = async (uploadKeys: FileKey[]) => {
+    setLoadingKey(uploadKeys[0]);
     setError('');
     setResult(null);
     setProgress({ current: 0, total: 0, percentage: 0 });
 
     try {
       const formData = new FormData();
-      formData.append('file', file!);
+      uploadKeys.forEach((key) => {
+        formData.append(key, files[key]!);
+      });
+      if (uploadKeys.length === 1) {
+        formData.append('uploadType', uploadKeys[0]);
+      }
       formData.append('year', selectedYear.toString());
 
-      const apiEndpoint = importMode === 'supporter'
-        ? '/api/police-personnel/import-supporter'
-        : '/api/police-personnel/import';
-
-      const response = await fetch(apiEndpoint, {
+      const response = await fetch('/api/police-personnel/import-bundle', {
         method: 'POST',
         body: formData,
       });
-
       const data = await response.json();
 
       if (data.success && data.jobId) {
-        pollJobStatus(data.jobId);
+        pollJobStatus(data.jobId, uploadKeys);
       } else {
         setError(data.error || 'เกิดข้อผิดพลาด');
-        setLoading(false);
+        setLoadingKey(null);
       }
-
     } catch (err: any) {
       setError(err.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
-      setLoading(false);
+      setLoadingKey(null);
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) {
-      setError('กรุณาเลือกไฟล์');
+  const handleUpload = async (uploadKeys: FileKey[]) => {
+    const missingFile = uploadKeys.find((key) => !files[key]);
+    if (missingFile) {
+      setError('กรุณาเลือกไฟล์ก่อนนำเข้า');
+      return;
+    }
+
+    if (!uploadKeys.includes('personFile')) {
+      performUpload(uploadKeys);
       return;
     }
 
@@ -145,6 +298,7 @@ export default function ImportPolicePersonnelPage() {
 
       if (existing > 0) {
         setExistingRecordCount(existing);
+        setPendingUploadKeys(uploadKeys);
         setImportConfirmOpen(true);
         return;
       }
@@ -152,11 +306,10 @@ export default function ImportPolicePersonnelPage() {
       // ถ้าตรวจสอบไม่ได้ ให้ดำเนินการต่อ
     }
 
-    performUpload();
+    performUpload(uploadKeys);
   };
 
-  // Polling function
-  const pollJobStatus = async (jobId: string) => {
+  const pollJobStatus = async (jobId: string, uploadKeys: FileKey[]) => {
     const intervalId = setInterval(async () => {
       try {
         const response = await fetch(`/api/import-job/${jobId}`);
@@ -165,14 +318,12 @@ export default function ImportPolicePersonnelPage() {
         if (data.success && data.job) {
           const job = data.job;
 
-          // Update progress
           setProgress({
             current: job.processedRows,
             total: job.totalRows,
-            percentage: job.percentage
+            percentage: job.percentage,
           });
 
-          // Check if completed or failed
           if (job.status === 'completed') {
             clearInterval(intervalId);
             setResult({
@@ -180,26 +331,25 @@ export default function ImportPolicePersonnelPage() {
               failed: job.failedRows,
               updated: job.updatedRows,
               errors: job.errors || [],
-              totalProcessed: job.processedRows
+              totalProcessed: job.processedRows,
+              message: job.errorMessage,
             });
-            setFile(null);
-            if (fileInputRef.current) {
-              fileInputRef.current.value = '';
-            }
-            setLoading(false);
+            setFiles((prev) => ({
+              ...prev,
+              ...Object.fromEntries(uploadKeys.map((key) => [key, null])),
+            }));
+            resetFileInputs(uploadKeys);
+            setLoadingKey(null);
           } else if (job.status === 'failed') {
             clearInterval(intervalId);
             setError(job.errorMessage || 'เกิดข้อผิดพลาด');
-            setLoading(false);
+            setLoadingKey(null);
           }
         }
       } catch (err) {
         console.error('Error polling job status:', err);
       }
-    }, 2000); // Poll ทุก 2 วินาที
-
-    // Cleanup ถ้า component unmount
-    return () => clearInterval(intervalId);
+    }, 2000);
   };
 
   const handleDeleteYear = async () => {
@@ -226,27 +376,43 @@ export default function ImportPolicePersonnelPage() {
     }
   };
 
-  const downloadTemplate = async () => {
-    // เลือก template endpoint ตาม import mode
-    const templateEndpoint = importMode === 'supporter'
-      ? '/api/police-personnel/template-supporter'
-      : '/api/police-personnel/template';
-
-    const fileName = importMode === 'supporter'
-      ? 'police_personnel_supporter_template.xlsx'
-      : 'police_personnel_template.xlsx';
-
+  const downloadTemplate = async (config: (typeof fileConfigs)[number]) => {
     try {
-      const response = await fetch(templateEndpoint);
-      const blob = await response.blob();
+      const XLSX = await import('@e965/xlsx');
+      const worksheet = XLSX.utils.json_to_sheet([config.sampleRow]);
+      worksheet['!cols'] = config.requiredColumns.map((column) => ({
+        wch: Math.max(16, column.length + 8),
+      }));
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, config.title.replace(/^\d+\.\s*/, '').slice(0, 31));
+      config.requiredColumns.forEach((column, index) => {
+        if (column === 'เลขประจำตัวประชาชน') {
+          const columnLetter = XLSX.utils.encode_col(index);
+          const headerCell = worksheet[`${columnLetter}1`];
+          const sampleCell = worksheet[`${columnLetter}2`];
+
+          if (headerCell) headerCell.z = '@';
+          if (sampleCell) {
+            sampleCell.t = 's';
+            sampleCell.v = String(sampleCell.v);
+            sampleCell.z = '@';
+          }
+        }
+      });
+      const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = fileName;
+      link.download = config.templateName;
       link.click();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading template:', error);
+    } catch (err) {
+      console.error('Error downloading template:', err);
       setError('ไม่สามารถดาวน์โหลดไฟล์ Template ได้');
     }
   };
@@ -254,285 +420,134 @@ export default function ImportPolicePersonnelPage() {
   return (
     <Layout>
       <Box sx={{ mx: 'auto' }}>
-        {/* Header */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-            นำเข้าข้อมูล Police Personnel
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            นำเข้าข้อมูลบุคลากรตำรวจจากไฟล์ Excel
-          </Typography>
-
-          {/* Import Mode Selection */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-              เลือกประเภทการ Import:
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-              <ToggleButtonGroup
-                value={importMode}
-                exclusive
-                onChange={(_e, newMode) => {
-                  if (newMode !== null) {
-                    setImportMode(newMode);
-                    setFile(null);
-                    setResult(null);
-                    setError('');
-                    // Reset file input
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = '';
-                    }
-                  }
-                }}
-                aria-label="import mode"
-                color="primary"
-              >
-                <ToggleButton value="full" aria-label="full import">
-                  <RefreshIcon sx={{ mr: 1 }} />
-                  Import แบบเต็ม (ไม่ลบข้อมูลเดิม)
-                </ToggleButton>
-                <ToggleButton value="supporter" aria-label="supporter update">
-                  <UpdateIcon sx={{ mr: 1 }} />
-                  อัปเดตผู้สนับสนุนเท่านั้น (ไม่ลบข้อมูลเดิม)
-                </ToggleButton>
-              </ToggleButtonGroup>
-
-              {/* Year Selection Dropdown */}
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel id="year-select-label">ปี พ.ศ.</InputLabel>
-                <Select
-                  labelId="year-select-label"
-                  id="year-select"
-                  value={selectedYear}
-                  label="ปี พ.ศ."
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                >
-                  {availableYears.map((year) => (
-                    <MenuItem key={year} value={year}>
-                      {year}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
+                นำเข้าข้อมูล Police Personnel
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                รองรับไฟล์สมบูรณ์ไฟล์เดียว หรือแยกนำเข้าเป็นข้อมูลบุคคล ข้อมูลตำแหน่ง และข้อมูลคำร้อง
+              </Typography>
             </Box>
-          </Box>
 
-          {/* Mode Description */}
-          <Alert severity={importMode === 'full' ? 'info' : 'info'} sx={{ mb: 0 }}>
-            {importMode === 'full' ? (
-              <Typography variant="body2">
-                <strong>✨ Import แบบเต็ม:</strong> ระบบจะนำเข้าข้อมูลบุคลากรจากไฟล์ Excel โดยไม่ลบข้อมูลเดิม หากมีข้อมูลซ้ำ (เลขบัตรประชาชนเดียวกัน) จะอัปเดตข้อมูลเดิม
-              </Typography>
-            ) : (
-              <Typography variant="body2">
-                <strong>✨ อัปเดตผู้สนับสนุน:</strong> ระบบจะอัปเดตเฉพาะฟิลด์ "ตำแหน่งที่ร้องขอ", "ชื่อผู้สนับสนุน" และ "เหตุผล" โดยค้นหาจากเลขตำแหน่ง (รองรับทั้งตำแหน่งที่มีคนและตำแหน่งว่าง)
-              </Typography>
-            )}
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel id="year-select-label">ปี พ.ศ.</InputLabel>
+              <Select
+                labelId="year-select-label"
+                value={selectedYear}
+                label="ปี พ.ศ."
+                onChange={(event) => setSelectedYear(Number(event.target.value))}
+              >
+                {availableYears.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+
+          <Alert severity="info" sx={{ mt: 3 }}>
+            แบบแยกไฟล์: ระบบจะผูกไฟล์คำร้องกับคนด้วยเลขประจำตัวประชาชน และผูกข้อมูลคนกับตำแหน่งด้วยเลขตำแหน่ง
           </Alert>
         </Paper>
 
-        {/* Instructions - Accordion */}
-        <Accordion sx={{ mb: 3, bgcolor: 'info.50', borderLeft: 4, borderColor: 'info.main' }}>
-          <AccordionSummary
-            expandIcon={<ExpandMoreIcon />}
-            aria-controls="import-guide-content"
-            id="import-guide-header"
-            sx={{
-              '&:hover': { bgcolor: 'info.100' },
-              transition: 'background-color 0.2s'
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <InfoIcon sx={{ color: 'info.main', mr: 1.5 }} />
-              <Typography variant="h6" fontWeight={600} color="info.main">
-                📚 คำแนะนำการใช้งาน Import ข้อมูล
-              </Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails sx={{ pt: 1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              <strong>📌 วัตถุประสงค์:</strong> ระบบ Import ใช้สำหรับนำเข้าข้อมูลบุคลากรตำรวจจากไฟล์ Excel เข้าสู่ระบบฐานข้อมูล
-            </Typography>
-
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              <strong>📋 ขั้นตอนการใช้งาน:</strong>
-            </Typography>
-
-            <List dense sx={{ pl: 2, mb: 2 }}>
-              <ListItem>
-                <ListItemText
-                  primary={<Typography variant="body2" fontWeight={600}>1. ดาวน์โหลดไฟล์ Template Excel</Typography>}
-                  secondary={<Typography variant="body2" color="text.secondary">คลิกปุ่ม "ดาวน์โหลด Template" เพื่อดาวน์โหลดไฟล์ตัวอย่างที่มีรูปแบบถูกต้อง</Typography>}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText
-                  primary={<Typography variant="body2" fontWeight={600}>2. กรอกข้อมูลตามรูปแบบ</Typography>}
-                  secondary={<Typography variant="body2" color="text.secondary">กรอกข้อมูลในไฟล์ Excel ตามคอลัมน์ที่กำหนด <strong>อย่าลบหรือเปลี่ยนชื่อหัวคอลัมน์</strong></Typography>}
-                />
-              </ListItem>
-              <ListItem>
-                <ListItemText
-                  primary={<Typography variant="body2" fontWeight={600}>3. อัปโหลดไฟล์</Typography>}
-                  secondary={<Typography variant="body2" color="text.secondary">เลือกไฟล์และคลิก "นำเข้าข้อมูล" เพื่ออัปโหลดข้อมูลเข้าระบบ</Typography>}
-                />
-              </ListItem>
-            </List>
-
-            <Divider sx={{ my: 2 }} />
-
-            <Typography variant="body2" color="text.secondary" fontWeight={600} sx={{ mb: 2 }}>
-              📊 รูปแบบคอลัมน์ใน Excel:
-            </Typography>
-
-            {/* Full Import Columns */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" fontWeight={600} color="primary.main" sx={{ mb: 1 }}>
-                Import แบบเต็ม (21 คอลัมน์):
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                {[
-                  'อาวุโส', 'ยศ', 'ชื่อ สกุล', 'ID', 'POSCODE', 'ตำแหน่ง',
-                  'เลขตำแหน่ง', 'ทำหน้าที่', 'แต่งตั้งครั้งสุดท้าย', 'ระดับนี้เมื่อ', 'บรรจุ',
-                  'วันเกิด', 'คุณวุฒิ', 'เลขประจำตัวประชาชน', 'หน่วย', 'เกษียณ',
-                  'จำนวนปี', 'อายุ', 'ตท.', 'นรต.', 'หมายเหตุ/เงื่อนไข', 'ตำแหน่งที่ร้องขอ', 'ชื่อผู้สนับสนุน', 'เหตุผล'
-                ].map((column, index) => (
-                  <Chip
-                    key={column}
-                    label={`${index + 1}. ${column}`}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '0.75rem' }}
-                  />
-                ))}
-              </Box>
-            </Box>
-
-            {/* Supporter Update Columns */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" fontWeight={600} color="secondary.main" sx={{ mb: 1 }}>
-                อัปเดตผู้สนับสนุน (5 คอลัมน์):
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {[
-                  'ชื่อ สกุล', 'เลขตำแหน่ง', 'เลขประจำตัวประชาชน', 'ตำแหน่งที่ร้องขอ', 'ชื่อผู้สนับสนุน', 'เหตุผล'
-                ].map((column, index) => (
-                  <Chip
-                    key={column}
-                    label={`${index + 1}. ${column}`}
-                    size="small"
-                    variant="outlined"
-                    color="secondary"
-                    sx={{ fontSize: '0.75rem' }}
-                  />
-                ))}
-              </Box>
-            </Box>
-
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              <strong>⚠️ ข้อควรระวัง:</strong>
-              <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                <li><strong>Import แบบเต็ม:</strong> จะไม่ลบข้อมูลเดิม แต่จะเพิ่มข้อมูลใหม่เข้าไปในระบบ (24 คอลัมน์)</li>
-                <li><strong>อัปเดตผู้สนับสนุน:</strong> จะอัปเดตเฉพาะฟิลด์ "ตำแหน่งที่ร้องขอ", "ผู้สนับสนุน" และ "เหตุผล" โดยอ้างอิงจากเลขตำแหน่ง (6 คอลัมน์)</li>
-                <li><strong>สำหรับตำแหน่งที่มีคน:</strong> ใส่เลขบัตรประชาชน</li>
-                <li><strong>สำหรับตำแหน่งว่าง:</strong> เว้นเลขบัตรประชาชนว่างไว้ ระบบจะใช้เลขตำแหน่งในการค้นหา</li>
-                <li>ห้ามลบหรือเปลี่ยนชื่อหัวคอลัมน์ เพราะจะทำให้การ import ผิดพลาด</li>
-                <li>ตรวจสอบรูปแบบข้อมูลให้ถูกต้องก่อนอัปโหลด</li>
-                <li><strong>การจัดการข้อมูลซ้ำ:</strong> หากมีข้อมูลซ้ำ (เลขบัตรประชาชนเดียวกัน) ระบบจะอัปเดตข้อมูลเดิมแทนการสร้างใหม่</li>
-              </ul>
-            </Alert>
-
-            <Alert severity="info">
-              <strong>💡 เคล็ดลับ:</strong>
-              <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                <li>ระบบจะแสดง progress bar ระหว่างการ import</li>
-                <li>หากมีข้อผิดพลาด ระบบจะแสดงรายละเอียดแถวที่มีปัญหา</li>
-                <li>สามารถ import ข้อมูลได้ทีละหลายๆ แถว</li>
-              </ul>
-            </Alert>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Upload Section */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', gap: 2, mb: 3, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={downloadTemplate}
-            >
-              ดาวน์โหลด Template
-            </Button>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              เลือกไฟล์นำเข้า
+            </Typography>
             <Button
               variant="outlined"
               color="error"
               startIcon={deleting ? <CircularProgress size={16} color="error" /> : <DeleteForeverIcon />}
               onClick={() => setDeleteConfirmOpen(true)}
-              disabled={deleting || loading}
+              disabled={deleting || Boolean(loadingKey)}
             >
               ลบข้อมูลทั้งหมดปี {selectedYear}
             </Button>
+          </Stack>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+            {fileConfigs.map((config) => {
+              const selectedFile = files[config.key];
+
+              return (
+                <Card key={config.key} variant="outlined" sx={{ borderRadius: 2 }}>
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                          {config.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {config.description}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                        {config.requiredColumns.map((column) => (
+                          <Chip key={column} label={column} size="small" variant="outlined" />
+                        ))}
+                      </Box>
+
+                      <Divider />
+
+                      <input
+                        ref={inputRefs[config.key]}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        onChange={handleFileChange(config.key)}
+                        style={{ display: 'none' }}
+                        id={`${config.key}-input`}
+                      />
+
+                      <Button variant="text" startIcon={<DownloadIcon />} onClick={() => downloadTemplate(config)}>
+                        ดาวน์โหลด Template
+                      </Button>
+
+                      <Button component="label" htmlFor={`${config.key}-input`} variant="outlined" startIcon={<UploadIcon />}>
+                        เลือกไฟล์
+                      </Button>
+
+                      <Button
+                        variant="contained"
+                        startIcon={loadingKey === config.key ? <CircularProgress size={18} color="inherit" /> : <UploadIcon />}
+                        onClick={() => handleUpload([config.key])}
+                        disabled={!selectedFile || Boolean(loadingKey)}
+                      >
+                        {loadingKey === config.key ? 'กำลังนำเข้า...' : 'นำเข้าไฟล์นี้'}
+                      </Button>
+
+                      <Box
+                        sx={{
+                          minHeight: 52,
+                          border: '1px dashed',
+                          borderColor: selectedFile ? 'success.main' : 'divider',
+                          borderRadius: 1,
+                          p: 1.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}
+                      >
+                        <FileIcon color={selectedFile ? 'success' : 'disabled'} />
+                        <Typography variant="body2" color={selectedFile ? 'text.primary' : 'text.secondary'} noWrap>
+                          {selectedFile ? selectedFile.name : 'ยังไม่ได้เลือกไฟล์'}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </Box>
 
-          <Divider sx={{ my: 3 }} />
-
-          <Box
-            sx={{
-              border: '2px dashed',
-              borderColor: file ? 'primary.main' : 'grey.300',
-              borderRadius: 2,
-              p: 4,
-              textAlign: 'center',
-              backgroundColor: file ? 'primary.50' : 'grey.50',
-              transition: 'all 0.3s',
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileChange}
-              style={{ display: 'none' }}
-              id="file-input"
-            />
-            <label htmlFor="file-input">
-              <Box sx={{ cursor: 'pointer' }}>
-                <UploadIcon sx={{ fontSize: 48, color: file ? 'primary.main' : 'grey.400', mb: 2 }} />
-                <Typography variant="h6" sx={{ mb: 1 }}>
-                  {file ? file.name : 'คลิกเพื่อเลือกไฟล์ Excel'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  รองรับไฟล์ .xlsx และ .xls เท่านั้น
-                </Typography>
-              </Box>
-            </label>
-          </Box>
-
-          {file && (
-            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<UploadIcon />}
-                onClick={handleUpload}
-                disabled={loading}
-              >
-                {loading ? 'กำลังนำเข้าข้อมูล...' : 'นำเข้าข้อมูล'}
-              </Button>
-            </Box>
-          )}
-
-          {/* Progress Bar */}
-          {loading && (
+          {loadingKey && (
             <Box sx={{ mt: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                <CircularProgress size={24} />
-                <Typography variant="body2" color="text.secondary">
-                  กำลังประมวลผล...
-                </Typography>
-              </Box>
               <LinearProgress
-                variant={progress.total > 0 ? "determinate" : "indeterminate"}
+                variant={progress.total > 0 ? 'determinate' : 'indeterminate'}
                 value={progress.percentage}
                 sx={{ height: 8, borderRadius: 1 }}
               />
@@ -550,31 +565,24 @@ export default function ImportPolicePersonnelPage() {
           )}
         </Paper>
 
-        {/* Error Alert */}
         {error && (
           <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
             {error}
           </Alert>
         )}
 
-        {/* Success Result */}
         {result && (
           <Paper sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
               <SuccessIcon color="success" sx={{ fontSize: 40 }} />
               <Box>
-                <Typography variant="h6">
-                  {importMode === 'supporter' ? 'อัปเดตข้อมูลเสร็จสิ้น' : 'นำเข้าข้อมูลเสร็จสิ้น'}
-                </Typography>
+                <Typography variant="h6">นำเข้าข้อมูลเสร็จสิ้น</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  สำเร็จ: {result.success} แถว | ล้มเหลว: {result.failed} แถว
-                  {result.notFound !== undefined && ` | ไม่พบในระบบ: ${result.notFound} แถว`}
-                  {result.deleted !== undefined && ` | ลบข้อมูลเก่า: ${result.deleted} แถว`}
+                  {result.message || `สำเร็จ: ${result.success} แถว | ล้มเหลว: ${result.failed} แถว`}
                 </Typography>
               </Box>
             </Box>
 
-            {/* Summary */}
             <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
               <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'success.50' }}>
                 <CardContent>
@@ -582,7 +590,17 @@ export default function ImportPolicePersonnelPage() {
                     {result.success}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {importMode === 'supporter' ? 'อัปเดตสำเร็จ' : 'นำเข้าสำเร็จ'}
+                    นำเข้าสำเร็จ
+                  </Typography>
+                </CardContent>
+              </Card>
+              <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'info.50' }}>
+                <CardContent>
+                  <Typography variant="h4" color="info.main" sx={{ fontWeight: 700 }}>
+                    {result.updated}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    อัปเดตข้อมูลเดิม
                   </Typography>
                 </CardContent>
               </Card>
@@ -596,121 +614,30 @@ export default function ImportPolicePersonnelPage() {
                   </Typography>
                 </CardContent>
               </Card>
-              {result.notFound !== undefined && result.notFound > 0 && (
-                <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'warning.50' }}>
-                  <CardContent>
-                    <Typography variant="h4" color="warning.main" sx={{ fontWeight: 700 }}>
-                      {result.notFound}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      ไม่พบในระบบ
-                    </Typography>
-                  </CardContent>
-                </Card>
-              )}
-              {result.deleted !== undefined && result.deleted > 0 && (
-                <Card sx={{ flex: 1, minWidth: 150, bgcolor: 'info.50' }}>
-                  <CardContent>
-                    <Typography variant="h4" color="info.main" sx={{ fontWeight: 700 }}>
-                      {result.deleted}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      ลบข้อมูลเก่า
-                    </Typography>
-                  </CardContent>
-                </Card>
-              )}
             </Box>
 
-            {/* Errors List */}
             {result.errors && result.errors.length > 0 && (
               <>
                 <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600, color: 'error.main' }}>
-                  รายการที่ล้มเหลว:
+                  รายการที่ต้องตรวจสอบ
                 </Typography>
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
                       <TableRow>
                         <TableCell>ลำดับ</TableCell>
-                        <TableCell>ข้อผิดพลาด</TableCell>
+                        <TableCell>รายละเอียด</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {result.errors.map((error: string, index: number) => (
-                        <TableRow key={index}>
+                      {result.errors.map((item: string, index: number) => (
+                        <TableRow key={`${item}-${index}`}>
                           <TableCell>{index + 1}</TableCell>
                           <TableCell>
                             <Typography variant="body2" color="error">
-                              {error}
+                              {item}
                             </Typography>
                           </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </>
-            )}
-
-            {/* Success List Preview - For Supporter Update */}
-            {result.updated && result.updated.length > 0 && result.updated.length <= 20 && (
-              <>
-                <Divider sx={{ my: 3 }} />
-                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-                  ข้อมูลที่อัปเดตสำเร็จ (แสดง {result.updated.length} รายการ):
-                </Typography>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>ชื่อ-นามสกุล</TableCell>
-                        <TableCell>เลขประจำตัวประชาชน</TableCell>
-                        <TableCell>ตำแหน่งที่ร้องขอ</TableCell>
-                        <TableCell>ผู้สนับสนุน</TableCell>
-                        <TableCell>เหตุผล</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {result.updated.map((person: any, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell>{person.fullName}</TableCell>
-                          <TableCell>{person.nationalId}</TableCell>
-                          <TableCell>{person.requestedPosition || '-'}</TableCell>
-                          <TableCell>{person.supporterName || '-'}</TableCell>
-                          <TableCell>{person.supportReason || '-'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </>
-            )}
-
-            {/* Success List Preview - For Full Import */}
-            {result.created && result.created.length > 0 && result.created.length <= 10 && (
-              <>
-                <Divider sx={{ my: 3 }} />
-                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-                  ข้อมูลที่นำเข้าสำเร็จ (แสดง {result.created.length} รายการ):
-                </Typography>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>ตำแหน่ง</TableCell>
-                        <TableCell>ยศ</TableCell>
-                        <TableCell>ชื่อ-สกุล</TableCell>
-                        <TableCell>หน่วย</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {result.created.map((person: any) => (
-                        <TableRow key={person.id}>
-                          <TableCell>{person.position || '-'}</TableCell>
-                          <TableCell>{person.rank || '-'}</TableCell>
-                          <TableCell>{person.fullName || '-'}</TableCell>
-                          <TableCell>{person.unit || '-'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -721,49 +648,49 @@ export default function ImportPolicePersonnelPage() {
           </Paper>
         )}
       </Box>
-        {/* Delete Year Confirm Dialog */}
-        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-          <DialogTitle sx={{ color: 'error.main' }}>⚠️ ยืนยันการลบข้อมูล</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              คุณต้องการลบข้อมูลบุคลากร<strong>ทั้งหมด</strong>ในปี <strong>{selectedYear}</strong> ออกจากระบบหรือไม่?
-            </DialogContentText>
-            <Alert severity="error" sx={{ mt: 2 }}>
-              การดำเนินการนี้<strong>ไม่สามารถย้อนกลับได้</strong> ข้อมูลที่ถูกลบจะหายไปถาวร
-              รวมถึงข้อมูลที่อาจเชื่อมโยงกับการแลกเปลี่ยนตำแหน่งต่างๆ
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteConfirmOpen(false)}>ยกเลิก</Button>
-            <Button onClick={handleDeleteYear} color="error" variant="contained">
-              ยืนยัน ลบทั้งหมด
-            </Button>
-          </DialogActions>
-        </Dialog>
 
-        {/* Import Over Existing Data Confirm Dialog */}
-        <Dialog open={importConfirmOpen} onClose={() => setImportConfirmOpen(false)}>
-          <DialogTitle>📋 พบข้อมูลในระบบแล้ว</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              พบข้อมูลบุคลากรในปี <strong>{selectedYear}</strong> จำนวน <strong>{existingRecordCount.toLocaleString()}</strong> รายการอยู่ในระบบแล้ว
-            </DialogContentText>
-            <Alert severity="info" sx={{ mt: 2 }}>
-              ระบบจะ <strong>อัปเดต (UPSERT)</strong> ข้อมูลที่มีอยู่แล้ว และเพิ่มข้อมูลใหม่ที่ยังไม่มี
-              โดยจะ<strong>ไม่ลบ</strong>ข้อมูลเดิม ต้องการดำเนินการต่อหรือไม่?
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setImportConfirmOpen(false)}>ยกเลิก</Button>
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle sx={{ color: 'error.main' }}>ยืนยันการลบข้อมูล</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            คุณต้องการลบข้อมูลบุคลากรทั้งหมดในปี <strong>{selectedYear}</strong> ออกจากระบบหรือไม่?
+          </DialogContentText>
+          <Alert severity="error" sx={{ mt: 2 }}>
+            การดำเนินการนี้ไม่สามารถย้อนกลับได้
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>ยกเลิก</Button>
+          <Button onClick={handleDeleteYear} color="error" variant="contained">
+            ยืนยัน ลบทั้งหมด
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={importConfirmOpen} onClose={() => setImportConfirmOpen(false)}>
+        <DialogTitle>พบข้อมูลในระบบแล้ว</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            พบข้อมูลบุคลากรในปี <strong>{selectedYear}</strong> จำนวน{' '}
+            <strong>{existingRecordCount.toLocaleString()}</strong> รายการอยู่ในระบบแล้ว
+          </DialogContentText>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            ระบบจะอัปเดตข้อมูลที่มีเลขประจำตัวประชาชนซ้ำในปีเดียวกัน และเพิ่มข้อมูลใหม่ที่ยังไม่มี โดยจะไม่ลบข้อมูลเดิม
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportConfirmOpen(false)}>ยกเลิก</Button>
             <Button
-              onClick={() => { setImportConfirmOpen(false); performUpload(); }}
-              variant="contained"
-            >
-              ยืนยัน นำเข้าข้อมูล
-            </Button>
-          </DialogActions>
-        </Dialog>
-
+              onClick={() => {
+                setImportConfirmOpen(false);
+                performUpload(pendingUploadKeys);
+              }}
+            variant="contained"
+          >
+            ยืนยัน นำเข้าข้อมูล
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Layout>
   );
 }

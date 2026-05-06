@@ -65,6 +65,7 @@ import {
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Bar } from 'react-chartjs-2';
 import { teal } from '@mui/material/colors';
+import { formatBuddhistDate } from '@/utils/dateFormat';
 
 // Register ChartJS components
 ChartJS.register(
@@ -244,47 +245,7 @@ export default function HomePage() {
   const [supportDrawerOpen, setSupportDrawerOpen] = useState(false);
   const [selectedSupportPerson, setSelectedSupportPerson] = useState<SupportedPersonnel | null>(null);
 
-  // Utility function สำหรับ format วันที่
-  const formatDate = (dateString?: string | null): string => {
-    if (!dateString) return '-';
-
-    // ถ้าเป็นรูปแบบวันที่ไทยอยู่แล้ว (DD/MM/YYYY) ให้ return เลย
-    if (typeof dateString === 'string' && dateString.includes('/')) {
-      const parts = dateString.split('/');
-      if (parts.length === 3) {
-        const day = parts[0];
-        const month = parts[1];
-        const year = parts[2];
-
-        // ถ้าปีเป็น พ.ศ. (มากกว่า 2500) ให้ return เลย
-        if (parseInt(year) > 2500) {
-          return `${day}/${month}/${year}`;
-        }
-
-        // ถ้าปีเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
-        if (parseInt(year) > 1900 && parseInt(year) < 2100) {
-          const thaiYear = parseInt(year) + 543;
-          return `${day}/${month}/${thaiYear}`;
-        }
-      }
-      return dateString;
-    }
-
-    // ถ้าเป็น ISO date string หรือ timestamp
-    try {
-      const date = new Date(dateString);
-      if (!isNaN(date.getTime())) {
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const year = date.getFullYear() + 543;
-        return `${day}/${month}/${year}`;
-      }
-    } catch (error) {
-      return dateString;
-    }
-
-    return dateString;
-  };
+  const formatDate = formatBuddhistDate;
 
   // Pagination state for Supported Personnel
   const [supportPage, setSupportPage] = useState(0);
@@ -3339,7 +3300,7 @@ export default function HomePage() {
                             {selectedSupportPerson.retirementDate && (
                               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เกษียณ</Typography>
-                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{selectedSupportPerson.retirementDate}</Typography>
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(selectedSupportPerson.retirementDate)}</Typography>
                               </Box>
                             )}
                             {selectedSupportPerson.yearsOfService && (

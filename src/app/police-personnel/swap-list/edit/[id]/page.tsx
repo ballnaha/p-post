@@ -37,6 +37,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import PersonnelDrawer from '../../add/components/PersonnelDrawer';
+import { formatBuddhistDate } from '@/utils/dateFormat';
 
 interface PolicePersonnel {
   id: string;
@@ -705,7 +706,7 @@ export default function EditSwapTransactionPage() {
                         {personnelA.birthDate && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">วันเกิด</Typography>
-                            <Typography variant="body2">{personnelA.birthDate}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelA.birthDate)}</Typography>
                           </Box>
                         )}
                         {personnelA.age && (
@@ -733,7 +734,7 @@ export default function EditSwapTransactionPage() {
                         {personnelA.enrollmentDate && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">วันบรรจุ</Typography>
-                            <Typography variant="body2">{personnelA.enrollmentDate}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelA.enrollmentDate)}</Typography>
                           </Box>
                         )}
                         {personnelA.yearsOfService && (
@@ -747,20 +748,20 @@ export default function EditSwapTransactionPage() {
                         {personnelA.currentRankSince && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">ดำรงยศนี้ตั้งแต่</Typography>
-                            <Typography variant="body2">{personnelA.currentRankSince}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelA.currentRankSince)}</Typography>
                           </Box>
                         )}
                         {personnelA.lastAppointment && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">แต่งตั้งครั้งล่าสุด</Typography>
-                            <Typography variant="body2">{personnelA.lastAppointment}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelA.lastAppointment)}</Typography>
                           </Box>
                         )}
                         {personnelA.retirementDate && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">วันเกษียณ</Typography>
                             <Typography variant="body2" color="warning.main">
-                              {personnelA.retirementDate}
+                              {formatBuddhistDate(personnelA.retirementDate)}
                             </Typography>
                           </Box>
                         )}
@@ -939,7 +940,7 @@ export default function EditSwapTransactionPage() {
                         {personnelB.birthDate && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">วันเกิด</Typography>
-                            <Typography variant="body2">{personnelB.birthDate}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelB.birthDate)}</Typography>
                           </Box>
                         )}
                         {personnelB.age && (
@@ -967,7 +968,7 @@ export default function EditSwapTransactionPage() {
                         {personnelB.enrollmentDate && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">วันบรรจุ</Typography>
-                            <Typography variant="body2">{personnelB.enrollmentDate}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelB.enrollmentDate)}</Typography>
                           </Box>
                         )}
                         {personnelB.yearsOfService && (
@@ -981,20 +982,20 @@ export default function EditSwapTransactionPage() {
                         {personnelB.currentRankSince && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">ดำรงยศนี้ตั้งแต่</Typography>
-                            <Typography variant="body2">{personnelB.currentRankSince}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelB.currentRankSince)}</Typography>
                           </Box>
                         )}
                         {personnelB.lastAppointment && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">แต่งตั้งครั้งล่าสุด</Typography>
-                            <Typography variant="body2">{personnelB.lastAppointment}</Typography>
+                            <Typography variant="body2">{formatBuddhistDate(personnelB.lastAppointment)}</Typography>
                           </Box>
                         )}
                         {personnelB.retirementDate && (
                           <Box>
                             <Typography variant="caption" color="text.secondary">วันเกษียณ</Typography>
                             <Typography variant="body2" color="warning.main">
-                              {personnelB.retirementDate}
+                              {formatBuddhistDate(personnelB.retirementDate)}
                             </Typography>
                           </Box>
                         )}

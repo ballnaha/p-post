@@ -25,6 +25,7 @@ import {
   CalendarToday as CalendarIcon,
   InfoOutlined as InfoIcon,
 } from '@mui/icons-material';
+import { formatBuddhistDate } from '@/utils/dateFormat';
 
 interface SwapDetail {
   id: string;
@@ -91,37 +92,7 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const formatDate = (dateString?: string | null) => {
-    if (!dateString) return '-';
-    
-    // ถ้าเป็นรูปแบบ DD/MM/YYYY ให้ตรวจสอบว่าเป็น พ.ศ. หรือ ค.ศ.
-    if (typeof dateString === 'string' && dateString.includes('/')) {
-      const parts = dateString.split('/');
-      if (parts.length === 3) {
-        const year = parseInt(parts[2]);
-        // ถ้าปีน้อยกว่า 2500 แสดงว่าเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
-        if (!isNaN(year) && year < 2500) {
-          return `${parts[0]}/${parts[1]}/${year + 543}`;
-        }
-      }
-      // ถ้าเป็น พ.ศ. อยู่แล้ว หรือไม่สามารถ parse ได้ ให้ return ตรงๆ
-      return dateString;
-    }
-    
-    try {
-      const date = new Date(dateString);
-      if (!isNaN(date.getTime())) {
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const year = date.getFullYear() + 543;
-        return `${day}/${month}/${year}`;
-      }
-    } catch {
-      return dateString;
-    }
-    
-    return dateString;
-  };
+  const formatDate = formatBuddhistDate;
 
   const getSwapTypeLabel = (type: string) => {
     switch (type) {
@@ -294,7 +265,7 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
                 <Box>
                   <Typography variant="caption" color="text.secondary" fontWeight={500}>วันเกษียณ</Typography>
                   <Typography variant="body2" fontWeight={500} sx={{ mt: 0.5 }}>
-                    {detail.retirementDate}
+                    {formatDate(detail.retirementDate)}
                   </Typography>
                 </Box>
               )}

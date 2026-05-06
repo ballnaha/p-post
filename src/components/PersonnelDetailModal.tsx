@@ -37,6 +37,7 @@ import {
   ArrowRightAlt as ArrowRightAltIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from '@/contexts/SnackbarContext';
+import { formatBuddhistDate } from '@/utils/dateFormat';
 
 // Interface สำหรับข้อมูลบุคลากร (รองรับทั้ง police-personnel, swap-list, three-way-swap, vacant-position)
 export interface PersonnelData {
@@ -102,51 +103,7 @@ interface PersonnelDetailModalProps {
   variant?: 'default' | 'vacant';
 }
 
-// Utility function สำหรับ format วันที่
-const formatDate = (dateString?: string | null): string => {
-  if (!dateString) return '-';
-
-  // ถ้าเป็นรูปแบบวันที่ไทยอยู่แล้ว (DD/MM/YYYY) ให้ return เลย
-  if (typeof dateString === 'string' && dateString.includes('/')) {
-    const parts = dateString.split('/');
-    if (parts.length === 3) {
-      // ตรวจสอบว่าเป็นรูปแบบ DD/MM/YYYY หรือไม่
-      const day = parts[0];
-      const month = parts[1];
-      const year = parts[2];
-
-      // ถ้าปีเป็น พ.ศ. (มากกว่า 2500) ให้ return เลย
-      if (parseInt(year) > 2500) {
-        return `${day}/${month}/${year}`;
-      }
-
-      // ถ้าปีเป็น ค.ศ. ให้แปลงเป็น พ.ศ.
-      if (parseInt(year) > 1900 && parseInt(year) < 2100) {
-        const thaiYear = parseInt(year) + 543;
-        return `${day}/${month}/${thaiYear}`;
-      }
-    }
-
-    // ถ้าเป็นรูปแบบอื่นที่มี / ให้ return เลย
-    return dateString;
-  }
-
-  // ถ้าเป็น ISO date string หรือ timestamp
-  try {
-    const date = new Date(dateString);
-    if (!isNaN(date.getTime())) {
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const year = date.getFullYear() + 543; // แปลงเป็น พ.ศ.
-      return `${day}/${month}/${year}`;
-    }
-  } catch (error) {
-    // ถ้าแปลงไม่ได้ ให้ return ค่าเดิม
-    return dateString;
-  }
-
-  return dateString;
-};
+const formatDate = formatBuddhistDate;
 
 export default function PersonnelDetailModal({
   open,
@@ -982,7 +939,7 @@ export default function PersonnelDetailModal({
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เกษียณ</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.retirementDate || '-'}</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatDate(personnel.retirementDate)}</Typography>
                         </Box>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>จำนวนปี</Typography>

@@ -1054,7 +1054,7 @@ export default function PersonnelDrawer({
                                 {person.lastAppointment && (
                                   <Box sx={{ gridColumn: '1 / -1' }}>
                                     <Typography variant="caption" color="text.secondary">แต่งตั้งครั้งสุดท้าย</Typography>
-                                    <Typography variant="body2">{person.lastAppointment}</Typography>
+                                    <Typography variant="body2">{formatDate(person.lastAppointment)}</Typography>
                                   </Box>
                                 )}
                               </Box>

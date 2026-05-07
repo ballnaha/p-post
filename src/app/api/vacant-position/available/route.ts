@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { buildWildcardSearchWhere } from '@/lib/wildcardSearch';
+
+const SEARCHABLE_FIELDS = ['position', 'unit', 'positionNumber', 'fullName'] as const;
 
 /**
  * GET - ดึงรายการตำแหน่งว่างที่พร้อมใช้งาน
@@ -92,14 +95,10 @@ export async function GET(request: NextRequest) {
 
     // Filter by search text
     if (search) {
-      whereClause.AND.push({
-        OR: [
-          { position: { contains: search } },
-          { unit: { contains: search } },
-          { positionNumber: { contains: search } },
-          { fullName: { contains: search } }
-        ]
-      });
+      const searchWhere = buildWildcardSearchWhere(SEARCHABLE_FIELDS, search);
+      if (searchWhere) {
+        whereClause.AND.push(searchWhere);
+      }
     }
 
     // Filter by posCodeId

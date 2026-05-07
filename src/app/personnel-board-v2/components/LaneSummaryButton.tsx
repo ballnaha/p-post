@@ -35,6 +35,7 @@ import {
     Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { Column, Personnel } from '../types';
+import { matchesAnyWildcardSearch } from '@/lib/wildcardSearch';
 
 interface LaneSummaryButtonProps {
     columns: Column[];
@@ -413,16 +414,13 @@ const LaneSummaryButton = memo(({ columns, personnelMap, onOpenDetail }: LaneSum
     const filteredSummaryData = useMemo(() => {
         if (!searchTerm.trim()) return summaryData;
 
-        const lowerSearch = searchTerm.toLowerCase();
         return summaryData.map(group => ({
             ...group,
             lanes: group.lanes.filter(lane =>
-                lane.title.toLowerCase().includes(lowerSearch) ||
-                lane.groupNumber?.toLowerCase().includes(lowerSearch) ||
+                matchesAnyWildcardSearch([lane.title, lane.groupNumber], searchTerm) ||
                 lane.itemIds.some(id => {
                     const person = personnelMap[id];
-                    return person?.fullName?.toLowerCase().includes(lowerSearch) ||
-                        person?.rank?.toLowerCase().includes(lowerSearch);
+                    return Boolean(person && matchesAnyWildcardSearch([person.fullName, person.rank], searchTerm));
                 })
             )
         })).filter(group => group.lanes.length > 0);
@@ -543,7 +541,7 @@ const LaneSummaryButton = memo(({ columns, personnelMap, onOpenDetail }: LaneSum
                         <TextField
                             fullWidth
                             size="small"
-                            placeholder="ค้นหาเลน, เลขกลุ่ม, ชื่อบุคลากร..."
+                            placeholder="ค้นหาเลน, เลขกลุ่ม, ชื่อบุคลากร เช่น ชื่อ*นามสกุล"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             InputProps={{

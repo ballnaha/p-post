@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { buildWildcardSearchWhere, getWildcardSearchParts } from '@/lib/wildcardSearch';
 
 // Use global prisma instance to prevent connection pool exhaustion
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
@@ -73,6 +74,25 @@ const checkIsReserved = (fullName: string | null | undefined): boolean => {
 const normalizePositionNumber = (posNum: string | null | undefined): string => {
     if (!posNum) return '';
     return posNum.replace(/\s+/g, '').trim();
+};
+
+const buildNestedContainsCondition = (path: string[], term: string): any => {
+    return path.reduceRight((acc, key) => ({ [key]: acc }), { contains: term });
+};
+
+const buildWildcardNestedOrConditions = (paths: string[][], rawSearch: string): any[] => {
+    const { search, hasWildcard, parts } = getWildcardSearchParts(rawSearch);
+    if (!search) return [];
+
+    if (!hasWildcard) {
+        return paths.map((path) => buildNestedContainsCondition(path, search));
+    }
+
+    if (parts.length === 0) return [];
+
+    return paths.map((path) => ({
+        AND: parts.map((part) => buildNestedContainsCondition(path, part)),
+    }));
 };
 
 // Simple cache for filter options only (lightweight)
@@ -177,19 +197,24 @@ export async function GET(request: NextRequest) {
         if (search) {
             // 1. Find relevant swap details (for Incoming Person search or Group Number search)
             // Find transactions with matching groupNumber OR details with matching fullName/rank
+            const detailSearchConditions = buildWildcardNestedOrConditions(
+                [
+                    ['fullName'],
+                    ['rank'],
+                    ['toPosition'],
+                    ['transaction', 'groupNumber'],
+                    ['transaction', 'groupName'],
+                ],
+                search,
+            );
+
             const matchedDetails = await prisma.swapTransactionDetail.findMany({
                 where: {
                     transaction: {
                         year,
                         status: { in: ['completed', 'active'] }
                     },
-                    OR: [
-                        { fullName: { contains: search } }, // Incoming Person Name match
-                        { rank: { contains: search } }, // Check rank too
-                        { transaction: { groupNumber: { contains: search } } }, // Group Number match
-                        { transaction: { groupName: { contains: search } } },
-                        { toPosition: { contains: search } } // Outgoing position (from card perspective)
-                    ]
+                    OR: detailSearchConditions
                 },
                 select: {
                     fromPositionNumber: true,
@@ -212,16 +237,10 @@ export async function GET(request: NextRequest) {
             const searchPosNumArray = Array.from(searchPosNums);
 
             // 2. Build the main where clause
-            const searchCondition: any = {
-                OR: [
-                    // Direct fields on PolicePersonnel
-                    { fullName: { contains: search } },
-                    { position: { contains: search } }, // Current position name
-                    { unit: { contains: search } },
-                    { positionNumber: { contains: search } },
-                    { rank: { contains: search } },
-                ]
-            };
+            const searchCondition = buildWildcardSearchWhere(
+                ['fullName', 'position', 'unit', 'positionNumber', 'rank'],
+                search,
+            ) || { OR: [] as any[] };
 
             // Add matches from swap/incoming logic
             if (searchPosNumArray.length > 0) {

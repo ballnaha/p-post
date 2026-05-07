@@ -2,12 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
     Box,
     Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     Typography,
     Chip,
     alpha,
@@ -25,13 +19,19 @@ import {
     ThreeSixty as ThreeWayIcon,
     Business as BusinessIcon,
 } from '@mui/icons-material';
+import { Virtuoso } from 'react-virtuoso';
 import { Personnel, Column } from '../types';
+import { matchesAnyWildcardSearch } from '@/lib/wildcardSearch';
 
 interface BoardListViewProps {
     columns: Column[];
     personnelMap: Record<string, Personnel>;
     onCardClick?: (personnel: Personnel, targetInfo?: any) => void;
 }
+
+type ListRow =
+    | { type: 'lane'; lane: Column; count: number }
+    | { type: 'person'; lane: Column; person: Personnel; level: number; stripe: boolean };
 
 export default function BoardListView({ columns, personnelMap, onCardClick }: BoardListViewProps) {
     const [searchTerm, setSearchTerm] = useState('');
@@ -49,15 +49,13 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
                 .filter(item => item.person);
 
             // If there's a search term, filter items or the lane itself
-            const term = searchTerm.toLowerCase();
-            const laneMatches = col.title?.toLowerCase().includes(term) || col.groupNumber?.toLowerCase().includes(term);
-            
+            const laneMatches = matchesAnyWildcardSearch([col.title, col.groupNumber], searchTerm);
+
             const filteredItems = items.filter(item => {
                 if (!searchTerm) return true;
                 return (
                     laneMatches ||
-                    item.person.fullName?.toLowerCase().includes(term) ||
-                    item.person.position?.toLowerCase().includes(term)
+                    matchesAnyWildcardSearch([item.person.fullName, item.person.position], searchTerm)
                 );
             });
 
@@ -87,6 +85,20 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
     };
 
     const totalRows = useMemo(() => groupedData.reduce((acc, curr) => acc + curr.items.length, 0), [groupedData]);
+    const virtualRows = useMemo<ListRow[]>(() => {
+        return groupedData.flatMap(group => [
+            { type: 'lane' as const, lane: group.lane, count: group.items.length },
+            ...group.items.map((item, idx) => ({
+                type: 'person' as const,
+                lane: group.lane,
+                person: item.person,
+                level: item.level,
+                stripe: idx % 2 === 1,
+            }))
+        ]);
+    }, [groupedData]);
+
+    const gridColumns = '64px minmax(260px, 1.15fr) minmax(320px, 1fr) 56px';
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
@@ -97,7 +109,7 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
                 </Typography>
                 <TextField
                     size="small"
-                    placeholder="ค้นหาชื่อ, ตำแหน่ง หรือเลขกลุ่ม..."
+                    placeholder="ค้นหาชื่อ, ตำแหน่ง หรือเลขกลุ่ม เช่น ชื่อ*นามสกุล"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     InputProps={{
@@ -111,118 +123,123 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
                 />
             </Box>
 
-            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 3, border: '1px solid #e2e8f0', flex: 1, overflow: 'auto' }}>
-                <Table stickyHeader size="small" aria-label="personnel list table">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc', color: '#64748b', width: 50, py: 1 }}>#</TableCell>
-                            <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc', color: '#64748b', py: 1 }}>บุคลากร / ตำแหน่งปัจจุบัน</TableCell>
-                            <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc', color: '#64748b', py: 1 }}>การปรับย้าย (เดิม → ใหม่)</TableCell>
-                            <TableCell sx={{ fontWeight: 800, bgcolor: '#f8fafc', color: '#64748b', width: 40, py: 1 }}></TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {groupedData.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={4} align="center" sx={{ py: 10 }}>
-                                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                        ไม่พบข้อมูลที่ต้องการ
-                                    </Typography>
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            groupedData.map((group) => (
-                                <React.Fragment key={group.lane.id}>
-                                    {/* Lane Header Row - More Compact */}
-                                    <TableRow sx={{ bgcolor: alpha('#f1f5f9', 0.9) }}>
-                                        <TableCell colSpan={4} sx={{ py: 0.75, borderBottom: '1px solid #e2e8f0' }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                <Typography variant="caption" sx={{ fontWeight: 900, color: 'primary.main', bgcolor: 'white', px: 1, py: 0.2, borderRadius: 1, border: '1px solid', borderColor: alpha('#3b82f6', 0.2) }}>
-                                                    {group.lane.groupNumber}
-                                                </Typography>
-                                                <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '0.9rem' }}>
-                                                    {group.lane.title}
-                                                </Typography>
-                                                {getLaneTypeChip(group.lane.chainType)}
-                                                <Box sx={{ flex: 1 }} />
-                                                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                                                    {group.items.length} รายการ
+            <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid #e2e8f0', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: gridColumns,
+                        alignItems: 'center',
+                        minWidth: 900,
+                        bgcolor: '#f8fafc',
+                        borderBottom: '1px solid #e2e8f0',
+                    }}
+                >
+                    <Box sx={{ px: 2, py: 1, fontWeight: 800, color: '#64748b', fontSize: '0.875rem' }}>#</Box>
+                    <Box sx={{ px: 2, py: 1, fontWeight: 800, color: '#64748b', fontSize: '0.875rem' }}>บุคลากร / ตำแหน่งปัจจุบัน</Box>
+                    <Box sx={{ px: 2, py: 1, fontWeight: 800, color: '#64748b', fontSize: '0.875rem' }}>การปรับย้าย (เดิม → ใหม่)</Box>
+                    <Box sx={{ px: 2, py: 1 }} />
+                </Box>
+
+                {virtualRows.length === 0 ? (
+                    <Box sx={{ py: 10, textAlign: 'center' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                            ไม่พบข้อมูลที่ต้องการ
+                        </Typography>
+                    </Box>
+                ) : (
+                    <Virtuoso
+                        data={virtualRows}
+                        style={{ height: 'calc(100% - 41px)' }}
+                        increaseViewportBy={500}
+                        itemContent={(index, row) => {
+                            if (row.type === 'lane') {
+                                return (
+                                    <Box sx={{ minWidth: 900, bgcolor: alpha('#f1f5f9', 0.9), borderBottom: '1px solid #e2e8f0', px: 2, py: 0.75 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                                            <Typography variant="caption" sx={{ fontWeight: 900, color: 'primary.main', bgcolor: 'white', px: 1, py: 0.2, borderRadius: 1, border: '1px solid', borderColor: alpha('#3b82f6', 0.2) }}>
+                                                {row.lane.groupNumber}
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '0.9rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {row.lane.title}
+                                            </Typography>
+                                            {getLaneTypeChip(row.lane.chainType)}
+                                            <Box sx={{ flex: 1 }} />
+                                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, flexShrink: 0 }}>
+                                                {row.count} รายการ
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                );
+                            }
+
+                            return (
+                                <Box
+                                    sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: gridColumns,
+                                        alignItems: 'center',
+                                        minWidth: 900,
+                                        cursor: 'pointer',
+                                        bgcolor: row.stripe ? alpha('#f8fafc', 0.5) : 'white',
+                                        borderBottom: '1px solid #eef2f7',
+                                        '&:hover': { bgcolor: alpha('#3b82f6', 0.04) },
+                                    }}
+                                    onClick={() => onCardClick?.(row.person)}
+                                >
+                                    <Box sx={{ px: 2, py: 1 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 800, color: '#94a3b8', display: 'block', textAlign: 'center' }}>
+                                            {row.level}
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ px: 2, py: 1, minWidth: 0 }}>
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.2, minWidth: 0 }}>
+                                                {row.lane.chainType === 'promotion' && (
+                                                    <Chip label={`Lv ${row.level}`} size="small" color="error" sx={{ height: 14, fontSize: '0.55rem', fontWeight: 900, px: 0, flexShrink: 0 }} />
+                                                )}
+                                                <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {row.person.rank}{row.person.fullName}
                                                 </Typography>
                                             </Box>
-                                        </TableCell>
-                                    </TableRow>
-                                    
-                                    {/* Personnel Rows - Very Compact */}
-                                    {group.items.map((item, idx) => (
-                                        <TableRow 
-                                            key={`${group.lane.id}-${item.person.id}-${idx}`}
-                                            hover
-                                            sx={{ 
-                                                '&:last-child td, &:last-child th': { border: 0 }, 
-                                                cursor: 'pointer',
-                                                bgcolor: idx % 2 === 0 ? 'transparent' : alpha('#f8fafc', 0.5)
-                                            }}
-                                            onClick={() => onCardClick?.(item.person)}
-                                        >
-                                            <TableCell>
-                                                <Typography variant="caption" sx={{ fontWeight: 800, color: '#94a3b8', display: 'block', textAlign: 'center' }}>
-                                                    {item.level}
+                                            <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {row.person.position || '-'} <BusinessIcon sx={{ fontSize: 10, ml: 0.5, flexShrink: 0 }} /> {row.person.unit || '-'}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ px: 2, py: 1, minWidth: 0 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography variant="caption" noWrap sx={{ color: '#94a3b8', display: 'block', fontSize: '0.8rem' }}>
+                                                    {row.person.unit || '-'}
                                                 </Typography>
-                                            </TableCell>
-                                            <TableCell sx={{ py: 1 }}>
-                                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.2 }}>
-                                                        {group.lane.chainType === 'promotion' && (
-                                                            <Chip label={`Lv ${item.level}`} size="small" color="error" sx={{ height: 14, fontSize: '0.55rem', fontWeight: 900, px: 0 }} />
-                                                        )}
-                                                        <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>
-                                                            {item.person.rank}{item.person.fullName}
-                                                        </Typography>
-                                                    </Box>
-                                                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                        {item.person.position || '-'} <BusinessIcon sx={{ fontSize: 10, ml: 0.5 }} /> {item.person.unit || '-'}
-                                                    </Typography>
-                                                </Box>
-                                            </TableCell>
-                                            <TableCell sx={{ py: 1 }}>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                                    {/* Condensed Move Display */}
-                                                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                                                        <Typography variant="caption" noWrap sx={{ color: '#94a3b8', display: 'block', fontSize: '0.8rem' }}>
-                                                            {item.person.unit || '-'}
-                                                        </Typography>
-                                                        <Typography variant="caption" noWrap sx={{ color: '#94a3b8', fontWeight: 500, fontSize: '0.8rem' }}>
-                                                            {item.person.position || '-'}
-                                                        </Typography>
-                                                    </Box>
-                                                    
-                                                    <ArrowForwardIcon sx={{ color: 'divider', fontSize: 14 }} />
-                                                    
-                                                    <Box sx={{ flex: 1, minWidth: 0, bgcolor: alpha('#10b981', 0.05), px: 1, py: 0.5, borderRadius: 1 }}>
-                                                        <Typography variant="caption" noWrap sx={{ color: '#059669', fontWeight: 800, display: 'block', fontSize: '0.85rem' }}>
-                                                            {item.person.toUnit || '-'}
-                                                        </Typography>
-                                                        <Typography variant="caption" noWrap sx={{ color: '#059669', fontWeight: 700, fontSize: '0.8rem' }}>
-                                                            {item.person.toPosition || item.person.toPosCodeMaster?.name || 'ตำแหน่งว่าง'}
-                                                        </Typography>
-                                                    </Box>
-                                                </Box>
-                                            </TableCell>
-                                            <TableCell align="right" sx={{ py: 1 }}>
-                                                <Tooltip title="ดูรายละเอียด">
-                                                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); onCardClick?.(item.person); }}>
-                                                        <InfoIcon fontSize="small" sx={{ color: 'primary.main', opacity: 0.6, fontSize: 18 }} />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </React.Fragment>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                                                <Typography variant="caption" noWrap sx={{ color: '#94a3b8', fontWeight: 500, fontSize: '0.8rem' }}>
+                                                    {row.person.position || '-'}
+                                                </Typography>
+                                            </Box>
+                                            <ArrowForwardIcon sx={{ color: 'divider', fontSize: 14, flexShrink: 0 }} />
+                                            <Box sx={{ flex: 1, minWidth: 0, bgcolor: alpha('#10b981', 0.05), px: 1, py: 0.5, borderRadius: 1 }}>
+                                                <Typography variant="caption" noWrap sx={{ color: '#059669', fontWeight: 800, display: 'block', fontSize: '0.85rem' }}>
+                                                    {row.person.toUnit || '-'}
+                                                </Typography>
+                                                <Typography variant="caption" noWrap sx={{ color: '#059669', fontWeight: 700, fontSize: '0.8rem' }}>
+                                                    {row.person.toPosition || row.person.toPosCodeMaster?.name || 'ตำแหน่งว่าง'}
+                                                </Typography>
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                    <Box sx={{ px: 1, py: 1, textAlign: 'right' }}>
+                                        <Tooltip title="ดูรายละเอียด">
+                                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); onCardClick?.(row.person); }}>
+                                                <InfoIcon fontSize="small" sx={{ color: 'primary.main', opacity: 0.6, fontSize: 18 }} />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </Box>
+                                </Box>
+                            );
+                        }}
+                    />
+                )}
+            </Paper>
         </Box>
     );
 }

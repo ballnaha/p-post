@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import { Personnel } from '../types';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import { matchesWildcardSearch } from '@/lib/wildcardSearch';
 
 interface CreateTransferLaneTabProps {
     selectedYear: number;
@@ -53,6 +54,7 @@ export default function CreateTransferLaneTab({
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [filterUnit, setFilterUnit] = useState('all');
     const [filterPosCode, setFilterPosCode] = useState('all');
+    const [filterHasRequestedPosition, setFilterHasRequestedPosition] = useState('all');
     const [isFilterCollapsed, setIsFilterCollapsed] = useState(true);
     const [page, setPage] = useState(0);
     const [total, setTotal] = useState(0);
@@ -75,6 +77,7 @@ export default function CreateTransferLaneTab({
             if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
             if (filterUnit && filterUnit !== 'all') params.set('unit', filterUnit);
             if (filterPosCode && filterPosCode !== 'all') params.set('posCodeId', filterPosCode);
+            if (filterHasRequestedPosition && filterHasRequestedPosition !== 'all') params.set('hasRequestedPosition', filterHasRequestedPosition);
 
             params.set('page', page.toString());
             params.set('limit', '20');
@@ -90,7 +93,7 @@ export default function CreateTransferLaneTab({
         } finally {
             setLoadingPersonnel(false);
         }
-    }, [debouncedSearchTerm, filterUnit, filterPosCode, page, selectedYear]);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition, page, selectedYear]);
 
     // Fetch on changes
     useEffect(() => {
@@ -100,7 +103,7 @@ export default function CreateTransferLaneTab({
     // Reset page when filter changes
     useEffect(() => {
         setPage(0);
-    }, [debouncedSearchTerm, filterUnit, filterPosCode]);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition]);
 
     // Handle Create
     const handleCreate = () => {
@@ -185,13 +188,16 @@ export default function CreateTransferLaneTab({
                         <Autocomplete
                             freeSolo
                             options={allUnits}
+                            filterOptions={(options, state) =>
+                                options.filter(option => matchesWildcardSearch(option, state.inputValue))
+                            }
                             value={targetUnit}
                             onChange={(_, newValue) => setTargetUnit(newValue || '')}
                             onInputChange={(_, newInputValue) => setTargetUnit(newInputValue || '')}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
-                                    placeholder="ค้นหาหรือเลือกหน่วยงาน..."
+                                    placeholder="ค้นหาหรือเลือกหน่วยงาน เช่น บก*น"
                                     size="small"
                                     fullWidth
                                     InputProps={{
@@ -283,6 +289,20 @@ export default function CreateTransferLaneTab({
                     <ExpandMoreIcon sx={{ fontSize: 18, color: 'text.secondary' }} /> :
                     <ExpandLessIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 }
+                {/* Show active filter count */}
+                {(searchTerm || filterUnit !== 'all' || filterPosCode !== 'all' || filterHasRequestedPosition !== 'all') && (
+                    <Chip
+                        label={[
+                            searchTerm ? 1 : 0,
+                            filterUnit !== 'all' ? 1 : 0,
+                            filterPosCode !== 'all' ? 1 : 0,
+                            filterHasRequestedPosition !== 'all' ? 1 : 0
+                        ].reduce((a, b) => a + b, 0)}
+                        size="small"
+                        color="primary"
+                        sx={{ height: 18, fontSize: '0.7rem', ml: 0.5, '& .MuiChip-label': { px: 0.75 } }}
+                    />
+                )}
             </Box>
 
             {/* Collapsible Filters */}
@@ -291,7 +311,7 @@ export default function CreateTransferLaneTab({
                     <TextField
                         fullWidth
                         size="small"
-                        placeholder="ค้นหา ชื่อ-นามสกุล..."
+                        placeholder="ค้นหา ชื่อ-นามสกุล เช่น ชื่อ*นามสกุล"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         InputProps={{
@@ -335,7 +355,33 @@ export default function CreateTransferLaneTab({
                                 <MenuItem key={pc.id} value={String(pc.id)}>{pc.id} - {pc.name}</MenuItem>
                             ))}
                         </TextField>
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="การร้องขอตำแหน่ง"
+                            value={filterHasRequestedPosition}
+                            onChange={(e) => setFilterHasRequestedPosition(e.target.value)}
+                            sx={{ bgcolor: 'white', '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+                        >
+                            <MenuItem value="all">ทั้งหมด</MenuItem>
+                            <MenuItem value="with-supporter">มีการร้องขอ / มีผู้สนับสนุน</MenuItem>
+                            <MenuItem value="without-supporter">ไม่มีการร้องขอ</MenuItem>
+                        </TextField>
                     </Box>
+                    <Button
+                        size="small"
+                        color="error"
+                        onClick={() => {
+                            setSearchTerm('');
+                            setFilterUnit('all');
+                            setFilterPosCode('all');
+                            setFilterHasRequestedPosition('all');
+                        }}
+                        sx={{ mt: 1, fontSize: '0.75rem' }}
+                    >
+                        ล้างตัวกรอง
+                    </Button>
                 </Box>
             </Collapse>
 

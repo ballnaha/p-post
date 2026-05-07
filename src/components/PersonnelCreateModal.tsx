@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import {
   PersonAdd as PersonAddIcon,
+  Edit as EditIcon,
   Save as SaveIcon,
   Close as CloseIcon,
   CalendarToday as CalendarIcon,
@@ -28,20 +29,15 @@ import {
   School as SchoolIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import dayjs, { Dayjs } from 'dayjs';
-import 'dayjs/locale/th';
 import { useSnackbar } from '@/contexts/SnackbarContext';
-
-// Set locale to Thai
-dayjs.locale('th');
+import { formatBuddhistDateInput, parseBuddhistDateInputToGregorian } from '@/utils/dateFormat';
+import { formatPositionNumber, normalizePositionNumber } from '@/utils/positionNumber';
 
 interface PersonnelCreateModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialData?: Partial<PersonnelFormData> & { id?: string };
 }
 
 interface PosCode {
@@ -49,31 +45,106 @@ interface PosCode {
   name: string;
 }
 
-// Helper functions for Thai date
-const parseThaiDate = (dateStr: string): Dayjs | null => {
-  if (!dateStr) return null;
-  const parts = dateStr.split('/');
-  if (parts.length !== 3) return null;
-  const day = parseInt(parts[0]);
-  const month = parseInt(parts[1]);
-  const year = parseInt(parts[2]) - 543; // Convert BE to AD
-  const date = dayjs(`${year}-${month}-${day}`);
-  return date.isValid() ? date : null;
+interface PersonnelFormData {
+  posCodeId: number | null;
+  position: string;
+  positionNumber: string;
+  unit: string;
+  rank: string;
+  fullName: string;
+  nationalId: string;
+  birthDate: string;
+  age: string;
+  seniority: string;
+  education: string;
+  lastAppointment: string;
+  currentRankSince: string;
+  enrollmentDate: string;
+  retirementDate: string;
+  yearsOfService: string;
+  trainingLocation: string;
+  trainingCourse: string;
+  notes: string;
+  actingAs: string;
+  supporterName: string;
+  supportReason: string;
+  requestedPosition: string;
+}
+
+const emptyFormData: PersonnelFormData = {
+  posCodeId: null,
+  position: '',
+  positionNumber: '',
+  unit: '',
+  rank: '',
+  fullName: '',
+  nationalId: '',
+  birthDate: '',
+  age: '',
+  seniority: '',
+  education: '',
+  lastAppointment: '',
+  currentRankSince: '',
+  enrollmentDate: '',
+  retirementDate: '',
+  yearsOfService: '',
+  trainingLocation: '',
+  trainingCourse: '',
+  notes: '',
+  actingAs: '',
+  supporterName: '',
+  supportReason: '',
+  requestedPosition: '',
 };
 
-const formatThaiDate = (date: Dayjs | null): string => {
-  if (!date || !date.isValid()) return '';
-  const day = date.date().toString().padStart(2, '0');
-  const month = (date.month() + 1).toString().padStart(2, '0');
-  const year = date.year() + 543; // Convert AD to BE
-  return `${day}/${month}/${year}`;
+const dateFields: Array<keyof Pick<
+  PersonnelFormData,
+  'birthDate' | 'lastAppointment' | 'currentRankSince' | 'enrollmentDate' | 'retirementDate'
+>> = ['birthDate', 'lastAppointment', 'currentRankSince', 'enrollmentDate', 'retirementDate'];
+
+const toFormData = (initialData?: PersonnelCreateModalProps['initialData']): PersonnelFormData => ({
+  posCodeId: initialData?.posCodeId ?? null,
+  position: initialData?.position ?? '',
+  positionNumber: formatPositionNumber(initialData?.positionNumber),
+  unit: initialData?.unit ?? '',
+  rank: initialData?.rank ?? '',
+  fullName: initialData?.fullName ?? '',
+  nationalId: initialData?.nationalId ?? '',
+  birthDate: formatBuddhistDateInput(initialData?.birthDate),
+  age: initialData?.age ?? '',
+  seniority: initialData?.seniority ?? '',
+  education: initialData?.education ?? '',
+  lastAppointment: formatBuddhistDateInput(initialData?.lastAppointment),
+  currentRankSince: formatBuddhistDateInput(initialData?.currentRankSince),
+  enrollmentDate: formatBuddhistDateInput(initialData?.enrollmentDate),
+  retirementDate: formatBuddhistDateInput(initialData?.retirementDate),
+  yearsOfService: initialData?.yearsOfService ?? '',
+  trainingLocation: initialData?.trainingLocation ?? '',
+  trainingCourse: initialData?.trainingCourse ?? '',
+  notes: initialData?.notes ?? '',
+  actingAs: initialData?.actingAs ?? '',
+  supporterName: initialData?.supporterName ?? '',
+  supportReason: initialData?.supportReason ?? '',
+  requestedPosition: initialData?.requestedPosition ?? '',
+});
+
+const toSubmitData = (formData: PersonnelFormData): PersonnelFormData => {
+  const submitData = { ...formData };
+  dateFields.forEach((field) => {
+    submitData[field] = parseBuddhistDateInputToGregorian(formData[field]);
+  });
+  submitData.positionNumber = normalizePositionNumber(formData.positionNumber);
+
+  return submitData;
 };
 
 export default function PersonnelCreateModal({
   open,
   onClose,
   onSuccess,
+  initialData,
 }: PersonnelCreateModalProps) {
+  const isEditMode = Boolean(initialData?.id);
   const { showSnackbar } = useSnackbar();
   const [loading, setLoading] = useState(false);
   const [posCodes, setPosCodes] = useState<PosCode[]>([]);
@@ -82,39 +153,16 @@ export default function PersonnelCreateModal({
   const [loadingUnits, setLoadingUnits] = useState(false);
 
   // Form state
-  const [formData, setFormData] = useState({
-    posCodeId: null as number | null,
-    position: '',
-    positionNumber: '',
-    unit: '',
-    rank: '',
-    fullName: '',
-    nationalId: '',
-    birthDate: '',
-    age: '',
-    seniority: '',
-    education: '',
-    lastAppointment: '',
-    currentRankSince: '',
-    enrollmentDate: '',
-    retirementDate: '',
-    yearsOfService: '',
-    trainingLocation: '',
-    trainingCourse: '',
-    notes: '',
-    actingAs: '',
-    supporterName: '',
-    supportReason: '',
-    requestedPosition: '',
-  });
+  const [formData, setFormData] = useState<PersonnelFormData>(emptyFormData);
 
   // Fetch PosCodes on mount
   useEffect(() => {
     if (open) {
       fetchPosCodes();
       fetchUnits();
+      setFormData(toFormData(initialData));
     }
-  }, [open]);
+  }, [open, initialData]);
 
   const fetchPosCodes = async () => {
     try {
@@ -154,54 +202,27 @@ export default function PersonnelCreateModal({
   };
 
   const handleSubmit = async () => {
-    // Validation
-    if (!formData.fullName) {
-      showSnackbar('กรุณาระบุชื่อ-สกุล', 'error');
-      return;
-    }
-
     try {
       setLoading(true);
-      const response = await fetch('/api/police-personnel', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      const submitData = toSubmitData(formData);
+      const response = await fetch(
+        isEditMode ? `/api/police-personnel/${initialData?.id}` : '/api/police-personnel',
+        {
+          method: isEditMode ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(submitData),
+        }
+      );
 
       const result = await response.json();
 
       if (response.ok) {
-        showSnackbar('บันทึกข้อมูลสำเร็จ', 'success');
+        showSnackbar(isEditMode ? 'แก้ไขข้อมูลสำเร็จ' : 'บันทึกข้อมูลสำเร็จ', 'success');
         onSuccess();
         onClose();
-        // Reset form
-        setFormData({
-          posCodeId: null,
-          position: '',
-          positionNumber: '',
-          unit: '',
-          rank: '',
-          fullName: '',
-          nationalId: '',
-          birthDate: '',
-          age: '',
-          seniority: '',
-          education: '',
-          lastAppointment: '',
-          currentRankSince: '',
-          enrollmentDate: '',
-          retirementDate: '',
-          yearsOfService: '',
-          trainingLocation: '',
-          trainingCourse: '',
-          notes: '',
-          actingAs: '',
-          supporterName: '',
-          supportReason: '',
-          requestedPosition: '',
-        });
+        setFormData(emptyFormData);
       } else {
         showSnackbar(result.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
       }
@@ -244,9 +265,9 @@ export default function PersonnelCreateModal({
         px: 2,
         flexShrink: 0
       }}>
-        <PersonAddIcon fontSize="small" />
+        {isEditMode ? <EditIcon fontSize="small" /> : <PersonAddIcon fontSize="small" />}
         <Box component="span" sx={{ fontWeight: 600, fontSize: '1.25rem' }}>
-          เพิ่มข้อมูลบุคลากร
+          {isEditMode ? 'แก้ไขข้อมูลบุคลากร' : 'เพิ่มข้อมูลบุคลากร'}
         </Box>
       </DialogTitle>
 
@@ -273,7 +294,6 @@ export default function PersonnelCreateModal({
           }
         }
       }}>
-        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="th">
           <Box component="form" noValidate autoComplete="off">
             <Stack spacing={{ xs: 2, sm: 3 }}>
 
@@ -312,7 +332,6 @@ export default function PersonnelCreateModal({
                     />
                     <TextField
                       fullWidth
-                      required
                       label="ชื่อ-สกุล"
                       value={formData.fullName}
                       onChange={(e) => handleChange('fullName', e.target.value)}
@@ -514,7 +533,8 @@ export default function PersonnelCreateModal({
                     <TextField
                       fullWidth
                       label="วันเกิด"
-                      placeholder="DD/MM/YYYY"
+                      placeholder="DD/MM/พ.ศ."
+                      helperText="เช่น 15/01/2523"
                       value={formData.birthDate}
                       onChange={(e) => handleChange('birthDate', e.target.value)}
                       variant="outlined"
@@ -523,7 +543,8 @@ export default function PersonnelCreateModal({
                     <TextField
                       fullWidth
                       label="แต่งตั้งครั้งสุดท้าย"
-                      placeholder="DD/MM/YYYY"
+                      placeholder="DD/MM/พ.ศ."
+                      helperText="เช่น 01/01/2568"
                       value={formData.lastAppointment}
                       onChange={(e) => handleChange('lastAppointment', e.target.value)}
                       variant="outlined"
@@ -534,7 +555,8 @@ export default function PersonnelCreateModal({
                     <TextField
                       fullWidth
                       label="ระดับนี้เมื่อ"
-                      placeholder="DD/MM/YYYY"
+                      placeholder="DD/MM/พ.ศ."
+                      helperText="เช่น 01/06/2567"
                       value={formData.currentRankSince}
                       onChange={(e) => handleChange('currentRankSince', e.target.value)}
                       variant="outlined"
@@ -543,7 +565,8 @@ export default function PersonnelCreateModal({
                     <TextField
                       fullWidth
                       label="บรรจุ"
-                      placeholder="DD/MM/YYYY"
+                      placeholder="DD/MM/พ.ศ."
+                      helperText="เช่น 01/10/2543"
                       value={formData.enrollmentDate}
                       onChange={(e) => handleChange('enrollmentDate', e.target.value)}
                       variant="outlined"
@@ -554,7 +577,8 @@ export default function PersonnelCreateModal({
                     <TextField
                       fullWidth
                       label="เกษียณ"
-                      placeholder=""
+                      placeholder="DD/MM/พ.ศ."
+                      helperText="เช่น 30/09/2583"
                       value={formData.retirementDate}
                       onChange={(e) => handleChange('retirementDate', e.target.value)}
                       variant="outlined"
@@ -712,7 +736,6 @@ export default function PersonnelCreateModal({
               </Paper>
             </Stack>
           </Box>
-        </LocalizationProvider>
       </DialogContent>
 
       <DialogActions sx={{
@@ -746,7 +769,7 @@ export default function PersonnelCreateModal({
             borderRadius: 1.5
           }}
         >
-          {loading ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+          {loading ? 'กำลังบันทึก...' : isEditMode ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'}
         </Button>
       </DialogActions>
     </Dialog>

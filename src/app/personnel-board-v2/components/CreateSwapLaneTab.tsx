@@ -52,6 +52,7 @@ export default function CreateSwapLaneTab({
     const [debouncedSwapSearchTerm, setDebouncedSwapSearchTerm] = useState('');
     const [swapFilterUnit, setSwapFilterUnit] = useState('all');
     const [swapFilterPosCode, setSwapFilterPosCode] = useState('all');
+    const [swapFilterHasRequestedPosition, setSwapFilterHasRequestedPosition] = useState('all');
     const [isSwapFilterCollapsed, setIsSwapFilterCollapsed] = useState(true);
     const [swapPage, setSwapPage] = useState(0);
     const [swapTotal, setSwapTotal] = useState(0);
@@ -74,6 +75,7 @@ export default function CreateSwapLaneTab({
             if (debouncedSwapSearchTerm) params.set('search', debouncedSwapSearchTerm);
             if (swapFilterUnit && swapFilterUnit !== 'all') params.set('unit', swapFilterUnit);
             if (swapFilterPosCode && swapFilterPosCode !== 'all') params.set('posCodeId', swapFilterPosCode);
+            if (swapFilterHasRequestedPosition && swapFilterHasRequestedPosition !== 'all') params.set('hasRequestedPosition', swapFilterHasRequestedPosition);
 
             params.set('page', swapPage.toString());
             params.set('limit', '20');
@@ -89,7 +91,7 @@ export default function CreateSwapLaneTab({
         } finally {
             setLoadingSwapPersonnel(false);
         }
-    }, [debouncedSwapSearchTerm, swapFilterUnit, swapFilterPosCode, swapPage, selectedYear]);
+    }, [debouncedSwapSearchTerm, swapFilterUnit, swapFilterPosCode, swapFilterHasRequestedPosition, swapPage, selectedYear]);
 
     // Fetch on changes
     useEffect(() => {
@@ -99,7 +101,7 @@ export default function CreateSwapLaneTab({
     // Reset page when filter changes
     useEffect(() => {
         setSwapPage(0);
-    }, [debouncedSwapSearchTerm, swapFilterUnit, swapFilterPosCode]);
+    }, [debouncedSwapSearchTerm, swapFilterUnit, swapFilterPosCode, swapFilterHasRequestedPosition]);
 
     // Handle Create
     const handleCreate = () => {
@@ -169,6 +171,7 @@ export default function CreateSwapLaneTab({
                                         setSwapPerson1(null);
                                         setSwapFilterUnit('all');
                                         setSwapFilterPosCode('all');
+                                        setSwapFilterHasRequestedPosition('all');
                                         if (!swapPerson2) setSwapCreateMode('select1');
                                         else setSwapCreateMode('confirm');
                                     }}
@@ -329,12 +332,13 @@ export default function CreateSwapLaneTab({
                     <ExpandLessIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 }
                 {/* Show active filter count */}
-                {(swapSearchTerm || swapFilterUnit !== 'all' || swapFilterPosCode !== 'all') && (
+                {(swapSearchTerm || swapFilterUnit !== 'all' || swapFilterPosCode !== 'all' || swapFilterHasRequestedPosition !== 'all') && (
                     <Chip
                         label={[
                             swapSearchTerm ? 1 : 0,
                             swapFilterUnit !== 'all' ? 1 : 0,
-                            swapFilterPosCode !== 'all' ? 1 : 0
+                            swapFilterPosCode !== 'all' ? 1 : 0,
+                            swapFilterHasRequestedPosition !== 'all' ? 1 : 0
                         ].reduce((a, b) => a + b, 0)}
                         size="small"
                         color="primary"
@@ -350,7 +354,7 @@ export default function CreateSwapLaneTab({
                     <TextField
                         fullWidth
                         size="small"
-                        placeholder="ค้นหาบุคลากร..."
+                        placeholder="ค้นหาบุคลากร เช่น ชื่อ*นามสกุล"
                         value={swapSearchTerm}
                         onChange={(e) => setSwapSearchTerm(e.target.value)}
                         InputProps={{
@@ -395,16 +399,30 @@ export default function CreateSwapLaneTab({
                                 <MenuItem key={pc.id} value={String(pc.id)}>{pc.id} - {pc.name}</MenuItem>
                             ))}
                         </TextField>
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="การร้องขอตำแหน่ง"
+                            value={swapFilterHasRequestedPosition}
+                            onChange={(e) => setSwapFilterHasRequestedPosition(e.target.value)}
+                            sx={{ bgcolor: 'white' }}
+                        >
+                            <MenuItem value="all">ทั้งหมด</MenuItem>
+                            <MenuItem value="with-supporter">มีการร้องขอ / มีผู้สนับสนุน</MenuItem>
+                            <MenuItem value="without-supporter">ไม่มีการร้องขอ</MenuItem>
+                        </TextField>
                     </Box>
                     <Button
                         size="small"
-                        color="inherit"
+                        color="error"
                         onClick={() => {
                             setSwapSearchTerm('');
                             setSwapFilterUnit('all');
                             setSwapFilterPosCode('all');
+                            setSwapFilterHasRequestedPosition('all');
                         }}
-                        sx={{ mt: 1, fontSize: '0.75rem', color: 'text.secondary' }}
+                        sx={{ mt: 1, fontSize: '0.75rem' }}
                     >
                         ล้างตัวกรอง
                     </Button>
@@ -501,6 +519,7 @@ export default function CreateSwapLaneTab({
                                                 // Suggest filters: Same Unit & PosCode
                                                 if (person.unit) setSwapFilterUnit(person.unit);
                                                 if (person.posCodeId) setSwapFilterPosCode(String(person.posCodeId));
+                                                setSwapFilterHasRequestedPosition('all');
                                                 setIsSwapFilterCollapsed(false);
                                             } else if (!swapPerson2) {
                                                 setSwapPerson2(person);

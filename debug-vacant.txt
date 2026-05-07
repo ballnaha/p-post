@@ -1,6 +1,6 @@
 --- DEBUG ASSIGNED COUNTS ---
-Total Matching Keys: 206
+Total Matching Keys: 3
 Assigned Positions: 0
 Assigned Counts Map: {}
 Removed Keys: []
-True Unassigned Count: 206
+True Unassigned Count: 3

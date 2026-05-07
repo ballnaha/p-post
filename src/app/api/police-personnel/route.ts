@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAdminAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { buildWildcardSearchWhere } from '@/lib/wildcardSearch';
+
+const nullableText = (value: any): string | null => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  return normalized === '' ? null : normalized;
+};
+
+const nullablePositionNumber = (value: any): string | null => {
+  const normalized = nullableText(value);
+  return normalized ? normalized.replace(/\s+/g, '') : null;
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -150,19 +162,20 @@ export async function GET(request: NextRequest) {
     }
     
     if (search) {
-      const searchConditions = [
-        { fullName: { contains: search } },
-        { nationalId: { contains: search } },
-        { positionNumber: { contains: search } },
-        { position: { contains: search } },
-        { notes: { contains: search } },
-      ];
+      const searchConditions = buildWildcardSearchWhere([
+        'fullName',
+        'nationalId',
+        'positionNumber',
+        'position',
+        'requestedPosition',
+        'notes',
+      ], search);
       
-      if (where.AND || where.OR) {
+      if (searchConditions && (where.AND || where.OR)) {
         // ถ้ามี filter อื่นแล้ว ให้เพิ่ม search เข้าไป
-        where.AND = where.AND ? [...where.AND, { OR: searchConditions }] : [{ OR: searchConditions }];
-      } else {
-        where.OR = searchConditions;
+        where.AND = where.AND ? [...where.AND, searchConditions] : [searchConditions];
+      } else if (searchConditions) {
+        Object.assign(where, searchConditions);
       }
     }
 
@@ -375,14 +388,6 @@ export async function POST(request: NextRequest) {
     const currentYear = new Date().getFullYear() + 543;
     const username = authCheck.session?.user?.username || 'system';
 
-    // ตรวจสอบข้อมูลที่จำเป็น
-    if (!body.fullName) {
-      return NextResponse.json(
-        { success: false, error: 'กรุณาระบุชื่อ-สกุล' },
-        { status: 400 }
-      );
-    }
-
     // ดึงค่า noId สุดท้าย และ +1
     const lastPersonnel = await prisma.policePersonnel.findFirst({
       where: {
@@ -406,27 +411,28 @@ export async function POST(request: NextRequest) {
         isActive: true,
         noId: nextNoId,
         posCodeId: body.posCodeId,
-        position: body.position,
-        positionNumber: body.positionNumber,
-        unit: body.unit,
-        rank: body.rank,
-        fullName: body.fullName,
-        nationalId: body.nationalId,
-        birthDate: body.birthDate,
-        age: body.age,
-        seniority: body.seniority,
-        education: body.education,
-        lastAppointment: body.lastAppointment,
-        currentRankSince: body.currentRankSince,
-        enrollmentDate: body.enrollmentDate,
-        retirementDate: body.retirementDate,
-        yearsOfService: body.yearsOfService,
-        trainingLocation: body.trainingLocation,
-        trainingCourse: body.trainingCourse,
-        notes: body.notes,
-        actingAs: body.actingAs,
-        supporterName: body.supporterName,
-        supportReason: body.supportReason,
+        position: nullableText(body.position),
+        positionNumber: nullablePositionNumber(body.positionNumber),
+        unit: nullableText(body.unit),
+        rank: nullableText(body.rank),
+        fullName: nullableText(body.fullName),
+        nationalId: nullableText(body.nationalId),
+        birthDate: nullableText(body.birthDate),
+        age: nullableText(body.age),
+        seniority: nullableText(body.seniority),
+        education: nullableText(body.education),
+        lastAppointment: nullableText(body.lastAppointment),
+        currentRankSince: nullableText(body.currentRankSince),
+        enrollmentDate: nullableText(body.enrollmentDate),
+        retirementDate: nullableText(body.retirementDate),
+        yearsOfService: nullableText(body.yearsOfService),
+        trainingLocation: nullableText(body.trainingLocation),
+        trainingCourse: nullableText(body.trainingCourse),
+        notes: nullableText(body.notes),
+        actingAs: nullableText(body.actingAs),
+        supporterName: nullableText(body.supporterName),
+        supportReason: nullableText(body.supportReason),
+        requestedPosition: nullableText(body.requestedPosition),
         createdBy: username,
         updatedBy: username,
       },

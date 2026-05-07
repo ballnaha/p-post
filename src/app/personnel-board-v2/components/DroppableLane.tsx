@@ -31,6 +31,7 @@ import type { Edge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/types';
 import DraggableCard from './DraggableCard';
 import AddPlaceholderCardButton from './AddPlaceholderCardButton';
 import { Personnel, Column } from '../types';
+import { formatPositionNumber } from '@/utils/positionNumber';
 
 const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 
@@ -57,7 +58,8 @@ interface DroppableLaneProps {
         id: string; 
         title: string; 
         groupNumber?: string; 
-        occupants?: {
+        occupantCount?: number;
+        getOccupants?: () => {
             name: string;
             currentPosition: string;
             currentUnit: string;
@@ -68,7 +70,7 @@ interface DroppableLaneProps {
             requestedPosition?: string | null;
         }[]; 
     }[]; // Optimized: Pre-calculated
-    onMoveItem?: (itemId: string, targetLaneId: string) => void;
+    onMoveItem?: (itemId: string, targetLaneId: string, itemIds?: string[]) => void;
     onViewSummary?: (column: Column) => void;
 }
 
@@ -157,7 +159,8 @@ const DroppableLane = memo(({
     const isTransaction = column.vacantPosition?.isTransaction;
     const isSwap = column.chainType === 'swap' || column.vacantPosition?.transactionType === 'two-way';
     const isThreeWay = column.chainType === 'three-way' || column.vacantPosition?.transactionType === 'three-way';
-    const isTransfer = column.vacantPosition?.transactionType === 'transfer';
+    const isPromotion = column.chainType === 'promotion' || column.vacantPosition?.transactionType === 'promotion-chain';
+    const isTransfer = column.chainType === 'transfer' || column.vacantPosition?.transactionType === 'transfer';
     const isVacant = hasVacantPosition && !isTransaction;
     const canOpenVacantDetail = isVacant;
     const isCustom = !hasVacantPosition && column.chainType === 'custom';
@@ -167,41 +170,59 @@ const DroppableLane = memo(({
         return person?.isPlaceholder || person?.id.startsWith('placeholder-');
     });
 
-    // Premium Color Mapping
+    // Professional type accents: neutral canvas + restrained color accents
     const getLaneStyles = () => {
         if (isSwap) return {
-            bg: '#faf5ff',
-            accent: '#a855f7',
-            headerBg: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)',
+            bg: '#ffffff',
+            accent: '#4f46e5',
+            headerBg: 'linear-gradient(180deg, #f8faff 0%, #eef2ff 100%)',
             label: 'สลับตำแหน่ง'
         };
         if (isThreeWay) return {
-            bg: '#fff1f2',
-            accent: '#f43f5e',
-            headerBg: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)',
+            bg: '#ffffff',
+            accent: '#0f766e',
+            headerBg: 'linear-gradient(180deg, #f6fffd 0%, #ecfeff 100%)',
             label: getCircularSwapLabel(lanePersonnel.length)
         };
-        if (isVacant) return {
-            bg: '#eff6ff',
-            accent: '#3b82f6',
-            headerBg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-            label: 'ตำแหน่งว่าง'
+        if (isPromotion) return {
+            bg: '#ffffff',
+            accent: '#b45309',
+            headerBg: 'linear-gradient(180deg, #fffdf7 0%, #fef3c7 100%)',
+            label: 'เลื่อนตำแหน่ง'
         };
         if (isTransfer) return {
-            bg: '#f0fdf4',
-            accent: '#10b981',
-            headerBg: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+            bg: '#ffffff',
+            accent: '#2563eb',
+            headerBg: 'linear-gradient(180deg, #f8fbff 0%, #eaf2ff 100%)',
             label: 'ย้ายหน่วย'
         };
-        return {
-            bg: '#f8fafc',
+        if (isVacant) return {
+            bg: '#ffffff',
             accent: '#64748b',
-            headerBg: 'white',
+            headerBg: 'linear-gradient(180deg, #fbfdff 0%, #f1f5f9 100%)',
+            label: 'ตำแหน่งว่าง'
+        };
+        if (isCustom) return {
+            bg: '#ffffff',
+            accent: '#7c3aed',
+            headerBg: 'linear-gradient(180deg, #fcfbff 0%, #f5f3ff 100%)',
+            label: 'เลนกำหนดเอง'
+        };
+        return {
+            bg: '#ffffff',
+            accent: '#64748b',
+            headerBg: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
             label: 'เลนทั่วไป'
         };
     };
 
     const styles = getLaneStyles();
+    const showSuccessionHint = (
+        column.chainType === 'promotion' ||
+        column.chainType === 'transfer' ||
+        isTransfer ||
+        (column.chainType === 'custom' && column.itemIds.length >= 2)
+    ) && !isReadOnly && !isOver;
 
     return (
         <Paper
@@ -211,16 +232,16 @@ const DroppableLane = memo(({
                 width: 320,
                 minWidth: 320,
                 flexShrink: 0,
-                bgcolor: justDropped ? alpha('#22c55e', 0.08) : column.isCompleted ? alpha('#22c55e', 0.05) : isOver ? alpha(styles.accent, 0.08) : styles.bg,
+                bgcolor: justDropped ? alpha('#22c55e', 0.06) : column.isCompleted ? alpha('#22c55e', 0.04) : isOver ? alpha(styles.accent, 0.035) : styles.bg,
                 opacity: isDraggingLane ? 0.4 : 1,
                 borderRadius: '0 0 12px 12px',
-                border: column.isCompleted ? '3px solid' : '2px solid',
-                borderColor: justDropped ? '#22c55e' : column.isCompleted ? '#22c55e' : isOver ? styles.accent : alpha(styles.accent, 0.2),
+                border: column.isCompleted ? '2px solid' : '1px solid',
+                borderColor: justDropped ? '#22c55e' : column.isCompleted ? alpha('#22c55e', 0.4) : isOver ? alpha(styles.accent, 0.45) : alpha(styles.accent, 0.16),
                 display: 'flex',
                 flexDirection: 'column',
                 transition: 'all 0.2s ease',
-                transform: isOver ? 'translateY(-6px)' : 'translateY(0)',
-                boxShadow: isOver ? `0 12px 24px ${alpha(styles.accent, 0.15)}` : '0 2px 4px rgba(0,0,0,0.02)',
+                transform: isOver ? 'translateY(-4px)' : 'translateY(0)',
+                boxShadow: isOver ? `0 14px 28px ${alpha(styles.accent, 0.1)}` : '0 6px 16px rgba(15,23,42,0.05)',
                 backgroundClip: 'padding-box',
                 position: 'relative',
                 overflow: 'visible', // Changed to visible for edges
@@ -228,11 +249,12 @@ const DroppableLane = memo(({
                     content: '""',
                     position: 'absolute',
                     top: 0,
-                    left: 0,
-                    right: 0,
+                    left: 12,
+                    right: 12,
                     height: 4,
                     bgcolor: justDropped ? '#22c55e' : styles.accent,
-                    opacity: 0.8,
+                    borderRadius: '999px',
+                    opacity: 0.9,
                     transition: 'all 0.2s ease'
                 }
             }}
@@ -248,8 +270,8 @@ const DroppableLane = memo(({
             <Box sx={{
                 p: 1.5,
                 borderBottom: '1px solid',
-                borderColor: alpha(styles.accent, 0.1),
-                bgcolor: isOver ? alpha(styles.accent, 0.05) : styles.headerBg,
+                borderColor: alpha(styles.accent, 0.08),
+                bgcolor: isOver ? alpha(styles.accent, 0.04) : styles.headerBg,
                 borderRadius: 0,
                 transition: 'all 0.15s ease',
                 display: 'flex',
@@ -259,7 +281,7 @@ const DroppableLane = memo(({
                     sx={{
                         mt: 0.25,
                         fontSize: 20,
-                        color: alpha(styles.accent, 0.4),
+                        color: alpha(styles.accent, 0.32),
                         cursor: 'grab',
                         '&:active': { cursor: 'grabbing' }
                     }}
@@ -315,10 +337,10 @@ const DroppableLane = memo(({
                                         sx={{
                                             height: 18,
                                             fontSize: '0.65rem',
-                                            fontWeight: 700,
-                                            bgcolor: alpha(styles.accent, 0.1),
+                                            fontWeight: 800,
+                                            bgcolor: alpha(styles.accent, 0.08),
                                             color: styles.accent,
-                                            border: `1px solid ${alpha(styles.accent, 0.2)}`
+                                            border: `1px solid ${alpha(styles.accent, 0.16)}`
                                         }}
                                     />
                                     {column.isCompleted && (
@@ -362,7 +384,7 @@ const DroppableLane = memo(({
                             <IconButton
                                 size="small"
                                 onClick={handleClickMenu}
-                                sx={{ color: 'text.secondary', opacity: 0.7, '&:hover': { opacity: 1, bgcolor: alpha(styles.accent, 0.1) } }}
+                                sx={{ color: 'text.secondary', opacity: 0.7, '&:hover': { opacity: 1, bgcolor: alpha(styles.accent, 0.08) } }}
                             >
                                 <MoreVertIcon fontSize="small" />
                             </IconButton>
@@ -455,13 +477,13 @@ const DroppableLane = memo(({
                     <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, flex: 1, minWidth: 0 }}>
                             {column.groupNumber && (
-                                <Typography variant="caption" sx={{ fontWeight: 800, color: 'white', bgcolor: '#334155', px: 0.5, borderRadius: 0.5, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}>
+                                <Typography variant="caption" sx={{ fontWeight: 800, color: '#334155', bgcolor: '#e2e8f0', px: 0.5, borderRadius: 0.5, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}>
                                     กลุ่ม {column.groupNumber}
                                 </Typography>
                             )}
                             {column.vacantPosition?.positionNumber && (
-                                <Typography variant="caption" sx={{ fontWeight: 700, color: styles.accent, bgcolor: alpha(styles.accent, 0.1), px: 0.5, borderRadius: 0.5, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}>
-                                    #{column.vacantPosition.positionNumber}
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: styles.accent, bgcolor: alpha(styles.accent, 0.08), px: 0.5, borderRadius: 0.5, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}>
+                                    #{formatPositionNumber(column.vacantPosition.positionNumber)}
                                 </Typography>
                             )}
                             {column.vacantPosition?.posCodeMaster && (
@@ -475,8 +497,8 @@ const DroppableLane = memo(({
                                         fontSize: '0.62rem',
                                         fontWeight: 700,
                                         color: 'text.secondary',
-                                        borderColor: alpha(styles.accent, 0.1),
-                                        bgcolor: 'white',
+                                        borderColor: alpha(styles.accent, 0.12),
+                                        bgcolor: alpha('#ffffff', 0.9),
                                         '& .MuiChip-label': {
                                             display: '-webkit-box',
                                             WebkitLineClamp: 2,
@@ -595,6 +617,17 @@ const DroppableLane = memo(({
                         {lanePersonnel.map((personnel, idx) => {
                             if (!personnel) return null;
                             const itemId = personnel.id;
+                            const moveItemIds = selectedIds.includes(itemId) ? selectedIds : [itemId];
+                            const selectedPeopleData = moveItemIds.length > 1
+                                ? moveItemIds.map(id => {
+                                    const p = lanePersonnel.find(lp => lp.id === id);
+                                    return p ? {
+                                        name: `${p.rank || ''} ${p.fullName || ''}`.trim(),
+                                        position: p.position || '',
+                                        unit: p.unit || ''
+                                    } : null;
+                                }).filter(Boolean) as { name: string; position?: string; unit?: string }[]
+                                : [];
 
                             // Logic for promotion chain target:
                             // Lv 1 (idx 0) fills the header's vacant position
@@ -642,45 +675,40 @@ const DroppableLane = memo(({
                                     onCardClick={onCardClick}
                                     isReadOnly={isReadOnly}
                                     availableLanes={availableLanes.filter(l => l.id !== column.id)}
-                                    onMoveToLane={(targetLaneId) => onMoveItem?.(itemId, targetLaneId)}
+                                    onMoveToLane={(targetLaneId) => onMoveItem?.(itemId, targetLaneId, moveItemIds)}
+                                    selectedMoveCount={moveItemIds.length}
                                 />
                             );
                         })}
 
                         {/* Next Level Slot Placeholder - Professional "Ghost Slot" UI - Hide in read-only mode */}
-                        {(
-                            column.chainType === 'promotion' ||
-                            column.chainType === 'transfer' ||
-                            isTransfer ||
-                            (column.chainType === 'custom' && column.itemIds.length >= 2)
-                        ) && !isReadOnly && (
+                        {showSuccessionHint && (
                                 <Box
                                     onClick={() => onSuggest?.(column)}
                                     sx={{
-                                        py: 1.5,
-                                        px: 1,
-                                        border: '1.5px dashed',
-                                        borderColor: alpha('#3b82f6', 0.15),
-                                        borderRadius: 3,
-                                        bgcolor: alpha('#f8fafc', 0.3),
+                                        py: 1,
+                                        px: 1.25,
+                                        border: '1px dashed',
+                                        borderColor: alpha(styles.accent, 0.18),
+                                        borderRadius: 2,
+                                        bgcolor: alpha(styles.accent, 0.03),
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
+                                        justifyContent: 'flex-start',
                                         gap: 1,
                                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                         mt: 1,
                                         mb: 2,
                                         '&:hover': {
-                                            borderColor: 'primary.main',
-                                            bgcolor: alpha('#3b82f6', 0.05),
-                                            transform: 'scale(0.98)',
-                                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                                            borderColor: alpha(styles.accent, 0.34),
+                                            bgcolor: alpha(styles.accent, 0.06),
+                                            boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.03)'
                                         }
                                     }}
                                 >
-                                    <AutoFixHighIcon sx={{ fontSize: 16, color: 'primary.main', opacity: 0.5 }} />
-                                    <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', opacity: 0.7, fontSize: '0.7rem' }}>
+                                    <AutoFixHighIcon sx={{ fontSize: 15, color: styles.accent, opacity: 0.7 }} />
+                                    <Typography variant="caption" sx={{ fontWeight: 700, color: styles.accent, opacity: 0.85, fontSize: '0.69rem' }}>
                                         หาคนสืบต่อลำดับที่ {column.itemIds.length + 1}
                                     </Typography>
                                 </Box>
@@ -689,22 +717,28 @@ const DroppableLane = memo(({
                         {/* Drop zone at bottom */}
                         {isOver && (
                             <Box sx={{
-                                height: 40,
-                                border: '2px dashed',
-                                borderColor: 'primary.main',
-                                borderRadius: 1.5,
-                                bgcolor: alpha('#3b82f6', 0.1),
+                                mt: 1,
+                                mb: 1,
+                                px: 1,
+                                py: 0.75,
+                                borderTop: '2px solid',
+                                borderBottom: '2px solid',
+                                borderColor: styles.accent,
+                                bgcolor: alpha(styles.accent, 0.06),
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                animation: 'pulse 1s infinite',
-                                '@keyframes pulse': {
+                                gap: 0.75,
+                                borderRadius: 1,
+                                animation: 'laneDropPulse 1s ease-in-out infinite',
+                                '@keyframes laneDropPulse': {
                                     '0%, 100%': { opacity: 1 },
-                                    '50%': { opacity: 0.5 },
+                                    '50%': { opacity: 0.72 },
                                 }
                             }}>
-                                <Typography variant="caption" color="primary.main" fontWeight={600}>
-                                    วางที่นี่
+                                <AddIcon sx={{ fontSize: 15, color: styles.accent }} />
+                                <Typography variant="caption" sx={{ color: styles.accent, fontWeight: 700, letterSpacing: '0.01em' }}>
+                                    ปล่อยเพื่อเพิ่มเข้าเลนนี้
                                 </Typography>
                             </Box>
                         )}

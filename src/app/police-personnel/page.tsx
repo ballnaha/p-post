@@ -43,6 +43,7 @@ import {
 import {
   Search as SearchIcon,
   CloudUpload as ImportIcon,
+  Download as DownloadIcon,
   RestartAlt as ResetIcon,
   Visibility as ViewIcon,
   ViewList as ViewListIcon,
@@ -53,6 +54,7 @@ import {
   WorkHistory as ServiceIcon,
   Assignment as PositionIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
   SwapHoriz as SwapHorizIcon,
   AssignmentTurnedIn as VacantIcon,
   ChangeHistory as ChangeHistoryIcon,
@@ -69,6 +71,8 @@ import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import PersonnelCreateModal from '@/components/PersonnelCreateModal';
 import { EmptyState } from '@/app/components/EmptyState';
+import { formatBuddhistDateInput } from '@/utils/dateFormat';
+import { formatPositionNumber } from '@/utils/positionNumber';
 
 interface PolicePersonnel {
   id: string;
@@ -112,6 +116,92 @@ const isReservedPosition = (fullName: string | null | undefined): boolean => {
   return fullName.includes('ว่าง (กันตำแหน่ง)') || fullName.includes('ว่าง(กันตำแหน่ง)');
 };
 
+const fullImportExportColumns = [
+  'อาวุโส',
+  'ยศ',
+  'ชื่อ สกุล',
+  'เลขประจำตัวประชาชน',
+  'แต่งตั้งครั้งสุดท้าย',
+  'ระดับนี้เมื่อ',
+  'บรรจุ',
+  'วันเกิด',
+  'คุณวุฒิ',
+  'เกษียณ',
+  'จำนวนปี',
+  'อายุ',
+  'ตท.',
+  'นรต.',
+  'หมายเหตุตัวคน',
+  'POSCODE',
+  'ตำแหน่ง',
+  'เลขตำแหน่ง',
+  'ทำหน้าที่',
+  'หน่วย',
+  'หมายเหตุตำแหน่ง',
+  'ตำแหน่งที่ร้องขอ',
+  'ชื่อผู้สนับสนุน',
+  'เหตุผลที่สนันสุนน',
+] as const;
+
+const fullImportExportTextColumns = new Set<string>([
+  'เลขประจำตัวประชาชน',
+  'แต่งตั้งครั้งสุดท้าย',
+  'ระดับนี้เมื่อ',
+  'บรรจุ',
+  'วันเกิด',
+  'เกษียณ',
+  'เลขตำแหน่ง',
+]);
+
+const getTaggedNote = (notes: string | undefined, label: string) => {
+  if (!notes) return '';
+  const prefix = `${label}:`;
+  return notes
+    .split('\n')
+    .find((line) => line.startsWith(prefix))
+    ?.replace(prefix, '')
+    .trim() || '';
+};
+
+const getUntaggedNote = (notes: string | undefined) => {
+  if (!notes) return '';
+  const taggedPersonNote = getTaggedNote(notes, 'หมายเหตุตัวคน');
+  if (taggedPersonNote) return taggedPersonNote;
+
+  return notes
+    .split('\n')
+    .filter((line) => !line.startsWith('หมายเหตุตำแหน่ง:'))
+    .join('\n')
+    .trim();
+};
+
+const buildFullImportExportRow = (person: PolicePersonnel) => ({
+  อาวุโส: person.seniority || '',
+  ยศ: person.rank || '',
+  'ชื่อ สกุล': person.fullName || '',
+  เลขประจำตัวประชาชน: person.nationalId || '',
+  แต่งตั้งครั้งสุดท้าย: formatBuddhistDateInput(person.lastAppointment),
+  ระดับนี้เมื่อ: formatBuddhistDateInput(person.currentRankSince),
+  บรรจุ: formatBuddhistDateInput(person.enrollmentDate),
+  วันเกิด: formatBuddhistDateInput(person.birthDate),
+  คุณวุฒิ: person.education || '',
+  เกษียณ: formatBuddhistDateInput(person.retirementDate),
+  จำนวนปี: person.yearsOfService || '',
+  อายุ: person.age || '',
+  'ตท.': person.trainingLocation || '',
+  'นรต.': person.trainingCourse || '',
+  หมายเหตุตัวคน: getUntaggedNote(person.notes),
+  POSCODE: person.posCodeId || '',
+  ตำแหน่ง: person.position || '',
+  เลขตำแหน่ง: formatPositionNumber(person.positionNumber),
+  ทำหน้าที่: person.actingAs || '',
+  หน่วย: person.unit || '',
+  หมายเหตุตำแหน่ง: getTaggedNote(person.notes, 'หมายเหตุตำแหน่ง'),
+  ตำแหน่งที่ร้องขอ: person.requestedPosition || '',
+  ชื่อผู้สนับสนุน: person.supporterName || '',
+  เหตุผลที่สนันสุนน: person.supportReason || '',
+});
+
 export default function PolicePersonnelPage() {
   const router = useRouter();
   const theme = useTheme();
@@ -137,6 +227,7 @@ export default function PolicePersonnelPage() {
 
   const [data, setData] = useState<PolicePersonnel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [nameSearch, setNameSearch] = useState<string | null>(null);
@@ -207,6 +298,7 @@ export default function PolicePersonnelPage() {
 
   // Create Modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingPersonnel, setEditingPersonnel] = useState<PolicePersonnel | null>(null);
 
   const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLElement>, personnel: PolicePersonnel) => {
     setAnchorEl(event.currentTarget);
@@ -449,8 +541,15 @@ export default function PolicePersonnelPage() {
       const result = await response.json();
 
       if (result.success) {
+        const nextTotal = result.pagination.total;
+        const lastPage = Math.max(0, Math.ceil(nextTotal / rowsPerPage) - 1);
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+
         setData(result.data);
-        setTotal(result.pagination.total);
+        setTotal(nextTotal);
       } else {
         setError(result.error || 'เกิดข้อผิดพลาดในการดึงข้อมูล');
       }
@@ -483,6 +582,98 @@ export default function PolicePersonnelPage() {
   const handleCreateSuccess = () => {
     fetchData();
   };
+
+  const buildPersonnelQueryParams = useCallback((exportAll = false) => {
+    const searchParam = nameSearch || search || '';
+    const params = new URLSearchParams();
+    params.set('page', exportAll ? '1' : String(page + 1));
+    params.set('limit', exportAll ? String(Math.max(total, rowsPerPage, 100000)) : String(rowsPerPage));
+    params.set('search', searchParam);
+    params.set('position', positionFilter);
+    params.set('posCode', posCodeFilter);
+    params.set('unit', unitFilter);
+    params.set('supporter', supporterFilter);
+    params.set('year', String(yearFilter));
+    return params;
+  }, [nameSearch, search, page, total, rowsPerPage, positionFilter, posCodeFilter, unitFilter, supporterFilter, yearFilter]);
+
+  const handleExportExcel = useCallback(async () => {
+    setExportingExcel(true);
+    try {
+      const params = buildPersonnelQueryParams(true);
+      const response = await fetch(`/api/police-personnel?${params.toString()}`);
+      const result = await response.json();
+
+      if (!result.success) {
+        toast.error(result.error || 'ไม่สามารถนำออกข้อมูลได้');
+        return;
+      }
+
+      const exportRows = (Array.isArray(result.data) ? result.data : []).map(buildFullImportExportRow);
+      if (exportRows.length === 0) {
+        toast.error('ไม่มีข้อมูลสำหรับนำออก');
+        return;
+      }
+
+      const XLSX = await import('@e965/xlsx');
+      const worksheet = XLSX.utils.json_to_sheet(exportRows, {
+        header: [...fullImportExportColumns],
+      });
+      worksheet['!cols'] = fullImportExportColumns.map((column) => ({
+        wch: Math.max(14, column.length + 8),
+      }));
+
+      fullImportExportColumns.forEach((column, index) => {
+        const columnLetter = XLSX.utils.encode_col(index);
+        const isTextColumn = fullImportExportTextColumns.has(column);
+
+        if (isTextColumn) {
+          for (let rowIndex = 2; rowIndex <= exportRows.length + 1; rowIndex++) {
+            const cell = worksheet[`${columnLetter}${rowIndex}`];
+            if (cell) {
+              cell.t = 's';
+              cell.v = String(cell.v || '');
+              cell.z = '@';
+            }
+          }
+        }
+      });
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'นำเข้าข้อมูลแบบสมบูรณ์');
+      const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `police_personnel_full_export_${yearFilter}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success(`นำออกข้อมูล ${exportRows.length.toLocaleString()} รายการเรียบร้อย`);
+    } catch (err: any) {
+      console.error('Export Excel error:', err);
+      toast.error(err.message || 'เกิดข้อผิดพลาดในการนำออกข้อมูล');
+    } finally {
+      setExportingExcel(false);
+    }
+  }, [buildPersonnelQueryParams, toast, yearFilter]);
+
+  const handleOpenCreateModal = useCallback(() => {
+    setEditingPersonnel(null);
+    setCreateModalOpen(true);
+  }, []);
+
+  const handleOpenEditModal = useCallback((personnel: PolicePersonnel) => {
+    setEditingPersonnel(personnel);
+    setCreateModalOpen(true);
+  }, []);
+
+  const handleCloseCreateModal = useCallback(() => {
+    setCreateModalOpen(false);
+    setEditingPersonnel(null);
+  }, []);
 
   const handleReset = () => {
     setSearch('');
@@ -546,7 +737,14 @@ export default function PolicePersonnelPage() {
         toast.success('ลบข้อมูลสำเร็จ');
         setDeleteConfirmOpen(false);
         setSelectedPersonnel(null);
-        fetchData();
+
+        const nextTotal = Math.max(0, total - 1);
+        const lastPage = Math.max(0, Math.ceil(nextTotal / rowsPerPage) - 1);
+        if (page > lastPage) {
+          setPage(lastPage);
+        } else {
+          fetchData();
+        }
       } else {
         toast.error(result.error || 'เกิดข้อผิดพลาดในการลบข้อมูล');
       }
@@ -1183,7 +1381,7 @@ export default function PolicePersonnelPage() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <BadgeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                      {person.positionNumber || 'ไม่ระบุเลขตำแหน่ง'}
+                      {formatPositionNumber(person.positionNumber) || 'ไม่ระบุเลขตำแหน่ง'}
                     </Typography>
                   </Box>
                   {person.posCodeMaster && (
@@ -1505,7 +1703,7 @@ export default function PolicePersonnelPage() {
                 variant="contained"
                 color="success"
                 startIcon={<PersonAddIcon />}
-                onClick={() => setCreateModalOpen(true)}
+                onClick={handleOpenCreateModal}
                 sx={{
                   minWidth: { xs: 'auto', sm: 140 },
                   fontSize: { xs: '0.875rem', sm: '0.9375rem' },
@@ -1514,6 +1712,23 @@ export default function PolicePersonnelPage() {
               >
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>เพิ่มข้อมูล</Box>
                 <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>เพิ่ม</Box>
+              </Button>
+              <Button
+                variant="outlined"
+                color="success"
+                startIcon={exportingExcel ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />}
+                onClick={handleExportExcel}
+                disabled={exportingExcel || loading}
+                sx={{
+                  minWidth: { xs: 'auto', sm: 140 },
+                  fontSize: { xs: '0.875rem', sm: '0.9375rem' },
+                  mr: 1,
+                }}
+              >
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                  {exportingExcel ? 'กำลัง Export...' : 'Export Excel'}
+                </Box>
+                <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Export</Box>
               </Button>
               <Button
                 variant="contained"
@@ -1695,7 +1910,7 @@ export default function PolicePersonnelPage() {
             {/* ช่องค้นหาหลัก */}
             <TextField
               size="small"
-              placeholder="ค้นหาด้วย เลขบัตรประชาชน, เลขตำแหน่ง, หมายเหตุ..."
+              placeholder="ค้นหาเลขบัตร, เลขตำแหน่ง, ตำแหน่งที่ร้องขอ เช่น สว*สอบ"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -1783,7 +1998,7 @@ export default function PolicePersonnelPage() {
                       data.map((row, index) => (
                         <TableRow key={row.id} hover>
                           <TableCell>{page * rowsPerPage + index + 1}</TableCell>
-                          <TableCell>{row.positionNumber || '-'}</TableCell>
+                          <TableCell>{formatPositionNumber(row.positionNumber) || '-'}</TableCell>
                           <TableCell>{row.position || '-'}</TableCell>
                           <TableCell>{row.rank || '-'}</TableCell>
                           <TableCell>
@@ -2334,7 +2549,7 @@ export default function PolicePersonnelPage() {
           </DialogActions>
         </Dialog>
 
-        {/* Menu สำหรับ Delete */}
+        {/* Action Menu */}
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
@@ -2348,6 +2563,18 @@ export default function PolicePersonnelPage() {
             horizontal: 'right',
           }}
         >
+          <MenuItem
+            onClick={() => {
+              const personnel = menuPersonnel;
+              handleMenuClose();
+              if (personnel) handleOpenEditModal(personnel);
+            }}
+          >
+            <ListItemIcon>
+              <EditIcon fontSize="small" color="primary" />
+            </ListItemIcon>
+            <ListItemText>แก้ไข</ListItemText>
+          </MenuItem>
           <MenuItem
             onClick={() => {
               if (menuPersonnel) handleDelete(menuPersonnel);
@@ -2364,8 +2591,9 @@ export default function PolicePersonnelPage() {
         {/* Create Modal */}
         <PersonnelCreateModal
           open={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
+          onClose={handleCloseCreateModal}
           onSuccess={handleCreateSuccess}
+          initialData={editingPersonnel || undefined}
         />
       </Box>
     </Layout>

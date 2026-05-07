@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { formatBuddhistDate } from '@/utils/dateFormat';
+import { formatPositionNumber } from '@/utils/positionNumber';
 
 // Interface สำหรับข้อมูลบุคลากร (รองรับทั้ง police-personnel, swap-list, three-way-swap, vacant-position)
 export interface PersonnelData {
@@ -797,7 +798,7 @@ export default function PersonnelDetailModal({
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
-                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.positionNumber || '-'}</Typography>
+                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{formatPositionNumber(personnel.positionNumber) || '-'}</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ทำหน้าที่</Typography>
@@ -829,7 +830,7 @@ export default function PersonnelDetailModal({
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>เลขตำแหน่ง</Typography>
                             <Typography variant="body2" fontWeight={700} sx={{ fontSize: '0.875rem' }}>
-                              {personnel.toPositionNumber || targetInfo?.positionNumber}
+                              {formatPositionNumber(personnel.toPositionNumber || targetInfo?.positionNumber)}
                             </Typography>
                           </Box>
                         )}

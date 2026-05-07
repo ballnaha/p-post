@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import InOutTable, { InOutRecord } from '@/components/InOutTable';
 import PersonnelDetailModal, { PersonnelData } from '@/components/PersonnelDetailModal';
+import { formatPositionNumber } from '@/utils/positionNumber';
 
 interface ApiResponse {
     success: boolean;
@@ -490,7 +491,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                         ? `${record.currentHolder.rank || ''} ${record.currentHolder.name}`.trim()
                         : '-');
                 const currentPosition = record.currentHolder?.position || record.vacantPosition?.position || '-';
-                const positionNumber = record.positionNumber || '-';
+                const positionNumber = formatPositionNumber(record.positionNumber) || '-';
                 const currentPosCode = (() => {
                     const posCodeId = record.currentHolder?.posCodeId || record.vacantPosition?.posCodeId;
                     const posCode = record.currentHolder?.posCode || record.vacantPosition?.posCode;
@@ -501,7 +502,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
 
                 // คนออก
                 const outgoingPosition = record.outgoingPerson?.toPosition || '-';
-                const outgoingPositionNumber = record.outgoingPerson?.toPositionNumber || '-';
+                const outgoingPositionNumber = formatPositionNumber(record.outgoingPerson?.toPositionNumber) || '-';
                 const outgoingPosCode = record.outgoingPerson?.toPosCodeId
                     ? `${record.outgoingPerson.toPosCodeId} - ${record.outgoingPerson.toPosCode || ''}`
                     : (record.outgoingPerson?.toPosCode || '-');
@@ -744,7 +745,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                             {summary['three-way'] > 0 && (
                                 <Chip
                                     icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
-                                    label={`สามเส้า ${summary['three-way']}`}
+                                    label={`วงสลับ ${summary['three-way']}`}
                                     size="small"
                                     sx={{
                                         bgcolor: alpha(theme.palette.secondary.main, 0.1),
@@ -866,7 +867,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                             <MenuItem value="vacant">ว่าง</MenuItem>
                             <MenuItem value="reserved">ว่าง (กันตำแหน่ง)</MenuItem>
                             <MenuItem value="swap">สับเปลี่ยน</MenuItem>
-                            <MenuItem value="three-way">สามเส้า</MenuItem>
+                            <MenuItem value="three-way">วงสลับ</MenuItem>
                             <MenuItem value="promotion">เลื่อน</MenuItem>
                         </Select>
                     </FormControl>
@@ -874,10 +875,14 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                     {/* Search */}
                     <TextField
                         size="small"
-                        placeholder="ค้นหาชื่อ, ตำแหน่ง, ชื่อกลุ่ม..."
+                        placeholder="ค้นหาชื่อ/ตำแหน่ง/ชื่อกลุ่ม เช่น สมชาย*สืบสวน"
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
-                        sx={{ minWidth: 250, flexGrow: 1, maxWidth: 400 }}
+                        sx={{
+                            minWidth: { xs: '100%', sm: 340, md: 420 },
+                            flexGrow: 1,
+                            maxWidth: { xs: '100%', md: 620 }
+                        }}
                         InputProps={{
                             startAdornment: (
                                 <InputAdornment position="start">

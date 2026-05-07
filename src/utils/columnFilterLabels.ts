@@ -1,3 +1,5 @@
+import { formatPositionNumber } from './positionNumber';
+
 const VACANT_LABEL = 'ตำแหน่งว่าง';
 const RESERVED_LABEL = 'ว่าง (กันตำแหน่ง)';
 const PLACEHOLDER_KEYWORDS = new Set([
@@ -48,7 +50,7 @@ const formatNewPosition = (
   const rawParts: Array<string | null | undefined> = [
     position,
     unit,
-    positionNumber ? `#${positionNumber}` : null,
+    positionNumber ? `#${formatPositionNumber(positionNumber)}` : null,
   ];
 
   const parts = rawParts

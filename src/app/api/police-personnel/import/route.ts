@@ -34,6 +34,13 @@ function convertExcelDateToThai(value: any): string | null {
   return value ? String(value) : null;
 }
 
+function positionNumberText(value: any): string | null {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  return normalized.replace(/\s+/g, '');
+}
+
 // Helper function to create Server-Sent Events stream
 function createProgressStream() {
   const encoder = new TextEncoder();
@@ -212,7 +219,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               noId: row['ID'] ? parseInt(String(row['ID'])) : null,
               posCodeId: (row['POSCODE'] || row['ID/POSCODE']) ? parseInt(String(row['POSCODE'] || row['ID/POSCODE'])) : null,
               position: row['ตำแหน่ง'] ? String(row['ตำแหน่ง']) : null,
-              positionNumber: row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']) : null,
+              positionNumber: positionNumberText(row['เลขตำแหน่ง']),
               actingAs: row['ทำหน้าที่'] ? String(row['ทำหน้าที่']) : null,
               age: row['อายุ'] ? String(row['อายุ']) : null,
               education: row['คุณวุฒิ'] ? String(row['คุณวุฒิ']).substring(0, 5000) : null, // จำกัดความยาวไม่เกิน 5000 ตัวอักษร
@@ -277,14 +284,20 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
                     results.updated++;
                   } else if (personnelData.positionNumber) {
                     // กรณีที่ 2: ไม่มีเลขบัตรประชาชน (ตำแหน่งว่าง) → ค้นหาด้วยเลขตำแหน่ง + ปี
-                    const existingRecord = await tx.policePersonnel.findFirst({
+                    const existingRecords = await tx.policePersonnel.findMany({
                       where: {
-                        positionNumber: personnelData.positionNumber,
                         year: importYear,
                         isActive: true,
-                        nationalId: null // ต้องเป็นตำแหน่งว่าง
+                        positionNumber: { not: null },
+                        OR: [
+                          { nationalId: null },
+                          { nationalId: '' },
+                        ] // ต้องเป็นตำแหน่งว่าง
                       }
                     });
+                    const existingRecord = existingRecords.find(
+                      record => positionNumberText(record.positionNumber) === personnelData.positionNumber
+                    );
 
                     if (existingRecord) {
                       // UPDATE ข้อมูลเดิม
@@ -312,7 +325,10 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
                         noId: personnelData.noId,
                         year: importYear,
                         isActive: true,
-                        nationalId: null // ต้องเป็นตำแหน่งว่าง
+                        OR: [
+                          { nationalId: null },
+                          { nationalId: '' },
+                        ] // ต้องเป็นตำแหน่งว่าง
                       }
                     });
 
@@ -397,7 +413,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
               noId: row['ID'] ? parseInt(String(row['ID'])) : null,
               posCodeId: row['ID/POSCODE'] ? parseInt(String(row['ID/POSCODE'])) : null,
               position: row['ตำแหน่ง'] ? String(row['ตำแหน่ง']) : null,
-              positionNumber: row['เลขตำแหน่ง'] ? String(row['เลขตำแหน่ง']) : null,
+              positionNumber: positionNumberText(row['เลขตำแหน่ง']),
               actingAs: row['ทำหน้าที่'] ? String(row['ทำหน้าที่']) : null,
               age: row['อายุ'] ? String(row['อายุ']) : null,
               education: row['คุณวุฒิ'] ? String(row['คุณวุฒิ']).substring(0, 5000) : null, // จำกัดความยาวไม่เกิน 5000 ตัวอักษร

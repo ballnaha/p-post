@@ -42,7 +42,8 @@ interface DraggableCardProps {
         id: string; 
         title: string; 
         groupNumber?: string; 
-        occupants?: {
+        occupantCount?: number;
+        getOccupants?: () => {
             name: string;
             currentPosition: string;
             currentUnit: string;
@@ -54,6 +55,8 @@ interface DraggableCardProps {
         }[]; 
     }[];
     onMoveToLane?: (laneId: string) => void;
+    selectedMoveCount?: number;
+    selectedPeople?: { name: string; position?: string; unit?: string }[];
 }
 
 const DraggableCard = memo(({
@@ -69,7 +72,9 @@ const DraggableCard = memo(({
     onCardClick,
     isReadOnly = false,
     availableLanes = [],
-    onMoveToLane
+    onMoveToLane,
+    selectedMoveCount = 1,
+    selectedPeople = []
 }: DraggableCardProps) => {
     const ref = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -450,11 +455,13 @@ const DraggableCard = memo(({
                             <MoveToLaneButton
                                 availableLanes={availableLanes}
                                 onMove={onMoveToLane}
-                                personName={`${personnel.rank || ''} ${personnel.fullName || ''}`}
-                                personPosition={personnel.position || ''}
-                                personPosCode={personnel.posCodeId?.toString()}
-                                personPosName={personnel.posCodeMaster?.name || ''}
-                                personUnit={personnel.unit || ''}
+                                personName={selectedMoveCount > 1 ? undefined : `${personnel.rank || ''} ${personnel.fullName || ''}`}
+                                personPosition={selectedMoveCount > 1 ? '' : personnel.position || ''}
+                                personPosCode={selectedMoveCount > 1 ? undefined : personnel.posCodeId?.toString()}
+                                personPosName={selectedMoveCount > 1 ? '' : personnel.posCodeMaster?.name || ''}
+                                personUnit={selectedMoveCount > 1 ? '' : personnel.unit || ''}
+                                moveCount={selectedMoveCount}
+                                selectedPeople={selectedPeople}
                             />
                         )}
                     </Box>

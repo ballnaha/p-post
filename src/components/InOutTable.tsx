@@ -28,6 +28,7 @@ import {
     Login as LoginIcon,
     Logout as LogoutIcon,
 } from '@mui/icons-material';
+import { formatPositionNumber } from '@/utils/positionNumber';
 
 // Interface สำหรับข้อมูลการ In-Out
 export interface InOutRecord {
@@ -127,7 +128,7 @@ const InOutRow = memo(({
             'three-way': {
                 bg: alpha(theme.palette.secondary.main, 0.12),
                 color: theme.palette.secondary.dark,
-                label: 'สามเส้า',
+                label: 'วงสลับ',
                 icon: <SwapHorizIcon sx={{ fontSize: 14 }} />,
             },
             promotion: {
@@ -247,7 +248,7 @@ const InOutRow = memo(({
                                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: position ? 0.3 : 0 }}>
                                     {positionNumber && (
                                         <Chip
-                                            label={`เลข: ${positionNumber}`}
+                                            label={`เลข: ${formatPositionNumber(positionNumber)}`}
                                             size="small"
                                             sx={{
                                                 height: 18,
@@ -338,7 +339,7 @@ const InOutRow = memo(({
                         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.3, ml: 2 }}>
                             {record.outgoingPerson.toPositionNumber && (
                                 <Chip
-                                    label={`เลข: ${record.outgoingPerson.toPositionNumber}`}
+                                    label={`เลข: ${formatPositionNumber(record.outgoingPerson.toPositionNumber)}`}
                                     size="small"
                                     sx={{
                                         height: 18,

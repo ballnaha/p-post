@@ -3,6 +3,55 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
 
+const nullableText = (value: any): string | null => {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  return normalized === '' ? null : normalized;
+};
+
+const nullablePositionNumber = (value: any): string | null => {
+  const normalized = nullableText(value);
+  return normalized ? normalized.replace(/\s+/g, '') : null;
+};
+
+const normalizeUpdateBody = (body: Record<string, any>) => {
+  const updateData = { ...body };
+  const nullableFields = [
+    'position',
+    'positionNumber',
+    'unit',
+    'rank',
+    'fullName',
+    'nationalId',
+    'birthDate',
+    'age',
+    'seniority',
+    'education',
+    'lastAppointment',
+    'currentRankSince',
+    'enrollmentDate',
+    'retirementDate',
+    'yearsOfService',
+    'trainingLocation',
+    'trainingCourse',
+    'notes',
+    'actingAs',
+    'supporterName',
+    'supportReason',
+    'requestedPosition',
+  ];
+
+  nullableFields.forEach((field) => {
+    if (field in updateData) {
+      updateData[field] = field === 'positionNumber'
+        ? nullablePositionNumber(updateData[field])
+        : nullableText(updateData[field]);
+    }
+  });
+
+  return updateData;
+};
+
 // GET - ดึงข้อมูลบุคลากรตาม ID
 export async function GET(
   request: NextRequest,
@@ -58,7 +107,7 @@ export async function PUT(
     const personnel = await prisma.policePersonnel.update({
       where: { id },
       data: {
-        ...body,
+        ...normalizeUpdateBody(body),
         updatedBy: username,
       },
     });

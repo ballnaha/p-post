@@ -52,6 +52,7 @@ export default function CreateThreeWayLaneTab({
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [filterUnit, setFilterUnit] = useState('all');
     const [filterPosCode, setFilterPosCode] = useState('all');
+    const [filterHasRequestedPosition, setFilterHasRequestedPosition] = useState('all');
     const [isFilterCollapsed, setIsFilterCollapsed] = useState(true);
     const [page, setPage] = useState(0);
     const [total, setTotal] = useState(0);
@@ -80,6 +81,7 @@ export default function CreateThreeWayLaneTab({
             if (debouncedSearchTerm) params.set('search', debouncedSearchTerm);
             if (filterUnit && filterUnit !== 'all') params.set('unit', filterUnit);
             if (filterPosCode && filterPosCode !== 'all') params.set('posCodeId', filterPosCode);
+            if (filterHasRequestedPosition && filterHasRequestedPosition !== 'all') params.set('hasRequestedPosition', filterHasRequestedPosition);
 
             params.set('page', page.toString());
             params.set('limit', '20');
@@ -95,7 +97,7 @@ export default function CreateThreeWayLaneTab({
         } finally {
             setLoadingPersonnel(false);
         }
-    }, [debouncedSearchTerm, filterUnit, filterPosCode, page, selectedYear]);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition, page, selectedYear]);
 
     // Fetch on changes
     useEffect(() => {
@@ -105,7 +107,7 @@ export default function CreateThreeWayLaneTab({
     // Reset page when filter changes
     useEffect(() => {
         setPage(0);
-    }, [debouncedSearchTerm, filterUnit, filterPosCode]);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition]);
 
     // Handle Create
     const handleCreate = () => {
@@ -136,15 +138,15 @@ export default function CreateThreeWayLaneTab({
                             minWidth: 0
                         }}
                     >
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', fontSize: '0.65rem' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', fontSize: '0.7rem' }}>
                             👤 คนที่ 1
                         </Typography>
                         {person1 ? (
                             <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.8rem' }} noWrap>
-                                    {person1.fullName}
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
+                                    {person1.rank} {person1.fullName}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.65rem', mb: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
                                     {person1.position}
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
@@ -168,7 +170,7 @@ export default function CreateThreeWayLaneTab({
                                     size="small"
                                     color="error"
                                     onClick={() => setPerson1(null)}
-                                    sx={{ minWidth: 0, py: 0, px: 1, fontSize: '0.6rem', height: 20 }}
+                                    sx={{ minWidth: 0, py: 0.25, px: 1, fontSize: '0.65rem', height: 22 }}
                                 >
                                     ลบ
                                 </Button>
@@ -198,15 +200,15 @@ export default function CreateThreeWayLaneTab({
                             minWidth: 0
                         }}
                     >
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', fontSize: '0.65rem' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', fontSize: '0.7rem' }}>
                             👤 คนที่ 2
                         </Typography>
                         {person2 ? (
                             <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.8rem' }} noWrap>
-                                    {person2.fullName}
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
+                                    {person2.rank} {person2.fullName}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.65rem', mb: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
                                     {person2.position}
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
@@ -230,7 +232,7 @@ export default function CreateThreeWayLaneTab({
                                     size="small"
                                     color="error"
                                     onClick={() => setPerson2(null)}
-                                    sx={{ minWidth: 0, py: 0, px: 1, fontSize: '0.6rem', height: 20 }}
+                                    sx={{ minWidth: 0, py: 0.25, px: 1, fontSize: '0.65rem', height: 22 }}
                                 >
                                     ลบ
                                 </Button>
@@ -260,15 +262,15 @@ export default function CreateThreeWayLaneTab({
                             minWidth: 0
                         }}
                     >
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', fontSize: '0.65rem' }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', fontSize: '0.7rem' }}>
                             👤 คนที่ 3
                         </Typography>
                         {person3 ? (
                             <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.8rem' }} noWrap>
-                                    {person3.fullName}
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
+                                    {person3.rank} {person3.fullName}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.65rem', mb: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
                                     {person3.position}
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
@@ -292,7 +294,7 @@ export default function CreateThreeWayLaneTab({
                                     size="small"
                                     color="error"
                                     onClick={() => setPerson3(null)}
-                                    sx={{ minWidth: 0, py: 0, px: 1, fontSize: '0.6rem', height: 20 }}
+                                    sx={{ minWidth: 0, py: 0.25, px: 1, fontSize: '0.65rem', height: 22 }}
                                 >
                                     ลบ
                                 </Button>
@@ -380,6 +382,20 @@ export default function CreateThreeWayLaneTab({
                     <ExpandMoreIcon sx={{ fontSize: 18, color: 'text.secondary' }} /> :
                     <ExpandLessIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 }
+                {/* Show active filter count */}
+                {(searchTerm || filterUnit !== 'all' || filterPosCode !== 'all' || filterHasRequestedPosition !== 'all') && (
+                    <Chip
+                        label={[
+                            searchTerm ? 1 : 0,
+                            filterUnit !== 'all' ? 1 : 0,
+                            filterPosCode !== 'all' ? 1 : 0,
+                            filterHasRequestedPosition !== 'all' ? 1 : 0
+                        ].reduce((a, b) => a + b, 0)}
+                        size="small"
+                        color="primary"
+                        sx={{ height: 18, fontSize: '0.7rem', ml: 0.5, '& .MuiChip-label': { px: 0.75 } }}
+                    />
+                )}
             </Box>
 
             {/* Collapsible Filters */}
@@ -388,7 +404,7 @@ export default function CreateThreeWayLaneTab({
                     <TextField
                         fullWidth
                         size="small"
-                        placeholder="ค้นหาบุคลากร..."
+                        placeholder="ค้นหาบุคลากร เช่น ชื่อ*นามสกุล"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         InputProps={{
@@ -432,7 +448,33 @@ export default function CreateThreeWayLaneTab({
                                 <MenuItem key={pc.id} value={String(pc.id)}>{pc.id} - {pc.name}</MenuItem>
                             ))}
                         </TextField>
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            label="การร้องขอตำแหน่ง"
+                            value={filterHasRequestedPosition}
+                            onChange={(e) => setFilterHasRequestedPosition(e.target.value)}
+                            sx={{ bgcolor: 'white' }}
+                        >
+                            <MenuItem value="all">ทั้งหมด</MenuItem>
+                            <MenuItem value="with-supporter">มีการร้องขอ / มีผู้สนับสนุน</MenuItem>
+                            <MenuItem value="without-supporter">ไม่มีการร้องขอ</MenuItem>
+                        </TextField>
                     </Box>
+                    <Button
+                        size="small"
+                        color="error"
+                        onClick={() => {
+                            setSearchTerm('');
+                            setFilterUnit('all');
+                            setFilterPosCode('all');
+                            setFilterHasRequestedPosition('all');
+                        }}
+                        sx={{ mt: 1, fontSize: '0.75rem' }}
+                    >
+                        ล้างตัวกรอง
+                    </Button>
                 </Box>
             </Collapse>
 
@@ -518,6 +560,7 @@ export default function CreateThreeWayLaneTab({
                                                 // Suggest same rank/posCode
                                                 if (person.unit) setFilterUnit(person.unit);
                                                 if (person.posCodeId) setFilterPosCode(String(person.posCodeId));
+                                                setFilterHasRequestedPosition('all');
                                                 setIsFilterCollapsed(false);
                                             } else if (!person2) {
                                                 setPerson2(person);

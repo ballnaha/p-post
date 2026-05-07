@@ -62,6 +62,10 @@ import {
     Print as PrintIcon,
     ViewKanban as KanbanIcon,
     ViewList as ListIcon,
+    CheckCircleOutline as SuccessToastIcon,
+    ErrorOutline as ErrorToastIcon,
+    InfoOutlined as InfoToastIcon,
+    ReportProblemOutlined as WarningToastIcon,
 } from '@mui/icons-material';
 
 const Transition = React.forwardRef(function Transition(
@@ -87,6 +91,7 @@ import { Personnel, Column } from './types';
 import CreateSwapLaneTab from './components/CreateSwapLaneTab';
 import CreateThreeWayLaneTab from './components/CreateThreeWayLaneTab';
 import CreateTransferLaneTab from './components/CreateTransferLaneTab';
+import { matchesAnyWildcardSearch } from '@/lib/wildcardSearch';
 
 // Components
 import DraggableCard from './components/DraggableCard';
@@ -98,10 +103,42 @@ import UndoRedoControls from './components/UndoRedoControls';
 import LaneSummaryModal from './components/LaneSummaryModal';
 import TransferSummaryReport from './components/TransferSummaryReport';
 import BoardListView from './components/BoardListView';
+import { formatPositionNumber } from '@/utils/positionNumber';
 
 const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 const CIRCULAR_SWAP_MAX_PERSONNEL = 10;
 const DEFAULT_POS_CODE_ORDER = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12];
+
+const snackbarConfig = {
+    success: {
+        icon: <SuccessToastIcon fontSize="small" />,
+        color: '#047857',
+        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+        borderColor: '#d1fae5',
+        iconBackgroundColor: '#ecfdf5',
+    },
+    info: {
+        icon: <InfoToastIcon fontSize="small" />,
+        color: '#2563eb',
+        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+        borderColor: '#dbeafe',
+        iconBackgroundColor: '#eff6ff',
+    },
+    warning: {
+        icon: <WarningToastIcon fontSize="small" />,
+        color: '#b45309',
+        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+        borderColor: '#fef3c7',
+        iconBackgroundColor: '#fffbeb',
+    },
+    error: {
+        icon: <ErrorToastIcon fontSize="small" />,
+        color: '#dc2626',
+        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+        borderColor: '#fee2e2',
+        iconBackgroundColor: '#fef2f2',
+    },
+} as const;
 
 const getCircularSwapLabel = (count?: number) => {
     return 'วงสลับ';
@@ -110,6 +147,21 @@ const getCircularSwapLabel = (count?: number) => {
 const getCircularSwapTitle = (itemIds: string[], map: Record<string, Personnel>, fallback?: Record<string, Personnel>) => {
     const names = itemIds.map(itemId => fallback?.[itemId]?.fullName || map[itemId]?.fullName || '?');
     return `${getCircularSwapLabel(itemIds.length)}: ${names.join(' → ')}`;
+};
+
+const personnelMatchesSearch = (person: Personnel, rawSearch: string) => {
+    if (!rawSearch.trim()) return true;
+
+    return matchesAnyWildcardSearch([
+        person.fullName,
+        person.position,
+        person.unit,
+        person.actingAs,
+        person.trainingCourse,
+        person.requestedPosition,
+        person.supporterName,
+        person.supportReason,
+    ], rawSearch);
 };
 
 // --- Main Page Component ---
@@ -233,6 +285,8 @@ export default function PersonnelBoardV2Page() {
         setDrawerOpenCounter(c => c + 1);
     }, []);
     const [forceAvailableIds, setForceAvailableIds] = useState<string[]>([]);
+    const [forceAvailablePersonnelIds, setForceAvailablePersonnelIds] = useState<string[]>([]);
+    const [forceAvailablePersonnelNoIds, setForceAvailablePersonnelNoIds] = useState<string[]>([]);
     const [showCompletedLanes, setShowCompletedLanes] = useState(false); // Toggle to show/hide completed lanes
     const [isInOutTableOpen, setIsInOutTableOpen] = useState(false); // State for In-Out Table Dialog
     const [isReportOpen, setIsReportOpen] = useState(false); // State for Report Dialog
@@ -303,16 +357,14 @@ export default function PersonnelBoardV2Page() {
     const [draggedItem, setDraggedItem] = useState<Personnel | null>(null);
 
     const toggleSelection = useCallback((id: string) => {
-        commitAction();
         setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    }, [commitAction]);
+    }, []);
 
     const clearSelection = useCallback(() => {
         if (selectedIdsRef.current.length > 0) {
-            commitAction();
             setSelectedIds([]);
         }
-    }, [commitAction]);
+    }, []);
 
     // Snackbar State
     const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>(
@@ -328,14 +380,33 @@ export default function PersonnelBoardV2Page() {
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
     // Filter IDs already on board
-    const assignedIds = useMemo(() => {
-        const ids: string[] = [];
+    const assignedIdSet = useMemo(() => {
+        const ids = new Set<string>();
         Object.values(personnelMap).forEach(p => {
-            if (p.noId) ids.push(String(p.noId));
-            if (p.id) ids.push(String(p.id));
-            if ((p as any).originalId) ids.push(String((p as any).originalId));
+            if (p.noId) ids.add(String(p.noId));
+            if (p.id) ids.add(String(p.id));
+            if ((p as any).originalId) ids.add(String((p as any).originalId));
         });
-        return ids.filter(Boolean);
+        return ids;
+    }, [personnelMap]);
+
+    const assignedOriginalIds = useMemo(() => {
+        const ids = new Set<string>();
+        Object.values(personnelMap).forEach((p) => {
+            if (p.isPlaceholder || p.id?.startsWith('placeholder-')) return;
+            const originalId = (p as any).originalId || p.id;
+            if (originalId) ids.add(String(originalId));
+        });
+        return Array.from(ids);
+    }, [personnelMap]);
+
+    const assignedNoIds = useMemo(() => {
+        const ids = new Set<string>();
+        Object.values(personnelMap).forEach((p) => {
+            if (p.isPlaceholder || p.id?.startsWith('placeholder-')) return;
+            if (p.noId) ids.add(String(p.noId));
+        });
+        return Array.from(ids);
     }, [personnelMap]);
 
     // Filter ALL Vacant Position IDs on board (for display only)
@@ -364,7 +435,7 @@ export default function PersonnelBoardV2Page() {
             if (p.isPlaceholder || p.id?.startsWith('placeholder-')) return;
 
             // Apply current filters to people on board
-            if (searchTerm && !p.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) && !p.position?.toLowerCase().includes(searchTerm.toLowerCase())) return;
+            if (searchTerm && !personnelMatchesSearch(p, searchTerm)) return;
             if (filterUnit !== 'all' && p.unit !== filterUnit) return;
             if (filterPosCode !== 'all' && String(p.posCodeId) !== filterPosCode) return;
             if (filterMinPosCode && p.posCodeId && p.posCodeId < Number(filterMinPosCode)) return;
@@ -384,9 +455,9 @@ export default function PersonnelBoardV2Page() {
         return personnelList.filter((p: any) => {
             const pNoId = String(p.noId || '');
             const pId = String(p.id || '');
-            return !assignedIds.includes(pId) && !assignedIds.includes(pNoId);
+            return !assignedIdSet.has(pId) && !assignedIdSet.has(pNoId);
         });
-    }, [personnelList, assignedIds]);
+    }, [personnelList, assignedIdSet]);
 
     // Filter columns for board display
     const filteredColumns = useMemo(() => {
@@ -412,19 +483,13 @@ export default function PersonnelBoardV2Page() {
 
             // Filter by Search Term (Group, Name, Position)
             if (boardSearchTerm) {
-                const term = boardSearchTerm.toLowerCase();
-                const matchesGroup = col.groupNumber?.toLowerCase().includes(term);
-                const matchesTitle = col.title?.toLowerCase().includes(term);
+                const matchesLane = matchesAnyWildcardSearch([col.groupNumber, col.title], boardSearchTerm);
                 const matchesPersonnel = col.itemIds.some(id => {
                     const p = personnelMap[id];
-                    return p && (
-                        (p.fullName || '').toLowerCase().includes(term) ||
-                        (p.position || '').toLowerCase().includes(term) ||
-                        (p.rank || '').toLowerCase().includes(term)
-                    );
+                    return p && matchesAnyWildcardSearch([p.fullName, p.position, p.rank], boardSearchTerm);
                 });
 
-                if (!matchesGroup && !matchesTitle && !matchesPersonnel) return false;
+                if (!matchesLane && !matchesPersonnel) return false;
             }
 
             return true;
@@ -456,18 +521,12 @@ export default function PersonnelBoardV2Page() {
             }
 
             if (boardSearchTerm) {
-                const term = boardSearchTerm.toLowerCase();
-                const matchesGroup = col.groupNumber?.toLowerCase().includes(term);
-                const matchesTitle = col.title?.toLowerCase().includes(term);
+                const matchesLane = matchesAnyWildcardSearch([col.groupNumber, col.title], boardSearchTerm);
                 const matchesPersonnel = col.itemIds.some(id => {
                     const p = personnelMap[id];
-                    return p && (
-                        (p.fullName || '').toLowerCase().includes(term) ||
-                        (p.position || '').toLowerCase().includes(term) ||
-                        (p.rank || '').toLowerCase().includes(term)
-                    );
+                    return p && matchesAnyWildcardSearch([p.fullName, p.position, p.rank], boardSearchTerm);
                 });
-                if (!matchesGroup && !matchesTitle && !matchesPersonnel) return false;
+                if (!matchesLane && !matchesPersonnel) return false;
             }
 
             return true;
@@ -519,6 +578,34 @@ export default function PersonnelBoardV2Page() {
         itemIds: string[],
         map: Record<string, Personnel>
     ) => {
+        const isSwapOrThreeWay = column?.chainType === 'swap' || column?.chainType === 'three-way' || 
+            column?.vacantPosition?.transactionType === 'two-way' || column?.vacantPosition?.transactionType === 'three-way';
+
+        if (isSwapOrThreeWay) {
+            // All personnel in swap/three-way lanes must have the EXACT SAME posCode
+            let firstPosCode: number | null = null;
+            let firstPersonName = '';
+
+            for (let index = 0; index < itemIds.length; index++) {
+                const person = map[itemIds[index]];
+                if (!person || person.isPlaceholder) continue;
+
+                const personPosCode = Number(person.posCodeId);
+                if (!Number.isFinite(personPosCode)) continue;
+
+                if (firstPosCode === null) {
+                    firstPosCode = personPosCode;
+                    firstPersonName = `${person.rank || ''} ${person.fullName || ''}`.trim();
+                } else if (personPosCode !== firstPosCode) {
+                    return {
+                        valid: false,
+                        message: `ไม่สามารถสลับตำแหน่งได้: ${person.rank || ''} ${person.fullName || ''} (PosCode ${personPosCode}) มีรหัสตำแหน่งไม่ตรงกับ ${firstPersonName} (PosCode ${firstPosCode})`
+                    };
+                }
+            }
+            return { valid: true };
+        }
+
         if (!isSuccessionLane(column)) return { valid: true };
 
         const vacantPosCode = Number(column?.vacantPosition?.posCodeMaster?.id ?? column?.vacantPosition?.posCodeId);
@@ -566,6 +653,10 @@ export default function PersonnelBoardV2Page() {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
+    useEffect(() => {
+        setPage(0);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterMinPosCode, filterHasRequestedPosition, assignedOriginalIds, assignedNoIds]);
+
     // Load filters
     const loadFilters = async () => {
         try {
@@ -602,6 +693,10 @@ export default function PersonnelBoardV2Page() {
                 params.set('minPosCodeId', filterMinPosCode);
             }
             if (filterHasRequestedPosition && filterHasRequestedPosition !== 'all') params.set('hasRequestedPosition', filterHasRequestedPosition);
+            if (assignedOriginalIds.length > 0) params.set('excludeIds', assignedOriginalIds.join(','));
+            if (assignedNoIds.length > 0) params.set('excludeNoIds', assignedNoIds.join(','));
+            if (forceAvailablePersonnelIds.length > 0) params.set('includeIds', forceAvailablePersonnelIds.join(','));
+            if (forceAvailablePersonnelNoIds.length > 0) params.set('includeNoIds', forceAvailablePersonnelNoIds.join(','));
             params.set('page', page.toString());
             params.set('limit', rowsPerPage.toString());
 
@@ -625,7 +720,7 @@ export default function PersonnelBoardV2Page() {
         } finally {
             setListLoading(false);
         }
-    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterMinPosCode, filterHasRequestedPosition, page, rowsPerPage, selectedYear]);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterMinPosCode, filterHasRequestedPosition, assignedOriginalIds, assignedNoIds, forceAvailablePersonnelIds, forceAvailablePersonnelNoIds, page, rowsPerPage, selectedYear]);
 
     useEffect(() => {
         fetchPersonnelList();
@@ -741,6 +836,9 @@ export default function PersonnelBoardV2Page() {
                 setColumns([]);
                 setPersonnelMap({});
             }
+            setForceAvailableIds([]);
+            setForceAvailablePersonnelIds([]);
+            setForceAvailablePersonnelNoIds([]);
             setHasUnsavedChanges(false);
         } catch (err) {
             console.error('Error loading board data:', err);
@@ -874,9 +972,47 @@ export default function PersonnelBoardV2Page() {
         const success = await saveBoardData(selectedYear, columns, personnelMap);
         if (success) {
             setForceAvailableIds([]); // ล้างรายการที่บังคับคืนชีพเมื่อบันทึกจริงแล้ว
+            setForceAvailablePersonnelIds([]);
+            setForceAvailablePersonnelNoIds([]);
             setSnackbar({ open: true, message: `บันทึกข้อมูลปี ${selectedYear} เรียบร้อยแล้ว`, severity: 'success' });
         }
     };
+
+    const handleClearBoard = useCallback(() => {
+        commitAction();
+
+        const vacantIdsToRestore = columns
+            .map((column) => column.vacantPosition?.id)
+            .filter(Boolean)
+            .map((id) => String(id));
+
+        if (vacantIdsToRestore.length > 0) {
+            setForceAvailableIds((prev) => [...new Set([...prev, ...vacantIdsToRestore])]);
+        }
+
+        const originalIdsToRestore = new Set<string>();
+        const noIdsToRestore = new Set<string>();
+        Object.values(personnelMap).forEach((person) => {
+            if (!person || person.isPlaceholder || person.id?.startsWith('placeholder-')) return;
+            const originalId = (person as any).originalId || person.id;
+            if (originalId) originalIdsToRestore.add(String(originalId));
+            if (person.noId) noIdsToRestore.add(String(person.noId));
+        });
+
+        if (originalIdsToRestore.size > 0) {
+            setForceAvailablePersonnelIds((prev) => [...new Set([...prev, ...Array.from(originalIdsToRestore)])]);
+        }
+
+        if (noIdsToRestore.size > 0) {
+            setForceAvailablePersonnelNoIds((prev) => [...new Set([...prev, ...Array.from(noIdsToRestore)])]);
+        }
+
+        setColumns([]);
+        setPersonnelMap({});
+        setClearBoardConfirm(false);
+        setHasUnsavedChanges(true);
+        setSnackbar({ open: true, message: 'ล้างกระดานเรียบร้อยแล้ว', severity: 'success' });
+    }, [columns, personnelMap, commitAction]);
 
     // Monitor for drag events
     useEffect(() => {
@@ -2186,33 +2322,37 @@ export default function PersonnelBoardV2Page() {
                     setForceAvailableIds(prev => [...new Set([...prev, String(lane.vacantPosition!.id)])]);
                 }
 
-                lane.itemIds.forEach(id => {
+                // สำหรับเลนที่เคยบันทึกแล้ว: คืนคนเข้าฝั่งซ้ายแบบชั่วคราว
+                // โดยยังไม่ลบ transaction ใน DB จนกว่าจะกดบันทึกจริง
+                const originalIdsToRestore = new Set<string>();
+                const noIdsToRestore = new Set<string>();
+                lane.itemIds.forEach((itemId) => {
+                    const person = personnelMap[itemId];
+                    if (!person || person.isPlaceholder || itemId.startsWith('placeholder-')) return;
+                    const originalId = (person as any).originalId || person.id;
+                    if (originalId) originalIdsToRestore.add(String(originalId));
+                    if (person.noId) noIdsToRestore.add(String(person.noId));
+                });
+                if (originalIdsToRestore.size > 0) {
+                    setForceAvailablePersonnelIds((prev) => [...new Set([...prev, ...Array.from(originalIdsToRestore)])]);
+                }
+                if (noIdsToRestore.size > 0) {
+                    setForceAvailablePersonnelNoIds((prev) => [...new Set([...prev, ...Array.from(noIdsToRestore)])]);
+                }
+
+                // Remove all personnel in the lane atomically (single state update)
+                // so they reappear in the left drawer correctly
+                if (lane.itemIds.length > 0) {
+                    const idsToRemove = new Set(lane.itemIds);
                     setPersonnelMap(prev => {
                         const next = { ...prev };
-                        delete next[id];
+                        idsToRemove.forEach(id => {
+                            delete next[id];
+                        });
                         return next;
                     });
-                });
-
-                // ถ้าเลนเชื่อมกับ SwapTransaction ให้ลบใน DB ด้วย
-                if (lane.linkedTransactionId) {
-                    try {
-                        const res = await fetch(`/api/swap-transactions/${lane.linkedTransactionId}?force=true`, {
-                            method: 'DELETE',
-                        });
-                        if (res.ok) {
-                            console.log(`Deleted transaction ${lane.linkedTransactionId} from DB`);
-                        } else if (res.status === 404) {
-                            // Transaction ไม่มีอยู่แล้ว - ถือว่าสำเร็จ
-                            console.log(`Transaction ${lane.linkedTransactionId} not found in DB (already deleted)`);
-                        } else {
-                            const errData = await res.json().catch(() => ({}));
-                            console.error('Failed to delete transaction from DB:', errData?.error || res.statusText);
-                        }
-                    } catch (err) {
-                        console.error('Error deleting transaction:', err);
-                    }
                 }
+
             }
             setColumns(prev => prev.filter(c => c.id !== laneId));
             setHasUnsavedChanges(true);
@@ -2220,7 +2360,7 @@ export default function PersonnelBoardV2Page() {
         } finally {
             setIsDeletingLane(false);
         }
-    }, [columns, commitAction]);
+    }, [columns, commitAction, personnelMap]);
 
     // Confirm remove lane (show dialog)
     const confirmRemoveLane = useCallback((laneId: string) => {
@@ -2259,16 +2399,27 @@ export default function PersonnelBoardV2Page() {
     }, [recalculateColumnToPositions]);
 
     // Add new lane
-    const handleMovePersonToLane = useCallback((personId: string, targetLaneId: string) => {
+    const handleMovePersonToLane = useCallback((personId: string, targetLaneId: string, requestedIds?: string[]) => {
         commitAction();
-        const sourceLane = columns.find(c => c.itemIds.includes(personId));
-        if (!sourceLane) return;
-
-        const person = personnelMap[personId];
-        if (!person) return;
+        const candidateIds = requestedIds && requestedIds.length > 0
+            ? requestedIds
+            : selectedIds.includes(personId)
+                ? selectedIds
+                : [personId];
+        const movingIds = [...new Set(candidateIds)].filter(id => personnelMap[id]);
+        if (movingIds.length === 0) return;
 
         const targetLane = columns.find(c => c.id === targetLaneId);
         if (!targetLane) return;
+
+        const people = movingIds
+            .map(id => personnelMap[id])
+            .filter((person): person is Personnel => Boolean(person));
+        if (people.length === 0) return;
+        const firstPerson = people[0];
+
+        const movingIdsAlreadyInTarget = targetLane.itemIds.filter(id => movingIds.includes(id)).length;
+        const targetCountAfterMove = targetLane.itemIds.length - movingIdsAlreadyInTarget + movingIds.length;
 
         // Enforce limits for Swap (2) and Three-way (3)
         const maxLimit = targetLane.chainType === 'swap' ? 2
@@ -2277,12 +2428,12 @@ export default function PersonnelBoardV2Page() {
 
         let limitType = '';
         if (targetLane.chainType === 'swap' || (targetLane.vacantPosition?.transactionType === 'two-way')) {
-            if (targetLane.itemIds.length >= 2) limitType = 'สลับตำแหน่ง (2 คน)';
+            if (targetCountAfterMove > 2) limitType = 'สลับตำแหน่ง (2 คน)';
         } else if (targetLane.chainType === 'three-way' || (targetLane.vacantPosition?.transactionType === 'three-way')) {
-            if (targetLane.itemIds.length >= CIRCULAR_SWAP_MAX_PERSONNEL) limitType = `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`;
+            if (targetCountAfterMove > CIRCULAR_SWAP_MAX_PERSONNEL) limitType = `วงสลับ (${CIRCULAR_SWAP_MAX_PERSONNEL} คน)`;
         }
 
-        if (limitType || targetLane.itemIds.length >= maxLimit) {
+        if (limitType || targetCountAfterMove > maxLimit) {
             setSnackbar({
                 open: true,
                 message: limitType ? `❌ รายการ "${limitType}" เต็มแล้ว` : `❌ เลนนี้จำกัดสูงสุด ${maxLimit} คน`,
@@ -2291,23 +2442,32 @@ export default function PersonnelBoardV2Page() {
             return;
         }
 
-        let newPerson: Personnel = {
-            ...person,
-            // Reset toPosition fields when moving to a new lane context
-            // They will be recalculated shortly if it's a chain lane
-            toPosCodeId: null,
-            toPosCodeMaster: null,
-            toPosition: null,
-            toPositionNumber: null,
-            toUnit: null,
-            toActingAs: null
-        };
-        const boardId = personId;
+        const nextPersonnelMap = movingIds.reduce<Record<string, Personnel>>((map, id) => {
+            const person = map[id];
+            if (!person) return map;
 
+            map[id] = {
+                ...person,
+                // Reset toPosition fields when moving to a new lane context.
+                // They will be recalculated shortly if it's a chain lane.
+                toPosCodeId: null,
+                toPosCodeMaster: null,
+                toPosition: null,
+                toPositionNumber: null,
+                toUnit: null,
+                toActingAs: null
+            };
+            return map;
+        }, { ...personnelMap });
+
+        const targetItemIdsForValidation = [
+            ...targetLane.itemIds.filter(id => !movingIds.includes(id)),
+            ...movingIds
+        ];
         const validation = validateSuccessionPosCodes(
             targetLane,
-            [...targetLane.itemIds, boardId],
-            { ...personnelMap, [boardId]: newPerson }
+            targetItemIdsForValidation,
+            nextPersonnelMap
         );
         if (!validation.valid) {
             setSnackbar({
@@ -2318,63 +2478,11 @@ export default function PersonnelBoardV2Page() {
             return;
         }
 
-        // Special logic for Swap (2-way) - auto-set toPosition if 2nd person
-        if (targetLane.vacantPosition?.isTransaction && targetLane.vacantPosition.transactionType === 'two-way' && targetLane.itemIds.length === 1) {
-            const existingPersonId = targetLane.itemIds[0];
-            const existingPerson = personnelMap[existingPersonId];
-            if (existingPerson) {
-                newPerson = {
-                    ...newPerson,
-                    toPosCodeId: existingPerson.posCodeId || null,
-                    toPosCodeMaster: existingPerson.posCodeMaster || null,
-                    toPosition: existingPerson.position || null,
-                    toPositionNumber: existingPerson.positionNumber || null,
-                    toUnit: existingPerson.unit || null,
-                    toActingAs: existingPerson.actingAs || null,
-                };
-
-                const updatedExistingPerson: Personnel = {
-                    ...existingPerson,
-                    toPosCodeId: person.posCodeId || null,
-                    toPosCodeMaster: person.posCodeMaster || null,
-                    toPosition: person.position || null,
-                    toPositionNumber: person.positionNumber || null,
-                    toUnit: person.unit || null,
-                    toActingAs: person.actingAs || null,
-                };
-
-                setPersonnelMap(prev => ({
-                    ...prev,
-                    [existingPersonId]: updatedExistingPerson,
-                    [boardId]: newPerson
-                }));
-
-                setColumns(prev => prev.map(c => {
-                    if (c.id === sourceLane.id) {
-                        return { ...c, itemIds: c.itemIds.filter(id => id !== personId) };
-                    }
-                    if (c.id === targetLaneId) {
-                        const newTitle = `สลับ: ${existingPerson.fullName} ↔ ${newPerson.fullName}`;
-                        return { ...c, title: newTitle, itemIds: [...c.itemIds, boardId] };
-                    }
-                    return c;
-                }));
-
-                triggerChainReaction(newPerson, targetLane);
-                setHasUnsavedChanges(true);
-                setSnackbar({ open: true, message: `ย้าย ${person.fullName} ไปยัง ${targetLane.title} แล้ว`, severity: 'success' });
-                return;
-            }
-        }
-
-        setPersonnelMap(prev => ({ ...prev, [boardId]: newPerson }));
+        setPersonnelMap(nextPersonnelMap);
         setColumns(prev => prev.map(c => {
-            if (c.id === sourceLane.id) {
-                return { ...c, itemIds: c.itemIds.filter(id => id !== personId) };
-            }
             if (c.id === targetLaneId) {
                 let newTitle = c.title;
-                const newItemIds = [...c.itemIds, boardId];
+                const newItemIds = [...c.itemIds.filter(id => !movingIds.includes(id)), ...movingIds];
 
                 const isSwapLane = c.chainType === 'swap' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'two-way');
                 const isThreeWayLane = c.chainType === 'three-way' || (c.vacantPosition?.isTransaction && c.vacantPosition.transactionType === 'three-way');
@@ -2382,24 +2490,29 @@ export default function PersonnelBoardV2Page() {
                 // Update title for two-way (swap) lanes
                 if (isSwapLane) {
                     if (newItemIds.length === 1) {
-                        newTitle = `สลับ: ${newPerson.fullName || '?'} ↔ ?`;
+                        const p1 = nextPersonnelMap[newItemIds[0]];
+                        newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ?`;
                     } else if (newItemIds.length === 2) {
-                        const p1 = personnelMap[newItemIds[0]] || newPerson;
-                        const p2 = newItemIds[1] === boardId ? newPerson : personnelMap[newItemIds[1]];
+                        const p1 = nextPersonnelMap[newItemIds[0]];
+                        const p2 = nextPersonnelMap[newItemIds[1]];
                         newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ${p2?.fullName || '?'}`;
                     }
                 } else if (isThreeWayLane) {
-                    newTitle = getCircularSwapTitle(newItemIds, personnelMap, { [boardId]: newPerson });
+                    newTitle = getCircularSwapTitle(newItemIds, nextPersonnelMap);
                 }
 
 
                 return { ...c, title: newTitle, itemIds: newItemIds };
             }
+            if (c.itemIds.some(id => movingIds.includes(id))) {
+                return { ...c, itemIds: c.itemIds.filter(id => !movingIds.includes(id)) };
+            }
             return c;
         }));
 
-        triggerChainReaction(newPerson, targetLane);
+        triggerChainReaction(firstPerson, targetLane);
         setHasUnsavedChanges(true);
+        if (movingIds.length > 1) clearSelection();
 
         // Recalculate chain toPositions
         setTimeout(() => {
@@ -2412,9 +2525,45 @@ export default function PersonnelBoardV2Page() {
             });
         }, 50);
 
-        setSnackbar({ open: true, message: `ย้าย ${person.fullName} ไปยัง ${targetLane.title} แล้ว`, severity: 'success' });
+        const isTargetSwapLane = targetLane.chainType === 'swap' || (targetLane.vacantPosition?.isTransaction && targetLane.vacantPosition.transactionType === 'two-way');
+        if (isTargetSwapLane && targetItemIdsForValidation.length === 2) {
+            const [id1, id2] = targetItemIdsForValidation;
+            const p1 = nextPersonnelMap[id1];
+            const p2 = nextPersonnelMap[id2];
+            if (p1 && p2) {
+                setPersonnelMap(prev => ({
+                    ...prev,
+                    [id1]: {
+                        ...prev[id1],
+                        toPosCodeId: p2.posCodeId || null,
+                        toPosCodeMaster: p2.posCodeMaster || null,
+                        toPosition: p2.position || null,
+                        toPositionNumber: p2.positionNumber || null,
+                        toUnit: p2.unit || null,
+                        toActingAs: p2.actingAs || null,
+                    },
+                    [id2]: {
+                        ...prev[id2],
+                        toPosCodeId: p1.posCodeId || null,
+                        toPosCodeMaster: p1.posCodeMaster || null,
+                        toPosition: p1.position || null,
+                        toPositionNumber: p1.positionNumber || null,
+                        toUnit: p1.unit || null,
+                        toActingAs: p1.actingAs || null,
+                    }
+                }));
+            }
+        }
 
-    }, [columns, personnelMap, triggerChainReaction, commitAction, recalculateColumnToPositions, validateSuccessionPosCodes]);
+        setSnackbar({
+            open: true,
+            message: movingIds.length > 1
+                ? `ย้าย ${movingIds.length} คนไปยัง ${targetLane.title} แล้ว`
+                : `ย้าย ${firstPerson.fullName} ไปยัง ${targetLane.title} แล้ว`,
+            severity: 'success'
+        });
+
+    }, [columns, personnelMap, selectedIds, triggerChainReaction, commitAction, recalculateColumnToPositions, validateSuccessionPosCodes, clearSelection]);
 
 
 
@@ -2585,6 +2734,15 @@ export default function PersonnelBoardV2Page() {
 
     // Create new swap lane from selected 2 personnel (Called from Component)
     const handleCreateSwapLane = async (p1: Personnel, p2: Personnel, laneTitle: string) => {
+        if (p1.posCodeId !== p2.posCodeId) {
+            setSnackbar({
+                open: true,
+                message: `ไม่สามารถสลับตำแหน่งได้: ${p1.fullName} (PosCode ${p1.posCodeId}) รหัสตำแหน่งไม่ตรงกับ ${p2.fullName} (PosCode ${p2.posCodeId})`,
+                severity: 'error'
+            });
+            return;
+        }
+
         setIsCreatingLane(true);
         commitAction();
         // Find max existing SWAP number to avoid duplicates
@@ -2792,6 +2950,15 @@ export default function PersonnelBoardV2Page() {
 
     // Create new 3-way swap lane (Called from Component)
     const handleCreateThreeWayLane = async (p1: Personnel, p2: Personnel, p3: Personnel, laneTitle: string) => {
+        if (p1.posCodeId !== p2.posCodeId || p2.posCodeId !== p3.posCodeId) {
+            setSnackbar({
+                open: true,
+                message: `ไม่สามารถสร้างวงสลับได้: บุคลากรทั้งหมดต้องมีรหัสตำแหน่งเดียวกัน (พบ ${p1.posCodeId}, ${p2.posCodeId}, ${p3.posCodeId})`,
+                severity: 'error'
+            });
+            return;
+        }
+
         setIsCreatingLane(true);
         commitAction();
         // Find max existing THREE number to avoid duplicates
@@ -3240,7 +3407,8 @@ export default function PersonnelBoardV2Page() {
                 id: l.id, 
                 title: l.title, 
                 groupNumber: l.groupNumber,
-                occupants: l.itemIds
+                occupantCount: l.itemIds.length,
+                getOccupants: () => l.itemIds
                     .map(id => personnelMap[id])
                     .filter((p): p is Personnel => !!p)
                     .map(p => ({
@@ -3260,13 +3428,13 @@ export default function PersonnelBoardV2Page() {
     // Memoizing this means DroppableLane (wrapped in React.memo) can skip rendering if it gets the same personnel array.
     const lanePersonnelMap = useMemo(() => {
         const map: Record<string, Personnel[]> = {};
-        columns.forEach(col => {
+        filteredColumns.forEach(col => {
             map[col.id] = col.itemIds
                 .map(id => personnelMap[id])
                 .filter((p): p is Personnel => !!p);
         });
         return map;
-    }, [columns, personnelMap]);
+    }, [filteredColumns, personnelMap]);
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
@@ -3658,7 +3826,7 @@ export default function PersonnelBoardV2Page() {
                                     <TextField
                                         fullWidth
                                         size="small"
-                                        placeholder="ค้นหาชื่อ, ตำแหน่ง..."
+                                        placeholder="ค้นหาชื่อ/ตำแหน่ง/ร้องขอ เช่น ชื่อ*นามสกุล"
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         InputProps={{
@@ -3748,7 +3916,7 @@ export default function PersonnelBoardV2Page() {
                                 {!listLoading && totalPersonnel > 0 && (
                                     <Box sx={{ mb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: alpha('#3b82f6', 0.05), p: 1, borderRadius: 1.5, border: '1px solid', borderColor: alpha('#3b82f6', 0.1) }}>
                                         <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main', fontSize: '0.7rem' }}>
-                                            พบ {Math.max(0, totalPersonnel - matchingAssignedCount)} รายชื่อ {matchingAssignedCount > 0 && `(บนบอร์ด ${matchingAssignedCount})`}
+                                            พบ {totalPersonnel} รายชื่อ {matchingAssignedCount > 0 && `(บนบอร์ด ${matchingAssignedCount})`}
                                         </Typography>
                                         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.65rem' }}>
                                             หน้า {page + 1}
@@ -3815,7 +3983,7 @@ export default function PersonnelBoardV2Page() {
                     }}>
                         <TextField
                             size="small"
-                            placeholder="🔍 ค้นหา Group / ชื่อ / ตำแหน่ง"
+                            placeholder="ค้นหา Group / ชื่อ / ตำแหน่ง เช่น ชื่อ*นามสกุล"
                             value={boardSearchTerm}
                             onChange={(e) => setBoardSearchTerm(e.target.value)}
                             InputProps={{
@@ -4210,7 +4378,7 @@ export default function PersonnelBoardV2Page() {
                 open={isNewLaneDrawerOpen}
                 onClose={() => setIsNewLaneDrawerOpen(false)}
                 PaperProps={{
-                    sx: { width: { xs: '100%', sm: 500, md: 550 }, bgcolor: '#f8fafc' }
+                    sx: { width: { xs: '100%', sm: 650, md: 800 }, bgcolor: '#f8fafc' }
                 }}
             >
                 <Box sx={{ px: 2, pt: 1.5, pb: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -4291,7 +4459,7 @@ export default function PersonnelBoardV2Page() {
                                     <TextField
                                         fullWidth
                                         size="small"
-                                        placeholder="ค้นหาวงจร, หน่วยงาน, เลขตำแหน่ง..."
+                                        placeholder="ค้นหาตำแหน่ง/หน่วยงาน/เลขตำแหน่ง เช่น สว*สอบ"
                                         value={vacantSearch}
                                         onChange={(e) => setVacantSearch(e.target.value)}
                                         InputProps={{
@@ -4355,15 +4523,16 @@ export default function PersonnelBoardV2Page() {
                             </Typography>
 
                             {/* Vacant List */}
-                            <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5 }}>
-                                {loadingVacantPositions ? (
+                            <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 2 }}>
+                                {loadingVacantPositions ?
                                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress size={24} /></Box>
-                                ) : vacantPositions.filter(pos => !allAssignedVacantIds.includes(String(pos.id))).length === 0 ? (
+                                 : vacantPositions.filter(pos => !allAssignedVacantIds.includes(String(pos.id))).length === 0 ? 
                                     <Box sx={{ textAlign: 'center', py: 8, opacity: 0.5 }}>
                                         <Typography variant="body2">ไม่พบตำแหน่งที่ตรงตามเงื่อนไข (หรือถูกจัดลงบอร์ดแล้ว)</Typography>
                                     </Box>
-                                ) : (
-                                    vacantPositions
+                                 : 
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                                    {vacantPositions
                                         .filter(pos => !allAssignedVacantIds.includes(String(pos.id)))
                                         .map((pos) => (
                                             <Paper
@@ -4398,7 +4567,7 @@ export default function PersonnelBoardV2Page() {
                                                             {pos.position || pos.posCodeMaster?.name || 'ตำแหน่งว่าง'}
                                                         </Typography>
                                                         <Chip
-                                                            label={`#${pos.positionNumber}`}
+                                                            label={`#${formatPositionNumber(pos.positionNumber)}`}
                                                             size="small"
                                                             variant="outlined"
                                                             sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, '& .MuiChip-label': { px: 0.5 } }}
@@ -4443,8 +4612,9 @@ export default function PersonnelBoardV2Page() {
                                                     <AddIcon sx={{ fontSize: 18 }} />
                                                 </IconButton>
                                             </Paper>
-                                        ))
-                                )}
+                                        ))}
+                                    </Box>
+                                }
                             </Box>
 
                             {/* Pagination */}
@@ -4733,7 +4903,7 @@ export default function PersonnelBoardV2Page() {
                     </Typography>
 
                     <Typography variant="body1" sx={{ color: '#475569', mb: 1 }}>
-                        คุณต้องการลบ Lane ทั้งหมด <strong>{columns.length} Lane</strong> ใช่หรือไม่?
+                        คุณต้องการล้าง Lane ทั้งหมด <strong>{columns.length} Lane</strong> ออกจากหน้าจอใช่หรือไม่?
                     </Typography>
 
                     <Box sx={{
@@ -4744,7 +4914,7 @@ export default function PersonnelBoardV2Page() {
                         mb: 2
                     }}>
                         <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 600, display: 'flex', gap: 1, justifyContent: 'center' }}>
-                            <StarIcon sx={{ fontSize: 14 }} /> การเปลี่ยนแปลงจะถูกบันทึกอัตโนมัติ
+                            <StarIcon sx={{ fontSize: 14 }} /> รายการจะถูกล้างชั่วคราว และจะมีผลถาวรเมื่อกดบันทึกเท่านั้น
                         </Typography>
                     </Box>
                 </DialogContent>
@@ -4769,13 +4939,7 @@ export default function PersonnelBoardV2Page() {
                         fullWidth
                         variant="contained"
                         color="error"
-                        onClick={() => {
-                            setColumns([]);
-                            setPersonnelMap({});
-                            setClearBoardConfirm(false);
-                            setHasUnsavedChanges(true);
-                            setSnackbar({ open: true, message: 'ล้างกระดานเรียบร้อยแล้ว', severity: 'success' });
-                        }}
+                        onClick={handleClearBoard}
                         sx={{
                             fontWeight: 700,
                             textTransform: 'none',
@@ -4795,14 +4959,88 @@ export default function PersonnelBoardV2Page() {
                 autoHideDuration={3000}
                 onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                sx={{
+                    px: { xs: 2, sm: 0 },
+                    mb: { xs: 1.5, sm: 2 },
+                }}
             >
-                <Alert
-                    severity={snackbar.severity}
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    sx={{ fontWeight: 600, borderRadius: 2 }}
+                <Box
+                    role="status"
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        width: { xs: '100%', sm: 'auto' },
+                        minWidth: { xs: '100%', sm: 280 },
+                        maxWidth: { xs: '100%', sm: 460 },
+                        px: 1.25,
+                        py: 1,
+                        borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: snackbarConfig[snackbar.severity].borderColor,
+                        bgcolor: snackbarConfig[snackbar.severity].backgroundColor,
+                        boxShadow: '0 14px 36px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(15, 23, 42, 0.06)',
+                        backdropFilter: 'blur(12px)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            left: 0,
+                            top: 8,
+                            bottom: 8,
+                            width: 3,
+                            borderRadius: '0 999px 999px 0',
+                            bgcolor: snackbarConfig[snackbar.severity].color,
+                        },
+                    }}
                 >
-                    {snackbar.message}
-                </Alert>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            flexShrink: 0,
+                            color: snackbarConfig[snackbar.severity].color,
+                            bgcolor: snackbarConfig[snackbar.severity].iconBackgroundColor,
+                        }}
+                    >
+                        {snackbarConfig[snackbar.severity].icon}
+                    </Box>
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            flex: 1,
+                            minWidth: 0,
+                            color: '#1f2937',
+                            fontSize: '0.875rem',
+                            fontWeight: 500,
+                            lineHeight: 1.45,
+                            overflowWrap: 'anywhere',
+                        }}
+                    >
+                        {snackbar.message}
+                    </Typography>
+                    <IconButton
+                        size="small"
+                        onClick={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                        aria-label="ปิดข้อความแจ้งเตือน"
+                        sx={{
+                            width: 26,
+                            height: 26,
+                            flexShrink: 0,
+                            color: '#64748b',
+                            '&:hover': {
+                                bgcolor: 'rgba(15, 23, 42, 0.06)',
+                            },
+                        }}
+                    >
+                        <CloseIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                </Box>
             </Snackbar>
 
             {/* Drag Preview Indicator */}

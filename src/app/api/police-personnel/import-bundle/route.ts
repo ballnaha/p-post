@@ -31,6 +31,12 @@ function nationalIdText(value: any): string | null {
   return normalized.replace(/\D/g, '') || normalized;
 }
 
+function positionNumberText(value: any): string | null {
+  const normalized = text(value);
+  if (!normalized) return null;
+  return normalized.replace(/\s+/g, '');
+}
+
 function intValue(value: any): number | null {
   const normalized = text(value);
   if (!normalized) return null;
@@ -374,7 +380,7 @@ async function processImportBundleJob(
     const positionMap = new Map<string, ExcelRow>();
     if (personRows.length > 0) {
       positionRows.forEach((row, index) => {
-        const positionNumber = text(row['เลขตำแหน่ง']);
+        const positionNumber = positionNumberText(row['เลขตำแหน่ง']);
         if (!positionNumber) {
           errors.push(`ไฟล์ตำแหน่ง แถวที่ ${index + 2}: ไม่พบเลขตำแหน่ง`);
           failed++;
@@ -413,7 +419,7 @@ async function processImportBundleJob(
 
           try {
             const nationalId = nationalIdText(row['เลขประจำตัวประชาชน']);
-            const positionNumber = text(row['เลขตำแหน่ง']);
+            const positionNumber = positionNumberText(row['เลขตำแหน่ง']);
 
             if (!nationalId) {
               failed++;
@@ -454,24 +460,29 @@ async function processImportBundleJob(
                 unit: text(positionDataRow['หน่วย']),
               }
               : null;
-            const existingPositionRecord = !importedPositionData
-              ? await tx.policePersonnel.findFirst({
+            const existingPositionRecords = await tx.policePersonnel.findMany({
                 where: {
                   year: importYear,
                   isActive: true,
-                  positionNumber,
-                  nationalId: null,
+                  positionNumber: { not: null },
+                  OR: [
+                    { nationalId: null },
+                    { nationalId: '' },
+                  ],
                 },
                 select: {
                   id: true,
                   posCodeId: true,
                   position: true,
+                  positionNumber: true,
                   actingAs: true,
                   unit: true,
                   notes: true,
                 },
-              })
-              : null;
+              });
+            const existingPositionRecord = existingPositionRecords.find(
+              record => positionNumberText(record.positionNumber) === positionNumber
+            ) || null;
             const existingPositionNote = existingPositionRecord?.notes
               ?.split('\n')
               .find((line) => line.startsWith('หมายเหตุตำแหน่ง:'))
@@ -571,7 +582,7 @@ async function processImportBundleJob(
     if (positionRows.length > 0 && personRows.length === 0) {
       for (let index = 0; index < positionRows.length; index++) {
         const row = positionRows[index];
-        const positionNumber = text(row['เลขตำแหน่ง']);
+        const positionNumber = positionNumberText(row['เลขตำแหน่ง']);
 
         if (!positionNumber) {
           failed++;
@@ -596,10 +607,17 @@ async function processImportBundleJob(
           }
         });
 
-        const matchedPeople = await prisma.policePersonnel.findMany({
-          where: { year: importYear, isActive: true, positionNumber },
-          select: { id: true, notes: true },
+        const matchedPeopleCandidates = await prisma.policePersonnel.findMany({
+          where: {
+            year: importYear,
+            isActive: true,
+            positionNumber: { not: null },
+          },
+          select: { id: true, positionNumber: true, notes: true },
         });
+        const matchedPeople = matchedPeopleCandidates.filter(
+          person => positionNumberText(person.positionNumber) === positionNumber
+        );
 
         if (matchedPeople.length > 0) {
           for (const person of matchedPeople) {

@@ -26,6 +26,7 @@ import {
   InfoOutlined as InfoIcon,
 } from '@mui/icons-material';
 import { formatBuddhistDate } from '@/utils/dateFormat';
+import { formatPositionNumber } from '@/utils/positionNumber';
 
 interface SwapDetail {
   id: string;
@@ -311,7 +312,7 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
                     <Box sx={{ mb: 1 }}>
                       <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>เลขตำแหน่ง</Typography>
                       <Typography variant="body2" fontWeight={500} sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
-                        {detail.fromPositionNumber}
+                        {formatPositionNumber(detail.fromPositionNumber)}
                       </Typography>
                     </Box>
                   )}
@@ -363,7 +364,7 @@ const InOutDetailModal: React.FC<InOutDetailModalProps> = ({
                     <Box sx={{ mb: 1 }}>
                       <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: { xs: '0.7rem', sm: '0.75rem' } }}>เลขตำแหน่ง</Typography>
                       <Typography variant="body2" fontWeight={600} color="success.dark" sx={{ fontSize: { xs: '0.8rem', sm: '0.875rem' } }}>
-                        {detail.toPositionNumber}
+                        {formatPositionNumber(detail.toPositionNumber)}
                       </Typography>
                     </Box>
                   )}

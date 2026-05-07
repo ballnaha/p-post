@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
+import { buildWildcardSearchWhere } from '@/lib/wildcardSearch';
+
+const SEARCHABLE_FIELDS = [
+  'fullName',
+  'position',
+  'unit',
+  'actingAs',
+  'trainingCourse',
+  'requestedPosition',
+  'supporterName',
+  'supportReason',
+] as const;
 
 /**
  * GET /api/police-personnel/candidates
@@ -27,6 +39,10 @@ export async function GET(request: NextRequest) {
     const yearParam = searchParams.get('year');
     const excludeTransactionId = searchParams.get('excludeTransactionId') || undefined;
     const minPosCodeIdParam = searchParams.get('minPosCodeId') || undefined;
+    const excludeIdsParam = searchParams.get('excludeIds') || undefined;
+    const excludeNoIdsParam = searchParams.get('excludeNoIds') || undefined;
+    const includeIdsParam = searchParams.get('includeIds') || undefined;
+    const includeNoIdsParam = searchParams.get('includeNoIds') || undefined;
 
     const page = pageParam ? Math.max(0, parseInt(pageParam, 10) || 0) : 0;
     const limit = limitParam ? Math.max(1, parseInt(limitParam, 10) || 20) : 20;
@@ -63,6 +79,22 @@ export async function GET(request: NextRequest) {
           txWhere.id = { not: excludeTransactionId };
         }
 
+        const includedIds = new Set(
+          (includeIdsParam || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+        );
+
+        const includedNoIds = new Set(
+          (includeNoIdsParam || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id))
+        );
+
         // Exclude IDs that appear in swap_transaction_detail for this year
         // ใช้ raw query เพื่อ subquery ที่เร็วกว่า
         const swapDetails = await prisma.swapTransactionDetail.findMany({
@@ -76,10 +108,31 @@ export async function GET(request: NextRequest) {
 
         const excludedIds = swapDetails
           .map((sd: any) => sd.personnelId)
-          .filter((id: any): id is string => id !== null);
+          .filter((id: any): id is string => id !== null)
+          .filter((id: string) => !includedIds.has(id));
 
         if (excludedIds.length > 0) {
           where.id = { notIn: excludedIds };
+        }
+
+        if (includedNoIds.size > 0) {
+          const swapDetailsByNoId = await prisma.swapTransactionDetail.findMany({
+            where: {
+              transaction: txWhere,
+              noId: { not: null },
+            },
+            select: { noId: true },
+            distinct: ['noId'],
+          });
+
+          const excludedNoIdsFromTx = swapDetailsByNoId
+            .map((sd: any) => sd.noId)
+            .filter((id: any): id is number => id !== null)
+            .filter((id: number) => !includedNoIds.has(id));
+
+          if (excludedNoIdsFromTx.length > 0) {
+            where.noId = { notIn: excludedNoIdsFromTx };
+          }
         }
       }
     }
@@ -122,15 +175,34 @@ export async function GET(request: NextRequest) {
     }
 
     if (search && search.trim()) {
-      where.AND.push({
-        OR: [
-          { fullName: { contains: search } },
-          { position: { contains: search } },
-          { unit: { contains: search } },
-          { actingAs: { contains: search } },
-          { trainingCourse: { contains: search } },
-        ]
-      });
+      const searchWhere = buildWildcardSearchWhere(SEARCHABLE_FIELDS, search);
+      if (searchWhere) {
+        where.AND.push(searchWhere);
+      }
+    }
+
+    const excludedLocalIds = (excludeIdsParam || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    const excludedLocalNoIds = (excludeNoIdsParam || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id));
+
+    if (excludedLocalIds.length > 0) {
+      where.id = where.id
+        ? { ...where.id, notIn: [...new Set([...(where.id.notIn || []), ...excludedLocalIds])] }
+        : { notIn: excludedLocalIds };
+    }
+
+    if (excludedLocalNoIds.length > 0) {
+      where.noId = where.noId
+        ? { ...where.noId, notIn: [...new Set([...(where.noId.notIn || []), ...excludedLocalNoIds])] }
+        : { notIn: excludedLocalNoIds };
     }
 
     // ใช้ Promise.all เพื่อ query count + data พร้อมกัน แทนที่จะ sequential

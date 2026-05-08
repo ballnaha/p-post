@@ -169,6 +169,7 @@ export async function GET(request: NextRequest) {
         'position',
         'requestedPosition',
         'notes',
+        'positionNotes',
       ], search);
       
       if (searchConditions && (where.AND || where.OR)) {
@@ -429,6 +430,7 @@ export async function POST(request: NextRequest) {
         trainingLocation: nullableText(body.trainingLocation),
         trainingCourse: nullableText(body.trainingCourse),
         notes: nullableText(body.notes),
+        positionNotes: nullableText(body.positionNotes),
         actingAs: nullableText(body.actingAs),
         supporterName: nullableText(body.supporterName),
         supportReason: nullableText(body.supportReason),

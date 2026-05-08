@@ -73,6 +73,8 @@ export interface InOutRecord {
     } | null;
     status: 'filled' | 'vacant' | 'reserved' | 'swap' | 'three-way' | 'promotion' | 'pending';
     remark: string | null;
+    personRemark?: string | null;
+    positionRemark?: string | null;
     swapType: string | null;
 }
 
@@ -408,10 +410,10 @@ const InOutRow = memo(({
                 )}
             </TableCell>
 
-            {/* หมายเหตุ */}
-            <TableCell sx={{ py: 1.25, px: 1.5 }}>
-                {record.remark ? (
-                    <Tooltip title={record.remark} arrow>
+            {/* หมายเหตุคน */}
+            <TableCell sx={{ py: 1.25, px: 1.5, borderRight: `1px solid ${theme.palette.divider}` }}>
+                {record.personRemark ? (
+                    <Tooltip title={record.personRemark} arrow>
                         <Typography
                             sx={{
                                 fontSize: '0.75rem',
@@ -424,7 +426,31 @@ const InOutRow = memo(({
                                 cursor: 'help',
                             }}
                         >
-                            {record.remark}
+                            {record.personRemark}
+                        </Typography>
+                    </Tooltip>
+                ) : (
+                    <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
+                )}
+            </TableCell>
+
+            {/* หมายเหตุตำแหน่ง */}
+            <TableCell sx={{ py: 1.25, px: 1.5 }}>
+                {record.positionRemark ? (
+                    <Tooltip title={record.positionRemark} arrow>
+                        <Typography
+                            sx={{
+                                fontSize: '0.75rem',
+                                color: theme.palette.secondary.main,
+                                fontWeight: 500,
+                                maxWidth: 140,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                cursor: 'help',
+                            }}
+                        >
+                            {record.positionRemark}
                         </Typography>
                     </Tooltip>
                 ) : (
@@ -542,8 +568,14 @@ export default function InOutTable({
             headerBg: theme.palette.error.main,
         },
         {
-            id: 'remark',
-            label: 'หมายเหตุ',
+            id: 'personRemark',
+            label: 'หมายเหตุคน',
+            minWidth: 120,
+            headerBg: theme.palette.grey[600],
+        },
+        {
+            id: 'positionRemark',
+            label: 'หมายเหตุตำแหน่ง',
             minWidth: 120,
             headerBg: theme.palette.grey[600],
         },

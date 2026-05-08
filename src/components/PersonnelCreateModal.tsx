@@ -65,6 +65,7 @@ interface PersonnelFormData {
   trainingLocation: string;
   trainingCourse: string;
   notes: string;
+  positionNotes: string;
   actingAs: string;
   supporterName: string;
   supportReason: string;
@@ -91,6 +92,7 @@ const emptyFormData: PersonnelFormData = {
   trainingLocation: '',
   trainingCourse: '',
   notes: '',
+  positionNotes: '',
   actingAs: '',
   supporterName: '',
   supportReason: '',
@@ -122,6 +124,7 @@ const toFormData = (initialData?: PersonnelCreateModalProps['initialData']): Per
   trainingLocation: initialData?.trainingLocation ?? '',
   trainingCourse: initialData?.trainingCourse ?? '',
   notes: initialData?.notes ?? '',
+  positionNotes: initialData?.positionNotes ?? '',
   actingAs: initialData?.actingAs ?? '',
   supporterName: initialData?.supporterName ?? '',
   supportReason: initialData?.supportReason ?? '',
@@ -715,12 +718,35 @@ export default function PersonnelCreateModal({
                   fullWidth
                   multiline
                   rows={3}
-                  label="หมายเหตุเพิ่มเติม"
+                  label="หมายเหตุตัวคน"
                   value={formData.notes}
                   onChange={(e) => handleChange('notes', e.target.value)}
                   variant="outlined"
                   size="small"
-                  placeholder="ระบุข้อมูลเพิ่มเติม..."
+                  placeholder="ระบุหมายเหตุเฉพาะตัวคน..."
+                  sx={{
+                    mb: 2,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main'
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: 2
+                      }
+                    }
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label="หมายเหตุตำแหน่ง"
+                  value={formData.positionNotes}
+                  onChange={(e) => handleChange('positionNotes', e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  placeholder="ระบุหมายเหตุของตำแหน่ง..."
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 2,

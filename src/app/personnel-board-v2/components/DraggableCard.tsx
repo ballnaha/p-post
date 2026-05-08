@@ -25,6 +25,8 @@ import { attachClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/clos
 import type { Edge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/types';
 import { Personnel } from '../types';
 import MoveToLaneButton from './MoveToLaneButton';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
+import { getResolvedPersonNote } from '@/utils/personnelNotes';
 
 interface DraggableCardProps {
     personnel: Personnel;
@@ -57,6 +59,7 @@ interface DraggableCardProps {
     onMoveToLane?: (laneId: string) => void;
     selectedMoveCount?: number;
     selectedPeople?: { name: string; position?: string; unit?: string }[];
+    searchTerm?: string;
 }
 
 const DraggableCard = memo(({
@@ -74,12 +77,14 @@ const DraggableCard = memo(({
     availableLanes = [],
     onMoveToLane,
     selectedMoveCount = 1,
-    selectedPeople = []
+    selectedPeople = [],
+    searchTerm = ''
 }: DraggableCardProps) => {
     const ref = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
     const [justDropped, setJustDropped] = useState(false);
+    const personNote = getResolvedPersonNote(personnel.notes);
 
     useEffect(() => {
         const el = ref.current;
@@ -308,7 +313,7 @@ const DraggableCard = memo(({
                                 wordBreak: 'break-word',
                             }}
                         >
-                            {personnel.rank} {personnel.fullName}
+                            {highlightWildcardText(`${personnel.rank} ${personnel.fullName}`, searchTerm)}
                         </Typography>
                     </Box>
                     <Typography
@@ -326,7 +331,10 @@ const DraggableCard = memo(({
                             overflow: 'hidden',
                         }}
                     >
-                        {personnel.position || '-'} {personnel.actingAs && `(${personnel.actingAs})`}
+                        {highlightWildcardText(
+                            `${personnel.position || '-'}${personnel.actingAs ? ` (${personnel.actingAs})` : ''}`,
+                            searchTerm
+                        )}
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
                         <Chip
@@ -351,7 +359,7 @@ const DraggableCard = memo(({
                             }}
                         />
                         <Chip
-                            label={personnel.unit || 'ไม่ระบุหน่วย'}
+                            label={highlightWildcardText(personnel.unit || 'ไม่ระบุหน่วย', searchTerm)}
                             size="small"
                             sx={{
                                 height: 'auto',
@@ -374,10 +382,50 @@ const DraggableCard = memo(({
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontSize: '0.75rem' }}>
                         อายุ: {personnel.age || '-'} | อาวุโส: {personnel.seniority || '-'}
                     </Typography>
+                    {personNote && (
+                        <Box
+                            sx={{
+                                mt: 0.75,
+                                px: 0.75,
+                                py: 0.5,
+                                borderRadius: 1,
+                                bgcolor: alpha('#f59e0b', 0.08),
+                                border: '1px solid',
+                                borderColor: alpha('#f59e0b', 0.2),
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    display: 'block',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    color: '#b45309',
+                                    mb: 0.25,
+                                }}
+                            >
+                                หมายเหตุตัวคน
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                                sx={{
+                                    fontSize: '0.75rem',
+                                    lineHeight: 1.4,
+                                    whiteSpace: 'normal',
+                                    overflowWrap: 'anywhere',
+                                    wordBreak: 'break-word',
+                                }}
+                            >
+                                {highlightWildcardText(personNote, searchTerm)}
+                            </Typography>
+                        </Box>
+                    )}
                     {(personnel.requestedPosition || personnel.supporterName || personnel.supportReason) && (
                         <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.72rem' }}>
-                                📍 ร้องขอ: {personnel.requestedPosition || personnel.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                📍 ร้องขอ: {highlightWildcardText(personnel.requestedPosition || personnel.supporterName || 'มีการร้องขอตำแหน่ง', searchTerm)}
                             </Typography>
                         </Box>
                     )}

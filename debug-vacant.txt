@@ -1,6 +1,6 @@
 --- DEBUG ASSIGNED COUNTS ---
-Total Matching Keys: 3
-Assigned Positions: 0
-Assigned Counts Map: {}
+Total Matching Keys: 0
+Assigned Positions: 6
+Assigned Counts Map: {"รอง ผบก.อก.บช.น.-น-1001071010004":1,"รอง ผบก.อก.บช.น.-น-1001071010147":1,"รอง ผบก.อก.บช.น.-น-1001071010002":1,"รอง ผบก.อก.บช.น.-น-1001071010146":1,"รอง ผบก.อก.บช.น.-น-1001071010005":1,"รอง ผบก.อก.บช.น.-น-1001071010003":1}
 Removed Keys: []
-True Unassigned Count: 3
+True Unassigned Count: 0

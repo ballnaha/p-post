@@ -73,6 +73,7 @@ import PersonnelCreateModal from '@/components/PersonnelCreateModal';
 import { EmptyState } from '@/app/components/EmptyState';
 import { formatBuddhistDateInput } from '@/utils/dateFormat';
 import { formatPositionNumber } from '@/utils/positionNumber';
+import { getResolvedPersonNote, getResolvedPositionNote } from '@/utils/personnelNotes';
 
 interface PolicePersonnel {
   id: string;
@@ -101,6 +102,7 @@ interface PolicePersonnel {
   trainingLocation?: string;
   trainingCourse?: string;
   notes?: string;
+  positionNotes?: string;
   supporterName?: string; // ผู้สนับสนุน/ผู้เสนอชื่อ
   supportReason?: string; // เหตุผลในการสนับสนุน
   requestedPosition?: string; // ตำแหน่งที่ร้องขอ
@@ -153,28 +155,6 @@ const fullImportExportTextColumns = new Set<string>([
   'เลขตำแหน่ง',
 ]);
 
-const getTaggedNote = (notes: string | undefined, label: string) => {
-  if (!notes) return '';
-  const prefix = `${label}:`;
-  return notes
-    .split('\n')
-    .find((line) => line.startsWith(prefix))
-    ?.replace(prefix, '')
-    .trim() || '';
-};
-
-const getUntaggedNote = (notes: string | undefined) => {
-  if (!notes) return '';
-  const taggedPersonNote = getTaggedNote(notes, 'หมายเหตุตัวคน');
-  if (taggedPersonNote) return taggedPersonNote;
-
-  return notes
-    .split('\n')
-    .filter((line) => !line.startsWith('หมายเหตุตำแหน่ง:'))
-    .join('\n')
-    .trim();
-};
-
 const buildFullImportExportRow = (person: PolicePersonnel) => ({
   อาวุโส: person.seniority || '',
   ยศ: person.rank || '',
@@ -190,13 +170,13 @@ const buildFullImportExportRow = (person: PolicePersonnel) => ({
   อายุ: person.age || '',
   'ตท.': person.trainingLocation || '',
   'นรต.': person.trainingCourse || '',
-  หมายเหตุตัวคน: getUntaggedNote(person.notes),
+  หมายเหตุตัวคน: getResolvedPersonNote(person.notes) || '',
   POSCODE: person.posCodeId || '',
   ตำแหน่ง: person.position || '',
   เลขตำแหน่ง: formatPositionNumber(person.positionNumber),
   ทำหน้าที่: person.actingAs || '',
   หน่วย: person.unit || '',
-  หมายเหตุตำแหน่ง: getTaggedNote(person.notes, 'หมายเหตุตำแหน่ง'),
+  หมายเหตุตำแหน่ง: getResolvedPositionNote(person.notes, person.positionNotes) || '',
   ตำแหน่งที่ร้องขอ: person.requestedPosition || '',
   ชื่อผู้สนับสนุน: person.supporterName || '',
   เหตุผลที่สนันสุนน: person.supportReason || '',
@@ -1573,34 +1553,6 @@ export default function PolicePersonnelPage() {
             </CardContent>
 
             <CardActions sx={{ px: 2, pb: 2, pt: 0, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {/* Chip แสดงสถานะ Swap List */}
-              {person.rank && getPersonnelStatus(person.nationalId).isInSwap && (
-                <Chip
-                  label="อยู่ในสลับตำแหน่ง"
-                  size="small"
-                  color="info"
-                  sx={{ fontSize: '0.7rem', height: 20 }}
-                />
-              )}
-              {/* Chip แสดงสถานะ Three Way Swap */}
-              {person.rank && person.nationalId && threeWayListData.has(person.nationalId) && (
-                <Chip
-                  label="อยู่ในสามเส้า"
-                  size="small"
-                  color="warning"
-                  sx={{ fontSize: '0.7rem', height: 20 }}
-                />
-              )}
-              {/* Chip แสดงสถานะ Promotion Chain */}
-              {person.rank && person.nationalId && promotionChainData.has(person.nationalId) && (
-                <Chip
-                  label="แทนตำแหน่ง"
-                  size="small"
-                  color="success"
-                  sx={{ fontSize: '0.7rem', height: 20 }}
-                />
-              )}
-
               {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
               <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', alignItems: 'center' }}>
                 <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
@@ -2185,6 +2137,22 @@ export default function PolicePersonnelPage() {
           onClose={handleCloseDetailModal}
           personnel={selectedPersonnel}
           loading={false}
+          onNotesUpdate={(notes) => {
+            setSelectedPersonnel((prev) => prev ? { ...prev, notes: notes || undefined } : prev);
+            setData((prev) => prev.map((item) => (
+              item.id === selectedPersonnel?.id
+                ? { ...item, notes: notes || undefined }
+                : item
+            )));
+          }}
+          onPositionNotesUpdate={(positionNotes) => {
+            setSelectedPersonnel((prev) => prev ? { ...prev, positionNotes: positionNotes || undefined } : prev);
+            setData((prev) => prev.map((item) => (
+              item.id === selectedPersonnel?.id
+                ? { ...item, positionNotes: positionNotes || undefined }
+                : item
+            )));
+          }}
           onClearData={() => setSelectedPersonnel(null)}
         />
 

@@ -33,9 +33,11 @@ import {
     UnfoldLess as UnfoldLessIcon,
     KeyboardArrowDown as KeyboardArrowDownIcon,
     Visibility as VisibilityIcon,
+    PushPin as PushPinIcon,
 } from '@mui/icons-material';
 import { Column, Personnel } from '../types';
 import { matchesAnyWildcardSearch } from '@/lib/wildcardSearch';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
 
 interface LaneSummaryButtonProps {
     columns: Column[];
@@ -59,7 +61,7 @@ const LANES_PER_PAGE = 10;
 const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 
 // Sub-component for lane detail view
-const LaneDetailView = memo(({ lane, personnelMap, color, onOpenDetail }: { lane: Column; personnelMap: Record<string, Personnel>; color: string; onOpenDetail?: (person: Personnel, targetInfo?: any) => void }) => {
+const LaneDetailView = memo(({ lane, personnelMap, color, onOpenDetail, searchTerm }: { lane: Column; personnelMap: Record<string, Personnel>; color: string; onOpenDetail?: (person: Personnel, targetInfo?: any) => void; searchTerm: string }) => {
     const chainType = lane.chainType || 'custom';
     const isSwap = chainType === 'swap';
     const isThreeWay = chainType === 'three-way';
@@ -200,7 +202,7 @@ const LaneDetailView = memo(({ lane, personnelMap, color, onOpenDetail }: { lane
                                 ) : (
                                     <>
                                         <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155' }}>
-                                            {item.person.rank || ''} {item.person.fullName}
+                                            {highlightWildcardText(`${item.person.rank || ''} ${item.person.fullName || ''}`.trim(), searchTerm)}
                                         </Typography>
                                         {item.person.unit && (
                                             <Chip
@@ -459,6 +461,7 @@ const LaneSummaryButton = memo(({ columns, personnelMap, onOpenDetail }: LaneSum
         setIsOpen(false);
         setSearchTerm('');
     };
+    const renderHighlighted = (text: unknown) => highlightWildcardText(text, searchTerm);
 
     return (
         <>
@@ -760,7 +763,7 @@ const LaneSummaryButton = memo(({ columns, personnelMap, onOpenDetail }: LaneSum
                                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                                                                     {lane.groupNumber && (
                                                                         <Chip
-                                                                            label={lane.groupNumber}
+                                                                            label={renderHighlighted(lane.groupNumber)}
                                                                             size="small"
                                                                             sx={{
                                                                                 height: 16,
@@ -773,8 +776,11 @@ const LaneSummaryButton = memo(({ columns, personnelMap, onOpenDetail }: LaneSum
                                                                             }}
                                                                         />
                                                                     )}
+                                                                    {lane.isPinned && !lane.isCompleted && (
+                                                                        <PushPinIcon sx={{ fontSize: 12, color: '#d97706', flexShrink: 0 }} />
+                                                                    )}
                                                                     <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155', fontSize: '0.75rem' }}>
-                                                                        {lane.title}
+                                                                        {renderHighlighted(lane.title)}
                                                                     </Typography>
                                                                 </Box>
 
@@ -827,6 +833,7 @@ const LaneSummaryButton = memo(({ columns, personnelMap, onOpenDetail }: LaneSum
                                                                 personnelMap={personnelMap}
                                                                 color={group.color}
                                                                 onOpenDetail={onOpenDetail}
+                                                                searchTerm={searchTerm}
                                                             />
                                                         </Collapse>
                                                     </Box>

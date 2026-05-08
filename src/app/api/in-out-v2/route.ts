@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { buildWildcardSearchWhere, getWildcardSearchParts } from '@/lib/wildcardSearch';
+import { getResolvedPersonNote, getResolvedPositionNote } from '@/utils/personnelNotes';
 
 // Use global prisma instance to prevent connection pool exhaustion
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
@@ -49,6 +50,8 @@ export interface InOutRecord {
     } | null;
     status: 'filled' | 'vacant' | 'reserved' | 'swap' | 'three-way' | 'promotion' | 'pending';
     remark: string | null;
+    personRemark?: string | null;
+    positionRemark?: string | null;
     swapType: string | null;
 }
 
@@ -500,6 +503,8 @@ export async function GET(request: NextRequest) {
 
             const targetPosNorm = toPositionNumber ? normalizePositionNumber(toPositionNumber) : null;
             const targetPosInfo = targetPosNorm ? positionNamesMap.get(targetPosNorm) : null;
+            const personRemark = swapDetail?.notes || getResolvedPersonNote(person.notes);
+            const positionRemark = getResolvedPositionNote(person.notes, person.positionNotes);
 
             return {
                 id: person.id,
@@ -534,7 +539,9 @@ export async function GET(request: NextRequest) {
                     supporter: swapDetail.supportName || person.supporterName,
                 } : null,
                 status: recordStatus,
-                remark: swapDetail?.notes || person.notes || null,
+                remark: personRemark || positionRemark || null,
+                personRemark,
+                positionRemark,
                 swapType: swapDetail?.transaction?.swapType || null,
             };
         };

@@ -23,11 +23,17 @@ import {
 } from '@mui/icons-material';
 import { Personnel } from '../types';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
+import { getResolvedPersonNote } from '@/utils/personnelNotes';
 
 interface CreateThreeWayLaneTabProps {
     selectedYear: number;
     allUnits: string[];
     posCodeOptions: Array<{ id: number; name: string }>;
+    excludeIds?: string[];
+    excludeNoIds?: string[];
+    includeIds?: string[];
+    includeNoIds?: string[];
     onCreate: (person1: Personnel, person2: Personnel, person3: Personnel, title: string) => void;
     loading?: boolean;
 }
@@ -36,6 +42,10 @@ export default function CreateThreeWayLaneTab({
     selectedYear,
     allUnits,
     posCodeOptions,
+    excludeIds = [],
+    excludeNoIds = [],
+    includeIds = [],
+    includeNoIds = [],
     onCreate,
     loading = false
 }: CreateThreeWayLaneTabProps) {
@@ -82,6 +92,10 @@ export default function CreateThreeWayLaneTab({
             if (filterUnit && filterUnit !== 'all') params.set('unit', filterUnit);
             if (filterPosCode && filterPosCode !== 'all') params.set('posCodeId', filterPosCode);
             if (filterHasRequestedPosition && filterHasRequestedPosition !== 'all') params.set('hasRequestedPosition', filterHasRequestedPosition);
+            if (excludeIds.length > 0) params.set('excludeIds', excludeIds.join(','));
+            if (excludeNoIds.length > 0) params.set('excludeNoIds', excludeNoIds.join(','));
+            if (includeIds.length > 0) params.set('includeIds', includeIds.join(','));
+            if (includeNoIds.length > 0) params.set('includeNoIds', includeNoIds.join(','));
 
             params.set('page', page.toString());
             params.set('limit', '20');
@@ -97,7 +111,7 @@ export default function CreateThreeWayLaneTab({
         } finally {
             setLoadingPersonnel(false);
         }
-    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition, page, selectedYear]);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition, page, selectedYear, excludeIds, excludeNoIds, includeIds, includeNoIds]);
 
     // Fetch on changes
     useEffect(() => {
@@ -118,6 +132,7 @@ export default function CreateThreeWayLaneTab({
     };
 
     const isComplete = person1 && person2 && person3;
+    const renderHighlighted = (text: unknown) => highlightWildcardText(text, debouncedSearchTerm);
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 1 }}>
@@ -144,10 +159,10 @@ export default function CreateThreeWayLaneTab({
                         {person1 ? (
                             <Box>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
-                                    {person1.rank} {person1.fullName}
+                                    {renderHighlighted(`${person1.rank} ${person1.fullName}`)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
-                                    {person1.position}
+                                    {renderHighlighted(person1.position)}
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                     <Chip
@@ -156,7 +171,7 @@ export default function CreateThreeWayLaneTab({
                                         sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
                                     />
                                     <Chip
-                                        label={person1.unit || '-'}
+                                        label={renderHighlighted(person1.unit || '-')}
                                         size="small"
                                         sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
                                     />
@@ -206,10 +221,10 @@ export default function CreateThreeWayLaneTab({
                         {person2 ? (
                             <Box>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
-                                    {person2.rank} {person2.fullName}
+                                    {renderHighlighted(`${person2.rank} ${person2.fullName}`)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
-                                    {person2.position}
+                                    {renderHighlighted(person2.position)}
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                     <Chip
@@ -218,7 +233,7 @@ export default function CreateThreeWayLaneTab({
                                         sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
                                     />
                                     <Chip
-                                        label={person2.unit || '-'}
+                                        label={renderHighlighted(person2.unit || '-')}
                                         size="small"
                                         sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
                                     />
@@ -268,10 +283,10 @@ export default function CreateThreeWayLaneTab({
                         {person3 ? (
                             <Box>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
-                                    {person3.rank} {person3.fullName}
+                                    {renderHighlighted(`${person3.rank} ${person3.fullName}`)}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
-                                    {person3.position}
+                                    {renderHighlighted(person3.position)}
                                 </Typography>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                     <Chip
@@ -280,7 +295,7 @@ export default function CreateThreeWayLaneTab({
                                         sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
                                     />
                                     <Chip
-                                        label={person3.unit || '-'}
+                                        label={renderHighlighted(person3.unit || '-')}
                                         size="small"
                                         sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
                                     />
@@ -519,11 +534,15 @@ export default function CreateThreeWayLaneTab({
                                 onClick={() => setViewPerson(person)}
                             >
                                 <Box sx={{ flex: 1, p: 1.5, minWidth: 0 }}>
+                                    {(() => {
+                                        const personNote = getResolvedPersonNote(person.notes);
+                                        return (
+                                            <>
                                     <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>
-                                        {person.rank} {person.fullName}
+                                        {renderHighlighted(`${person.rank} ${person.fullName}`)}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem' }}>
-                                        {person.position}
+                                        {renderHighlighted(person.position)}
                                     </Typography>
                                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
                                         <Chip
@@ -532,7 +551,7 @@ export default function CreateThreeWayLaneTab({
                                             sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main' }}
                                         />
                                         <Chip
-                                            label={person.unit || 'ไม่ระบุหน่วย'}
+                                            label={renderHighlighted(person.unit || 'ไม่ระบุหน่วย')}
                                             size="small"
                                             sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600 }}
                                         />
@@ -544,6 +563,29 @@ export default function CreateThreeWayLaneTab({
                                             </Typography>
                                         </Box>
                                     )}
+                                    {personNote && (
+                                        <Box
+                                            sx={{
+                                                mt: 0.75,
+                                                px: 0.75,
+                                                py: 0.5,
+                                                borderRadius: 1,
+                                                bgcolor: alpha('#f59e0b', 0.08),
+                                                border: '1px solid',
+                                                borderColor: alpha('#f59e0b', 0.2),
+                                            }}
+                                        >
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', mb: 0.25 }}>
+                                                หมายเหตุตัวคน
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                {renderHighlighted(personNote)}
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                            </>
+                                        );
+                                    })()}
                                 </Box>
 
                                 <Box sx={{ display: 'flex', alignItems: 'center', px: 1, borderLeft: '1px solid #f1f5f9', bgcolor: '#f8fafc' }}>

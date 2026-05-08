@@ -23,11 +23,16 @@ import {
 } from '@mui/icons-material';
 import { Personnel } from '../types';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
+import { getResolvedPersonNote } from '@/utils/personnelNotes';
 
 interface CreateSwapLaneTabProps {
     selectedYear: number;
     allUnits: string[];
     posCodeOptions: Array<{ id: number; name: string }>;
+    excludeIds?: string[];
+    excludeNoIds?: string[];
+    includeIds?: string[];
+    includeNoIds?: string[];
     onCreate: (person1: Personnel, person2: Personnel, title: string) => void;
     loading?: boolean;
 }
@@ -36,6 +41,10 @@ export default function CreateSwapLaneTab({
     selectedYear,
     allUnits,
     posCodeOptions,
+    excludeIds = [],
+    excludeNoIds = [],
+    includeIds = [],
+    includeNoIds = [],
     onCreate,
     loading = false
 }: CreateSwapLaneTabProps) {
@@ -76,6 +85,10 @@ export default function CreateSwapLaneTab({
             if (swapFilterUnit && swapFilterUnit !== 'all') params.set('unit', swapFilterUnit);
             if (swapFilterPosCode && swapFilterPosCode !== 'all') params.set('posCodeId', swapFilterPosCode);
             if (swapFilterHasRequestedPosition && swapFilterHasRequestedPosition !== 'all') params.set('hasRequestedPosition', swapFilterHasRequestedPosition);
+            if (excludeIds.length > 0) params.set('excludeIds', excludeIds.join(','));
+            if (excludeNoIds.length > 0) params.set('excludeNoIds', excludeNoIds.join(','));
+            if (includeIds.length > 0) params.set('includeIds', includeIds.join(','));
+            if (includeNoIds.length > 0) params.set('includeNoIds', includeNoIds.join(','));
 
             params.set('page', swapPage.toString());
             params.set('limit', '20');
@@ -91,7 +104,7 @@ export default function CreateSwapLaneTab({
         } finally {
             setLoadingSwapPersonnel(false);
         }
-    }, [debouncedSwapSearchTerm, swapFilterUnit, swapFilterPosCode, swapFilterHasRequestedPosition, swapPage, selectedYear]);
+    }, [debouncedSwapSearchTerm, swapFilterUnit, swapFilterPosCode, swapFilterHasRequestedPosition, swapPage, selectedYear, excludeIds, excludeNoIds, includeIds, includeNoIds]);
 
     // Fetch on changes
     useEffect(() => {
@@ -476,6 +489,10 @@ export default function CreateSwapLaneTab({
                             >
                                 {/* Content */}
                                 <Box sx={{ flex: 1, p: 1.5, minWidth: 0 }}>
+                                    {(() => {
+                                        const personNote = getResolvedPersonNote(person.notes);
+                                        return (
+                                            <>
                                     <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
                                         {person.rank} {person.fullName}
                                     </Typography>
@@ -501,6 +518,29 @@ export default function CreateSwapLaneTab({
                                             </Typography>
                                         </Box>
                                     )}
+                                    {personNote && (
+                                        <Box
+                                            sx={{
+                                                mt: 0.75,
+                                                px: 0.75,
+                                                py: 0.5,
+                                                borderRadius: 1,
+                                                bgcolor: alpha('#f59e0b', 0.08),
+                                                border: '1px solid',
+                                                borderColor: alpha('#f59e0b', 0.2),
+                                            }}
+                                        >
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', mb: 0.25 }}>
+                                                หมายเหตุตัวคน
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                {personNote}
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                            </>
+                                        );
+                                    })()}
                                 </Box>
 
                                 {/* Action Button */}

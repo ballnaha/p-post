@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
 import * as XLSX from '@e965/xlsx';
+import { getLegacyPositionNote } from '@/utils/personnelNotes';
 
 type ExcelRow = Record<string, any>;
 type UploadType = 'personFile' | 'positionFile' | 'requestFile' | 'fullFile';
@@ -50,28 +51,6 @@ function firstText(row: ExcelRow, columns: string[]): string | null {
     if (value) return value;
   }
   return null;
-}
-
-function combineNotes(personNote: string | null, positionNote: string | null): string | null {
-  const notes = [
-    personNote ? `หมายเหตุตัวคน: ${personNote}` : null,
-    positionNote ? `หมายเหตุตำแหน่ง: ${positionNote}` : null,
-  ].filter(Boolean);
-
-  return notes.length > 0 ? notes.join('\n') : null;
-}
-
-function mergePositionNote(existingNote: string | null, positionNote: string | null): string | null {
-  if (!positionNote) return existingNote;
-
-  const preservedNotes = existingNote
-    ? existingNote
-      .split('\n')
-      .filter((line) => !line.startsWith('หมายเหตุตำแหน่ง:'))
-      .join('\n')
-    : null;
-
-  return [preservedNotes, `หมายเหตุตำแหน่ง: ${positionNote}`].filter(Boolean).join('\n');
 }
 
 function formatGregorianDate(day: number, month: number, year: number): string | null {
@@ -478,16 +457,15 @@ async function processImportBundleJob(
                   actingAs: true,
                   unit: true,
                   notes: true,
+                  positionNotes: true,
                 },
               });
             const existingPositionRecord = existingPositionRecords.find(
               record => positionNumberText(record.positionNumber) === positionNumber
             ) || null;
-            const existingPositionNote = existingPositionRecord?.notes
-              ?.split('\n')
-              .find((line) => line.startsWith('หมายเหตุตำแหน่ง:'))
-              ?.replace('หมายเหตุตำแหน่ง:', '')
-              .trim() || null;
+            const existingPositionNote = existingPositionRecord
+              ? getLegacyPositionNote(existingPositionRecord.notes) || existingPositionRecord.positionNotes || null
+              : null;
             const personnelData: any = {
               year: importYear,
               isActive: true,
@@ -500,7 +478,8 @@ async function processImportBundleJob(
               position: importedPositionData?.position || existingPositionRecord?.position || null,
               actingAs: importedPositionData?.actingAs || existingPositionRecord?.actingAs || null,
               unit: importedPositionData?.unit || existingPositionRecord?.unit || null,
-              notes: combineNotes(personNote, positionNote || existingPositionNote),
+              notes: personNote,
+              positionNotes: positionNote || existingPositionNote,
               age: text(row['อายุ']) || (calculatedAge !== null ? `${calculatedAge}ป.` : null),
               education: text(row['คุณวุฒิ'])?.substring(0, 5000),
               trainingLocation: text(row['ตท.']),
@@ -613,7 +592,7 @@ async function processImportBundleJob(
             isActive: true,
             positionNumber: { not: null },
           },
-          select: { id: true, positionNumber: true, notes: true },
+          select: { id: true, positionNumber: true, notes: true, positionNotes: true },
         });
         const matchedPeople = matchedPeopleCandidates.filter(
           person => positionNumberText(person.positionNumber) === positionNumber
@@ -625,7 +604,7 @@ async function processImportBundleJob(
               where: { id: person.id },
               data: {
                 ...updateData,
-                notes: mergePositionNote(person.notes, positionNote),
+                positionNotes: positionNote || getLegacyPositionNote(person.notes) || person.positionNotes || null,
               },
             });
           }
@@ -641,7 +620,7 @@ async function processImportBundleJob(
               position: updateData.position,
               actingAs: updateData.actingAs,
               unit: updateData.unit,
-              notes: positionNote ? `หมายเหตุตำแหน่ง: ${positionNote}` : undefined,
+              positionNotes: positionNote || undefined,
               createdBy: username,
               updatedBy: username,
             },

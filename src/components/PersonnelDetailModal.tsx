@@ -39,6 +39,7 @@ import {
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { formatBuddhistDate } from '@/utils/dateFormat';
 import { formatPositionNumber } from '@/utils/positionNumber';
+import { getResolvedPersonNote, getResolvedPositionNote } from '@/utils/personnelNotes';
 
 // Interface สำหรับข้อมูลบุคลากร (รองรับทั้ง police-personnel, swap-list, three-way-swap, vacant-position)
 export interface PersonnelData {
@@ -69,6 +70,7 @@ export interface PersonnelData {
   trainingLocation?: string | null;
   trainingCourse?: string | null;
   notes?: string | null;
+  positionNotes?: string | null;
   requestedPosition?: string | null; // ตำแหน่งที่ร้องขอ
   supporterName?: string | null; // ผู้สนับสนุน/ผู้เสนอชื่อ
   supportReason?: string | null; // เหตุผลในการสนับสนุน
@@ -101,6 +103,7 @@ interface PersonnelDetailModalProps {
   onSuggest?: (data: PersonnelData) => void;
   onPositionUpdate?: (actingAs: string | null) => void;
   onNotesUpdate?: (notes: string | null) => void;
+  onPositionNotesUpdate?: (positionNotes: string | null) => void;
   variant?: 'default' | 'vacant';
 }
 
@@ -119,6 +122,7 @@ export default function PersonnelDetailModal({
   onSuggest,
   onPositionUpdate,
   onNotesUpdate,
+  onPositionNotesUpdate,
   variant = 'default'
 }: PersonnelDetailModalProps) {
   const theme = useTheme();
@@ -153,6 +157,9 @@ export default function PersonnelDetailModal({
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notes, setNotes] = useState<string>('');
   const [savingNotes, setSavingNotes] = useState(false);
+  const [isEditingPositionNotes, setIsEditingPositionNotes] = useState(false);
+  const [positionNotes, setPositionNotes] = useState<string>('');
+  const [savingPositionNotes, setSavingPositionNotes] = useState(false);
 
   // Set avatar URL from personnel data
   useEffect(() => {
@@ -170,7 +177,8 @@ export default function PersonnelDetailModal({
       setSupporterName(personnel.supporterName || '');
       setSupportReason(personnel.supportReason || '');
       setActingAs(personnel.actingAs || '');
-      setNotes(personnel.notes || '');
+      setNotes(getResolvedPersonNote(personnel.notes) || '');
+      setPositionNotes(getResolvedPositionNote(personnel.notes, personnel.positionNotes) || '');
     }
   }, [personnel]);
 
@@ -180,6 +188,7 @@ export default function PersonnelDetailModal({
       setIsEditingSupporter(false);
       setIsEditingPosition(false);
       setIsEditingNotes(false);
+      setIsEditingPositionNotes(false);
     }
   }, [open]);
 
@@ -235,6 +244,7 @@ export default function PersonnelDetailModal({
     setIsEditingSupporter(false);
     setIsEditingPosition(false);
     setIsEditingNotes(false);
+    setIsEditingPositionNotes(false);
     onClose();
     // Delay clearing data until animation completes (if callback provided)
     if (onClearData) {
@@ -370,7 +380,7 @@ export default function PersonnelDetailModal({
   };
 
   const handleCancelEditNotes = () => {
-    setNotes(personnel?.notes || '');
+    setNotes(getResolvedPersonNote(personnel?.notes) || '');
     setIsEditingNotes(false);
   };
 
@@ -418,6 +428,55 @@ export default function PersonnelDetailModal({
       showSnackbar(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการบันทึก', 'error');
     } finally {
       setSavingNotes(false);
+    }
+  };
+
+  const handleEditPositionNotes = () => {
+    setIsEditingPositionNotes(true);
+  };
+
+  const handleCancelEditPositionNotes = () => {
+    setPositionNotes(getResolvedPositionNote(personnel?.notes, personnel?.positionNotes) || '');
+    setIsEditingPositionNotes(false);
+  };
+
+  const handleSavePositionNotes = async () => {
+    if (isPlaceholderPersonnel) {
+      setIsEditingPositionNotes(false);
+      return;
+    }
+
+    if (!originalId) {
+      showSnackbar('ไม่สามารถบันทึกได้ เนื่องจากไม่พบ ID บุคลากร', 'error');
+      return;
+    }
+
+    try {
+      setSavingPositionNotes(true);
+
+      const response = await fetch(`/api/police-personnel/${originalId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          positionNotes: positionNotes.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'เกิดข้อผิดพลาดในการบันทึก');
+      }
+
+      showSnackbar('บันทึกหมายเหตุตำแหน่งสำเร็จ', 'success');
+      setIsEditingPositionNotes(false);
+      onPositionNotesUpdate?.(positionNotes.trim() || null);
+    } catch (error) {
+      console.error('Save position notes error:', error);
+      showSnackbar(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการบันทึก', 'error');
+    } finally {
+      setSavingPositionNotes(false);
     }
   };
 
@@ -1091,7 +1150,7 @@ export default function PersonnelDetailModal({
               <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem' }}>
-                    หมายเหตุเพิ่มเติม
+                    {isVacant ? 'หมายเหตุเพิ่มเติม' : 'หมายเหตุตัวคน'}
                   </Typography>
                   {!isEditingNotes ? (
                     <IconButton size="small" onClick={handleEditNotes} sx={{ p: 0.5 }} disabled={isPlaceholderPersonnel || !originalId}>
@@ -1116,7 +1175,7 @@ export default function PersonnelDetailModal({
                     size="small"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="เพิ่มหมายเหตุ..."
+                    placeholder={isVacant ? 'เพิ่มหมายเหตุ...' : 'เพิ่มหมายเหตุตัวคน...'}
                     sx={{ bgcolor: 'white' }}
                   />
                 ) : (
@@ -1125,6 +1184,47 @@ export default function PersonnelDetailModal({
                   </Typography>
                 )}
               </Paper>
+
+              {/* หมายเหตุตำแหน่ง */}
+              {!isVacant && (
+                <Paper elevation={0} sx={{ p: 1.5, mt: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.875rem' }}>
+                      หมายเหตุตำแหน่ง
+                    </Typography>
+                    {!isEditingPositionNotes ? (
+                      <IconButton size="small" onClick={handleEditPositionNotes} sx={{ p: 0.5 }} disabled={isPlaceholderPersonnel || !originalId}>
+                        <EditIcon sx={{ fontSize: 20 }} />
+                      </IconButton>
+                    ) : (
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <IconButton size="small" onClick={handleCancelEditPositionNotes} disabled={savingPositionNotes}>
+                          <CloseIcon sx={{ fontSize: 20 }} />
+                        </IconButton>
+                        <IconButton size="small" onClick={handleSavePositionNotes} disabled={savingPositionNotes} color="primary">
+                          <SaveIcon sx={{ fontSize: 20 }} />
+                        </IconButton>
+                      </Box>
+                    )}
+                  </Box>
+                  {isEditingPositionNotes ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={2}
+                      size="small"
+                      value={positionNotes}
+                      onChange={(e) => setPositionNotes(e.target.value)}
+                      placeholder="เพิ่มหมายเหตุตำแหน่ง..."
+                      sx={{ bgcolor: 'white' }}
+                    />
+                  ) : (
+                    <Typography variant="body2" sx={{ fontStyle: positionNotes ? 'normal' : 'italic', color: positionNotes ? 'text.primary' : 'text.disabled' }}>
+                      {positionNotes || 'ไม่มีหมายเหตุตำแหน่ง'}
+                    </Typography>
+                  )}
+                </Paper>
+              )}
             </Box>
           ) : null}
         </DialogContent>

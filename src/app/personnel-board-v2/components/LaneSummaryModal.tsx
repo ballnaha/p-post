@@ -23,7 +23,8 @@ import {
     TrendingUp as PromotionIcon,
     CheckCircle as CheckCircleIcon,
     Warning as WarningIcon,
-    ArrowRightAlt as ArrowRightAltIcon
+    ArrowRightAlt as ArrowRightAltIcon,
+    PushPin as PushPinIcon
 } from '@mui/icons-material';
 import { Column, Personnel } from '../types';
 
@@ -45,6 +46,7 @@ export default function LaneSummaryModal({
     const vacantPos = column.vacantPosition;
     const personnelList = column.itemIds.map(id => personnelMap[id]).filter(Boolean);
     const isCompleted = column.isCompleted;
+    const isPinned = column.isPinned;
 
     // Determine Lane Type
     const isSwap = column.chainType === 'swap' || vacantPos?.transactionType === 'two-way';
@@ -122,6 +124,13 @@ export default function LaneSummaryModal({
                     <Chip
                         icon={<WarningIcon sx={{ fill: 'white !important' }} />}
                         label="กำลังดำเนินการ"
+                        sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 700 }}
+                    />
+                )}
+                {isPinned && !isCompleted && (
+                    <Chip
+                        icon={<PushPinIcon sx={{ fill: 'white !important' }} />}
+                        label="ปักหมุด"
                         sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 700 }}
                     />
                 )}

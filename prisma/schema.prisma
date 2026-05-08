@@ -81,7 +81,8 @@ model PolicePersonnel {
   trainingCourse   String? @map("training_course") // นรต. (นายร้อยตำรวจ)
 
   // หมายเหตุ
-  notes String? @db.Text // หมายเหตุ/เงื่อนไข
+  notes         String? @db.Text // หมายเหตุเฉพาะตัวคน
+  positionNotes String? @map("position_notes") @db.Text // หมายเหตุตำแหน่ง
 
   // ข้อมูลการเสนอชื่อ (Nomination Information)
   supporterName String? @map("supporter_name") // ผู้สนับสนุน/ผู้เสนอชื่อ

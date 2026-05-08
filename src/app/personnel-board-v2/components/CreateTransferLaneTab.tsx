@@ -26,11 +26,17 @@ import {
 import { Personnel } from '../types';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import { matchesWildcardSearch } from '@/lib/wildcardSearch';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
+import { getResolvedPersonNote } from '@/utils/personnelNotes';
 
 interface CreateTransferLaneTabProps {
     selectedYear: number;
     allUnits: string[];
     posCodeOptions: Array<{ id: number; name: string }>;
+    excludeIds?: string[];
+    excludeNoIds?: string[];
+    includeIds?: string[];
+    includeNoIds?: string[];
     onCreate: (person: Personnel, toUnit: string, laneTitle: string) => void;
     loading?: boolean;
 }
@@ -39,6 +45,10 @@ export default function CreateTransferLaneTab({
     selectedYear,
     allUnits,
     posCodeOptions,
+    excludeIds = [],
+    excludeNoIds = [],
+    includeIds = [],
+    includeNoIds = [],
     onCreate,
     loading = false
 }: CreateTransferLaneTabProps) {
@@ -62,6 +72,12 @@ export default function CreateTransferLaneTab({
     // Modal
     const [viewPerson, setViewPerson] = useState<Personnel | null>(null);
 
+    const getPosCodeLabel = (person: Personnel) => (
+        person.posCodeId
+            ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}`
+            : (person.posCodeMaster?.name || '-')
+    );
+
     // Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -78,6 +94,10 @@ export default function CreateTransferLaneTab({
             if (filterUnit && filterUnit !== 'all') params.set('unit', filterUnit);
             if (filterPosCode && filterPosCode !== 'all') params.set('posCodeId', filterPosCode);
             if (filterHasRequestedPosition && filterHasRequestedPosition !== 'all') params.set('hasRequestedPosition', filterHasRequestedPosition);
+            if (excludeIds.length > 0) params.set('excludeIds', excludeIds.join(','));
+            if (excludeNoIds.length > 0) params.set('excludeNoIds', excludeNoIds.join(','));
+            if (includeIds.length > 0) params.set('includeIds', includeIds.join(','));
+            if (includeNoIds.length > 0) params.set('includeNoIds', includeNoIds.join(','));
 
             params.set('page', page.toString());
             params.set('limit', '20');
@@ -93,7 +113,7 @@ export default function CreateTransferLaneTab({
         } finally {
             setLoadingPersonnel(false);
         }
-    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition, page, selectedYear]);
+    }, [debouncedSearchTerm, filterUnit, filterPosCode, filterHasRequestedPosition, page, selectedYear, excludeIds, excludeNoIds, includeIds, includeNoIds]);
 
     // Fetch on changes
     useEffect(() => {
@@ -114,6 +134,7 @@ export default function CreateTransferLaneTab({
     };
 
     const isComplete = selectedPerson && targetUnit;
+    const renderHighlighted = (text: unknown) => highlightWildcardText(text, debouncedSearchTerm);
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 1 }}>
@@ -137,19 +158,54 @@ export default function CreateTransferLaneTab({
                     {selectedPerson ? (
                         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e293b' }} noWrap>
-                                    {selectedPerson.rank} {selectedPerson.fullName}
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
+                                    {renderHighlighted(`${selectedPerson.rank} ${selectedPerson.fullName}`)}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, fontWeight: 500 }}>
-                                    {selectedPerson.position}
+                                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
+                                    {renderHighlighted(selectedPerson.position)}
                                 </Typography>
-                                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                     <Chip
-                                        label={selectedPerson.unit}
+                                        label={getPosCodeLabel(selectedPerson)}
                                         size="small"
-                                        sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
+                                    />
+                                    <Chip
+                                        label={renderHighlighted(selectedPerson.unit || '-')}
+                                        size="small"
+                                        sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
                                     />
                                 </Box>
+                                {(selectedPerson.requestedPosition || selectedPerson.supporterName || selectedPerson.supportReason) && (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main' }}>
+                                            📍 ร้องขอ: {selectedPerson.requestedPosition || selectedPerson.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                        </Typography>
+                                    </Box>
+                                )}
+                                {(() => {
+                                    const personNote = getResolvedPersonNote(selectedPerson.notes);
+                                    return personNote ? (
+                                        <Box
+                                            sx={{
+                                                mt: 0.75,
+                                                px: 0.75,
+                                                py: 0.5,
+                                                borderRadius: 1,
+                                                bgcolor: alpha('#f59e0b', 0.08),
+                                                border: '1px solid',
+                                                borderColor: alpha('#f59e0b', 0.2),
+                                            }}
+                                        >
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', mb: 0.25 }}>
+                                                หมายเหตุตัวคน
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                {renderHighlighted(personNote)}
+                                            </Typography>
+                                        </Box>
+                                    ) : null;
+                                })()}
                             </Box>
                             <Button
                                 size="small"
@@ -405,57 +461,84 @@ export default function CreateTransferLaneTab({
                                     border: '1px solid #e2e8f0',
                                     borderRadius: 1.5,
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s',
                                     '&:hover': {
-                                        borderColor: 'primary.main',
+                                        borderColor: '#3b82f6',
                                         bgcolor: alpha('#3b82f6', 0.05),
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
                                     },
                                     display: 'flex',
-                                    alignItems: 'center',
+                                    alignItems: 'stretch',
                                     overflow: 'hidden'
                                 }}
                                 onClick={() => setViewPerson(person)}
                             >
                                 <Box sx={{ flex: 1, p: 1.5, minWidth: 0 }}>
-                                    <Typography variant="subtitle2" noWrap sx={{ fontWeight: 800, fontSize: '0.85rem', color: '#1e293b' }}>
-                                        {person.rank} {person.fullName}
+                                    {(() => {
+                                        const personNote = getResolvedPersonNote(person.notes);
+                                        return (
+                                            <>
+                                    <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>
+                                        {renderHighlighted(`${person.rank} ${person.fullName}`)}
                                     </Typography>
-                                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', fontWeight: 500, my: 0.25 }}>
-                                        {person.position}
+                                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
+                                        {renderHighlighted(person.position)}
                                     </Typography>
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                         <Chip
-                                            label={person.unit || 'ไม่ระบุหน่วย'}
+                                            label={getPosCodeLabel(person)}
                                             size="small"
-                                            sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
+                                            sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main' }}
                                         />
-                                        {(person.requestedPosition || person.supporterName || person.supportReason) && (
-                                            <Chip
-                                                label="📍 มีการร้องขอ"
-                                                size="small"
-                                                color="primary"
-                                                variant="outlined"
-                                                sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }}
-                                            />
-                                        )}
+                                        <Chip
+                                            label={renderHighlighted(person.unit || 'ไม่ระบุหน่วย')}
+                                            size="small"
+                                            sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
+                                        />
                                     </Box>
+                                    {(person.requestedPosition || person.supporterName || person.supportReason) && (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.65rem' }}>
+                                                📍 ร้องขอ: {person.requestedPosition || person.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                    {personNote && (
+                                        <Box
+                                            sx={{
+                                                mt: 0.75,
+                                                px: 0.75,
+                                                py: 0.5,
+                                                borderRadius: 1,
+                                                bgcolor: alpha('#f59e0b', 0.08),
+                                                border: '1px solid',
+                                                borderColor: alpha('#f59e0b', 0.2),
+                                            }}
+                                        >
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', mb: 0.25 }}>
+                                                หมายเหตุตัวคน
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                {renderHighlighted(personNote)}
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                            </>
+                                        );
+                                    })()}
                                 </Box>
 
-                                <Box sx={{ px: 1.5, borderLeft: '1px solid #f1f5f9', height: '100%', display: 'flex', alignItems: 'center', bgcolor: '#f8fafc' }}>
-                                    <Button
+                                <Box sx={{ display: 'flex', alignItems: 'center', px: 1, borderLeft: '1px solid #f1f5f9', bgcolor: '#f8fafc' }}>
+                                    <Chip
+                                        label="เลือก"
                                         size="small"
-                                        variant="contained"
                                         color="primary"
+                                        variant="outlined"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setSelectedPerson(person);
                                             // Optional: Suggest units based on requested position?
                                         }}
-                                        sx={{ minWidth: 0, px: 2, height: 28, borderRadius: 1.5, fontWeight: 700, fontSize: '0.7rem' }}
-                                    >
-                                        เลือก
-                                    </Button>
+                                        sx={{ height: 24, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer' }}
+                                    />
                                 </Box>
                             </Paper>
                         ))

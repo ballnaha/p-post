@@ -23,6 +23,7 @@ import {
     Undo as UndoIcon,
     Warning as WarningIcon,
     Assessment as AssessmentIcon,
+    PushPin as PushPinIcon,
 } from '@mui/icons-material';
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
@@ -32,6 +33,7 @@ import DraggableCard from './DraggableCard';
 import AddPlaceholderCardButton from './AddPlaceholderCardButton';
 import { Personnel, Column } from '../types';
 import { formatPositionNumber } from '@/utils/positionNumber';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
 
 const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 
@@ -51,6 +53,7 @@ interface DroppableLaneProps {
     onUpdateItem?: (id: string, updates: Partial<Personnel>) => void;
     onCardClick?: (personnel: Personnel, targetInfo?: any) => void;
     onToggleComplete?: (columnId: string) => void;
+    onTogglePin?: (columnId: string) => void;
     onAddPlaceholder?: (columnId: string) => void;
     isReadOnly?: boolean;
     index: number;
@@ -72,6 +75,7 @@ interface DroppableLaneProps {
     }[]; // Optimized: Pre-calculated
     onMoveItem?: (itemId: string, targetLaneId: string, itemIds?: string[]) => void;
     onViewSummary?: (column: Column) => void;
+    searchTerm?: string;
 }
 
 const DroppableLane = memo(({
@@ -86,12 +90,14 @@ const DroppableLane = memo(({
     onUpdateItem,
     onCardClick,
     onToggleComplete,
+    onTogglePin,
     onAddPlaceholder,
     isReadOnly = false,
     index,
     availableLanes = [],
     onMoveItem,
-    onViewSummary
+    onViewSummary,
+    searchTerm = ''
 }: DroppableLaneProps) => {
     const ref = useRef<HTMLDivElement>(null);
     const [isOver, setIsOver] = useState(false);
@@ -328,7 +334,7 @@ const DroppableLane = memo(({
                                         width: '100%',
                                     }}
                                 >
-                                    {column.title}
+                                    {highlightWildcardText(column.title, searchTerm)}
                                 </Typography>
                                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                                     <Chip
@@ -353,6 +359,21 @@ const DroppableLane = memo(({
                                                 height: 18,
                                                 fontSize: '0.6rem',
                                                 fontWeight: 800,
+                                            }}
+                                        />
+                                    )}
+                                    {column.isPinned && !column.isCompleted && (
+                                        <Chip
+                                            icon={<PushPinIcon sx={{ fontSize: 12 }} />}
+                                            label="ปักหมุด"
+                                            size="small"
+                                            sx={{
+                                                height: 18,
+                                                fontSize: '0.6rem',
+                                                fontWeight: 800,
+                                                bgcolor: alpha('#f59e0b', 0.12),
+                                                color: '#b45309',
+                                                border: `1px solid ${alpha('#f59e0b', 0.2)}`,
                                             }}
                                         />
                                     )}
@@ -444,6 +465,18 @@ const DroppableLane = memo(({
                                 <MenuItem
                                     onClick={() => {
                                         handleCloseMenu();
+                                        onTogglePin?.(column.id);
+                                    }}
+                                    sx={{ color: column.isPinned ? '#92400e' : '#b45309' }}
+                                >
+                                    <ListItemIcon sx={{ minWidth: '30px !important' }}>
+                                        <PushPinIcon sx={{ fontSize: 18, color: column.isPinned ? '#92400e' : '#d97706' }} />
+                                    </ListItemIcon>
+                                    <ListItemText primary={column.isPinned ? 'เอาหมุดออก' : 'ปักหมุดไว้ก่อน'} />
+                                </MenuItem>
+                                <MenuItem
+                                    onClick={() => {
+                                        handleCloseMenu();
                                         onViewSummary?.(column);
                                     }}
                                 >
@@ -478,7 +511,7 @@ const DroppableLane = memo(({
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, flex: 1, minWidth: 0 }}>
                             {column.groupNumber && (
                                 <Typography variant="caption" sx={{ fontWeight: 800, color: '#334155', bgcolor: '#e2e8f0', px: 0.5, borderRadius: 0.5, fontSize: '0.65rem', display: 'flex', alignItems: 'center' }}>
-                                    กลุ่ม {column.groupNumber}
+                                    {highlightWildcardText(`กลุ่ม ${column.groupNumber}`, searchTerm)}
                                 </Typography>
                             )}
                             {column.vacantPosition?.positionNumber && (
@@ -677,6 +710,7 @@ const DroppableLane = memo(({
                                     availableLanes={availableLanes.filter(l => l.id !== column.id)}
                                     onMoveToLane={(targetLaneId) => onMoveItem?.(itemId, targetLaneId, moveItemIds)}
                                     selectedMoveCount={moveItemIds.length}
+                                    searchTerm={searchTerm}
                                 />
                             );
                         })}

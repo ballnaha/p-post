@@ -18,10 +18,13 @@ import {
     TrendingUp as PromotionIcon,
     ThreeSixty as ThreeWayIcon,
     Business as BusinessIcon,
+    PushPin as PushPinIcon,
 } from '@mui/icons-material';
 import { Virtuoso } from 'react-virtuoso';
 import { Personnel, Column } from '../types';
 import { matchesAnyWildcardSearch } from '@/lib/wildcardSearch';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
+import { getResolvedPersonNote } from '@/utils/personnelNotes';
 
 interface BoardListViewProps {
     columns: Column[];
@@ -35,6 +38,7 @@ type ListRow =
 
 export default function BoardListView({ columns, personnelMap, onCardClick }: BoardListViewProps) {
     const [searchTerm, setSearchTerm] = useState('');
+    const renderHighlighted = (text: unknown) => highlightWildcardText(text, searchTerm);
 
     // Group data by Lane for better visualization
     const groupedData = useMemo(() => {
@@ -157,10 +161,24 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
                                     <Box sx={{ minWidth: 900, bgcolor: alpha('#f1f5f9', 0.9), borderBottom: '1px solid #e2e8f0', px: 2, py: 0.75 }}>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
                                             <Typography variant="caption" sx={{ fontWeight: 900, color: 'primary.main', bgcolor: 'white', px: 1, py: 0.2, borderRadius: 1, border: '1px solid', borderColor: alpha('#3b82f6', 0.2) }}>
-                                                {row.lane.groupNumber}
+                                                {renderHighlighted(row.lane.groupNumber)}
                                             </Typography>
+                                            {row.lane.isPinned && (
+                                                <Chip
+                                                    icon={<PushPinIcon sx={{ fontSize: 12 }} />}
+                                                    label="ปักหมุด"
+                                                    size="small"
+                                                    sx={{
+                                                        height: 18,
+                                                        fontSize: '0.6rem',
+                                                        fontWeight: 800,
+                                                        bgcolor: alpha('#f59e0b', 0.12),
+                                                        color: '#b45309',
+                                                    }}
+                                                />
+                                            )}
                                             <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e293b', fontSize: '0.9rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {row.lane.title}
+                                                {renderHighlighted(row.lane.title)}
                                             </Typography>
                                             {getLaneTypeChip(row.lane.chainType)}
                                             <Box sx={{ flex: 1 }} />
@@ -177,7 +195,7 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
                                     sx={{
                                         display: 'grid',
                                         gridTemplateColumns: gridColumns,
-                                        alignItems: 'center',
+                                        alignItems: 'start',
                                         minWidth: 900,
                                         cursor: 'pointer',
                                         bgcolor: row.stripe ? alpha('#f8fafc', 0.5) : 'white',
@@ -198,12 +216,32 @@ export default function BoardListView({ columns, personnelMap, onCardClick }: Bo
                                                     <Chip label={`Lv ${row.level}`} size="small" color="error" sx={{ height: 14, fontSize: '0.55rem', fontWeight: 900, px: 0, flexShrink: 0 }} />
                                                 )}
                                                 <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {row.person.rank}{row.person.fullName}
+                                                    {renderHighlighted(`${row.person.rank}${row.person.fullName}`)}
                                                 </Typography>
                                             </Box>
                                             <Typography variant="caption" sx={{ fontWeight: 600, color: '#64748b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {row.person.position || '-'} <BusinessIcon sx={{ fontSize: 10, ml: 0.5, flexShrink: 0 }} /> {row.person.unit || '-'}
+                                                {renderHighlighted(row.person.position || '-')} <BusinessIcon sx={{ fontSize: 10, ml: 0.5, flexShrink: 0 }} /> {renderHighlighted(row.person.unit || '-')}
                                             </Typography>
+                                            {getResolvedPersonNote(row.person.notes) && (
+                                                <Box
+                                                    sx={{
+                                                        mt: 0.75,
+                                                        px: 0.75,
+                                                        py: 0.5,
+                                                        borderRadius: 1,
+                                                        bgcolor: alpha('#f59e0b', 0.08),
+                                                        border: '1px solid',
+                                                        borderColor: alpha('#f59e0b', 0.2),
+                                                    }}
+                                                >
+                                                    <Typography variant="caption" sx={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', mb: 0.25 }}>
+                                                        หมายเหตุตัวคน
+                                                    </Typography>
+                                                    <Typography variant="caption" sx={{ display: 'block', fontSize: '0.75rem', color: '#475569', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                        {renderHighlighted(getResolvedPersonNote(row.person.notes))}
+                                                    </Typography>
+                                                </Box>
+                                            )}
                                         </Box>
                                     </Box>
                                     <Box sx={{ px: 2, py: 1, minWidth: 0 }}>

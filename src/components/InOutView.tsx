@@ -419,8 +419,8 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
             // --- Header labels ---
             const headers = [
                 'คนเข้า',
-                'ตำแหน่งเดิม (เข้า)',
-                'รหัสตำแหน่ง (เข้า)',
+                'ตำแหน่งเดิม (เข้า)\nรหัสตำแหน่ง',
+                'ผู้สนับสนุน',
                 'คนครอง',
                 'ตำแหน่งปัจจุบัน',
                 'เลขที่ตำแหน่ง',
@@ -432,12 +432,12 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                 'รหัสตำแหน่ง (ออก)',
                 'หน่วยใหม่ (ออก)',
                 'ตำแหน่งที่ร้องขอ',
-                'ผู้สนับสนุน',
-                'หมายเหตุ'
+                'หมายเหตุคน',
+                'หมายเหตุตำแหน่ง'
             ];
 
             // ปรับความกว้างคอลัมน์
-            const colWidths = [28, 35, 22, 28, 35, 15, 22, 8, 12, 35, 15, 22, 28, 28, 28, 35];
+            const colWidths = [28, 35, 22, 28, 35, 15, 22, 8, 12, 35, 15, 22, 28, 28, 35, 35];
             ws.columns = headers.map((header, i) => ({
                 header,
                 key: `col${i}`,
@@ -448,7 +448,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
             const getHeaderColor = (colIdx: number): string => {
                 if (colIdx <= 2) return '1B5E20';       // คนเข้า: deep green
                 if (colIdx <= 8) return 'E65100';       // คนครอง: deep orange
-                if (colIdx <= 14) return 'B71C1C';      // คนออก: deep red
+                if (colIdx <= 13) return 'B71C1C';      // คนออก: deep red
                 return '37474F';                         // หมายเหตุ: blue-grey
             };
 
@@ -482,6 +482,8 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                 const incomingPosCode = record.incomingPerson?.posCodeId
                     ? `${record.incomingPerson.posCodeId} - ${record.incomingPerson.posCode || ''}`
                     : (record.incomingPerson?.posCode || '-');
+                const incomingSupporter = record.outgoingPerson?.supporter || '-';
+                const incomingFromPositionWithPosCode = `${incomingFromPosition}\n${incomingPosCode}`;
 
                 // คนครอง
                 const isVacant = record.status === 'vacant' || record.status === 'reserved';
@@ -508,14 +510,14 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                     : (record.outgoingPerson?.toPosCode || '-');
                 const outgoingUnit = record.outgoingPerson?.toUnit || '-';
                 const requestedPosition = record.outgoingPerson?.requestedPosition || '-';
-                const supporter = record.outgoingPerson?.supporter || '-';
-                const remark = record.remark || '-';
+                const personRemark = record.personRemark || '-';
+                const positionRemark = record.positionRemark || '-';
 
                 ws.addRow([
-                    incomingName, incomingFromPosition, incomingPosCode,
+                    incomingName, incomingFromPositionWithPosCode, incomingSupporter,
                     currentName, currentPosition, positionNumber, currentPosCode, age, group,
                     outgoingPosition, outgoingPositionNumber, outgoingPosCode, outgoingUnit,
-                    requestedPosition, supporter, remark
+                    requestedPosition, personRemark, positionRemark
                 ]);
             });
 
@@ -523,14 +525,14 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
             const getSectionFill = (colIdx: number, isEven: boolean): { argb: string } => {
                 if (colIdx <= 2) return { argb: isEven ? 'FFE8F5E9' : 'FFC8E6C9' };       // เขียวอ่อน
                 if (colIdx <= 8) return { argb: isEven ? 'FFFFF8E1' : 'FFFFECB3' };       // เหลืองอำพัน
-                if (colIdx <= 14) return { argb: isEven ? 'FFFBE9E7' : 'FFFFCCBC' };      // แดง/ส้มอ่อน
+                if (colIdx <= 13) return { argb: isEven ? 'FFFBE9E7' : 'FFFFCCBC' };      // แดง/ส้มอ่อน
                 return { argb: isEven ? 'FFF5F5F5' : 'FFEEEEEE' };                         // เทาอ่อน
             };
 
             const getSectionBorder = (colIdx: number): string => {
                 if (colIdx <= 2) return 'FFA5D6A7';
                 if (colIdx <= 8) return 'FFFFE082';
-                if (colIdx <= 14) return 'FFEF9A9A';
+                if (colIdx <= 13) return 'FFEF9A9A';
                 return 'FFBDBDBD';
             };
 

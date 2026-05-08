@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
-  Container,
   Typography,
   Paper,
   FormControl,
@@ -12,7 +10,6 @@ import {
   Select,
   MenuItem,
   SelectChangeEvent,
-  CircularProgress,
   Alert,
   Chip,
   Table,
@@ -27,7 +24,6 @@ import {
   Divider,
   Stack,
   Skeleton,
-  Button,
   Drawer,
   IconButton,
   TablePagination,
@@ -37,7 +33,6 @@ import {
   AssignmentTurnedIn,
   SwapHoriz,
   Person,
-  LocationOn,
   TrendingUp,
   CheckCircle,
   HelpOutline,
@@ -46,13 +41,11 @@ import {
   ChangeHistory,
   TrendingFlat as TrendingFlatIcon,
   Close as CloseIcon,
-  East as EastIcon,
   Badge as BadgeIcon,
   CalendarToday,
   School
 } from '@mui/icons-material';
 import Layout from './components/Layout';
-import StatsCard from '@/components/dashboard/StatsCard';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -64,7 +57,6 @@ import {
 } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Bar } from 'react-chartjs-2';
-import { teal } from '@mui/material/colors';
 import { formatBuddhistDate } from '@/utils/dateFormat';
 
 // Register ChartJS components
@@ -85,50 +77,26 @@ const DASHBOARD_COLORS = {
   accentSoft: 'rgba(255, 154, 68, 0.16)',
   pink: '#FF7EB3',
   pinkSoft: 'rgba(255, 126, 179, 0.16)',
-  neutralSoft: 'rgba(255, 255, 255, 0.18)',
-  alternativeBlue: '#4FC3F7',
-  alternativeBlueSoft: 'rgba(79, 195, 247, 0.14)',
   teal: '#1DE9B6',
-  tealSoft: 'rgba(29, 233, 182, 0.14)',
 };
 
-// Enhanced skeleton animations
-const SKELETON_STYLES = {
-  shimmerKeyframes: {
-    '@keyframes shimmer': {
-      '0%': {
-        backgroundPosition: '-200px 0'
-      },
-      '100%': {
-        backgroundPosition: 'calc(200px + 100%) 0'
-      }
-    },
-    '@keyframes pulseGlow': {
-      '0%, 100%': {
-        opacity: 1,
-        boxShadow: '0 0 0 rgba(29, 233, 182, 0)'
-      },
-      '50%': {
-        opacity: 0.8,
-        boxShadow: '0 0 20px rgba(29, 233, 182, 0.1)'
-      }
-    },
-    '@keyframes breathe': {
-      '0%, 100%': {
-        transform: 'scale(1)'
-      },
-      '50%': {
-        transform: 'scale(1.02)'
-      }
-    }
-  },
-  enhanced: {
-    background: 'linear-gradient(90deg, #f0f0f0 0px, rgba(255,255,255,0.8) 40px, #f0f0f0 80px)',
-    backgroundSize: '400px',
-    animation: 'shimmer 2s infinite linear, pulseGlow 3s infinite ease-in-out',
-    borderRadius: '8px'
+const DEFAULT_DASHBOARD_UNIT = 'น';
+
+function resolveDashboardUnit(availableUnits: string[] = [], currentUnit: string) {
+  if (currentUnit === 'all') {
+    return 'all';
   }
-};
+
+  if (availableUnits.includes(currentUnit)) {
+    return currentUnit;
+  }
+
+  if (availableUnits.includes(DEFAULT_DASHBOARD_UNIT)) {
+    return DEFAULT_DASHBOARD_UNIT;
+  }
+
+  return 'all';
+}
 
 interface PositionDetail {
   posCodeId: number;
@@ -231,9 +199,11 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear() + 543);
   const [selectedUnit, setSelectedUnit] = useState<string>('all'); // filter ทั้งหน้า dashboard
+  const [availableUnits, setAvailableUnits] = useState<string[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [isFirstLoad, setIsFirstLoad] = useState(true); // ตรวจสอบว่าเป็นการโหลดครั้งแรกหรือไม่
   const [defaultUnitSet, setDefaultUnitSet] = useState(false); // ตรวจสอบว่าตั้งค่า default unit แล้วหรือยัง
+  const latestRequestId = useRef(0);
 
   // Drilldown state
   const [drilldownOpen, setDrilldownOpen] = useState(false);
@@ -269,15 +239,11 @@ export default function HomePage() {
     if (drilldownFilterType === 'all') {
       return dataWithGroupName;
     }
-    if (drilldownFilterType === 'other') {
-      // อื่นๆ = ทุกอย่างที่ไม่ใช่ two-way, three-way, transfer, promotion-chain
-      return dataWithGroupName.filter((tx) => !['two-way', 'three-way', 'transfer', 'promotion-chain'].includes(tx.swapType));
-    }
     return dataWithGroupName.filter((tx) => tx.swapType === drilldownFilterType);
   }, [drilldownData, drilldownFilterType]);
 
   // Pagination handlers for Supported Personnel
-  const handleSupportChangePage = (event: unknown, newPage: number) => {
+  const handleSupportChangePage = (_event: unknown, newPage: number) => {
     setSupportPage(newPage);
   };
 
@@ -330,8 +296,29 @@ export default function HomePage() {
     setAvailableYears(years);
   }, []);
 
+  useEffect(() => {
+    setSupportPage(0);
+    setSelectedSupportPerson(null);
+    setSupportDrawerOpen(false);
+    setDrilldownOpen(false);
+    setDrilldownData([]);
+    setDrilldownFilterType('all');
+  }, [selectedYear, selectedUnit]);
+
+  useEffect(() => {
+    const totalSupported = stats?.supportedPersonnel?.length ?? 0;
+    const maxPage = totalSupported > 0 ? Math.max(0, Math.ceil(totalSupported / supportRowsPerPage) - 1) : 0;
+
+    if (supportPage > maxPage) {
+      setSupportPage(maxPage);
+    }
+  }, [stats?.supportedPersonnel?.length, supportPage, supportRowsPerPage]);
+
   // Fetch dashboard data (ขึ้นกับทั้ง year และ unit filter)
   useEffect(() => {
+    const abortController = new AbortController();
+    const requestId = ++latestRequestId.current;
+
     async function fetchDashboardData() {
       try {
         // กรณีโหลดครั้งแรก: โหลดเพื่อเอา availableUnits ก่อน
@@ -339,7 +326,7 @@ export default function HomePage() {
           setInitialLoading(true); // เริ่มโหลด - จะไม่ปิดจนกว่าจะโหลดข้อมูลจริงเสร็จ
           setError(null);
           const url = `/api/dashboard?year=${selectedYear}&unit=all`;
-          const response = await fetch(url);
+          const response = await fetch(url, { signal: abortController.signal });
 
           if (!response.ok) {
             throw new Error('Failed to fetch dashboard data');
@@ -347,9 +334,14 @@ export default function HomePage() {
 
           const result = await response.json();
 
-          if (result.success && result.data.availableUnits) {
-            // ตั้งค่า unit เป็น 'น' ถ้ามี ไม่งั้นใช้ 'all'
-            const defaultUnit = result.data.availableUnits.includes('น') ? 'น' : 'all';
+          if (abortController.signal.aborted || requestId !== latestRequestId.current) {
+            return;
+          }
+
+          if (result.success) {
+            const resultAvailableUnits = result.data.availableUnits || [];
+            setAvailableUnits(resultAvailableUnits);
+            const defaultUnit = resolveDashboardUnit(resultAvailableUnits, DEFAULT_DASHBOARD_UNIT);
             setSelectedUnit(defaultUnit);
             setDefaultUnitSet(true);
 
@@ -374,7 +366,7 @@ export default function HomePage() {
 
           setError(null);
           const url = `/api/dashboard?year=${selectedYear}&unit=${selectedUnit}`;
-          const response = await fetch(url);
+          const response = await fetch(url, { signal: abortController.signal });
 
           if (!response.ok) {
             throw new Error('Failed to fetch dashboard data');
@@ -382,12 +374,20 @@ export default function HomePage() {
 
           const result = await response.json();
 
+          if (abortController.signal.aborted || requestId !== latestRequestId.current) {
+            return;
+          }
+
           if (result.success) {
-            // Debug: Check supportedPersonnel data
-            const matchedPerson = result.data.supportedPersonnel?.find((p: any) => p.fullName?.includes('อภิสัณห์'));
-            if (matchedPerson) {
-              console.log('อภิสัณห์ หว้าจีน data:', matchedPerson);
+            const resultAvailableUnits = result.data.availableUnits || [];
+            setAvailableUnits(resultAvailableUnits);
+            const resolvedUnit = resolveDashboardUnit(resultAvailableUnits, selectedUnit);
+
+            if (resolvedUnit !== selectedUnit) {
+              setSelectedUnit(resolvedUnit);
+              return;
             }
+
             setStats(result.data);
 
             // ปิด loading หลังจากโหลดข้อมูลจริงเสร็จแล้ว
@@ -400,11 +400,23 @@ export default function HomePage() {
           }
         }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+
+        if (requestId !== latestRequestId.current) {
+          return;
+        }
+
         console.error('Failed to fetch dashboard data:', error);
         setError(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
         setIsFirstLoad(false);
         setInitialLoading(false);
       } finally {
+        if (abortController.signal.aborted || requestId !== latestRequestId.current) {
+          return;
+        }
+
         // ปิด filterLoading เสมอ แต่ initialLoading จะปิดเฉพาะเมื่อโหลดเสร็จจริง
         setFilterLoading(false);
       }
@@ -413,9 +425,14 @@ export default function HomePage() {
     if (selectedYear) {
       fetchDashboardData();
     }
+
+    return () => {
+      abortController.abort();
+    };
   }, [selectedYear, selectedUnit, isFirstLoad, defaultUnitSet]); // ขึ้นกับทั้ง year, unit และ state flags
 
   const handleYearChange = (event: SelectChangeEvent<number>) => {
+    setAvailableUnits([]);
     setSelectedYear(Number(event.target.value));
   };
 
@@ -666,84 +683,23 @@ export default function HomePage() {
     categoryPercentage: 0.7,
   } as any;
 
-  // Pagination state for Supported Personnel
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
+  const renderDashboardSkeleton = () => (
+    <Layout>
+      <Box sx={{ p: 3 }}>
+        <Skeleton variant="text" width="30%" height={50} sx={{ mb: 2 }} />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} variant="rectangular" height={150} sx={{ borderRadius: 2 }} />
+          ))}
+        </Box>
+        <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2, mb: 3 }} />
+        <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
+      </Box>
+    </Layout>
+  );
 
   if (initialLoading) {
-    return (
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        width: '100vw',
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        bgcolor: '#f5f7fa',
-        zIndex: 9999,
-        overflow: 'hidden',
-      }}>
-        <Stack
-          direction="column"
-          alignItems="center"
-          spacing={2.5}
-          sx={{
-            animation: 'fadeIn 0.5s ease-in-out',
-            '@keyframes fadeIn': {
-              '0%': { opacity: 0, transform: 'translateY(-10px)' },
-              '100%': { opacity: 1, transform: 'translateY(0)' }
-            }
-          }}
-        >
-          <Box sx={{ position: 'relative' }}>
-
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                bottom: 0,
-                right: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Box
-                sx={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: '50%',
-                  bgcolor: 'rgba(29, 233, 182, 0.1)',
-                }}
-              />
-            </Box>
-          </Box>
-          <Typography
-            variant="body1"
-            color="text.secondary"
-            sx={{
-              fontWeight: 600,
-              letterSpacing: 0.5,
-              fontSize: '1rem'
-            }}
-          >
-            กำลังโหลดข้อมูล...
-          </Typography>
-        </Stack>
-      </Box>
-    );
+    return renderDashboardSkeleton();
   }
 
   if (error) {
@@ -819,37 +775,12 @@ export default function HomePage() {
       );
     }
     // ถ้ากำลังโหลด ให้แสดง loading skeleton
-    return (
-      <Layout>
-        <Box sx={{ p: 3 }}>
-          <Skeleton variant="text" width="30%" height={50} sx={{ mb: 2 }} />
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} variant="rectangular" height={150} sx={{ borderRadius: 2 }} />
-            ))}
-          </Box>
-          <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} />
-        </Box>
-      </Layout>
-    );
+    return renderDashboardSkeleton();
   }
 
   // ถ้ากำลังโหลด (ไม่ว่าจะ initial หรือ filter) ให้แสดง skeleton
   if (initialLoading || filterLoading) {
-    return (
-      <Layout>
-        <Box sx={{ p: 3 }}>
-          <Skeleton variant="text" width="30%" height={50} sx={{ mb: 2 }} />
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} variant="rectangular" height={150} sx={{ borderRadius: 2 }} />
-            ))}
-          </Box>
-          <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2, mb: 3 }} />
-          <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
-        </Box>
-      </Layout>
-    );
+    return renderDashboardSkeleton();
   }
 
   return (
@@ -979,7 +910,7 @@ export default function HomePage() {
                 disabled={filterLoading}
               >
                 <MenuItem value="all">ทุกหน่วย</MenuItem>
-                {stats?.availableUnits?.map((unit) => (
+                {availableUnits.map((unit) => (
                   <MenuItem key={unit} value={unit}>
                     {unit}
                   </MenuItem>
@@ -1002,152 +933,6 @@ export default function HomePage() {
             '100%': { opacity: 1, transform: 'translateY(0)' }
           }
         }}>
-          {/* Loading Overlay removed - using full page skeleton instead */}
-          {false && (
-            <Box sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              bgcolor: 'rgba(248, 249, 250, 0.98)',
-              backdropFilter: 'blur(8px)',
-              display: 'flex',
-              gap: 3,
-              zIndex: 2,
-              borderRadius: 2,
-              animation: 'fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-              '@keyframes fadeInScale': {
-                '0%': { opacity: 0, transform: 'scale(0.98)' },
-                '100%': { opacity: 1, transform: 'scale(1)' }
-              }
-            }}>
-              {/* Enhanced Skeleton Cards */}
-              {[1, 2, 3, 4].map((index) => (
-                <Card key={index} sx={{
-                  flex: 1,
-                  borderRadius: 3,
-                  overflow: 'hidden',
-                  background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.8)',
-                  transform: `translateY(${index * 2}px)`,
-                  animation: `shimmerSlide 1.8s ease-in-out infinite ${index * 0.2}s`,
-                  '@keyframes shimmerSlide': {
-                    '0%, 100%': { transform: 'translateX(0)' },
-                    '50%': { transform: 'translateX(2px)' }
-                  },
-                  '& .MuiSkeleton-root': {
-                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)',
-                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                    '&::after': {
-                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent)',
-                      animationDuration: '2s',
-                      animationDelay: `${index * 0.3}s`,
-                    }
-                  }
-                }}>
-                  <CardContent sx={{ p: 3.5 }}>
-                    {/* Enhanced Header skeleton */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                      <Skeleton
-                        variant="rectangular"
-                        width={48}
-                        height={48}
-                        sx={{
-                          borderRadius: 3,
-                          background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.1), rgba(0, 191, 165, 0.15))'
-                        }}
-                        animation="wave"
-                      />
-                      <Box sx={{ flex: 1 }}>
-                        <Skeleton
-                          variant="text"
-                          width="65%"
-                          height={14}
-                          sx={{ mb: 0.8, borderRadius: 2 }}
-                          animation="wave"
-                        />
-                        <Skeleton
-                          variant="text"
-                          width="85%"
-                          height={22}
-                          sx={{ mb: 0.5, borderRadius: 2 }}
-                          animation="wave"
-                        />
-                        <Skeleton
-                          variant="text"
-                          width="45%"
-                          height={12}
-                          sx={{ borderRadius: 2 }}
-                          animation="wave"
-                        />
-                      </Box>
-                    </Box>
-
-                    {/* Enhanced Main number skeleton */}
-                    <Box sx={{ mb: 3 }}>
-                      <Skeleton
-                        variant="text"
-                        width="75%"
-                        height={48}
-                        sx={{
-                          mb: 1,
-                          borderRadius: 3,
-                          background: 'linear-gradient(90deg, rgba(0,0,0,0.06), rgba(0,0,0,0.03), rgba(0,0,0,0.06))'
-                        }}
-                        animation="wave"
-                      />
-                      <Skeleton
-                        variant="text"
-                        width="95%"
-                        height={16}
-                        sx={{ borderRadius: 2 }}
-                        animation="wave"
-                      />
-                    </Box>
-
-                    {/* Enhanced Divider skeleton */}
-                    <Skeleton
-                      variant="rectangular"
-                      width="100%"
-                      height={2}
-                      sx={{
-                        mb: 3,
-                        borderRadius: 1,
-                        background: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.08), transparent)'
-                      }}
-                      animation="wave"
-                    />
-
-                    {/* Enhanced Bottom content skeleton */}
-                    <Box sx={{
-                      textAlign: 'center',
-                      p: 2,
-                      borderRadius: 2,
-                      bgcolor: 'rgba(248, 249, 250, 0.5)'
-                    }}>
-                      <Skeleton
-                        variant="text"
-                        width="65%"
-                        height={28}
-                        sx={{ mb: 0.5, mx: 'auto', borderRadius: 2 }}
-                        animation="wave"
-                      />
-                      <Skeleton
-                        variant="text"
-                        width="85%"
-                        height={14}
-                        sx={{ mx: 'auto', borderRadius: 2 }}
-                        animation="wave"
-                      />
-                    </Box>
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
-          )}
-
           {/* Vacant Position Summary Card */}
           <Card
             sx={{
@@ -1731,160 +1516,6 @@ export default function HomePage() {
             height: { xs: 300, sm: 340, md: 380 },
             position: 'relative'
           }}>
-            {/* Enhanced Filter Loading Overlay removed - using full page skeleton instead */}
-            {false && (
-              <Box sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'linear-gradient(145deg, rgba(248, 249, 250, 0.98), rgba(255, 255, 255, 0.95))',
-                backdropFilter: 'blur(12px)',
-                display: 'flex',
-                flexDirection: 'column',
-                p: 4,
-                zIndex: 1,
-                borderRadius: '0 0 16px 16px',
-                animation: 'slideInChart 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                '@keyframes slideInChart': {
-                  '0%': { opacity: 0, transform: 'translateY(-10px)' },
-                  '100%': { opacity: 1, transform: 'translateY(0)' }
-                }
-              }}>
-                {/* Enhanced Chart title skeleton */}
-                <Box sx={{ mb: 4 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                    <Skeleton
-                      variant="rectangular"
-                      width={40}
-                      height={40}
-                      sx={{
-                        borderRadius: 2,
-                        background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.15), rgba(66, 165, 245, 0.15))'
-                      }}
-                      animation="wave"
-                    />
-                    <Skeleton
-                      variant="text"
-                      width="45%"
-                      height={28}
-                      sx={{ borderRadius: 3 }}
-                      animation="wave"
-                    />
-                  </Box>
-                  <Skeleton
-                    variant="text"
-                    width="65%"
-                    height={18}
-                    sx={{ borderRadius: 2, ml: 7 }}
-                    animation="wave"
-                  />
-                </Box>
-
-                {/* Enhanced Chart bars skeleton with glassmorphism */}
-                <Box sx={{
-                  display: 'flex',
-                  alignItems: 'end',
-                  gap: 3,
-                  height: '100%',
-                  pt: 3,
-                  pb: 5,
-                  px: 2,
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  borderRadius: 3,
-                  border: '1px solid rgba(255, 255, 255, 0.3)',
-                  backdropFilter: 'blur(8px)',
-                }}>
-                  {[85, 50, 95, 35, 70, 90].map((height, index) => (
-                    <Box key={index} sx={{
-                      flex: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      height: '100%',
-                      animation: `barFloat 2s ease-in-out infinite ${index * 0.2}s`,
-                      '@keyframes barFloat': {
-                        '0%, 100%': { transform: 'translateY(0)' },
-                        '50%': { transform: 'translateY(-2px)' }
-                      }
-                    }}>
-                      <Skeleton
-                        variant="rectangular"
-                        width="100%"
-                        height={`${height}%`}
-                        sx={{
-                          borderRadius: '24px 24px 8px 8px',
-                          mb: 2,
-                          background: index % 2 === 0
-                            ? 'linear-gradient(180deg, rgba(29, 233, 182, 0.2), rgba(29, 233, 182, 0.05))'
-                            : 'linear-gradient(180deg, rgba(158, 158, 158, 0.15), rgba(189, 189, 189, 0.05))',
-                          border: '1px solid rgba(255, 255, 255, 0.3)',
-                          backdropFilter: 'blur(4px)',
-                          position: 'relative',
-                          overflow: 'hidden',
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: '-100%',
-                            width: '100%',
-                            height: '100%',
-                            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)',
-                            animation: `slideShimmer 2s infinite ${index * 0.3}s`,
-                          },
-                          '@keyframes slideShimmer': {
-                            '0%': { left: '-100%' },
-                            '100%': { left: '100%' }
-                          }
-                        }}
-                        animation="wave"
-                      />
-                      <Skeleton
-                        variant="text"
-                        width="85%"
-                        height={16}
-                        sx={{ borderRadius: 2 }}
-                        animation="wave"
-                      />
-                    </Box>
-                  ))}
-                </Box>
-
-                {/* Chart legend skeleton */}
-                <Box sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  gap: 4,
-                  mt: 3,
-                  p: 2,
-                  borderRadius: 2,
-                  background: 'rgba(255, 255, 255, 0.4)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.3)'
-                }}>
-                  {[1, 2].map((item) => (
-                    <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Skeleton
-                        variant="rectangular"
-                        width={20}
-                        height={20}
-                        sx={{ borderRadius: 1 }}
-                        animation="wave"
-                      />
-                      <Skeleton
-                        variant="text"
-                        width={120}
-                        height={16}
-                        sx={{ borderRadius: 2 }}
-                        animation="wave"
-                      />
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            )}
-
             {/* Chart Content */}
             {chartData ? (
               <Bar data={chartData} options={chartOptions} />
@@ -1931,167 +1562,6 @@ export default function HomePage() {
               boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
             }
           }}>
-            {/* Enhanced Filter Loading Overlay for Table removed - using full page skeleton instead */}
-            {false && (
-              <Box sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'linear-gradient(145deg, rgba(248, 249, 250, 0.98), rgba(255, 255, 255, 0.95))',
-                backdropFilter: 'blur(12px)',
-                zIndex: 2,
-                borderRadius: 3,
-                animation: 'slideInTable 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                '@keyframes slideInTable': {
-                  '0%': { opacity: 0, transform: 'scale(0.98)' },
-                  '100%': { opacity: 1, transform: 'scale(1)' }
-                }
-              }}>
-                {/* Enhanced Table header skeleton */}
-                <Box sx={{
-                  p: 4,
-                  pb: 3,
-                  borderBottom: '2px solid rgba(240, 242, 247, 0.8)',
-                  background: 'linear-gradient(135deg, rgba(248, 249, 250, 0.9), rgba(255, 255, 255, 0.9))'
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                    <Skeleton
-                      variant="rectangular"
-                      width={40}
-                      height={40}
-                      sx={{
-                        borderRadius: 3,
-                        background: 'linear-gradient(135deg, rgba(124, 93, 250, 0.15), rgba(157, 127, 250, 0.15))'
-                      }}
-                      animation="wave"
-                    />
-                    <Skeleton
-                      variant="text"
-                      width="45%"
-                      height={28}
-                      sx={{ borderRadius: 3 }}
-                      animation="wave"
-                    />
-                  </Box>
-                  <Skeleton
-                    variant="text"
-                    width="65%"
-                    height={18}
-                    sx={{ ml: 6.5, borderRadius: 2 }}
-                    animation="wave"
-                  />
-                </Box>
-
-                {/* Enhanced Table content skeleton */}
-                <Box sx={{ p: 4 }}>
-                  <TableContainer sx={{
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    background: 'rgba(255, 255, 255, 0.6)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)'
-                  }}>
-                    <Table>
-                      <TableHead>
-                        <TableRow sx={{
-                          bgcolor: 'rgba(250, 250, 250, 0.8)',
-                          '& .MuiTableCell-root': { border: 'none' }
-                        }}>
-                          {['PosCode', 'ชื่อตำแหน่ง', 'ตำแหน่งว่าง', 'จับคู่แล้ว', 'รอจับคู่', 'อัตราความสำเร็จ'].map((header, index) => (
-                            <TableCell key={index}>
-                              <Skeleton
-                                variant="text"
-                                width={index === 1 ? "95%" : "75%"}
-                                height={18}
-                                sx={{
-                                  borderRadius: 2,
-                                  '&::after': {
-                                    animationDelay: `${index * 0.1}s`,
-                                  }
-                                }}
-                                animation="wave"
-                              />
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {[1, 2, 3, 4, 5].map((row) => (
-                          <TableRow
-                            key={row}
-                            sx={{
-                              '& .MuiTableCell-root': {
-                                border: 'none',
-                                borderBottom: '1px solid rgba(224, 224, 224, 0.3)'
-                              },
-                              '&:hover': {
-                                bgcolor: 'rgba(248, 249, 250, 0.5)'
-                              },
-                              animation: `fadeInRow 0.5s ease-out ${row * 0.1}s backwards`,
-                              '@keyframes fadeInRow': {
-                                '0%': { opacity: 0, transform: 'translateX(-10px)' },
-                                '100%': { opacity: 1, transform: 'translateX(0)' }
-                              }
-                            }}
-                          >
-                            {[1, 2, 3, 4, 5, 6].map((cell) => (
-                              <TableCell key={cell}>
-                                <Skeleton
-                                  variant={cell === 2 ? "text" : cell === 6 ? "rectangular" : "text"}
-                                  width={cell === 2 ? "85%" : cell === 6 ? "80%" : "65%"}
-                                  height={cell === 6 ? 24 : 16}
-                                  sx={{
-                                    borderRadius: cell === 6 ? 3 : 2,
-                                    background: cell === 6
-                                      ? 'linear-gradient(90deg, rgba(76, 175, 80, 0.1), rgba(129, 199, 132, 0.1))'
-                                      : undefined,
-                                    '&::after': {
-                                      animationDelay: `${(row - 1) * 0.15 + cell * 0.05}s`,
-                                    }
-                                  }}
-                                  animation="wave"
-                                />
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-
-                  {/* Enhanced pagination skeleton */}
-                  <Box sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    mt: 3,
-                    p: 2,
-                    borderRadius: 2,
-                    background: 'rgba(255, 255, 255, 0.4)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)'
-                  }}>
-                    <Skeleton variant="text" width={150} height={20} sx={{ borderRadius: 2 }} animation="wave" />
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      {[1, 2, 3, 4].map((btn) => (
-                        <Skeleton
-                          key={btn}
-                          variant="rectangular"
-                          width={32}
-                          height={32}
-                          sx={{ borderRadius: 2 }}
-                          animation="wave"
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                </Box>
-              </Box>
-
-            )}
-
             <Box sx={{
               p: 2,
               pb: 1.5,
@@ -2336,321 +1806,6 @@ export default function HomePage() {
           position: 'relative',
           animation: 'fadeInUp 0.8s ease-out 0.8s backwards',
         }}>
-          {/* Enhanced Filter Loading Overlay for Summary Cards removed - using full page skeleton instead */}
-          {false && (
-            <Box sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'linear-gradient(145deg, rgba(248, 249, 250, 0.98), rgba(255, 255, 255, 0.95))',
-              backdropFilter: 'blur(12px)',
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '3fr 7fr' },
-              gap: 3,
-              zIndex: 2,
-              borderRadius: 3,
-              animation: 'slideInSummary 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-              '@keyframes slideInSummary': {
-                '0%': { opacity: 0, transform: 'translateY(20px) scale(0.95)' },
-                '100%': { opacity: 1, transform: 'translateY(0) scale(1)' }
-              }
-            }}>
-              {/* Enhanced Summary Card Skeleton 1 */}
-              <Card sx={{
-                borderRadius: 3,
-                overflow: 'hidden',
-                background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
-                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.8)',
-                animation: 'cardFloat 3s ease-in-out infinite',
-                '@keyframes cardFloat': {
-                  '0%, 100%': { transform: 'translateY(0)' },
-                  '50%': { transform: 'translateY(-3px)' }
-                },
-                '& .MuiSkeleton-root': {
-                  '&::after': {
-                    background: 'linear-gradient(90deg, transparent, rgba(29, 233, 182, 0.3), transparent)',
-                  }
-                }
-              }}>
-                {/* Enhanced Header skeleton */}
-                <Box sx={{
-                  p: 2.5,
-                  pb: 2,
-                  borderBottom: '2px solid rgba(240, 242, 247, 0.6)',
-                  background: 'linear-gradient(135deg, rgba(248, 249, 250, 0.9), rgba(255, 255, 255, 0.9))',
-                  position: 'relative',
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '4px',
-                    background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
-                    borderRadius: '0 0 2px 2px'
-                  }
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Skeleton
-                      variant="rectangular"
-                      width={32}
-                      height={32}
-                      sx={{
-                        borderRadius: 2,
-                        background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.2), rgba(0, 191, 165, 0.15))'
-                      }}
-                      animation="wave"
-                    />
-                    <Box>
-                      <Skeleton
-                        variant="text"
-                        width={200}
-                        height={22}
-                        sx={{ mb: 0.5, borderRadius: 3 }}
-                        animation="wave"
-                      />
-                      <Skeleton
-                        variant="text"
-                        width={140}
-                        height={16}
-                        sx={{ borderRadius: 2 }}
-                        animation="wave"
-                      />
-                    </Box>
-                  </Box>
-                </Box>
-                {/* Enhanced Content skeleton */}
-                <CardContent sx={{ p: 2.5 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {[1, 2, 3, 4, 5].map((item) => (
-                      <Box
-                        key={item}
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          p: 1.5,
-                          borderRadius: 2,
-                          background: 'rgba(248, 249, 250, 0.5)',
-                          border: '1px solid rgba(255, 255, 255, 0.6)',
-                          animation: `itemSlide 0.5s ease-out ${item * 0.1}s backwards`,
-                          '@keyframes itemSlide': {
-                            '0%': { opacity: 0, transform: 'translateX(-15px)' },
-                            '100%': { opacity: 1, transform: 'translateX(0)' }
-                          }
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                          <Skeleton
-                            variant="rectangular"
-                            width={36}
-                            height={36}
-                            sx={{
-                              borderRadius: 2,
-                              background: item === 1
-                                ? 'linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 165, 0, 0.2))'
-                                : item === 2
-                                  ? 'linear-gradient(135deg, rgba(192, 192, 192, 0.3), rgba(169, 169, 169, 0.2))'
-                                  : 'linear-gradient(135deg, rgba(224, 224, 224, 0.3), rgba(189, 189, 189, 0.2))'
-                            }}
-                            animation="wave"
-                          />
-                          <Box sx={{ flex: 1 }}>
-                            <Skeleton
-                              variant="text"
-                              width="85%"
-                              height={18}
-                              sx={{ mb: 0.5, borderRadius: 2 }}
-                              animation="wave"
-                            />
-                            <Skeleton
-                              variant="text"
-                              width="65%"
-                              height={14}
-                              sx={{ borderRadius: 2 }}
-                              animation="wave"
-                            />
-                          </Box>
-                        </Box>
-                        <Skeleton
-                          variant="rectangular"
-                          width={70}
-                          height={30}
-                          sx={{
-                            borderRadius: 3,
-                            background: 'linear-gradient(135deg, rgba(227, 242, 253, 0.8), rgba(187, 222, 251, 0.6))'
-                          }}
-                          animation="wave"
-                        />
-                      </Box>
-                    ))}
-                  </Box>
-                </CardContent>
-              </Card>
-
-              {/* Enhanced Summary Card Skeleton 2 */}
-              <Card sx={{
-                borderRadius: 3,
-                overflow: 'hidden',
-                background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
-                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.8)',
-                animation: 'cardFloat 3s ease-in-out infinite 0.5s',
-                '& .MuiSkeleton-root': {
-                  '&::after': {
-                    background: 'linear-gradient(90deg, transparent, rgba(255, 154, 68, 0.3), transparent)',
-                  }
-                }
-              }}>
-                {/* Enhanced Header skeleton */}
-                <Box sx={{
-                  p: 2.5,
-                  pb: 2,
-                  borderBottom: '2px solid rgba(240, 242, 247, 0.6)',
-                  background: 'linear-gradient(135deg, rgba(248, 249, 250, 0.9), rgba(255, 255, 255, 0.9))',
-                  position: 'relative',
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '4px',
-                    background: 'linear-gradient(90deg, #FF9A44 0%, #ff9800 100%)',
-                    borderRadius: '0 0 2px 2px'
-                  }
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Skeleton
-                      variant="rectangular"
-                      width={32}
-                      height={32}
-                      sx={{
-                        borderRadius: 2,
-                        background: 'linear-gradient(135deg, rgba(255, 154, 68, 0.2), rgba(255, 152, 0, 0.15))'
-                      }}
-                      animation="wave"
-                    />
-                    <Box>
-                      <Skeleton
-                        variant="text"
-                        width={200}
-                        height={22}
-                        sx={{ mb: 0.5, borderRadius: 3 }}
-                        animation="wave"
-                      />
-                      <Skeleton
-                        variant="text"
-                        width={140}
-                        height={16}
-                        sx={{ borderRadius: 2 }}
-                        animation="wave"
-                      />
-                    </Box>
-                  </Box>
-                </Box>
-                {/* Enhanced Content skeleton */}
-                <CardContent sx={{ p: 2.5 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {[1, 2, 3, 4].map((item) => (
-                      <Box
-                        key={item}
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          p: 1.5,
-                          borderRadius: 2,
-                          background: 'rgba(248, 249, 250, 0.5)',
-                          border: '1px solid rgba(255, 255, 255, 0.6)',
-                          animation: `itemSlide 0.5s ease-out ${item * 0.15}s backwards`,
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                          <Skeleton
-                            variant="rectangular"
-                            width={36}
-                            height={36}
-                            sx={{
-                              borderRadius: 2,
-                              background: 'linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 152, 0, 0.15))'
-                            }}
-                            animation="wave"
-                          />
-                          <Box sx={{ flex: 1 }}>
-                            <Skeleton
-                              variant="text"
-                              width="85%"
-                              height={18}
-                              sx={{ mb: 0.5, borderRadius: 2 }}
-                              animation="wave"
-                            />
-                            <Skeleton
-                              variant="text"
-                              width="65%"
-                              height={14}
-                              sx={{ borderRadius: 2 }}
-                              animation="wave"
-                            />
-                          </Box>
-                        </Box>
-                        <Skeleton
-                          variant="rectangular"
-                          width={70}
-                          height={30}
-                          sx={{
-                            borderRadius: 3,
-                            background: 'linear-gradient(135deg, rgba(255, 235, 7, 0.8), rgba(255, 152, 0, 0.6))'
-                          }}
-                          animation="wave"
-                        />
-                      </Box>
-                    ))}
-                  </Box>
-
-                  {/* Empty state skeleton for no pending positions */}
-                  <Box sx={{
-                    textAlign: 'center',
-                    py: 4,
-                    mt: 2,
-                    borderRadius: 2,
-                    background: 'rgba(29, 233, 182, 0.05)',
-                    border: '1px dashed rgba(29, 233, 182, 0.2)'
-                  }}>
-                    <Skeleton
-                      variant="circular"
-                      width={56}
-                      height={56}
-                      sx={{
-                        mx: 'auto',
-                        mb: 2,
-                        background: 'linear-gradient(135deg, rgba(29, 233, 182, 0.2), rgba(0, 191, 165, 0.15))'
-                      }}
-                      animation="wave"
-                    />
-                    <Skeleton
-                      variant="text"
-                      width="70%"
-                      height={20}
-                      sx={{ mb: 1, mx: 'auto', borderRadius: 2 }}
-                      animation="wave"
-                    />
-                    <Skeleton
-                      variant="text"
-                      width="85%"
-                      height={16}
-                      sx={{ mx: 'auto', borderRadius: 2 }}
-                      animation="wave"
-                    />
-                  </Box>
-                </CardContent>
-              </Card>
-            </Box>
-          )}
-
           {/* Matching Progress Status */}
           {stats.transactionStatusSummary && stats.transactionStatusSummary.length > 0 && (
             <Card sx={{

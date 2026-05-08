@@ -35,6 +35,7 @@ const normalizeUpdateBody = (body: Record<string, any>) => {
     'trainingLocation',
     'trainingCourse',
     'notes',
+    'positionNotes',
     'actingAs',
     'supporterName',
     'supportReason',
@@ -141,12 +142,12 @@ export async function PATCH(
     const username = session?.user?.username || 'system';
 
     // อนุญาตให้อัพเดทเฉพาะบาง field
-    const allowedFields = ['supporterName', 'supportReason', 'notes', 'actingAs', 'requestedPosition'];
+    const allowedFields = ['supporterName', 'supportReason', 'notes', 'positionNotes', 'actingAs', 'requestedPosition'];
     const updateData: Record<string, any> = { updatedBy: username };
 
     for (const field of allowedFields) {
       if (field in body) {
-        updateData[field] = body[field];
+        updateData[field] = nullableText(body[field]);
       }
     }
 

@@ -194,6 +194,7 @@ export async function GET(request: NextRequest) {
                         tx.swapType === 'two-way' ? 'swap' :
                             tx.swapType === 'promotion-chain' ? 'promotion' : 'custom',
                     isCompleted: laneInfo.isCompleted || false,
+                    isPinned: laneInfo.isPinned || false,
                 });
 
                 tx.swapDetails.forEach((detail: any) => {
@@ -261,6 +262,7 @@ export async function GET(request: NextRequest) {
                     vacantPosition: laneInfo.vacantPosition || null,
                     chainType: 'custom',
                     isCompleted: laneInfo.isCompleted || false,
+                    isPinned: laneInfo.isPinned || false,
                 });
 
                 if (laneInfo.personnel) {
@@ -279,6 +281,7 @@ export async function GET(request: NextRequest) {
                     linkedTransactionId: laneInfo.transactionId,
                     chainType: 'custom',
                     isCompleted: laneInfo.isCompleted || false,
+                    isPinned: laneInfo.isPinned || false,
                 });
             }
         }
@@ -487,6 +490,7 @@ export async function POST(request: NextRequest) {
                                 title: column.title,
                                 vacantPosition: column.vacantPosition,
                                 isCompleted: column.isCompleted || false,
+                                isPinned: column.isPinned || false,
                             });
                             continue;
                         }
@@ -527,6 +531,7 @@ export async function POST(request: NextRequest) {
                             title: column.title,
                             vacantPosition: column.vacantPosition,
                             isCompleted: column.isCompleted || false,
+                            isPinned: column.isPinned || false,
                             transactionType: existingTransaction.swapType,
                         });
                     } else {
@@ -605,6 +610,7 @@ export async function POST(request: NextRequest) {
                             title: column.title,
                             vacantPosition: column.vacantPosition,
                             isCompleted: column.isCompleted || false,
+                            isPinned: column.isPinned || false,
                             transactionType: dbSwapType,
                         };
                     }));

@@ -58,6 +58,7 @@ import {
     Sort as SortIcon,
     Tune as TuneIcon,
     RemoveCircleOutline as PlaceholderIcon,
+    PushPin as PushPinIcon,
     TableChart as TableChartIcon,
     Print as PrintIcon,
     ViewKanban as KanbanIcon,
@@ -108,6 +109,13 @@ import { formatPositionNumber } from '@/utils/positionNumber';
 const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 const CIRCULAR_SWAP_MAX_PERSONNEL = 10;
 const DEFAULT_POS_CODE_ORDER = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12];
+
+const sortColumnsForBoard = (cols: Column[]) => {
+    const activePinned = cols.filter(col => !col.isCompleted && col.isPinned);
+    const activeUnpinned = cols.filter(col => !col.isCompleted && !col.isPinned);
+    const completed = cols.filter(col => col.isCompleted);
+    return [...activePinned, ...activeUnpinned, ...completed];
+};
 
 const snackbarConfig = {
     success: {
@@ -295,6 +303,7 @@ export default function PersonnelBoardV2Page() {
     const [boardFilterAnchor, setBoardFilterAnchor] = useState<null | HTMLElement>(null);
     const [filterBoardType, setFilterBoardType] = useState<string>('all'); // all, swap, three-way, promotion, custom
     const [showOnlyWithPlaceholder, setShowOnlyWithPlaceholder] = useState(false); // Show only lanes with placeholder
+    const [showOnlyPinnedLanes, setShowOnlyPinnedLanes] = useState(false); // Show only pinned lanes
     const [boardSearchTerm, setBoardSearchTerm] = useState('');
 
     // Fetch vacant positions
@@ -481,6 +490,8 @@ export default function PersonnelBoardV2Page() {
                 if (!hasPlaceholder) return false;
             }
 
+            if (showOnlyPinnedLanes && !col.isPinned) return false;
+
             // Filter by Search Term (Group, Name, Position)
             if (boardSearchTerm) {
                 const matchesLane = matchesAnyWildcardSearch([col.groupNumber, col.title], boardSearchTerm);
@@ -494,7 +505,7 @@ export default function PersonnelBoardV2Page() {
 
             return true;
         });
-    }, [columns, showCompletedLanes, filterBoardType, showOnlyWithPlaceholder, personnelMap, boardSearchTerm]);
+    }, [columns, showCompletedLanes, filterBoardType, showOnlyWithPlaceholder, showOnlyPinnedLanes, personnelMap, boardSearchTerm]);
 
     // Count lanes by type for the filter menu
     const laneTypeCounts = useMemo(() => {
@@ -520,6 +531,8 @@ export default function PersonnelBoardV2Page() {
                 if (!hasPlaceholder) return false;
             }
 
+            if (showOnlyPinnedLanes && !col.isPinned) return false;
+
             if (boardSearchTerm) {
                 const matchesLane = matchesAnyWildcardSearch([col.groupNumber, col.title], boardSearchTerm);
                 const matchesPersonnel = col.itemIds.some(id => {
@@ -544,7 +557,7 @@ export default function PersonnelBoardV2Page() {
         });
 
         return counts;
-    }, [columns, showCompletedLanes, showOnlyWithPlaceholder, boardSearchTerm, personnelMap]);
+    }, [columns, showCompletedLanes, showOnlyWithPlaceholder, showOnlyPinnedLanes, boardSearchTerm, personnelMap]);
 
     const isSuccessionLane = useCallback((column?: Column | null) => {
         if (!column) return false;
@@ -830,7 +843,7 @@ export default function PersonnelBoardV2Page() {
 
             if (data.columns && data.columns.length > 0) {
                 // Use columns directly from API (which are already sorted by saved layout)
-                setColumns(data.columns);
+                setColumns(sortColumnsForBoard(data.columns));
                 setPersonnelMap(data.personnelMap || {});
             } else {
                 setColumns([]);
@@ -949,6 +962,9 @@ export default function PersonnelBoardV2Page() {
         const completedLanes = columns.filter(c => c.isCompleted);
 
         const sortedActive = [...activeLanes].sort((a, b) => {
+            if ((a.isPinned || false) !== (b.isPinned || false)) {
+                return a.isPinned ? -1 : 1;
+            }
             const orderA = TYPE_ORDER[a.chainType || 'custom'] || 99;
             const orderB = TYPE_ORDER[b.chainType || 'custom'] || 99;
             return orderA - orderB;
@@ -2067,6 +2083,7 @@ export default function PersonnelBoardV2Page() {
 
         // Find the lane containing this person
         const sourceLane = columns.find(c => c.itemIds.includes(personId));
+        const removedPerson = personnelMap[personId];
 
         setColumns(prev => prev.map(col => {
             if (!col.itemIds.includes(personId)) return col;
@@ -2110,6 +2127,49 @@ export default function PersonnelBoardV2Page() {
             delete newMap[personId];
             return newMap;
         });
+
+        if (removedPerson && !removedPerson.isPlaceholder && !personId.startsWith('placeholder-')) {
+            const originalId = String((removedPerson as any).originalId || removedPerson.id || '');
+            const noId = String(removedPerson.noId || '');
+
+            if (originalId) {
+                setForceAvailablePersonnelIds(prev => [...new Set([...prev, originalId])]);
+            }
+            if (noId) {
+                setForceAvailablePersonnelNoIds(prev => [...new Set([...prev, noId])]);
+            }
+
+            const matchesCurrentFilters =
+                personnelMatchesSearch(removedPerson, searchTerm) &&
+                (filterUnit === 'all' || removedPerson.unit === filterUnit) &&
+                (
+                    (filterPosCode !== 'all' && String(removedPerson.posCodeId || '') === filterPosCode) ||
+                    (filterPosCode === 'all' && (!filterMinPosCode || ((removedPerson.posCodeId || 0) >= Number(filterMinPosCode))))
+                ) &&
+                (
+                    filterHasRequestedPosition === 'all' ||
+                    (
+                        filterHasRequestedPosition === 'with-supporter' &&
+                        !!(removedPerson.supporterName || removedPerson.supportReason || removedPerson.requestedPosition)
+                    ) ||
+                    (
+                        filterHasRequestedPosition === 'without-supporter' &&
+                        !(removedPerson.supporterName || removedPerson.supportReason || removedPerson.requestedPosition)
+                    )
+                );
+
+            if (matchesCurrentFilters) {
+                setPersonnelList(prev => {
+                    const exists = prev.some((person) =>
+                        String(person.id || '') === originalId ||
+                        (noId && String(person.noId || '') === noId)
+                    );
+                    if (exists) return prev;
+                    return [removedPerson, ...prev];
+                });
+                setTotalPersonnel(prev => prev + 1);
+            }
+        }
 
         if (sourceLane) {
             setTimeout(() => {
@@ -2179,11 +2239,19 @@ export default function PersonnelBoardV2Page() {
     // Toggle lane completion status
     const handleToggleComplete = useCallback((columnId: string) => {
         commitAction();
-        setColumns(prev => prev.map(col =>
+        setColumns(prev => sortColumnsForBoard(prev.map(col =>
             col.id === columnId ? { ...col, isCompleted: !col.isCompleted } : col
-        ));
+        )));
         setHasUnsavedChanges(true);
-    }, []);
+    }, [commitAction]);
+
+    const handleTogglePin = useCallback((columnId: string) => {
+        commitAction();
+        setColumns(prev => sortColumnsForBoard(prev.map(col =>
+            col.id === columnId ? { ...col, isPinned: !col.isPinned } : col
+        )));
+        setHasUnsavedChanges(true);
+    }, [commitAction]);
 
 
 
@@ -3945,6 +4013,7 @@ export default function PersonnelBoardV2Page() {
                                                 columns={columns}
                                                 personnelMap={personnelMap}
                                                 onAddToLane={handleAddToLane}
+                                                searchTerm={searchTerm}
                                             />
                                         ))}
 
@@ -4046,9 +4115,9 @@ export default function PersonnelBoardV2Page() {
                                         height: 36,
                                         fontWeight: 700,
                                         textTransform: 'none',
-                                        borderColor: (filterBoardType !== 'all' || showOnlyWithPlaceholder) ? 'primary.main' : 'divider',
-                                        color: (filterBoardType !== 'all' || showOnlyWithPlaceholder) ? 'primary.main' : 'text.secondary',
-                                        bgcolor: (filterBoardType !== 'all' || showOnlyWithPlaceholder) ? alpha('#3b82f6', 0.05) : 'transparent',
+                                        borderColor: (filterBoardType !== 'all' || showOnlyWithPlaceholder || showOnlyPinnedLanes) ? 'primary.main' : 'divider',
+                                        color: (filterBoardType !== 'all' || showOnlyWithPlaceholder || showOnlyPinnedLanes) ? 'primary.main' : 'text.secondary',
+                                        bgcolor: (filterBoardType !== 'all' || showOnlyWithPlaceholder || showOnlyPinnedLanes) ? alpha('#3b82f6', 0.05) : 'transparent',
                                         '&:hover': {
                                             borderColor: 'primary.main',
                                             color: 'primary.main',
@@ -4057,9 +4126,9 @@ export default function PersonnelBoardV2Page() {
                                     }}
                                 >
                                     จัดการ/กรอง
-                                    {(filterBoardType !== 'all' || showOnlyWithPlaceholder) && (
+                                    {(filterBoardType !== 'all' || showOnlyWithPlaceholder || showOnlyPinnedLanes) && (
                                         <Chip
-                                            label={[filterBoardType !== 'all' ? 1 : 0, showOnlyWithPlaceholder ? 1 : 0].reduce((a, b) => a + b, 0)}
+                                            label={[filterBoardType !== 'all' ? 1 : 0, showOnlyWithPlaceholder ? 1 : 0, showOnlyPinnedLanes ? 1 : 0].reduce((a, b) => a + b, 0)}
                                             size="small"
                                             color="primary"
                                             sx={{ height: 18, fontSize: '0.65rem', ml: 0.5, '& .MuiChip-label': { px: 0.5 } }}
@@ -4219,9 +4288,42 @@ export default function PersonnelBoardV2Page() {
                                             />
                                         )}
                                     </MenuItem>
+                                    <MenuItem
+                                        onClick={() => { setShowOnlyPinnedLanes(!showOnlyPinnedLanes); }}
+                                        selected={showOnlyPinnedLanes}
+                                        sx={{
+                                            py: 1.5,
+                                            fontSize: '0.85rem',
+                                            bgcolor: showOnlyPinnedLanes ? alpha('#f59e0b', 0.1) : 'transparent',
+                                            '&:hover': {
+                                                bgcolor: showOnlyPinnedLanes ? alpha('#f59e0b', 0.15) : 'action.hover',
+                                            }
+                                        }}
+                                    >
+                                        <PushPinIcon sx={{ mr: 1.5, fontSize: 18, color: showOnlyPinnedLanes ? 'warning.main' : 'text.disabled' }} />
+                                        <Typography sx={{
+                                            fontWeight: showOnlyPinnedLanes ? 700 : 400,
+                                            color: showOnlyPinnedLanes ? 'warning.dark' : 'text.primary'
+                                        }}>
+                                            เฉพาะเลนที่ปักหมุด
+                                        </Typography>
+                                        {columns.filter(col => !col.isCompleted && col.isPinned).length > 0 && (
+                                            <Chip
+                                                label={columns.filter(col => !col.isCompleted && col.isPinned).length}
+                                                size="small"
+                                                sx={{
+                                                    ml: 'auto',
+                                                    height: 18,
+                                                    fontSize: '0.65rem',
+                                                    bgcolor: showOnlyPinnedLanes ? alpha('#f59e0b', 0.15) : alpha('#64748b', 0.1),
+                                                    color: showOnlyPinnedLanes ? 'warning.dark' : 'text.secondary'
+                                                }}
+                                            />
+                                        )}
+                                    </MenuItem>
 
                                     {/* Clear Filters */}
-                                    {(filterBoardType !== 'all' || showOnlyWithPlaceholder) && (
+                                    {(filterBoardType !== 'all' || showOnlyWithPlaceholder || showOnlyPinnedLanes) && (
                                         <Box sx={{ p: 1.5, borderTop: '1px solid #e2e8f0' }}>
                                             <Button
                                                 fullWidth
@@ -4230,6 +4332,7 @@ export default function PersonnelBoardV2Page() {
                                                 onClick={() => {
                                                     setFilterBoardType('all');
                                                     setShowOnlyWithPlaceholder(false);
+                                                    setShowOnlyPinnedLanes(false);
                                                     setBoardFilterAnchor(null);
                                                 }}
                                                 sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 1.5 }}
@@ -4330,7 +4433,7 @@ export default function PersonnelBoardV2Page() {
                                     <Button
                                         variant="outlined"
                                         size="small"
-                                        onClick={(e) => { e.stopPropagation(); setFilterBoardType('all'); setBoardSearchTerm(''); setShowOnlyWithPlaceholder(false); }}
+                                        onClick={(e) => { e.stopPropagation(); setFilterBoardType('all'); setBoardSearchTerm(''); setShowOnlyWithPlaceholder(false); setShowOnlyPinnedLanes(false); }}
                                         sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
                                     >
                                         ล้างตัวกรองทั้งหมด
@@ -4357,11 +4460,13 @@ export default function PersonnelBoardV2Page() {
                                                 onUpdateItem={handleUpdatePersonnel}
                                                 onCardClick={handleCardClick}
                                                 onToggleComplete={handleToggleComplete}
+                                                onTogglePin={handleTogglePin}
                                                 onAddPlaceholder={handleAddPlaceholder}
                                                 isReadOnly={showCompletedLanes}
                                                 availableLanes={memoizedAvailableLanes}
                                                 onMoveItem={handleMovePersonToLane}
                                                 onViewSummary={setSelectedLaneSummary}
+                                                searchTerm={boardSearchTerm}
                                             />
                                         </Box>
                                     )}
@@ -4636,6 +4741,10 @@ export default function PersonnelBoardV2Page() {
                             selectedYear={selectedYear}
                             allUnits={allUnits}
                             posCodeOptions={posCodeOptions}
+                            excludeIds={assignedOriginalIds}
+                            excludeNoIds={assignedNoIds}
+                            includeIds={forceAvailablePersonnelIds}
+                            includeNoIds={forceAvailablePersonnelNoIds}
                             onCreate={handleCreateSwapLane}
                             loading={isCreatingLane}
                         />
@@ -4645,6 +4754,10 @@ export default function PersonnelBoardV2Page() {
                             selectedYear={selectedYear}
                             allUnits={allUnits}
                             posCodeOptions={posCodeOptions}
+                            excludeIds={assignedOriginalIds}
+                            excludeNoIds={assignedNoIds}
+                            includeIds={forceAvailablePersonnelIds}
+                            includeNoIds={forceAvailablePersonnelNoIds}
                             onCreate={handleCreateThreeWayLane}
                             loading={isCreatingLane}
                         />
@@ -4654,6 +4767,10 @@ export default function PersonnelBoardV2Page() {
                             selectedYear={selectedYear}
                             allUnits={allUnits}
                             posCodeOptions={posCodeOptions}
+                            excludeIds={assignedOriginalIds}
+                            excludeNoIds={assignedNoIds}
+                            includeIds={forceAvailablePersonnelIds}
+                            includeNoIds={forceAvailablePersonnelNoIds}
                             onCreate={handleCreateTransferLane}
                             loading={isCreatingLane}
                         />
@@ -5185,6 +5302,11 @@ export default function PersonnelBoardV2Page() {
                 onNotesUpdate={(notes) => {
                     if (selectedPersonnelDetail) {
                         handleUpdatePersonnel(selectedPersonnelDetail.personnel.id, { notes });
+                    }
+                }}
+                onPositionNotesUpdate={(positionNotes) => {
+                    if (selectedPersonnelDetail) {
+                        handleUpdatePersonnel(selectedPersonnelDetail.personnel.id, { positionNotes });
                     }
                 }}
             />

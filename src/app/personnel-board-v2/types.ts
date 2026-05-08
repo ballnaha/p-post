@@ -14,6 +14,7 @@ export interface Personnel {
     supportReason?: string | null;
     requestedPosition?: string | null;
     notes?: string | null;
+    positionNotes?: string | null;
     posCodeId?: number;
     posCodeMaster?: { id: number; name: string } | null;
     originalId?: string;
@@ -57,4 +58,5 @@ export interface Column {
     linkedTransactionId?: string;
     linkedTransactionType?: string; // 'two-way', 'three-way', etc.
     isCompleted?: boolean; // Lane marked as complete and can be hidden
+    isPinned?: boolean; // Lane marked to stay visible at the top of active work
 }

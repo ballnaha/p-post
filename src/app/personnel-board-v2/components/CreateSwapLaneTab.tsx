@@ -24,6 +24,11 @@ import {
 import { Personnel } from '../types';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import { getResolvedPersonNote } from '@/utils/personnelNotes';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
+
+const REQUEST_TEXT_FONT_SIZE = '0.72rem';
+const NOTE_LABEL_FONT_SIZE = '0.72rem';
+const NOTE_BODY_FONT_SIZE = '0.76rem';
 
 interface CreateSwapLaneTabProps {
     selectedYear: number;
@@ -74,6 +79,8 @@ export default function CreateSwapLaneTab({
         const timer = setTimeout(() => setDebouncedSwapSearchTerm(swapSearchTerm), 300);
         return () => clearTimeout(timer);
     }, [swapSearchTerm]);
+
+    const renderHighlighted = useCallback((text: unknown) => highlightWildcardText(text, debouncedSwapSearchTerm), [debouncedSwapSearchTerm]);
 
     // Fetch Personnel List
     const fetchSwapPersonnelList = useCallback(async () => {
@@ -148,19 +155,19 @@ export default function CreateSwapLaneTab({
                     {swapPerson1 ? (
                         <Box>
                             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
-                                {swapPerson1.rank} {swapPerson1.fullName}
+                                {renderHighlighted(`${swapPerson1.rank} ${swapPerson1.fullName}`)}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
-                                {swapPerson1.position}
+                                {renderHighlighted(swapPerson1.position)}
                             </Typography>
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                 <Chip
-                                    label={swapPerson1.posCodeId ? `${swapPerson1.posCodeId} - ${swapPerson1.posCodeMaster?.name || ''}` : (swapPerson1.posCodeMaster?.name || '-')}
+                                    label={renderHighlighted(swapPerson1.posCodeId ? `${swapPerson1.posCodeId} - ${swapPerson1.posCodeMaster?.name || ''}` : (swapPerson1.posCodeMaster?.name || '-'))}
                                     size="small"
                                     sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
                                 />
                                 <Chip
-                                    label={swapPerson1.unit || '-'}
+                                    label={renderHighlighted(swapPerson1.unit || '-')}
                                     size="small"
                                     sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
                                 />
@@ -169,8 +176,8 @@ export default function CreateSwapLaneTab({
                             {/* Requested Position */}
                             {(swapPerson1.requestedPosition || swapPerson1.supporterName || swapPerson1.supportReason) && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main' }}>
-                                        📍 ร้องขอ: {swapPerson1.requestedPosition || swapPerson1.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: REQUEST_TEXT_FONT_SIZE, color: 'primary.main' }}>
+                                        📍 ร้องขอ: {renderHighlighted(swapPerson1.requestedPosition || swapPerson1.supporterName || 'มีการร้องขอตำแหน่ง')}
                                     </Typography>
                                 </Box>
                             )}
@@ -226,19 +233,19 @@ export default function CreateSwapLaneTab({
                     {swapPerson2 ? (
                         <Box>
                             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b', fontSize: '0.85rem' }} noWrap>
-                                {swapPerson2.rank} {swapPerson2.fullName}
+                                {renderHighlighted(`${swapPerson2.rank} ${swapPerson2.fullName}`)}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.7rem', mb: 0.5 }}>
-                                {swapPerson2.position}
+                                {renderHighlighted(swapPerson2.position)}
                             </Typography>
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                 <Chip
-                                    label={swapPerson2.posCodeId ? `${swapPerson2.posCodeId} - ${swapPerson2.posCodeMaster?.name || ''}` : (swapPerson2.posCodeMaster?.name || '-')}
+                                    label={renderHighlighted(swapPerson2.posCodeId ? `${swapPerson2.posCodeId} - ${swapPerson2.posCodeMaster?.name || ''}` : (swapPerson2.posCodeMaster?.name || '-'))}
                                     size="small"
                                     sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', maxWidth: '100%' }}
                                 />
                                 <Chip
-                                    label={swapPerson2.unit || '-'}
+                                    label={renderHighlighted(swapPerson2.unit || '-')}
                                     size="small"
                                     sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
                                 />
@@ -247,8 +254,8 @@ export default function CreateSwapLaneTab({
                             {/* Requested Position */}
                             {(swapPerson2.requestedPosition || swapPerson2.supporterName || swapPerson2.supportReason) && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main' }}>
-                                        📍 ร้องขอ: {swapPerson2.requestedPosition || swapPerson2.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: REQUEST_TEXT_FONT_SIZE, color: 'primary.main' }}>
+                                        📍 ร้องขอ: {renderHighlighted(swapPerson2.requestedPosition || swapPerson2.supporterName || 'มีการร้องขอตำแหน่ง')}
                                     </Typography>
                                 </Box>
                             )}
@@ -494,27 +501,27 @@ export default function CreateSwapLaneTab({
                                         return (
                                             <>
                                     <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
-                                        {person.rank} {person.fullName}
+                                        {renderHighlighted(`${person.rank} ${person.fullName}`)}
                                     </Typography>
                                     <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: '0.75rem', mb: 0.5 }}>
-                                        {person.position}
+                                        {renderHighlighted(person.position)}
                                     </Typography>
                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
                                         <Chip
-                                            label={person.posCodeId ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}` : (person.posCodeMaster?.name || '-')}
+                                            label={renderHighlighted(person.posCodeId ? `${person.posCodeId} - ${person.posCodeMaster?.name || '-'}` : (person.posCodeMaster?.name || '-'))}
                                             size="small"
                                             sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main' }}
                                         />
                                         <Chip
-                                            label={person.unit || 'ไม่ระบุหน่วย'}
+                                            label={renderHighlighted(person.unit || 'ไม่ระบุหน่วย')}
                                             size="small"
                                             sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: '#f1f5f9', color: '#475569' }}
                                         />
                                     </Box>
                                     {(person.requestedPosition || person.supporterName || person.supportReason) && (
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.65rem' }}>
-                                                📍 ร้องขอ: {person.requestedPosition || person.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: REQUEST_TEXT_FONT_SIZE }}>
+                                                📍 ร้องขอ: {renderHighlighted(person.requestedPosition || person.supporterName || 'มีการร้องขอตำแหน่ง')}
                                             </Typography>
                                         </Box>
                                     )}
@@ -530,11 +537,11 @@ export default function CreateSwapLaneTab({
                                                 borderColor: alpha('#f59e0b', 0.2),
                                             }}
                                         >
-                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', mb: 0.25 }}>
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: NOTE_LABEL_FONT_SIZE, fontWeight: 800, color: '#b45309', mb: 0.25 }}>
                                                 หมายเหตุตัวคน
                                             </Typography>
-                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                                {personNote}
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: NOTE_BODY_FONT_SIZE, color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                {renderHighlighted(personNote)}
                                             </Typography>
                                         </Box>
                                     )}

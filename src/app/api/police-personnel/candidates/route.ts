@@ -11,6 +11,7 @@ const SEARCHABLE_FIELDS = [
   'actingAs',
   'trainingCourse',
   'requestedPosition',
+  'notes',
   'supporterName',
   'supportReason',
 ] as const;

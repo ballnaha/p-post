@@ -93,6 +93,7 @@ import CreateSwapLaneTab from './components/CreateSwapLaneTab';
 import CreateThreeWayLaneTab from './components/CreateThreeWayLaneTab';
 import CreateTransferLaneTab from './components/CreateTransferLaneTab';
 import { matchesAnyWildcardSearch } from '@/lib/wildcardSearch';
+import { highlightWildcardText } from '@/lib/highlightWildcardText';
 
 // Components
 import DraggableCard from './components/DraggableCard';
@@ -316,6 +317,7 @@ export default function PersonnelBoardV2Page() {
     // Vacant Position Filters for Drawer
     const [vacantSearch, setVacantSearch] = useState('');
     const [debouncedVacantSearch, setDebouncedVacantSearch] = useState('');
+    const renderHighlightedVacant = useCallback((text: unknown) => highlightWildcardText(text, debouncedVacantSearch), [debouncedVacantSearch]);
     const [vacantFilterUnit, setVacantFilterUnit] = useState('all');
     const [vacantFilterPosCode, setVacantFilterPosCode] = useState('all');
     const [vacantFilterStatus, setVacantFilterStatus] = useState('all'); // all, vacant, reserved
@@ -4669,10 +4671,10 @@ export default function PersonnelBoardV2Page() {
                                                     {/* Row 1: Position Name + Position Number */}
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                                                         <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b', flex: 1 }}>
-                                                            {pos.position || pos.posCodeMaster?.name || 'ตำแหน่งว่าง'}
+                                                            {renderHighlightedVacant(pos.position || pos.posCodeMaster?.name || 'ตำแหน่งว่าง')}
                                                         </Typography>
                                                         <Chip
-                                                            label={`#${formatPositionNumber(pos.positionNumber)}`}
+                                                            label={renderHighlightedVacant(`#${formatPositionNumber(pos.positionNumber)}`)}
                                                             size="small"
                                                             variant="outlined"
                                                             sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, '& .MuiChip-label': { px: 0.5 } }}
@@ -4682,19 +4684,19 @@ export default function PersonnelBoardV2Page() {
                                                     {/* Row 2: Acting As (ทำหน้าที่) - if available */}
                                                     {pos.actingAs && (
                                                         <Typography variant="caption" noWrap sx={{ display: 'block', fontSize: '0.7rem', color: '#059669', fontWeight: 600, mb: 0.25 }}>
-                                                            📋 {pos.actingAs}
+                                                            📋 {renderHighlightedVacant(pos.actingAs)}
                                                         </Typography>
                                                     )}
 
                                                     {/* Row 3: Compact chips row - PosCode + Unit + Status */}
                                                     <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                                                         <Chip
-                                                            label={pos.posCodeId ? `${pos.posCodeId} - ${pos.posCodeMaster?.name}` : '-'}
+                                                            label={renderHighlightedVacant(pos.posCodeId ? `${pos.posCodeId} - ${pos.posCodeMaster?.name}` : '-')}
                                                             size="small"
                                                             sx={{ height: 16, fontSize: '0.7rem', fontWeight: 700, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', '& .MuiChip-label': { px: 0.5 } }}
                                                         />
                                                         <Typography variant="caption" noWrap sx={{ fontSize: '0.75rem', color: '#64748b', maxWidth: 120 }}>
-                                                            หน่วย: {pos.unit || 'ไม่ระบุหน่วย'}
+                                                            หน่วย: {renderHighlightedVacant(pos.unit || 'ไม่ระบุหน่วย')}
                                                         </Typography>
                                                         {(pos.fullName || '').includes('กันตำแหน่ง') && (
                                                             <Chip label="กันตำแหน่ง" size="small" color="warning" sx={{ height: 16, fontSize: '0.65rem', fontWeight: 400, '& .MuiChip-label': { px: 0.5 } }} />

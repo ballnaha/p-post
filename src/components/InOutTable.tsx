@@ -175,7 +175,7 @@ const InOutRow = memo(({
             </TableCell>
 
             {/* คนเข้า - ตำแหน่งเดิม */}
-            <TableCell sx={{ py: 1.25, px: 1.5, borderRight: `2px solid ${theme.palette.success.main}` }}>
+            <TableCell sx={{ py: 1.25, px: 1.5, borderRight: `1px solid ${theme.palette.divider}` }}>
                 {record.incomingPerson?.fromPosition ? (
                     <Box>
                         <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.secondary, lineHeight: 1.2 }}>
@@ -196,6 +196,17 @@ const InOutRow = memo(({
                             />
                         )}
                     </Box>
+                ) : (
+                    <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
+                )}
+            </TableCell>
+
+            {/* ผู้สนับสนุน */}
+            <TableCell sx={{ py: 1.25, px: 1.5, borderRight: `2px solid ${theme.palette.success.main}` }}>
+                {record.outgoingPerson?.supporter ? (
+                    <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.secondary, lineHeight: 1.2 }}>
+                        {record.outgoingPerson.supporter}
+                    </Typography>
                 ) : (
                     <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
                 )}
@@ -399,17 +410,6 @@ const InOutRow = memo(({
                 )}
             </TableCell>
 
-            {/* ผู้สนับสนุน */}
-            <TableCell sx={{ py: 1.25, px: 1.5, borderRight: `2px solid ${theme.palette.error.main}` }}>
-                {record.outgoingPerson?.supporter ? (
-                    <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.secondary, lineHeight: 1.2 }}>
-                        {record.outgoingPerson.supporter}
-                    </Typography>
-                ) : (
-                    <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
-                )}
-            </TableCell>
-
             {/* หมายเหตุคน */}
             <TableCell sx={{ py: 1.25, px: 1.5, borderRight: `1px solid ${theme.palette.divider}` }}>
                 {record.personRemark ? (
@@ -523,6 +523,12 @@ export default function InOutTable({
             headerBg: theme.palette.success.main,
         },
         {
+            id: 'supporter',
+            label: 'ผู้สนับสนุน',
+            minWidth: 120,
+            headerBg: theme.palette.success.main,
+        },
+        {
             id: 'currentName',
             label: 'คนครอง',
             minWidth: 160,
@@ -558,12 +564,6 @@ export default function InOutTable({
         {
             id: 'requestedPosition',
             label: 'ตำแหน่งที่ร้องขอ',
-            minWidth: 120,
-            headerBg: theme.palette.error.main,
-        },
-        {
-            id: 'supporter',
-            label: 'ผู้สนับสนุน',
             minWidth: 120,
             headerBg: theme.palette.error.main,
         },

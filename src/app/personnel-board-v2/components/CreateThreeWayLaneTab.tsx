@@ -26,6 +26,10 @@ import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import { highlightWildcardText } from '@/lib/highlightWildcardText';
 import { getResolvedPersonNote } from '@/utils/personnelNotes';
 
+const REQUEST_TEXT_FONT_SIZE = '0.72rem';
+const NOTE_LABEL_FONT_SIZE = '0.72rem';
+const NOTE_BODY_FONT_SIZE = '0.76rem';
+
 interface CreateThreeWayLaneTabProps {
     selectedYear: number;
     allUnits: string[];
@@ -177,8 +181,8 @@ export default function CreateThreeWayLaneTab({
                                     />
                                 </Box>
                                 {(person1.requestedPosition || person1.supporterName || person1.supportReason) && (
-                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main', display: 'block', mb: 0.5 }}>
-                                        📍 ร้องขอ: {person1.requestedPosition || person1.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: REQUEST_TEXT_FONT_SIZE, color: 'primary.main', display: 'block', mb: 0.5 }}>
+                                        📍 ร้องขอ: {renderHighlighted(person1.requestedPosition || person1.supporterName || 'มีการร้องขอตำแหน่ง')}
                                     </Typography>
                                 )}
                                 <Button
@@ -239,8 +243,8 @@ export default function CreateThreeWayLaneTab({
                                     />
                                 </Box>
                                 {(person2.requestedPosition || person2.supporterName || person2.supportReason) && (
-                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main', display: 'block', mb: 0.5 }}>
-                                        📍 ร้องขอ: {person2.requestedPosition || person2.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: REQUEST_TEXT_FONT_SIZE, color: 'primary.main', display: 'block', mb: 0.5 }}>
+                                        📍 ร้องขอ: {renderHighlighted(person2.requestedPosition || person2.supporterName || 'มีการร้องขอตำแหน่ง')}
                                     </Typography>
                                 )}
                                 <Button
@@ -301,8 +305,8 @@ export default function CreateThreeWayLaneTab({
                                     />
                                 </Box>
                                 {(person3.requestedPosition || person3.supporterName || person3.supportReason) && (
-                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', color: 'primary.main', display: 'block', mb: 0.5 }}>
-                                        📍 ร้องขอ: {person3.requestedPosition || person3.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                    <Typography variant="caption" sx={{ fontWeight: 700, fontSize: REQUEST_TEXT_FONT_SIZE, color: 'primary.main', display: 'block', mb: 0.5 }}>
+                                        📍 ร้องขอ: {renderHighlighted(person3.requestedPosition || person3.supporterName || 'มีการร้องขอตำแหน่ง')}
                                     </Typography>
                                 )}
                                 <Button
@@ -558,8 +562,8 @@ export default function CreateThreeWayLaneTab({
                                     </Box>
                                     {(person.requestedPosition || person.supporterName || person.supportReason) && (
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.65rem' }}>
-                                                📍 ร้องขอ: {person.requestedPosition || person.supporterName || 'มีการร้องขอตำแหน่ง'}
+                                            <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: REQUEST_TEXT_FONT_SIZE }}>
+                                                📍 ร้องขอ: {renderHighlighted(person.requestedPosition || person.supporterName || 'มีการร้องขอตำแหน่ง')}
                                             </Typography>
                                         </Box>
                                     )}
@@ -575,10 +579,10 @@ export default function CreateThreeWayLaneTab({
                                                 borderColor: alpha('#f59e0b', 0.2),
                                             }}
                                         >
-                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', mb: 0.25 }}>
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: NOTE_LABEL_FONT_SIZE, fontWeight: 800, color: '#b45309', mb: 0.25 }}>
                                                 หมายเหตุตัวคน
                                             </Typography>
-                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: NOTE_BODY_FONT_SIZE, color: 'text.secondary', lineHeight: 1.35, whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                                                 {renderHighlighted(personNote)}
                                             </Typography>
                                         </Box>

@@ -411,6 +411,8 @@ export async function POST(request: NextRequest) {
         year: currentYear,
         isActive: true,
         noId: nextNoId,
+        address: nullableText(body.address),
+        phoneNumber: nullableText(body.phoneNumber),
         posCodeId: body.posCodeId,
         position: nullableText(body.position),
         positionNumber: nullablePositionNumber(body.positionNumber),

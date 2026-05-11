@@ -47,6 +47,8 @@ model PosCodeMaster {
 model PolicePersonnel {
   id             String         @id @default(cuid())
   noId           Int?           @map("no_id")
+  address        String?        @db.Text
+  phoneNumber    String?        @map("phone_number")
   
   // ข้อมูลปี (Year & Status) - สำหรับเก็บข้อมูลประวัติข้ามปี
   year           Int            @default(2024) // ปีที่บันทึกข้อมูล (พ.ศ.)

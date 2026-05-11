@@ -62,6 +62,7 @@ import {
   InfoOutlined as InfoOutlinedIcon,
   PersonAdd as PersonAddIcon,
   Star as StarIcon,
+  Description as DescriptionIcon,
 } from '@mui/icons-material';
 import Layout from '@/app/components/Layout';
 import { useTheme, useMediaQuery } from '@mui/material';
@@ -70,6 +71,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import PersonnelCreateModal from '@/components/PersonnelCreateModal';
+import PersonnelHistoryPreviewDialog from '@/components/PersonnelHistoryPreviewDialog';
 import { EmptyState } from '@/app/components/EmptyState';
 import { formatBuddhistDateInput } from '@/utils/dateFormat';
 import { formatPositionNumber } from '@/utils/positionNumber';
@@ -77,7 +79,10 @@ import { getResolvedPersonNote, getResolvedPositionNote } from '@/utils/personne
 
 interface PolicePersonnel {
   id: string;
+  avatarUrl?: string;
+  address?: string;
   noId?: string;
+  phoneNumber?: string;
   posCodeId?: number;
   posCodeMaster?: {
     id: number;
@@ -229,6 +234,8 @@ export default function PolicePersonnelPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedPersonnel, setSelectedPersonnel] = useState<PolicePersonnel | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [historyPreviewOpen, setHistoryPreviewOpen] = useState(false);
+  const [historyPreviewPersonnel, setHistoryPreviewPersonnel] = useState<PolicePersonnel | null>(null);
 
   // State สำหรับ Add to Swap
   const [addToSwapModalOpen, setAddToSwapModalOpen] = useState(false);
@@ -701,6 +708,15 @@ export default function PolicePersonnelPage() {
     setSelectedPersonnel(personnel);
     setDeleteConfirmOpen(true);
   };
+
+  const handleOpenHistoryPreview = useCallback((personnel: PolicePersonnel) => {
+    setHistoryPreviewPersonnel(personnel);
+    setHistoryPreviewOpen(true);
+  }, []);
+
+  const handleCloseHistoryPreview = useCallback(() => {
+    setHistoryPreviewOpen(false);
+  }, []);
 
   const handleDeleteConfirm = async () => {
     if (!selectedPersonnel) return;
@@ -2016,43 +2032,6 @@ export default function PolicePersonnelPage() {
                           </TableCell>
                           <TableCell align="center">
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
-                              {/* Chip แสดงสถานะ Swap List */}
-                              {row.rank && getPersonnelStatus(row.nationalId).isInSwap && (
-                                <Chip
-                                  label="อยู่ใน Swap List"
-                                  size="small"
-                                  color="info"
-                                  sx={{ fontSize: '0.7rem', height: 20 }}
-                                />
-                              )}
-                              {/* Chip แสดงสถานะ Three Way Swap */}
-                              {row.rank && row.nationalId && threeWayListData.has(row.nationalId) && (
-                                <Chip
-                                  label="อยู่ในสามเส้า"
-                                  size="small"
-                                  color="warning"
-                                  sx={{ fontSize: '0.7rem', height: 20 }}
-                                />
-                              )}
-                              {/* Chip แสดงสถานะ Promotion Chain */}
-                              {row.rank && row.nationalId && promotionChainData.has(row.nationalId) && (
-                                <Chip
-                                  label="แทนตำแหน่ง"
-                                  size="small"
-                                  color="success"
-                                  sx={{ fontSize: '0.7rem', height: 20 }}
-                                />
-                              )}
-                              {/* Chip แสดงสถานะ Vacant Position */}
-                              {row.rank && row.nationalId && vacantListData.has(row.nationalId) && (
-                                <Chip
-                                  label="ยื่นขอตำแหน่ง"
-                                  size="small"
-                                  color="success"
-                                  sx={{ fontSize: '0.7rem', height: 20 }}
-                                />
-                              )}
-
                               {/* ปุ่มฝั่งขวา: ดูรายละเอียด + Menu */}
                               <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
                                 <Tooltip title="ดูรายละเอียด" leaveDelay={0} disableFocusListener>
@@ -2137,6 +2116,14 @@ export default function PolicePersonnelPage() {
           onClose={handleCloseDetailModal}
           personnel={selectedPersonnel}
           loading={false}
+          onAvatarUpdate={(avatarUrl) => {
+            setSelectedPersonnel((prev) => prev ? { ...prev, avatarUrl: avatarUrl || undefined } : prev);
+            setData((prev) => prev.map((item) => (
+              item.id === selectedPersonnel?.id
+                ? { ...item, avatarUrl: avatarUrl || undefined }
+                : item
+            )));
+          }}
           onNotesUpdate={(notes) => {
             setSelectedPersonnel((prev) => prev ? { ...prev, notes: notes || undefined } : prev);
             setData((prev) => prev.map((item) => (
@@ -2154,6 +2141,15 @@ export default function PolicePersonnelPage() {
             )));
           }}
           onClearData={() => setSelectedPersonnel(null)}
+        />
+
+        <PersonnelHistoryPreviewDialog
+          open={historyPreviewOpen}
+          onClose={() => {
+            handleCloseHistoryPreview();
+            setTimeout(() => setHistoryPreviewPersonnel(null), 200);
+          }}
+          personnel={historyPreviewPersonnel}
         />
 
         {/* Delete Confirmation Dialog */}
@@ -2531,6 +2527,18 @@ export default function PolicePersonnelPage() {
             horizontal: 'right',
           }}
         >
+          <MenuItem
+            onClick={() => {
+              const personnel = menuPersonnel;
+              handleMenuClose();
+              if (personnel) handleOpenHistoryPreview(personnel);
+            }}
+          >
+            <ListItemIcon>
+              <DescriptionIcon fontSize="small" color="action" />
+            </ListItemIcon>
+            <ListItemText>Preview ประวัติ PDF</ListItemText>
+          </MenuItem>
           <MenuItem
             onClick={() => {
               const personnel = menuPersonnel;

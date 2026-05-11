@@ -46,7 +46,9 @@ interface PosCode {
 }
 
 interface PersonnelFormData {
+  address: string;
   posCodeId: number | null;
+  phoneNumber: string;
   position: string;
   positionNumber: string;
   unit: string;
@@ -73,7 +75,9 @@ interface PersonnelFormData {
 }
 
 const emptyFormData: PersonnelFormData = {
+  address: '',
   posCodeId: null,
+  phoneNumber: '',
   position: '',
   positionNumber: '',
   unit: '',
@@ -105,7 +109,9 @@ const dateFields: Array<keyof Pick<
 >> = ['birthDate', 'lastAppointment', 'currentRankSince', 'enrollmentDate', 'retirementDate'];
 
 const toFormData = (initialData?: PersonnelCreateModalProps['initialData']): PersonnelFormData => ({
+  address: initialData?.address ?? '',
   posCodeId: initialData?.posCodeId ?? null,
+  phoneNumber: initialData?.phoneNumber ?? '',
   position: initialData?.position ?? '',
   positionNumber: formatPositionNumber(initialData?.positionNumber),
   unit: initialData?.unit ?? '',
@@ -399,6 +405,47 @@ export default function PersonnelCreateModal({
                       }}
                     />
                   </Stack>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: 'grey.200',
+                      bgcolor: 'grey.50',
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      color="text.secondary"
+                      sx={{ mb: 1.5, fontSize: '0.88rem' }}
+                    >
+                      ข้อมูลติดต่อ
+                    </Typography>
+                    <Stack spacing={1.75}>
+                      <TextField
+                        fullWidth
+                        label="ที่อยู่"
+                        value={formData.address}
+                        onChange={(e) => handleChange('address', e.target.value)}
+                        variant="outlined"
+                        size="small"
+                        multiline
+                        minRows={2}
+                        placeholder="ระบุที่อยู่สำหรับติดต่อ"
+                      />
+                      <TextField
+                        fullWidth
+                        label="เบอร์โทรศัพท์"
+                        value={formData.phoneNumber}
+                        onChange={(e) => handleChange('phoneNumber', e.target.value)}
+                        variant="outlined"
+                        size="small"
+                        placeholder="เช่น 0812345678"
+                        sx={{ maxWidth: { xs: '100%', sm: 280 } }}
+                      />
+                    </Stack>
+                  </Box>
                 </Stack>
               </Paper>
 

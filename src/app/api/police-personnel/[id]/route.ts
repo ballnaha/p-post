@@ -17,6 +17,8 @@ const nullablePositionNumber = (value: any): string | null => {
 const normalizeUpdateBody = (body: Record<string, any>) => {
   const updateData = { ...body };
   const nullableFields = [
+    'address',
+    'phoneNumber',
     'position',
     'positionNumber',
     'unit',
@@ -142,7 +144,7 @@ export async function PATCH(
     const username = session?.user?.username || 'system';
 
     // อนุญาตให้อัพเดทเฉพาะบาง field
-    const allowedFields = ['supporterName', 'supportReason', 'notes', 'positionNotes', 'actingAs', 'requestedPosition'];
+    const allowedFields = ['address', 'phoneNumber', 'supporterName', 'supportReason', 'notes', 'positionNotes', 'actingAs', 'requestedPosition'];
     const updateData: Record<string, any> = { updatedBy: username };
 
     for (const field of allowedFields) {

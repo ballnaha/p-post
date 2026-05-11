@@ -45,7 +45,9 @@ import { getResolvedPersonNote, getResolvedPositionNote } from '@/utils/personne
 export interface PersonnelData {
   id?: string;
   isPlaceholder?: boolean;
+  address?: string | null;
   noId?: number | string | null;
+  phoneNumber?: string | null;
   posCodeId?: number | null;
   posCodeMaster?: {
     id: number;

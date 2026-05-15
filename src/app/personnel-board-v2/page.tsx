@@ -624,22 +624,26 @@ export default function PersonnelBoardV2Page() {
         if (!isSuccessionLane(column)) return { valid: true };
 
         const vacantPosCode = Number(column?.vacantPosition?.posCodeMaster?.id ?? column?.vacantPosition?.posCodeId);
+        const getPreviousTargetPosCode = (currentIndex: number): number | null => {
+            for (let previousIndex = currentIndex - 1; previousIndex >= 0; previousIndex--) {
+                const previousPerson = map[itemIds[previousIndex]];
+                if (!previousPerson || previousPerson.isPlaceholder || previousPerson.id?.startsWith('placeholder-')) continue;
+
+                const previousPosCode = Number(previousPerson.posCodeId);
+                if (Number.isFinite(previousPosCode)) return previousPosCode;
+            }
+
+            return Number.isFinite(vacantPosCode) ? vacantPosCode : null;
+        };
 
         for (let index = 0; index < itemIds.length; index++) {
             const person = map[itemIds[index]];
-            if (!person || person.isPlaceholder) continue;
+            if (!person || person.isPlaceholder || person.id?.startsWith('placeholder-')) continue;
 
             const personPosCode = Number(person.posCodeId);
             if (!Number.isFinite(personPosCode)) continue;
 
-            let targetPosCode: number | null = null;
-            if (index === 0) {
-                targetPosCode = Number.isFinite(vacantPosCode) ? vacantPosCode : null;
-            } else {
-                const previousPerson = map[itemIds[index - 1]];
-                const previousPosCode = Number(previousPerson?.posCodeId);
-                targetPosCode = Number.isFinite(previousPosCode) ? previousPosCode : null;
-            }
+            const targetPosCode = getPreviousTargetPosCode(index);
 
             if (targetPosCode !== null && !isAllowedSuccessionPosCode(personPosCode, targetPosCode)) {
                 return {

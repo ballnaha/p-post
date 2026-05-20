@@ -5,6 +5,7 @@ export type SnackbarType = 'success' | 'info' | 'warning' | 'error';
 
 interface SnackbarState {
   open: boolean;
+  key: number;
   message: string;
   type: SnackbarType;
   duration?: number;
@@ -30,7 +31,7 @@ export const useSnackbar = () => {
           console.log('Snackbar (fallback):', message, type);
         },
         hideSnackbar: () => {},
-        snackbarState: { open: false, message: '', type: 'success' as SnackbarType, duration: 4000 }
+        snackbarState: { open: false, key: 0, message: '', type: 'success' as SnackbarType, duration: 4000 }
       };
     }
     throw new Error('useSnackbar must be used within a SnackbarProvider');
@@ -45,18 +46,20 @@ interface SnackbarProviderProps {
 export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) => {
   const [snackbarState, setSnackbarState] = useState<SnackbarState>({
     open: false,
+    key: 0,
     message: '',
     type: 'success',
     duration: 4000,
   });
 
   const showSnackbar = (message: string, type: SnackbarType, duration = 4000) => {
-    setSnackbarState({
+    setSnackbarState(prev => ({
       open: true,
+      key: prev.key + 1,
       message,
       type,
       duration,
-    });
+    }));
   };
 
   const hideSnackbar = () => {

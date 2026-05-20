@@ -46,6 +46,7 @@ interface PosCode {
 }
 
 interface PersonnelFormData {
+  noId: string;
   address: string;
   posCodeId: number | null;
   phoneNumber: string;
@@ -75,6 +76,7 @@ interface PersonnelFormData {
 }
 
 const emptyFormData: PersonnelFormData = {
+  noId: '',
   address: '',
   posCodeId: null,
   phoneNumber: '',
@@ -109,6 +111,7 @@ const dateFields: Array<keyof Pick<
 >> = ['birthDate', 'lastAppointment', 'currentRankSince', 'enrollmentDate', 'retirementDate'];
 
 const toFormData = (initialData?: PersonnelCreateModalProps['initialData']): PersonnelFormData => ({
+  noId: initialData?.noId === undefined || initialData?.noId === null ? '' : String(initialData.noId),
   address: initialData?.address ?? '',
   posCodeId: initialData?.posCodeId ?? null,
   phoneNumber: initialData?.phoneNumber ?? '',
@@ -466,6 +469,16 @@ export default function PersonnelCreateModal({
 
                 <Stack spacing={2.5}>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <TextField
+                      fullWidth
+                      label="ลำดับตำแหน่ง"
+                      value={formData.noId}
+                      onChange={(e) => handleChange('noId', e.target.value)}
+                      variant="outlined"
+                      size="small"
+                      type="number"
+                      inputProps={{ min: 1, step: 1 }}
+                    />
                     <TextField
                       fullWidth
                       select

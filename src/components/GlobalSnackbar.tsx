@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { Box, IconButton, Snackbar, Typography } from '@mui/material';
+import { Box, IconButton, Snackbar, Typography, Slide, alpha } from '@mui/material';
 import {
   CheckCircleOutline as SuccessIcon,
   Close as CloseIcon,
@@ -20,37 +20,37 @@ const snackbarConfig: Record<SnackbarType, {
 }> = {
   success: {
     icon: <SuccessIcon fontSize="small" />,
-    color: '#047857',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderColor: '#d1fae5',
-    iconBackgroundColor: '#ecfdf5',
+    color: '#065f46',
+    backgroundColor: 'rgba(240, 253, 250, 0.96)',
+    borderColor: '#a7f3d0',
+    iconBackgroundColor: '#ccfbf1',
   },
   info: {
     icon: <InfoIcon fontSize="small" />,
-    color: '#2563eb',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderColor: '#dbeafe',
-    iconBackgroundColor: '#eff6ff',
+    color: '#1e40af',
+    backgroundColor: 'rgba(239, 246, 255, 0.96)',
+    borderColor: '#bfdbfe',
+    iconBackgroundColor: '#dbeafe',
   },
   warning: {
     icon: <WarningIcon fontSize="small" />,
-    color: '#b45309',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderColor: '#fef3c7',
-    iconBackgroundColor: '#fffbeb',
+    color: '#854d0e',
+    backgroundColor: 'rgba(255, 251, 235, 0.96)',
+    borderColor: '#fde68a',
+    iconBackgroundColor: '#fef3c7',
   },
   error: {
     icon: <ErrorIcon fontSize="small" />,
-    color: '#dc2626',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderColor: '#fee2e2',
-    iconBackgroundColor: '#fef2f2',
+    color: '#991b1b',
+    backgroundColor: 'rgba(254, 242, 242, 0.96)',
+    borderColor: '#fecaca',
+    iconBackgroundColor: '#fee2e2',
   },
 };
 
 export const GlobalSnackbar: React.FC = () => {
   const { snackbarState, hideSnackbar } = useSnackbar();
-  const { open, message, type, duration } = snackbarState;
+  const { open, key, message, type, duration } = snackbarState;
   const config = snackbarConfig[type];
 
   useEffect(() => {
@@ -62,9 +62,11 @@ export const GlobalSnackbar: React.FC = () => {
 
   return (
     <Snackbar
+      key={key}
       open={open}
       onClose={hideSnackbar}
       anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      TransitionComponent={(props) => <Slide {...props} direction="down" />}
       sx={{
         mt: { xs: 1.5, sm: 3 },
         px: { xs: 2, sm: 0 },
@@ -76,29 +78,28 @@ export const GlobalSnackbar: React.FC = () => {
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 1,
+          gap: 1.5,
           width: { xs: '100%', sm: 'auto' },
-          minWidth: { xs: '100%', sm: 280 },
-          maxWidth: { xs: '100%', sm: 460 },
-          px: 1.25,
-          py: 1,
-          borderRadius: 2,
-          border: '1px solid',
+          minWidth: { xs: '100%', sm: 320 },
+          maxWidth: { xs: '100%', sm: 500 },
+          px: 2,
+          py: 1.5,
+          borderRadius: 3,
+          border: '1.5px solid',
           borderColor: config.borderColor,
           bgcolor: config.backgroundColor,
           color: config.color,
-          boxShadow: '0 14px 36px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(15, 23, 42, 0.06)',
-          backdropFilter: 'blur(12px)',
+          boxShadow: `0 20px 25px -5px ${alpha(config.color, 0.12)}, 0 8px 10px -6px ${alpha(config.color, 0.06)}`,
+          backdropFilter: 'blur(16px)',
           position: 'relative',
           overflow: 'hidden',
           '&::before': {
             content: '""',
             position: 'absolute',
             left: 0,
-            top: 8,
-            bottom: 8,
-            width: 3,
-            borderRadius: '0 999px 999px 0',
+            top: 0,
+            bottom: 0,
+            width: 4,
             bgcolor: config.color,
           },
         }}
@@ -108,8 +109,8 @@ export const GlobalSnackbar: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 28,
-            height: 28,
+            width: 32,
+            height: 32,
             borderRadius: '50%',
             flexShrink: 0,
             color: config.color,
@@ -124,9 +125,9 @@ export const GlobalSnackbar: React.FC = () => {
           sx={{
             flex: 1,
             minWidth: 0,
-            color: '#1f2937',
-            fontSize: '0.875rem',
-            fontWeight: 500,
+            color: '#1e293b',
+            fontSize: '0.9rem',
+            fontWeight: 700,
             lineHeight: 1.45,
             overflowWrap: 'anywhere',
           }}
@@ -144,7 +145,8 @@ export const GlobalSnackbar: React.FC = () => {
             flexShrink: 0,
             color: '#64748b',
             '&:hover': {
-              bgcolor: 'rgba(15, 23, 42, 0.06)',
+              bgcolor: alpha(config.color, 0.08),
+              color: config.color,
             },
           }}
         >

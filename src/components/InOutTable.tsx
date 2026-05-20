@@ -12,6 +12,7 @@ import {
     TableHead,
     TableRow,
     TablePagination,
+    Pagination,
     Chip,
     Tooltip,
     Skeleton,
@@ -33,6 +34,7 @@ import { formatPositionNumber } from '@/utils/positionNumber';
 // Interface สำหรับข้อมูลการ In-Out
 export interface InOutRecord {
     id: string;
+    noId: number | null;
     incomingPerson: {
         personnelId: string;
         name: string;
@@ -293,6 +295,25 @@ const InOutRow = memo(({
                 })()}
             </TableCell>
 
+            {/* ลำดับตำแหน่ง */}
+            <TableCell sx={{ py: 1.25, px: 1, textAlign: 'center', borderRight: `1px solid ${theme.palette.divider}` }}>
+                {record.noId ? (
+                    <Chip
+                        label={record.noId}
+                        size="small"
+                        sx={{
+                            height: 22,
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            bgcolor: alpha(theme.palette.warning.main, 0.12),
+                            color: theme.palette.warning.dark,
+                        }}
+                    />
+                ) : (
+                    <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
+                )}
+            </TableCell>
+
             {/* อายุ */}
             <TableCell sx={{ py: 1.25, px: 1, textAlign: 'center', borderRight: `1px solid ${theme.palette.divider}` }}>
                 {record.currentHolder?.age ? (
@@ -492,9 +513,15 @@ export default function InOutTable({
     }, [data, page, rowsPerPage, serverSidePagination]);
 
     const total = totalCount !== undefined ? totalCount : data.length;
+    const pageCount = Math.max(1, Math.ceil(total / rowsPerPage));
 
     const handlePageChange = (_: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
         onPageChange ? onPageChange(newPage) : setInternalPage(newPage);
+    };
+
+    const handlePageNumberChange = (_: React.ChangeEvent<unknown>, value: number) => {
+        const nextPage = value - 1;
+        onPageChange ? onPageChange(nextPage) : setInternalPage(nextPage);
     };
 
     const handleRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -538,6 +565,13 @@ export default function InOutTable({
             id: 'currentPos',
             label: 'ตำแหน่งปัจจุบัน',
             minWidth: 180,
+            headerBg: theme.palette.warning.main,
+        },
+        {
+            id: 'positionOrder',
+            label: 'ลำดับตำแหน่ง',
+            minWidth: 95,
+            align: 'center' as const,
             headerBg: theme.palette.warning.main,
         },
         {
@@ -597,7 +631,7 @@ export default function InOutTable({
     return (
         <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
             <TableContainer sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ minWidth: 1400 }}>
+                <Table size="small" sx={{ minWidth: 1500 }}>
                     <TableHead>
                         <TableRow>
                             {columns.map((col, idx) => (
@@ -656,31 +690,52 @@ export default function InOutTable({
 
             {/* Pagination */}
             {showPagination && (
-                <TablePagination
-                    component="div"
-                    count={total}
-                    page={page}
-                    onPageChange={handlePageChange}
-                    rowsPerPage={rowsPerPage}
-                    onRowsPerPageChange={handleRowsPerPageChange}
-                    rowsPerPageOptions={[10, 25, 50, 100]}
-                    labelRowsPerPage="แสดง:"
-                    labelDisplayedRows={({ from, to, count }) => `${from}–${to} จาก ${count !== -1 ? count.toLocaleString() : `>${to}`} รายการ`}
+                <Box
                     sx={{
                         borderTop: `1px solid ${theme.palette.divider}`,
                         bgcolor: alpha(theme.palette.grey[50], 0.5),
-                        '& .MuiTablePagination-toolbar': {
-                            minHeight: 52,
-                        },
-                        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                            fontSize: '0.85rem',
-                            color: theme.palette.text.secondary,
-                        },
-                        '& .MuiTablePagination-select': {
-                            fontSize: '0.85rem',
-                        },
                     }}
-                />
+                >
+                    <TablePagination
+                        component="div"
+                        count={total}
+                        page={page}
+                        onPageChange={handlePageChange}
+                        rowsPerPage={rowsPerPage}
+                        onRowsPerPageChange={handleRowsPerPageChange}
+                        rowsPerPageOptions={[10, 25, 50, 100]}
+                        labelRowsPerPage="แสดง:"
+                        labelDisplayedRows={({ from, to, count }) => `${from}–${to} จาก ${count !== -1 ? count.toLocaleString() : `>${to}`} รายการ`}
+                        sx={{
+                            borderBottom: pageCount > 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                            '& .MuiTablePagination-toolbar': {
+                                minHeight: 52,
+                            },
+                            '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                                fontSize: '0.85rem',
+                                color: theme.palette.text.secondary,
+                            },
+                            '& .MuiTablePagination-select': {
+                                fontSize: '0.85rem',
+                            },
+                        }}
+                    />
+                    {pageCount > 1 && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}>
+                            <Pagination
+                                count={pageCount}
+                                page={Math.min(page + 1, pageCount)}
+                                onChange={handlePageNumberChange}
+                                color="primary"
+                                size="small"
+                                showFirstButton
+                                showLastButton
+                                siblingCount={1}
+                                boundaryCount={1}
+                            />
+                        </Box>
+                    )}
+                </Box>
             )}
         </Paper>
     );

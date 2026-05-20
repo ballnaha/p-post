@@ -280,8 +280,10 @@ const DraggablePersonnelItem = memo(({
                                             name: `${p.rank || ''}${p.fullName || ''}`,
                                             currentPosition: p.position || '-',
                                             currentUnit: p.unit || '-',
+                                            currentPosCode: p.posCodeId ? `${p.posCodeId}${p.posCodeMaster?.name ? ` - ${p.posCodeMaster.name}` : ''}` : '-',
                                             targetPosition: p.toPosition || p.toPosCodeMaster?.name || 'ตำแหน่งว่าง',
                                             targetUnit: p.toUnit || '-',
+                                            targetPosCode: p.toPosCodeId ? `${p.toPosCodeId}${p.toPosCodeMaster?.name ? ` - ${p.toPosCodeMaster.name}` : ''}` : '-',
                                             age: p.age,
                                             seniority: p.seniority,
                                             requestedPosition: p.requestedPosition

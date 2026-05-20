@@ -14,6 +14,13 @@ const nullablePositionNumber = (value: any): string | null => {
   return normalized ? normalized.replace(/\s+/g, '') : null;
 };
 
+const nullableInt = (value: any): number | null => {
+  const normalized = nullableText(value);
+  if (normalized === null) return null;
+  const parsed = parseInt(normalized, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const normalizeUpdateBody = (body: Record<string, any>) => {
   const updateData = { ...body };
   const nullableFields = [
@@ -51,6 +58,10 @@ const normalizeUpdateBody = (body: Record<string, any>) => {
         : nullableText(updateData[field]);
     }
   });
+
+  if ('noId' in updateData) {
+    updateData.noId = nullableInt(updateData.noId);
+  }
 
   return updateData;
 };

@@ -57,6 +57,10 @@ function firstText(row: ExcelRow, columns: string[]): string | null {
   return null;
 }
 
+function hasAnyColumn(row: ExcelRow, columns: string[]): boolean {
+  return columns.some((column) => column in row);
+}
+
 function formatGregorianDate(day: number, month: number, year: number): string | null {
   if (!day || !month || !year) return null;
 
@@ -205,7 +209,10 @@ function assertColumns(rows: ExcelRow[], requiredColumns: string[], fileLabel: s
   }
 
   const firstRow = rows[0];
-  const missingColumns = requiredColumns.filter((column) => !(column in firstRow));
+  const missingColumns = requiredColumns.filter((column) => {
+    if (column === 'ตำแหน่ง') return !hasAnyColumn(firstRow, ['ตำแหน่ง', 'ตำแหน่งปัจจุบัน']);
+    return !(column in firstRow);
+  });
 
   if (missingColumns.length > 0) {
     throw new Error(`ไฟล์${fileLabel}ไม่มีคอลัมน์ที่จำเป็น: ${missingColumns.join(', ')}`);
@@ -320,6 +327,7 @@ async function processImportBundleJob(
         'หมายเหตุตัวคน',
         'POSCODE',
         'ตำแหน่ง',
+        'ลำดับตำแหน่ง',
         'เลขตำแหน่ง',
         'ทำหน้าที่',
         'หน่วย',
@@ -330,7 +338,7 @@ async function processImportBundleJob(
       ], 'ข้อมูลแบบสมบูรณ์');
     }
     if (files.personFile) assertColumns(personRows, ['เลขประจำตัวประชาชน', 'เลขตำแหน่ง'], 'ข้อมูลบุคคล');
-    if (files.positionFile) assertColumns(positionRows, ['POSCODE', 'ตำแหน่ง', 'เลขตำแหน่ง'], 'ข้อมูลตำแหน่ง');
+    if (files.positionFile) assertColumns(positionRows, ['POSCODE', 'ตำแหน่ง', 'ลำดับตำแหน่ง', 'เลขตำแหน่ง'], 'ข้อมูลตำแหน่ง');
     if (files.requestFile) assertColumns(requestRows, ['เลขประจำตัวประชาชน', 'ตำแหน่งที่ร้องขอ'], 'ข้อมูลคำร้อง');
 
     await prisma.importJob.update({
@@ -389,6 +397,7 @@ async function processImportBundleJob(
     const batchSize = PERSON_IMPORT_BATCH_SIZE;
     const existingVacantPositionsByNumber = new Map<string, {
       id: string;
+      noId: number | null;
       posCodeId: number | null;
       position: string | null;
       positionNumber: string | null;
@@ -411,6 +420,7 @@ async function processImportBundleJob(
         },
         select: {
           id: true,
+          noId: true,
           posCodeId: true,
           position: true,
           positionNumber: true,
@@ -477,7 +487,8 @@ async function processImportBundleJob(
             const importedPositionData = positionDataRow
               ? {
                 posCodeId: intValue(positionDataRow['POSCODE']),
-                position: text(positionDataRow['ตำแหน่ง']),
+                position: firstText(positionDataRow, ['ตำแหน่ง', 'ตำแหน่งปัจจุบัน']),
+                noId: intValue(positionDataRow['ลำดับตำแหน่ง']),
                 actingAs: text(positionDataRow['ทำหน้าที่']),
                 unit: text(positionDataRow['หน่วย']),
               }
@@ -494,6 +505,7 @@ async function processImportBundleJob(
               fullName: text(row['ชื่อ สกุล']),
               nationalId,
               positionNumber,
+              noId: importedPositionData?.noId || existingPositionRecord?.noId || null,
               posCodeId: importedPositionData?.posCodeId || existingPositionRecord?.posCodeId || null,
               position: importedPositionData?.position || existingPositionRecord?.position || null,
               actingAs: importedPositionData?.actingAs || existingPositionRecord?.actingAs || null,
@@ -619,7 +631,8 @@ async function processImportBundleJob(
             const positionNote = firstText(row, ['หมายเหตุตำแหน่ง', 'หมายเหตุ']);
             const updateData: any = {
               posCodeId: intValue(row['POSCODE']),
-              position: text(row['ตำแหน่ง']),
+              position: firstText(row, ['ตำแหน่ง', 'ตำแหน่งปัจจุบัน']),
+              noId: intValue(row['ลำดับตำแหน่ง']),
               actingAs: text(row['ทำหน้าที่']),
               unit: text(row['หน่วย']),
               updatedBy: username,
@@ -652,6 +665,7 @@ async function processImportBundleJob(
                   year: importYear,
                   isActive: true,
                   positionNumber,
+                  noId: updateData.noId,
                   posCodeId: updateData.posCodeId,
                   position: updateData.position,
                   actingAs: updateData.actingAs,

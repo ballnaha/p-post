@@ -230,8 +230,12 @@ export default function MoveToLaneButton({
         setRecentLaneIds(updatedRecent);
         localStorage.setItem(RECENT_LANES_KEY, JSON.stringify(updatedRecent));
 
-        onMove(laneId);
         setIsOpen(false);
+        // Delay the actual move to allow the drawer closing transition to start
+        // and prevent React/MUI portal/transition bugs upon abrupt unmounting.
+        setTimeout(() => {
+            onMove(laneId);
+        }, 150);
     }, [onMove, recentLaneIds]);
 
     const handleShowDetails = useCallback((lane: Lane) => {
@@ -694,10 +698,10 @@ export default function MoveToLaneButton({
                             <GroupsIcon />
                         </Avatar>
                         <Box>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#0f172a', lineHeight: 1.2 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 900, color: '#0f172a', lineHeight: 1.2, fontSize: '1.15rem' }}>
                                 {detailsLane?.title}
                             </Typography>
-                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.85rem' }}>
                                 รายชื่อบุคคลในเลน ({detailsLane?.occupants?.length || 0} คน)
                             </Typography>
                         </Box>
@@ -724,18 +728,18 @@ export default function MoveToLaneButton({
                                 }}
                             >
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                    <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a', flex: 1 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 800, color: '#0f172a', flex: 1, fontSize: '1rem' }}>
                                         {i + 1}. {occ.name}
                                     </Typography>
                                     <Box sx={{ display: 'flex', gap: 1 }}>
-                                        <Chip label={`อายุ: ${occ.age || '-'}`} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700, color: '#64748b', borderColor: '#e2e8f0', bgcolor: 'white' }} />
-                                        <Chip label={`อาวุโส: ${occ.seniority || '-'}`} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.7rem', fontWeight: 700, color: '#64748b', borderColor: '#e2e8f0', bgcolor: 'white' }} />
+                                        <Chip label={`อายุ: ${occ.age || '-'}`} size="small" variant="outlined" sx={{ height: 24, fontSize: '0.8rem', fontWeight: 700, color: '#64748b', borderColor: '#e2e8f0', bgcolor: 'white' }} />
+                                        <Chip label={`อาวุโส: ${occ.seniority || '-'}`} size="small" variant="outlined" sx={{ height: 24, fontSize: '0.8rem', fontWeight: 700, color: '#64748b', borderColor: '#e2e8f0', bgcolor: 'white' }} />
                                     </Box>
                                 </Box>
 
                                 <Box sx={{
                                     display: 'flex',
-                                    alignItems: 'center',
+                                    alignItems: 'stretch',
                                     gap: 1.5,
                                     bgcolor: 'white',
                                     p: 1.5,
@@ -743,20 +747,34 @@ export default function MoveToLaneButton({
                                     border: '1px solid #e2e8f0',
                                     boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                                 }}>
-                                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: '#64748b', display: 'block' }}>จากเดิม</Typography>
-                                        <Typography variant="caption" noWrap sx={{ fontWeight: 800, color: '#334155', fontSize: '0.75rem', display: 'block' }}>{occ.currentPosition}</Typography>
-                                        <Typography variant="caption" noWrap sx={{ color: '#94a3b8', fontSize: '0.65rem' }}>{occ.currentUnit}</Typography>
+                                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                                        <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: '#64748b', display: 'block', fontSize: '0.8rem', mb: 0.5 }}>จากเดิม</Typography>
+                                        <Typography variant="caption" noWrap sx={{ fontWeight: 800, color: '#334155', fontSize: '0.9rem', display: 'block', mb: 0.25 }}>{occ.currentPosition}</Typography>
+                                        <Typography variant="caption" noWrap sx={{ color: '#94a3b8', fontSize: '0.8rem', display: 'block', mb: 0.25 }}>{occ.currentUnit}</Typography>
+                                        {occ.currentPosCode && occ.currentPosCode !== '-' && (
+                                            <Chip
+                                                label={`PosCode: ${occ.currentPosCode}`}
+                                                size="small"
+                                                sx={{ mt: 2, height: 22, fontSize: '0.75rem', fontWeight: 800, bgcolor: alpha('#3b82f6', 0.08), color: '#2563eb', alignSelf: 'flex-start' }}
+                                            />
+                                        )}
                                     </Box>
 
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24 }}>
                                         <ArrowForwardIcon sx={{ color: 'primary.main', fontSize: 18, opacity: 0.5 }} />
                                     </Box>
 
-                                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: '#059669', display: 'block' }}>เป้าหมาย</Typography>
-                                        <Typography variant="caption" noWrap sx={{ fontWeight: 900, color: '#059669', fontSize: '0.75rem', display: 'block' }}>{occ.targetPosition}</Typography>
-                                        <Typography variant="caption" noWrap sx={{ color: '#10b981', fontSize: '0.65rem' }}>{occ.targetUnit}</Typography>
+                                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                                        <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: '#059669', display: 'block', fontSize: '0.8rem', mb: 0.5 }}>เป้าหมาย</Typography>
+                                        <Typography variant="caption" noWrap sx={{ fontWeight: 900, color: '#059669', fontSize: '0.9rem', display: 'block', mb: 0.25 }}>{occ.targetPosition}</Typography>
+                                        <Typography variant="caption" noWrap sx={{ color: '#10b981', fontSize: '0.8rem', display: 'block', mb: 0.25 }}>{occ.targetUnit}</Typography>
+                                        {occ.targetPosCode && occ.targetPosCode !== '-' && (
+                                            <Chip
+                                                label={`PosCode: ${occ.targetPosCode}`}
+                                                size="small"
+                                                sx={{ mt: 2, height: 22, fontSize: '0.75rem', fontWeight: 800, bgcolor: alpha('#10b981', 0.08), color: '#059669', alignSelf: 'flex-start' }}
+                                            />
+                                        )}
                                     </Box>
                                 </Box>
 
@@ -772,7 +790,7 @@ export default function MoveToLaneButton({
                                         border: '1px solid',
                                         borderColor: alpha('#f59e0b', 0.2)
                                     }}>
-                                        <Typography variant="caption" sx={{ color: '#b45309', fontWeight: 800, fontSize: '0.7rem' }}>
+                                        <Typography variant="caption" sx={{ color: '#b45309', fontWeight: 800, fontSize: '0.8rem' }}>
                                             📍 ร้องขอ: {occ.requestedPosition}
                                         </Typography>
                                     </Box>

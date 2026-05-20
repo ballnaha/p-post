@@ -10,6 +10,7 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 export interface InOutRecord {
     id: string;
+    noId: number | null;
     incomingPerson: {
         personnelId: string;
         name: string;
@@ -264,7 +265,11 @@ export async function GET(request: NextRequest) {
             prisma.policePersonnel.findMany({
                 where,
                 ...(needsPostFilter ? {} : { skip, take: pageSize }),
-                orderBy: [{ posCodeId: 'asc' }, { noId: 'asc' }],
+                orderBy: [
+                    { noId: 'asc' },
+                    { posCodeId: 'asc' },
+                    { fullName: 'asc' },
+                ],
                 include: { posCodeMaster: true },
             }),
             prisma.policePersonnel.count({ where }),
@@ -508,6 +513,7 @@ export async function GET(request: NextRequest) {
 
             return {
                 id: person.id,
+                noId: person.noId,
                 incomingPerson,
                 currentHolder: (isVacant || isReserved) ? null : {
                     personnelId: person.id,

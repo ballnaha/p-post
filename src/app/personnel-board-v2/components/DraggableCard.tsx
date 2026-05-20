@@ -49,8 +49,10 @@ interface DraggableCardProps {
             name: string;
             currentPosition: string;
             currentUnit: string;
+            currentPosCode?: string;
             targetPosition: string;
             targetUnit: string;
+            targetPosCode?: string;
             age?: string | number | null;
             seniority?: string | number | null;
             requestedPosition?: string | null;

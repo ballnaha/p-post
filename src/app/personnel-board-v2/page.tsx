@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 import Link from 'next/link';
 import {
     Box,
@@ -14,8 +15,6 @@ import {
     FormControl,
     Select,
     MenuItem,
-    Snackbar,
-    Alert,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -63,10 +62,6 @@ import {
     Print as PrintIcon,
     ViewKanban as KanbanIcon,
     ViewList as ListIcon,
-    CheckCircleOutline as SuccessToastIcon,
-    ErrorOutline as ErrorToastIcon,
-    InfoOutlined as InfoToastIcon,
-    ReportProblemOutlined as WarningToastIcon,
 } from '@mui/icons-material';
 
 const Transition = React.forwardRef(function Transition(
@@ -117,37 +112,6 @@ const sortColumnsForBoard = (cols: Column[]) => {
     const completed = cols.filter(col => col.isCompleted);
     return [...activePinned, ...activeUnpinned, ...completed];
 };
-
-const snackbarConfig = {
-    success: {
-        icon: <SuccessToastIcon fontSize="small" />,
-        color: '#047857',
-        backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#d1fae5',
-        iconBackgroundColor: '#ecfdf5',
-    },
-    info: {
-        icon: <InfoToastIcon fontSize="small" />,
-        color: '#2563eb',
-        backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#dbeafe',
-        iconBackgroundColor: '#eff6ff',
-    },
-    warning: {
-        icon: <WarningToastIcon fontSize="small" />,
-        color: '#b45309',
-        backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#fef3c7',
-        iconBackgroundColor: '#fffbeb',
-    },
-    error: {
-        icon: <ErrorToastIcon fontSize="small" />,
-        color: '#dc2626',
-        backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#fee2e2',
-        iconBackgroundColor: '#fef2f2',
-    },
-} as const;
 
 const getCircularSwapLabel = (count?: number) => {
     return 'วงสลับ';
@@ -259,6 +223,7 @@ export default function PersonnelBoardV2Page() {
     const [page, setPage] = useState(0);
     const [rowsPerPage] = useState(20);
     const [totalPersonnel, setTotalPersonnel] = useState(0);
+    const personnelFetchSeqRef = useRef(0);
 
     // Filter State
     const [filterUnit, setFilterUnit] = useState<string>('all');
@@ -347,6 +312,16 @@ export default function PersonnelBoardV2Page() {
         laneId: null,
         laneTitle: ''
     });
+    const [bulkSwapChoice, setBulkSwapChoice] = useState<{
+        open: boolean;
+        personId: string;
+        targetLaneId: string;
+        requestedIds?: string[];
+        count: number;
+        targetLaneTitle: string;
+        kind: 'single' | 'bulk';
+        targetMatchCount?: number;
+    } | null>(null);
 
     // Clear Board Dialog State
     const [clearBoardConfirm, setClearBoardConfirm] = useState(false);
@@ -377,10 +352,12 @@ export default function PersonnelBoardV2Page() {
         }
     }, []);
 
-    // Snackbar State
-    const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>(
-        { open: false, message: '', severity: 'success' }
-    );
+    // Snackbar State (Using Global Snackbar Context)
+    const { showSnackbar } = useSnackbar();
+    const setSnackbar = useCallback((config: { open?: boolean; message: string; severity?: 'success' | 'error' | 'info' | 'warning' }) => {
+        const type = config.severity || 'success';
+        showSnackbar(config.message, type);
+    }, [showSnackbar]);
 
     // Loading/Saving State
     const [loadingBoard, setLoadingBoard] = useState(false);
@@ -469,6 +446,33 @@ export default function PersonnelBoardV2Page() {
             return !assignedIdSet.has(pId) && !assignedIdSet.has(pNoId);
         });
     }, [personnelList, assignedIdSet]);
+
+    const resetSearchWhenSourceIsExhausted = useCallback((addedPerson: Personnel) => {
+        const hasActiveSourceFilter = Boolean(searchTerm.trim()) ||
+            filterUnit !== 'all' ||
+            filterPosCode !== 'all' ||
+            Boolean(filterMinPosCode) ||
+            filterHasRequestedPosition !== 'all';
+        if (!hasActiveSourceFilter) return;
+
+        const addedId = String(addedPerson.id || '');
+        const addedNoId = String(addedPerson.noId || '');
+        const remainingVisible = filteredPersonnelList.filter((person) => {
+            const personId = String(person.id || '');
+            const personNoId = String(person.noId || '');
+            return personId !== addedId && (!addedNoId || personNoId !== addedNoId);
+        });
+
+        if (remainingVisible.length === 0) {
+            setSearchTerm('');
+            setDebouncedSearchTerm('');
+            setFilterUnit('all');
+            setFilterPosCode('all');
+            setFilterMinPosCode(null);
+            setFilterHasRequestedPosition('all');
+            setPage(0);
+        }
+    }, [filterHasRequestedPosition, filterMinPosCode, filterPosCode, filterUnit, filteredPersonnelList, searchTerm]);
 
     // Filter columns for board display
     const filteredColumns = useMemo(() => {
@@ -621,7 +625,8 @@ export default function PersonnelBoardV2Page() {
             return { valid: true };
         }
 
-        if (!isSuccessionLane(column)) return { valid: true };
+        const shouldValidateSuccession = isSuccessionLane(column) || itemIds.length > 1;
+        if (!shouldValidateSuccession) return { valid: true };
 
         const vacantPosCode = Number(column?.vacantPosition?.posCodeMaster?.id ?? column?.vacantPosition?.posCodeId);
         const getPreviousTargetPosCode = (currentIndex: number): number | null => {
@@ -700,6 +705,7 @@ export default function PersonnelBoardV2Page() {
 
     // Fetch personnel list
     const fetchPersonnelList = useCallback(async () => {
+        const requestId = ++personnelFetchSeqRef.current;
         setListLoading(true);
         try {
             const params = new URLSearchParams();
@@ -731,13 +737,17 @@ export default function PersonnelBoardV2Page() {
                 throw new Error(`API Error: ${res.status} - ${errorData.error || 'Unknown error'}`);
             }
             const data = await res.json();
+            if (requestId !== personnelFetchSeqRef.current) return;
 
             setPersonnelList(Array.isArray(data?.data) ? data.data : []);
             setTotalPersonnel(data?.total || 0);
         } catch (err) {
+            if (requestId !== personnelFetchSeqRef.current) return;
             console.error('Error fetching personnel list:', err);
         } finally {
-            setListLoading(false);
+            if (requestId === personnelFetchSeqRef.current) {
+                setListLoading(false);
+            }
         }
     }, [debouncedSearchTerm, filterUnit, filterPosCode, filterMinPosCode, filterHasRequestedPosition, assignedOriginalIds, assignedNoIds, forceAvailablePersonnelIds, forceAvailablePersonnelNoIds, page, rowsPerPage, selectedYear]);
 
@@ -991,6 +1001,7 @@ export default function PersonnelBoardV2Page() {
 
     // Manual save — ใช้ saveBoardData เพื่ออัปเดต linkedTransactionId ป้องกัน Drawer นับซ้ำ
     const handleSaveData = async () => {
+        if (savingBoard) return;
         const success = await saveBoardData(selectedYear, columns, personnelMap);
         if (success) {
             setForceAvailableIds([]); // ล้างรายการที่บังคับคืนชีพเมื่อบันทึกจริงแล้ว
@@ -1171,6 +1182,7 @@ export default function PersonnelBoardV2Page() {
                                     if (targetLane) {
                                         triggerChainReaction(newPerson, targetLane);
                                     }
+                                    resetSearchWhenSourceIsExhausted(person);
                                     return; // Exit early since we handled everything
                                 }
                             }
@@ -1247,6 +1259,7 @@ export default function PersonnelBoardV2Page() {
                             };
                             triggerChainReaction(newPerson, updatedLane as Column);
                         }
+                        resetSearchWhenSourceIsExhausted(person);
                     }
                     // Dropped on another card to insert at specific position
                     else if (destData.personnelId && (destData.type === 'card')) {
@@ -1352,6 +1365,7 @@ export default function PersonnelBoardV2Page() {
                                     itemIds: destColumn.itemIds.map(id => id === destPersonnelId ? boardId : id)
                                 };
                                 triggerChainReaction(newPerson, updatedColumn);
+                                resetSearchWhenSourceIsExhausted(person);
                                 return; // Exit early - replacement done
                             }
                             // Enforce limits for Swap (2) and Three-way (3)
@@ -1421,6 +1435,7 @@ export default function PersonnelBoardV2Page() {
                                         }));
 
                                         triggerChainReaction(newPerson, destColumn);
+                                        resetSearchWhenSourceIsExhausted(person);
                                         return; // Exit early
                                     }
                                 }
@@ -1474,6 +1489,7 @@ export default function PersonnelBoardV2Page() {
 
                             const updatedColumn = { ...destColumn, itemIds: newItemIds };
                             triggerChainReaction(newPerson, updatedColumn);
+                            resetSearchWhenSourceIsExhausted(person);
                         }
 
                     }
@@ -1731,7 +1747,7 @@ export default function PersonnelBoardV2Page() {
                 setHasUnsavedChanges(true);
             },
         });
-    }, [columns, selectedIds, clearSelection, commitAction, personnelMap, selectedYear, saveBoardData, validateSuccessionPosCodes]);
+    }, [columns, selectedIds, clearSelection, commitAction, personnelMap, selectedYear, saveBoardData, validateSuccessionPosCodes, resetSearchWhenSourceIsExhausted]);
 
     // Add to lane handler
     // Recalculate 'toPosition' fields for all personnel in a specific column (for chains)
@@ -1915,6 +1931,28 @@ export default function PersonnelBoardV2Page() {
         commitAction();
         const lane = columns.find(c => c.id === laneId);
 
+        if (!lane) {
+            setSnackbar({
+                open: true,
+                message: '❌ ไม่พบเลนปลายทางที่ต้องการย้ายเข้า',
+                severity: 'error'
+            });
+            return;
+        }
+
+        const isAlreadyInLane = lane.itemIds.some(id => {
+            const p = personnelMap[id];
+            return p && (p.originalId === person.id || p.id === person.id || p.fullName === person.fullName);
+        });
+        if (isAlreadyInLane) {
+            setSnackbar({
+                open: true,
+                message: `⚠️ ${person.fullName} อยู่ในเลนนี้อยู่แล้ว`,
+                severity: 'warning'
+            });
+            return;
+        }
+
         // Enforce limits for Swap (2) and Three-way (3)
         if (lane) {
             const maxLimit = lane.chainType === 'swap' ? 2
@@ -2001,6 +2039,7 @@ export default function PersonnelBoardV2Page() {
                     return { ...c, title: newTitle, itemIds: newItemIds };
                 }));
                 setHasUnsavedChanges(true);
+                resetSearchWhenSourceIsExhausted(person);
                 return; // Exit early
             }
         } else if (isPromotionLane && lane?.vacantPosition) {
@@ -2070,6 +2109,13 @@ export default function PersonnelBoardV2Page() {
             return { ...c, title: newTitle, itemIds: newItemIds };
         }));
         setHasUnsavedChanges(true);
+        resetSearchWhenSourceIsExhausted(person);
+
+        setSnackbar({
+            open: true,
+            message: `✅ เพิ่ม ${person.rank || ''} ${person.fullName} เข้าเลน "${lane.title}" แล้ว`,
+            severity: 'success'
+        });
 
         // Recalculate chain toPositions
         setTimeout(() => {
@@ -2081,15 +2127,27 @@ export default function PersonnelBoardV2Page() {
                 return currentCols;
             });
         }, 50);
-    }, [columns, commitAction, personnelMap, recalculateColumnToPositions, validateSuccessionPosCodes]);
+    }, [columns, commitAction, personnelMap, recalculateColumnToPositions, validateSuccessionPosCodes, resetSearchWhenSourceIsExhausted]);
 
     // Remove from board handler
     const handleRemoveFromBoard = (personId: string) => {
-        commitAction();
-
         // Find the lane containing this person
         const sourceLane = columns.find(c => c.itemIds.includes(personId));
         const removedPerson = personnelMap[personId];
+        if (sourceLane) {
+            const prospectiveItemIds = sourceLane.itemIds.filter(id => id !== personId);
+            const validation = validateSuccessionPosCodes(sourceLane, prospectiveItemIds, personnelMap);
+            if (!validation.valid) {
+                setSnackbar({
+                    open: true,
+                    message: validation.message || 'ไม่สามารถลบได้ เพราะจะทำให้ลำดับตำแหน่งในเลนไม่ถูกต้อง',
+                    severity: 'error'
+                });
+                return;
+            }
+        }
+
+        commitAction();
 
         setColumns(prev => prev.map(col => {
             if (!col.itemIds.includes(personId)) return col;
@@ -2519,7 +2577,7 @@ export default function PersonnelBoardV2Page() {
     }, [recalculateColumnToPositions]);
 
     // Add new lane
-    const handleMovePersonToLane = useCallback((personId: string, targetLaneId: string, requestedIds?: string[]) => {
+    const handleMovePersonToLane = useCallback((personId: string, targetLaneId: string, requestedIds?: string[], mode: 'auto' | 'move' | 'swap' = 'auto') => {
         commitAction();
         const candidateIds = requestedIds && requestedIds.length > 0
             ? requestedIds
@@ -2527,16 +2585,246 @@ export default function PersonnelBoardV2Page() {
                 ? selectedIds
                 : [personId];
         const movingIds = [...new Set(candidateIds)].filter(id => personnelMap[id]);
-        if (movingIds.length === 0) return;
+        if (movingIds.length === 0) {
+            setSnackbar({
+                open: true,
+                message: '❌ ไม่พบข้อมูลบุคลากรที่ต้องการย้าย',
+                severity: 'error'
+            });
+            return;
+        }
 
         const targetLane = columns.find(c => c.id === targetLaneId);
-        if (!targetLane) return;
+        if (!targetLane) {
+            setSnackbar({
+                open: true,
+                message: '❌ ไม่พบเลนปลายทางที่ต้องการย้ายเข้า',
+                severity: 'error'
+            });
+            return;
+        }
 
         const people = movingIds
             .map(id => personnelMap[id])
             .filter((person): person is Personnel => Boolean(person));
-        if (people.length === 0) return;
+        if (people.length === 0) {
+            setSnackbar({
+                open: true,
+                message: '❌ ไม่พบข้อมูลบุคลากรที่ต้องการย้าย',
+                severity: 'error'
+            });
+            return;
+        }
         const firstPerson = people[0];
+
+        if (movingIds.every(id => targetLane.itemIds.includes(id))) {
+            setSnackbar({
+                open: true,
+                message: movingIds.length > 1
+                    ? '⚠️ บุคลากรที่เลือกอยู่ในเลนปลายทางอยู่แล้ว'
+                    : `⚠️ ${firstPerson.fullName} อยู่ในเลนปลายทางอยู่แล้ว`,
+                severity: 'warning'
+            });
+            return;
+        }
+
+        const sourceLanes = columns.filter(c => c.id !== targetLaneId && movingIds.some(id => c.itemIds.includes(id)));
+        const targetSwapIds = targetLane.itemIds.filter(id => !movingIds.includes(id) && personnelMap[id] && !personnelMap[id].isPlaceholder);
+        const movingPersonPosCode = Number(personnelMap[movingIds[0]]?.posCodeId);
+        const singleTargetSwapIds = targetSwapIds.filter(id => {
+            const targetPosCode = Number(personnelMap[id]?.posCodeId);
+            return Number.isFinite(movingPersonPosCode) && targetPosCode === movingPersonPosCode;
+        });
+        const canTrySingleLaneSwap = movingIds.length === 1 && sourceLanes.length === 1 && singleTargetSwapIds.length > 0;
+
+        if (mode !== 'move' && canTrySingleLaneSwap) {
+            const sourceLane = sourceLanes[0];
+            const movingId = movingIds[0];
+            const targetId = singleTargetSwapIds[0];
+            const movingPerson = personnelMap[movingId];
+            const targetPerson = personnelMap[targetId];
+
+            if (movingPerson && targetPerson) {
+                if (mode === 'auto') {
+                    setBulkSwapChoice({
+                        open: true,
+                        personId,
+                        targetLaneId,
+                        requestedIds: movingIds,
+                        count: 1,
+                        targetLaneTitle: targetLane.title,
+                        kind: 'single',
+                        targetMatchCount: singleTargetSwapIds.length,
+                    });
+                    return;
+                }
+
+                const nextPersonnelMap = {
+                    ...personnelMap,
+                    [movingId]: {
+                        ...movingPerson,
+                        toPosCodeId: targetPerson.posCodeId || null,
+                        toPosCodeMaster: targetPerson.posCodeMaster || null,
+                        toPosition: targetPerson.position || null,
+                        toPositionNumber: targetPerson.positionNumber || null,
+                        toUnit: targetPerson.unit || null,
+                        toActingAs: targetPerson.actingAs || null,
+                    },
+                    [targetId]: {
+                        ...targetPerson,
+                        toPosCodeId: movingPerson.posCodeId || null,
+                        toPosCodeMaster: movingPerson.posCodeMaster || null,
+                        toPosition: movingPerson.position || null,
+                        toPositionNumber: movingPerson.positionNumber || null,
+                        toUnit: movingPerson.unit || null,
+                        toActingAs: movingPerson.actingAs || null,
+                    },
+                };
+
+                setPersonnelMap(nextPersonnelMap);
+                setColumns(prev => prev.map(column => {
+                    if (column.id === sourceLane.id) {
+                        return {
+                            ...column,
+                            itemIds: column.itemIds.map(id => id === movingId ? targetId : id)
+                        };
+                    }
+
+                    if (column.id === targetLaneId) {
+                        return {
+                            ...column,
+                            itemIds: column.itemIds.map(id => id === targetId ? movingId : id)
+                        };
+                    }
+
+                    return column;
+                }));
+
+                setHasUnsavedChanges(true);
+                clearSelection();
+                setBulkSwapChoice(null);
+                setSnackbar({
+                    open: true,
+                    message: `สลับ ${movingPerson.fullName || 'บุคลากร'} กับเลน "${targetLane.title}" แล้ว`,
+                    severity: 'success'
+                });
+                return;
+            }
+        }
+
+        const canTryBulkLaneSwap = movingIds.length > 1 && sourceLanes.length === 1;
+
+        if (mode !== 'move' && canTryBulkLaneSwap) {
+            const sourceLane = sourceLanes[0];
+            const movingByPosCode = new Map<number, string>();
+            const targetByPosCode = new Map<number, string>();
+            let canPairByPosCode = true;
+
+            movingIds.forEach(id => {
+                const posCode = Number(personnelMap[id]?.posCodeId);
+                if (!Number.isFinite(posCode) || movingByPosCode.has(posCode)) {
+                    canPairByPosCode = false;
+                    return;
+                }
+                movingByPosCode.set(posCode, id);
+            });
+
+            targetSwapIds.forEach(id => {
+                const posCode = Number(personnelMap[id]?.posCodeId);
+                if (!Number.isFinite(posCode) || !movingByPosCode.has(posCode)) {
+                    return;
+                }
+                if (targetByPosCode.has(posCode)) {
+                    canPairByPosCode = false;
+                    return;
+                }
+                targetByPosCode.set(posCode, id);
+            });
+
+            const samePosCodeSet = canPairByPosCode
+                && movingByPosCode.size === targetByPosCode.size
+                && [...movingByPosCode.keys()].every(posCode => targetByPosCode.has(posCode));
+
+            if (samePosCodeSet) {
+                if (mode === 'auto') {
+                    setBulkSwapChoice({
+                        open: true,
+                        personId,
+                        targetLaneId,
+                        requestedIds: movingIds,
+                        count: movingIds.length,
+                        targetLaneTitle: targetLane.title,
+                        kind: 'bulk',
+                    });
+                    return;
+                }
+
+                const movingToTarget = new Map<string, string>();
+                const targetToMoving = new Map<string, string>();
+
+                movingByPosCode.forEach((movingId, posCode) => {
+                    const targetId = targetByPosCode.get(posCode);
+                    if (!targetId) return;
+                    movingToTarget.set(movingId, targetId);
+                    targetToMoving.set(targetId, movingId);
+                });
+
+                const nextPersonnelMap = { ...personnelMap };
+                movingToTarget.forEach((targetId, movingId) => {
+                    const movingPerson = personnelMap[movingId];
+                    const targetPerson = personnelMap[targetId];
+                    if (!movingPerson || !targetPerson) return;
+
+                    nextPersonnelMap[movingId] = {
+                        ...movingPerson,
+                        toPosCodeId: targetPerson.posCodeId || null,
+                        toPosCodeMaster: targetPerson.posCodeMaster || null,
+                        toPosition: targetPerson.position || null,
+                        toPositionNumber: targetPerson.positionNumber || null,
+                        toUnit: targetPerson.unit || null,
+                        toActingAs: targetPerson.actingAs || null,
+                    };
+                    nextPersonnelMap[targetId] = {
+                        ...targetPerson,
+                        toPosCodeId: movingPerson.posCodeId || null,
+                        toPosCodeMaster: movingPerson.posCodeMaster || null,
+                        toPosition: movingPerson.position || null,
+                        toPositionNumber: movingPerson.positionNumber || null,
+                        toUnit: movingPerson.unit || null,
+                        toActingAs: movingPerson.actingAs || null,
+                    };
+                });
+
+                setPersonnelMap(nextPersonnelMap);
+                setColumns(prev => prev.map(column => {
+                    if (column.id === sourceLane.id) {
+                        return {
+                            ...column,
+                            itemIds: column.itemIds.map(id => movingToTarget.get(id) || id)
+                        };
+                    }
+
+                    if (column.id === targetLaneId) {
+                        return {
+                            ...column,
+                            itemIds: column.itemIds.map(id => targetToMoving.get(id) || id)
+                        };
+                    }
+
+                    return column;
+                }));
+
+                setHasUnsavedChanges(true);
+                clearSelection();
+                setBulkSwapChoice(null);
+                setSnackbar({
+                    open: true,
+                    message: `สลับกลุ่ม ${movingIds.length} คนกับเลน "${targetLane.title}" ตาม PosCode แล้ว`,
+                    severity: 'success'
+                });
+                return;
+            }
+        }
 
         const movingIdsAlreadyInTarget = targetLane.itemIds.filter(id => movingIds.includes(id)).length;
         const targetCountAfterMove = targetLane.itemIds.length - movingIdsAlreadyInTarget + movingIds.length;
@@ -3492,30 +3780,9 @@ export default function PersonnelBoardV2Page() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // personnelMap/posCodeOptions accessed via refs — stable callback
 
-    // Auto-suggest for Manual/Custom lanes:
-    // When the first person is dropped into an empty custom lane, suggest the next person to fill that person's original position.
-    const prevCustomLaneCountsRef = useRef<Record<string, number>>({});
-    useEffect(() => {
-        const prevCounts = prevCustomLaneCountsRef.current;
-
-        columns.forEach(col => {
-            if (col.chainType !== 'custom') return;
-            const prevCount = prevCounts[col.id] ?? 0;
-            const nextCount = col.itemIds.length;
-            const hasAllPersonnel = col.itemIds.every(id => Boolean(personnelMapRef.current[id]));
-
-            // Wait until dropped personnel exist in map; otherwise 0->1 transition can be consumed too early.
-            if (!hasAllPersonnel) return;
-
-            // Trigger only on 0 -> 1 transition
-            if (prevCount === 0 && nextCount === 1) {
-                handleSuggest(col);
-            }
-
-            prevCounts[col.id] = nextCount;
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [columns]); // personnelMap accessed via ref; handleSuggest is now stable
+    // Custom lanes still show the next-level suggestion slot in the lane body.
+    // Keep it user-triggered so dropping the first person does not steal focus
+    // back to the left source panel or apply filters that can make the drawer look empty.
 
     // --- Performance Optimizations for 500+ lanes ---
 
@@ -3535,8 +3802,10 @@ export default function PersonnelBoardV2Page() {
                         name: `${p.rank || ''}${p.fullName || ''}`,
                         currentPosition: p.position || '-',
                         currentUnit: p.unit || '-',
+                        currentPosCode: p.posCodeId ? `${p.posCodeId}${p.posCodeMaster?.name ? ` - ${p.posCodeMaster.name}` : ''}` : '-',
                         targetPosition: p.toPosition || p.toPosCodeMaster?.name || 'ตำแหน่งว่าง',
                         targetUnit: p.toUnit || '-',
+                        targetPosCode: p.toPosCodeId ? `${p.toPosCodeId}${p.toPosCodeMaster?.name ? ` - ${p.toPosCodeMaster.name}` : ''}` : '-',
                         age: p.age,
                         seniority: p.seniority,
                         requestedPosition: p.requestedPosition
@@ -4947,6 +5216,82 @@ export default function PersonnelBoardV2Page() {
                 </Box >
             </Drawer >
 
+            {/* Bulk Swap Choice Dialog */}
+            <Dialog
+                open={Boolean(bulkSwapChoice?.open)}
+                onClose={() => setBulkSwapChoice(null)}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 4,
+                        p: 1,
+                        boxShadow: '0 20px 40px rgba(15, 23, 42, 0.16)'
+                    }
+                }}
+            >
+                <DialogTitle sx={{ fontWeight: 900, color: '#0f172a', pb: 1 }}>
+                    เลือกวิธีดำเนินการ
+                </DialogTitle>
+                <DialogContent sx={{ color: '#475569' }}>
+                    <Typography sx={{ mb: 1.5 }}>
+                        {bulkSwapChoice?.kind === 'single'
+                            ? 'เลนปลายทางมีบุคลากรอยู่แล้ว ต้องการสลับกับคนในเลน หรือย้ายไปต่อท้าย?'
+                            : `พบว่าคนที่เลือก ${bulkSwapChoice?.count || 0} คน มีคู่ PosCode ในเลน`}
+                        {bulkSwapChoice?.kind !== 'single' && (
+                            <>
+                                <strong> "{bulkSwapChoice?.targetLaneTitle || ''}" </strong>
+                                ตาม PosCode
+                            </>
+                        )}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        {bulkSwapChoice?.kind === 'single'
+                            ? 'เลือก “สลับ” ถ้าต้องการแลกคนระหว่างสองเลน หรือเลือก “ต่อท้าย” ถ้าต้องการเพิ่มคนที่เลือกเข้าเลนปลายทางตามปกติ'
+                            : 'เลือก “สลับกลุ่ม” ถ้าต้องการแลกคนระหว่างสองเลน หรือเลือก “ย้ายไปเลน” ถ้าต้องการย้ายคนที่เลือกเข้าไปรวมในเลนปลายทางตามปกติ'}
+                    </Typography>
+                    {bulkSwapChoice?.kind === 'single' && (bulkSwapChoice.targetMatchCount || 0) > 1 && (
+                        <Typography variant="caption" sx={{ display: 'block', color: '#b45309', mt: 1 }}>
+                            พบคน PosCode เดียวกันมากกว่า 1 คน ระบบจะสลับกับคนแรกในเลนปลายทาง
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 3, gap: 1, flexWrap: 'wrap' }}>
+                    <Button
+                        variant="outlined"
+                        onClick={() => setBulkSwapChoice(null)}
+                        sx={{ borderRadius: 2, fontWeight: 700 }}
+                    >
+                        ยกเลิก
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => {
+                            const choice = bulkSwapChoice;
+                            if (!choice) return;
+                            setBulkSwapChoice(null);
+                            handleMovePersonToLane(choice.personId, choice.targetLaneId, choice.requestedIds, 'move');
+                        }}
+                        sx={{ borderRadius: 2, fontWeight: 800 }}
+                    >
+                        {bulkSwapChoice?.kind === 'single' ? 'ต่อท้าย' : 'ย้ายไปเลน'}
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => {
+                            const choice = bulkSwapChoice;
+                            if (!choice) return;
+                            handleMovePersonToLane(choice.personId, choice.targetLaneId, choice.requestedIds, 'swap');
+                        }}
+                        sx={{ borderRadius: 2, fontWeight: 900 }}
+                    >
+                        {bulkSwapChoice?.kind === 'single' ? 'สลับ' : 'สลับกลุ่มตาม PosCode'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
             {/* Delete Lane Confirm Dialog (Premium Style) */}
             <Dialog
                 open={deleteLaneConfirm.open}
@@ -5122,96 +5467,6 @@ export default function PersonnelBoardV2Page() {
                     </Button>
                 </DialogActions>
             </Dialog>
-
-            {/* Snackbar */}
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={3000}
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                sx={{
-                    px: { xs: 2, sm: 0 },
-                    mb: { xs: 1.5, sm: 2 },
-                }}
-            >
-                <Box
-                    role="status"
-                    sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        width: { xs: '100%', sm: 'auto' },
-                        minWidth: { xs: '100%', sm: 280 },
-                        maxWidth: { xs: '100%', sm: 460 },
-                        px: 1.25,
-                        py: 1,
-                        borderRadius: 2,
-                        border: '1px solid',
-                        borderColor: snackbarConfig[snackbar.severity].borderColor,
-                        bgcolor: snackbarConfig[snackbar.severity].backgroundColor,
-                        boxShadow: '0 14px 36px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(15, 23, 42, 0.06)',
-                        backdropFilter: 'blur(12px)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            left: 0,
-                            top: 8,
-                            bottom: 8,
-                            width: 3,
-                            borderRadius: '0 999px 999px 0',
-                            bgcolor: snackbarConfig[snackbar.severity].color,
-                        },
-                    }}
-                >
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 28,
-                            height: 28,
-                            borderRadius: '50%',
-                            flexShrink: 0,
-                            color: snackbarConfig[snackbar.severity].color,
-                            bgcolor: snackbarConfig[snackbar.severity].iconBackgroundColor,
-                        }}
-                    >
-                        {snackbarConfig[snackbar.severity].icon}
-                    </Box>
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            flex: 1,
-                            minWidth: 0,
-                            color: '#1f2937',
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                            lineHeight: 1.45,
-                            overflowWrap: 'anywhere',
-                        }}
-                    >
-                        {snackbar.message}
-                    </Typography>
-                    <IconButton
-                        size="small"
-                        onClick={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                        aria-label="ปิดข้อความแจ้งเตือน"
-                        sx={{
-                            width: 26,
-                            height: 26,
-                            flexShrink: 0,
-                            color: '#64748b',
-                            '&:hover': {
-                                bgcolor: 'rgba(15, 23, 42, 0.06)',
-                            },
-                        }}
-                    >
-                        <CloseIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                </Box>
-            </Snackbar>
 
             {/* Drag Preview Indicator */}
             {

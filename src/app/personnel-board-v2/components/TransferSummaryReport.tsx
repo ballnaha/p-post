@@ -28,13 +28,21 @@ interface TransferSummaryReportProps {
 
 interface ReportRow {
     id: string;
+    order: number;
+    typeLabel: string;
+    group: string;
     currentName: string;
+    currentNoId: string;
     currentPosition: string;
+    currentPositionNumber: string;
     currentUnit: string;
     currentPosCode: string;
     targetPosition: string;
+    targetPositionNumber: string;
     targetUnit: string;
     targetPosCode: string;
+    supporter: string;
+    note: string;
 }
 
 interface ReportSection {
@@ -66,100 +74,158 @@ const getTypeLabel = (column: Column): string => {
     }
 };
 
+const formatValue = (value: unknown): string => {
+    if (value === null || value === undefined || value === '') return '-';
+    return String(value);
+};
+
+const getPosCodeLabel = (master?: { id: number; name: string } | null, fallbackId?: number | null): string => {
+    if (master) return `${master.id} - ${master.name}`;
+    if (fallbackId) return `${fallbackId}`;
+    return '-';
+};
+
+const getNoIdSortValue = (value: string): number => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+};
+
+const getSectionTypeOrder = (column: Column): number => {
+    const swapType = column.linkedTransactionType || column.chainType;
+
+    switch (swapType) {
+        case 'promotion-chain':
+        case 'promotion':
+            return 1;
+        case 'two-way':
+        case 'swap':
+            return 2;
+        case 'three-way':
+            return 3;
+        case 'transfer':
+            return 4;
+        case 'custom':
+            return 5;
+        default:
+            return 99;
+    }
+};
+
 const getReportSections = (
     columns: Column[],
     personnelMap: Record<string, Personnel>,
 ): ReportSection[] => {
-    return columns.flatMap((column, colIdx) => {
+    const sections = columns.flatMap((column, colIdx) => {
         const items = column.itemIds.map((id) => personnelMap[id]).filter(Boolean);
         if (items.length === 0) {
             return [];
         }
 
+        const sectionTypeLabel = getTypeLabel(column);
         const rows = items.map((person, idx) => {
             let targetPosition = person.toPosition || '-';
+            let targetPositionNumber = person.toPositionNumber || '-';
             let targetUnit = person.toUnit || '-';
+            let targetPosCodeMaster = person.toPosCodeMaster || null;
+            let targetPosCodeId = person.toPosCodeId || null;
 
             if (column.chainType === 'swap' && items.length === 2) {
                 const other = items[idx === 0 ? 1 : 0];
                 targetPosition = person.toPosition || other.position || '-';
+                targetPositionNumber = person.toPositionNumber || other.positionNumber || '-';
                 targetUnit = person.toUnit || other.unit || '-';
+                targetPosCodeMaster = person.toPosCodeMaster || other.posCodeMaster || null;
+                targetPosCodeId = person.toPosCodeId || other.posCodeId || null;
             } else if (column.chainType === 'three-way' && items.length >= 3) {
                 const next = items[(idx + 1) % items.length];
                 targetPosition = person.toPosition || next.position || '-';
+                targetPositionNumber = person.toPositionNumber || next.positionNumber || '-';
                 targetUnit = person.toUnit || next.unit || '-';
+                targetPosCodeMaster = person.toPosCodeMaster || next.posCodeMaster || null;
+                targetPosCodeId = person.toPosCodeId || next.posCodeId || null;
             } else if (column.chainType === 'promotion') {
                 if (idx === 0) {
                     targetPosition = column.vacantPosition?.position || '-';
+                    targetPositionNumber = column.vacantPosition?.positionNumber || '-';
                     targetUnit = column.vacantPosition?.unit || '-';
+                    targetPosCodeMaster = column.vacantPosition?.posCodeMaster || null;
+                    targetPosCodeId = column.vacantPosition?.posCodeId || null;
                 } else {
                     const prev = items[idx - 1];
                     targetPosition = prev.position || '-';
+                    targetPositionNumber = prev.positionNumber || '-';
                     targetUnit = prev.unit || '-';
+                    targetPosCodeMaster = prev.posCodeMaster || null;
+                    targetPosCodeId = prev.posCodeId || null;
                 }
             }
 
-            const currentPosCode = person.posCodeMaster
-                ? `${person.posCodeMaster.id} - ${person.posCodeMaster.name}`
-                : (person.posCodeId ? `${person.posCodeId}` : '');
-
-            const targetPosCode = (() => {
-                if (column.chainType === 'swap' && items.length === 2) {
-                    const other = items[idx === 0 ? 1 : 0];
-                    return person.toPosCodeMaster
-                        ? `${person.toPosCodeMaster.id} - ${person.toPosCodeMaster.name}`
-                        : (other.posCodeMaster
-                            ? `${other.posCodeMaster.id} - ${other.posCodeMaster.name}`
-                            : '');
-                }
-
-                if (column.chainType === 'three-way' && items.length >= 3) {
-                    const next = items[(idx + 1) % items.length];
-                    return person.toPosCodeMaster
-                        ? `${person.toPosCodeMaster.id} - ${person.toPosCodeMaster.name}`
-                        : (next.posCodeMaster
-                            ? `${next.posCodeMaster.id} - ${next.posCodeMaster.name}`
-                            : '');
-                }
-
-                if (column.chainType === 'promotion') {
-                    if (idx === 0) {
-                        return column.vacantPosition?.posCodeMaster
-                            ? `${column.vacantPosition.posCodeMaster.id} - ${column.vacantPosition.posCodeMaster.name}`
-                            : '';
-                    }
-
-                    const prev = items[idx - 1];
-                    return prev.posCodeMaster
-                        ? `${prev.posCodeMaster.id} - ${prev.posCodeMaster.name}`
-                        : '';
-                }
-
-                return person.toPosCodeMaster
-                    ? `${person.toPosCodeMaster.id} - ${person.toPosCodeMaster.name}`
-                    : '';
-            })();
+            const currentPosCode = getPosCodeLabel(person.posCodeMaster, person.posCodeId);
+            const targetPosCode = getPosCodeLabel(targetPosCodeMaster, targetPosCodeId);
+            const note = [
+                person.requestedPosition ? `ร้องขอ: ${person.requestedPosition}` : '',
+                person.supportReason ? `เหตุผล: ${person.supportReason}` : '',
+                person.notes || '',
+                person.positionNotes || '',
+            ].filter(Boolean).join(' | ');
 
             return {
                 id: `${person.id}-${idx}`,
+                order: idx + 1,
+                typeLabel: sectionTypeLabel,
+                group: column.groupNumber || column.title || '-',
                 currentName: `${person.rank ? `${person.rank} ` : ''}${person.fullName || '-'}`.trim(),
-                currentPosition: person.position || '-',
-                currentUnit: person.unit || '-',
+                currentNoId: formatValue(person.noId),
+                currentPosition: formatValue(person.position),
+                currentPositionNumber: formatValue(person.positionNumber),
+                currentUnit: formatValue(person.unit),
                 currentPosCode,
-                targetPosition,
-                targetUnit,
+                targetPosition: formatValue(targetPosition),
+                targetPositionNumber: formatValue(targetPositionNumber),
+                targetUnit: formatValue(targetUnit),
                 targetPosCode,
+                supporter: formatValue(person.supporterName),
+                note: note || '-',
             };
         });
+
+        const sortedRows = rows
+            .sort((a, b) => {
+                const noIdDiff = getNoIdSortValue(a.currentNoId) - getNoIdSortValue(b.currentNoId);
+                if (noIdDiff !== 0) return noIdDiff;
+                return a.currentName.localeCompare(b.currentName, 'th');
+            })
+            .map((row, idx) => ({ ...row, order: idx + 1 }));
 
         return [{
             id: column.id,
             index: colIdx + 1,
             title: column.title,
-            typeLabel: getTypeLabel(column),
-            rows,
+            typeLabel: sectionTypeLabel,
+            rows: sortedRows,
+            typeOrder: getSectionTypeOrder(column),
+            minNoId: sortedRows.length > 0 ? getNoIdSortValue(sortedRows[0].currentNoId) : Number.MAX_SAFE_INTEGER,
+            originalIndex: colIdx,
         }];
     });
+
+    return sections
+        .sort((a, b) => {
+            const typeDiff = (a as ReportSection & { typeOrder: number }).typeOrder - (b as ReportSection & { typeOrder: number }).typeOrder;
+            if (typeDiff !== 0) return typeDiff;
+
+            const noIdDiff = (a as ReportSection & { minNoId: number }).minNoId - (b as ReportSection & { minNoId: number }).minNoId;
+            if (noIdDiff !== 0) return noIdDiff;
+
+            return (a as ReportSection & { originalIndex: number }).originalIndex - (b as ReportSection & { originalIndex: number }).originalIndex;
+        })
+        .map((section, index) => ({
+            id: section.id,
+            index: index + 1,
+            title: section.title,
+            typeLabel: section.typeLabel,
+            rows: section.rows,
+        }));
 };
 
 export default function TransferSummaryReport({ columns, personnelMap, selectedYear }: TransferSummaryReportProps) {
@@ -179,127 +245,99 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
         setExportingExcel(true);
 
         try {
-            const ExcelJS = await import('exceljs');
-            const workbook = new ExcelJS.Workbook();
-            workbook.creator = 'P-Post System';
-            workbook.created = new Date();
-
-            const worksheet = workbook.addWorksheet('รายงานสรุป', {
-                views: [{ showGridLines: false }],
-                pageSetup: {
-                    paperSize: 9,
-                    orientation: 'portrait',
-                    fitToPage: true,
-                    fitToWidth: 1,
-                    fitToHeight: 0,
-                    margins: {
-                        left: 0.5,
-                        right: 0.5,
-                        top: 0.75,
-                        bottom: 0.75,
-                        header: 0.3,
-                        footer: 0.3,
-                    },
-                },
-            });
-
-            worksheet.columns = [
-                { key: 'current', width: 46 },
-                { key: 'arrow', width: 5 },
-                { key: 'target', width: 46 },
+            const XLSX = await import('@e965/xlsx');
+            const headers = [
+                'ลำดับ',
+                'ประเภท',
+                'กลุ่ม/เลน',
+                'ชื่อ-สกุล',
+                'ตำแหน่งปัจจุบัน',
+                'ลำดับตำแหน่ง',
+                'เลขตำแหน่ง',
+                'รหัสตำแหน่ง',
+                'หน่วยเดิม',
+                'ตำแหน่งใหม่',
+                'เลขตำแหน่งใหม่',
+                'รหัสตำแหน่งใหม่',
+                'หน่วยใหม่',
+                'ผู้สนับสนุน',
+                'หมายเหตุ',
+            ];
+            const rows: Array<Array<string | number>> = [
+                ['รายงานสรุปผลการพิจารณาหมุนเวียนและแต่งตั้งบุคลากร'],
+                [`ประจำปี พ.ศ. ${selectedYear}`],
+                [],
+            ];
+            const merges = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
             ];
 
-            worksheet.mergeCells('A1:C1');
-            worksheet.getCell('A1').value = 'รายงานสรุปผลการพิจารณาหมุนเวียนและแต่งตั้งบุคลากร';
-            worksheet.getCell('A1').font = { name: 'TH Sarabun New', size: 17, bold: true, color: { argb: 'FF1A1A1A' } };
-            worksheet.getCell('A1').alignment = { horizontal: 'left', vertical: 'middle' };
-
-            worksheet.mergeCells('A2:C2');
-            worksheet.getCell('A2').value = `ประจำปี พ.ศ. ${selectedYear}`;
-            worksheet.getCell('A2').font = { name: 'TH Sarabun New', size: 12, color: { argb: 'FF666666' } };
-            worksheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
-
-            worksheet.getRow(1).height = 21;
-            worksheet.getRow(2).height = 16;
-
-            let currentRow = 4;
-
             reportSections.forEach((section) => {
-                worksheet.mergeCells(`A${currentRow}:B${currentRow}`);
-                worksheet.getCell(`A${currentRow}`).value = `${section.index}. ${section.title}`;
-                worksheet.getCell(`A${currentRow}`).font = { name: 'TH Sarabun New', size: 13, bold: true, color: { argb: 'FF1A1A1A' } };
-                worksheet.getCell(`A${currentRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
-
-                worksheet.getCell(`C${currentRow}`).value = section.typeLabel;
-                worksheet.getCell(`C${currentRow}`).font = { name: 'TH Sarabun New', size: 10, color: { argb: 'FF333333' } };
-                worksheet.getCell(`C${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
-
-                ['A', 'B', 'C'].forEach((col) => {
-                    worksheet.getCell(`${col}${currentRow}`).border = {
-                        bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-                    };
+                const sectionRowIndex = rows.length;
+                rows.push([`${section.index}. ${section.title} (${section.typeLabel})`]);
+                merges.push({
+                    s: { r: sectionRowIndex, c: 0 },
+                    e: { r: sectionRowIndex, c: headers.length - 1 },
                 });
-                worksheet.getRow(currentRow).height = 18;
-                currentRow += 1;
-
-                const headerRow = worksheet.getRow(currentRow);
-                headerRow.values = ['บุคลากร / ตำแหน่งเดิม', '→', 'ตำแหน่งใหม่ / สังกัด'];
-                headerRow.height = 17;
-                headerRow.eachCell((cell) => {
-                    cell.font = { name: 'TH Sarabun New', size: 10, bold: true, color: { argb: 'FF000000' } };
-                    cell.fill = {
-                        type: 'pattern',
-                        pattern: 'solid',
-                        fgColor: { argb: 'FFF8F8F8' },
-                    };
-                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-                    cell.border = {
-                        bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-                    };
-                });
-                headerRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
-                headerRow.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
-                currentRow += 1;
-
+                rows.push(headers);
                 section.rows.forEach((row) => {
-                    worksheet.getCell(`A${currentRow}`).value = `${row.currentName}\n${row.currentPosition}\nหน่วย: ${row.currentUnit}${row.currentPosCode ? ` | ${row.currentPosCode}` : ''}`;
-                    worksheet.getCell(`B${currentRow}`).value = '→';
-                    worksheet.getCell(`C${currentRow}`).value = `${row.targetPosition}\nหน่วย: ${row.targetUnit}${row.targetPosCode ? ` | ${row.targetPosCode}` : ''}`;
-
-                    ['A', 'B', 'C'].forEach((col) => {
-                        const cell = worksheet.getCell(`${col}${currentRow}`);
-                        cell.font = {
-                            name: 'TH Sarabun New',
-                            size: col === 'A' || col === 'C' ? 11 : 12,
-                            color: { argb: 'FF000000' },
-                            bold: false,
-                        };
-                        cell.alignment = {
-                            vertical: col === 'B' ? 'middle' : 'top',
-                            horizontal: col === 'B' ? 'center' : 'left',
-                            wrapText: true,
-                        };
-                        cell.border = {
-                            bottom: { style: 'thin', color: { argb: 'FFBFC7D1' } },
-                        };
-                    });
-
-                    worksheet.getRow(currentRow).height = 42;
-                    currentRow += 1;
+                    rows.push([
+                        row.order,
+                        row.typeLabel,
+                        row.group,
+                        row.currentName,
+                        row.currentPosition,
+                        row.currentNoId,
+                        row.currentPositionNumber,
+                        row.currentPosCode,
+                        row.currentUnit,
+                        row.targetPosition,
+                        row.targetPositionNumber,
+                        row.targetPosCode,
+                        row.targetUnit,
+                        row.supporter,
+                        row.note,
+                    ]);
                 });
-
-                currentRow += 1;
+                rows.push([]);
             });
 
-            worksheet.mergeCells(`A${currentRow}:C${currentRow}`);
-            worksheet.getCell(`A${currentRow}`).value = `พิมพ์เมื่อ: ${printTime}`;
-            worksheet.getCell(`A${currentRow}`).font = { name: 'TH Sarabun New', size: 9, color: { argb: 'FF666666' } };
-            worksheet.getCell(`A${currentRow}`).alignment = { horizontal: 'right', vertical: 'middle' };
-            worksheet.getCell(`A${currentRow}`).border = {
-                top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            const footerRowIndex = rows.length;
+            rows.push([`พิมพ์เมื่อ: ${printTime}`]);
+            merges.push({
+                s: { r: footerRowIndex, c: 0 },
+                e: { r: footerRowIndex, c: headers.length - 1 },
+            });
+
+            const worksheet = XLSX.utils.aoa_to_sheet(rows);
+            worksheet['!merges'] = merges;
+            worksheet['!cols'] = [
+                { wch: 6 },
+                { wch: 14 },
+                { wch: 16 },
+                { wch: 24 },
+                { wch: 30 },
+                { wch: 10 },
+                { wch: 16 },
+                { wch: 20 },
+                { wch: 22 },
+                { wch: 30 },
+                { wch: 16 },
+                { wch: 20 },
+                { wch: 22 },
+                { wch: 18 },
+                { wch: 28 },
+            ];
+            worksheet['!pageSetup'] = {
+                orientation: 'landscape',
+                fitToWidth: 1,
+                fitToHeight: 0,
             };
 
-            const buffer = await workbook.xlsx.writeBuffer();
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'รายงานสรุป');
+            const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
             const blob = new Blob(
                 [buffer],
                 { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
@@ -334,7 +372,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 /* ===== Minimal Professional Design ===== */
                 .print-container {
                     font-family: "Sarabun", sans-serif !important;
-                    font-size: 8pt !important;
+                    font-size: 7pt !important;
                     color: #1a1a1a !important;
                     line-height: 1.3 !important;
                     background-color: white !important;
@@ -356,16 +394,16 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 }
 
                 .print-container .doc-title {
-                    font-size: 11pt !important;
+                    font-size: 12pt !important;
                     font-weight: 600 !important;
                     line-height: 1.2 !important;
                     margin: 1pt 0 2pt 0 !important;
                     color: #1a1a1a !important;
-                    letter-spacing: -0.02em !important;
+                    letter-spacing: 0 !important;
                 }
 
                 .print-container .doc-subtitle {
-                    font-size: 8pt !important;
+                    font-size: 8.5pt !important;
                     font-weight: 300 !important;
                     line-height: 1.3 !important;
                     margin: 0 !important;
@@ -390,7 +428,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                     font-size: 8.5pt !important;
                     font-weight: 500 !important;
                     color: #1a1a1a !important;
-                    letter-spacing: -0.01em !important;
+                    letter-spacing: 0 !important;
                 }
 
                 .print-container .section-type {
@@ -398,7 +436,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                     font-weight: 400 !important;
                     color: #333 !important;
                     text-transform: uppercase !important;
-                    letter-spacing: 0.05em !important;
+                    letter-spacing: 0 !important;
                 }
 
                 .print-container .print-sections {
@@ -424,21 +462,21 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 }
 
                 .print-container .report-table th {
-                    font-size: 7pt !important;
+                    font-size: 6.6pt !important;
                     font-weight: 500 !important;
-                    padding: 3pt 6pt !important;
+                    padding: 3pt 3pt !important;
                     text-align: left !important;
                     background-color: #f8f8f8 !important;
                     color: #000 !important;
                     border: none !important;
                     border-bottom: 0.75pt solid #e0e0e0 !important;
                     text-transform: uppercase !important;
-                    letter-spacing: 0.03em !important;
+                    letter-spacing: 0 !important;
                 }
 
                 .print-container .report-table td {
-                    font-size: 8pt !important;
-                    padding: 4pt 6pt !important;
+                    font-size: 6.8pt !important;
+                    padding: 3pt 3pt !important;
                     border: none !important;
                     border-bottom: 0.5pt solid #f0f0f0 !important;
                     vertical-align: top !important;
@@ -454,7 +492,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 }
 
                 .print-container .cell-name {
-                    font-size: 8.5pt !important;
+                    font-size: 7pt !important;
                     font-weight: 500 !important;
                     line-height: 1.2 !important;
                     color: #000 !important;
@@ -463,7 +501,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 }
 
                 .print-container .cell-detail {
-                    font-size: 7.5pt !important;
+                    font-size: 6.8pt !important;
                     font-weight: 300 !important;
                     color: #000 !important;
                     line-height: 1.2 !important;
@@ -472,7 +510,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 }
 
                 .print-container .cell-unit {
-                    font-size: 7pt !important;
+                    font-size: 6.6pt !important;
                     font-weight: 300 !important;
                     color: #000 !important;
                     display: block !important;
@@ -508,8 +546,8 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 /* ===== Print-only rules ===== */
                 @media print {
                     @page {
-                        size: A4 portrait;
-                        margin: 1.5cm 2cm;
+                        size: A4 landscape;
+                        margin: 1cm;
                     }
 
                     body * {
@@ -599,7 +637,7 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
             {/* ===== WEB UI HEADER ===== */}
             <Box className="no-print" sx={{
                 mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                maxWidth: 900, mx: 'auto'
+                maxWidth: 1320, mx: 'auto'
             }}>
                 <Box>
                     <Typography sx={{ fontWeight: 600, color: '#1a1a1a', fontSize: '1.25rem', mb: 0.5 }}>
@@ -643,10 +681,10 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                 bgcolor: '#fff',
                 borderRadius: '12px',
                 border: '1px solid #e8e8e8',
-                maxWidth: 900,
+                maxWidth: 1320,
                 mx: 'auto',
                 boxShadow: '0 2px 16px rgba(0,0,0,0.04)',
-                minHeight: '29.7cm'
+                minHeight: '21cm'
             }}>
 
                 {/* Document Header */}
@@ -679,41 +717,44 @@ export default function TransferSummaryReport({ columns, personnelMap, selectedY
                                     <Table size="small" className="report-table">
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell sx={{ width: '46%' }}>
-                                                    บุคลากร / ตำแหน่งเดิม
-                                                </TableCell>
-                                                <TableCell className="arrow-col" />
-                                                <TableCell>
-                                                    ตำแหน่งใหม่ / สังกัด
-                                                </TableCell>
+                                                <TableCell sx={{ width: '4%' }}>ลำดับ</TableCell>
+                                                <TableCell sx={{ width: '8%' }}>ประเภท</TableCell>
+                                                <TableCell sx={{ width: '8%' }}>กลุ่ม/เลน</TableCell>
+                                                <TableCell sx={{ width: '13%' }}>ชื่อ-สกุล</TableCell>
+                                                <TableCell sx={{ width: '13%' }}>ตำแหน่งปัจจุบัน</TableCell>
+                                                <TableCell sx={{ width: '6%' }}>ลำดับตำแหน่ง</TableCell>
+                                                <TableCell sx={{ width: '7%' }}>เลขตำแหน่ง</TableCell>
+                                                <TableCell sx={{ width: '9%' }}>รหัสตำแหน่ง</TableCell>
+                                                <TableCell sx={{ width: '10%' }}>หน่วยเดิม</TableCell>
+                                                <TableCell sx={{ width: '13%' }}>ตำแหน่งใหม่</TableCell>
+                                                <TableCell sx={{ width: '7%' }}>เลขตำแหน่งใหม่</TableCell>
+                                                <TableCell sx={{ width: '9%' }}>รหัสตำแหน่งใหม่</TableCell>
+                                                <TableCell sx={{ width: '10%' }}>หน่วยใหม่</TableCell>
+                                                <TableCell sx={{ width: '8%' }}>ผู้สนับสนุน</TableCell>
+                                                <TableCell sx={{ width: '12%' }}>หมายเหตุ</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
                                             {section.rows.map((row) => {
                                                 return (
                                                     <TableRow key={row.id}>
+                                                        <TableCell align="center">{row.order}</TableCell>
+                                                        <TableCell>{row.typeLabel}</TableCell>
+                                                        <TableCell>{row.group}</TableCell>
                                                         <TableCell>
-                                                            <Typography className="cell-name">
-                                                                {row.currentName}
-                                                            </Typography>
-                                                            <Typography className="cell-detail">
-                                                                {row.currentPosition}
-                                                            </Typography>
-                                                            <Typography className="cell-unit">
-                                                                หน่วย: {row.currentUnit}
-                                                                {row.currentPosCode && ` | ${row.currentPosCode}`}
-                                                            </Typography>
+                                                            <Typography className="cell-name">{row.currentName}</Typography>
                                                         </TableCell>
-                                                        <TableCell className="arrow-col" />
-                                                        <TableCell>
-                                                            <Typography className="cell-name">
-                                                                {row.targetPosition}
-                                                            </Typography>
-                                                            <Typography className="cell-unit">
-                                                                หน่วย: {row.targetUnit}
-                                                                {row.targetPosCode && ` | ${row.targetPosCode}`}
-                                                            </Typography>
-                                                        </TableCell>
+                                                        <TableCell>{row.currentPosition}</TableCell>
+                                                        <TableCell align="center">{row.currentNoId}</TableCell>
+                                                        <TableCell align="center">{row.currentPositionNumber}</TableCell>
+                                                        <TableCell>{row.currentPosCode}</TableCell>
+                                                        <TableCell>{row.currentUnit}</TableCell>
+                                                        <TableCell>{row.targetPosition}</TableCell>
+                                                        <TableCell align="center">{row.targetPositionNumber}</TableCell>
+                                                        <TableCell>{row.targetPosCode}</TableCell>
+                                                        <TableCell>{row.targetUnit}</TableCell>
+                                                        <TableCell>{row.supporter}</TableCell>
+                                                        <TableCell>{row.note}</TableCell>
                                                     </TableRow>
                                                 );
                                             })}

@@ -848,8 +848,8 @@ export default function PersonnelDetailModal({
                     <Divider sx={{ mb: 1 }} />
                     <Stack spacing={0.75} divider={<Divider />}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ID</Typography>
-                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.noId || personnel.id || '-'}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>ลำดับตำแหน่ง</Typography>
+                        <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>{personnel.noId || '-'}</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>POSCODE</Typography>

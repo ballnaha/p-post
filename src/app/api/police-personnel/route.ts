@@ -14,6 +14,13 @@ const nullablePositionNumber = (value: any): string | null => {
   return normalized ? normalized.replace(/\s+/g, '') : null;
 };
 
+const nullableInt = (value: any): number | null => {
+  const normalized = nullableText(value);
+  if (normalized === null) return null;
+  const parsed = parseInt(normalized, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 export async function GET(request: NextRequest) {
   try {
     // ตรวจสอบว่าเป็น admin
@@ -190,7 +197,11 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      orderBy: { noId: 'asc' } as any,
+      orderBy: [
+        { noId: 'asc' },
+        { posCodeId: 'asc' },
+        { fullName: 'asc' },
+      ] as any,
       include: {
         posCodeMaster: true,
       },
@@ -389,28 +400,12 @@ export async function POST(request: NextRequest) {
     const currentYear = new Date().getFullYear() + 543;
     const username = authCheck.session?.user?.username || 'system';
 
-    // ดึงค่า noId สุดท้าย และ +1
-    const lastPersonnel = await prisma.policePersonnel.findFirst({
-      where: {
-        year: currentYear,
-        noId: { not: null }
-      },
-      orderBy: {
-        noId: 'desc'
-      },
-      select: {
-        noId: true
-      }
-    });
-
-    const nextNoId = lastPersonnel?.noId ? lastPersonnel.noId + 1 : 1;
-
     // สร้างข้อมูลใหม่
     const newPersonnel = await prisma.policePersonnel.create({
       data: {
         year: currentYear,
         isActive: true,
-        noId: nextNoId,
+        noId: nullableInt(body.noId),
         address: nullableText(body.address),
         phoneNumber: nullableText(body.phoneNumber),
         posCodeId: body.posCodeId,

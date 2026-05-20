@@ -2194,13 +2194,56 @@ export default function PersonnelBoardV2Page() {
 
 
     const handleUpdatePersonnel = useCallback((id: string, updates: Partial<Personnel>) => {
-        commitAction();
-        setPersonnelMap(prev => {
-            if (!prev[id]) return prev;
+        const normalizedTargetId = String(id || '');
+        const getOriginalId = (person?: Personnel | null) => {
+            if (!person) return '';
+            if (person.originalId) return String(person.originalId);
+            if (person.id?.includes('-board-')) return String(person.id.split('-board-')[0]);
+            return person.id ? String(person.id) : '';
+        };
+        const targetPerson = personnelMapRef.current[normalizedTargetId];
+        const targetOriginalId = getOriginalId(targetPerson) || normalizedTargetId;
+        const targetNoId = targetPerson?.noId ? String(targetPerson.noId) : '';
+        const matchesPersonnel = (person: Personnel) => {
+            const originalId = getOriginalId(person);
+            const personNoId = person.noId ? String(person.noId) : '';
+            return (
+                String(person.id || '') === normalizedTargetId ||
+                originalId === normalizedTargetId ||
+                originalId === targetOriginalId ||
+                (!!targetNoId && personNoId === targetNoId)
+            );
+        };
+
+        const boardHasMatch = Object.values(personnelMapRef.current).some(matchesPersonnel);
+        if (boardHasMatch) {
+            commitAction();
+        }
+
+        setPersonnelList(prev => prev.map(person =>
+            matchesPersonnel(person) ? { ...person, ...updates } : person
+        ));
+
+        setSelectedPersonnelDetail(prev => {
+            if (!prev?.personnel || !matchesPersonnel(prev.personnel)) return prev;
             return {
                 ...prev,
-                [id]: { ...prev[id], ...updates }
+                personnel: { ...prev.personnel, ...updates },
             };
+        });
+
+        setPersonnelMap(prev => {
+            let changed = false;
+            const next: Record<string, Personnel> = {};
+            Object.entries(prev).forEach(([personId, person]) => {
+                if (!matchesPersonnel(person)) {
+                    next[personId] = person;
+                    return;
+                }
+                changed = true;
+                next[personId] = { ...person, ...updates };
+            });
+            return changed ? next : prev;
         });
 
         // If fullName was updated, also update the lane title for swap/three-way lanes
@@ -2209,27 +2252,28 @@ export default function PersonnelBoardV2Page() {
                 // Only update if this person is in this lane AND it's a swap or three-way lane
                 if (!col.itemIds.includes(id)) return col;
 
+                const currentPersonnelMap = personnelMapRef.current;
                 const isSwapLane = col.chainType === 'swap' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'two-way');
                 const isThreeWayLane = col.chainType === 'three-way' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'three-way');
                 const isTransferLane = col.chainType === 'transfer' || (col.vacantPosition?.isTransaction && col.vacantPosition.transactionType === 'transfer');
 
                 if (isSwapLane && col.itemIds.length === 2) {
                     // Swap: 2 people - format "สลับ: A ↔ B"
-                    const p1 = col.itemIds[0] === id ? { ...personnelMap[col.itemIds[0]], ...updates } : personnelMap[col.itemIds[0]];
-                    const p2 = col.itemIds[1] === id ? { ...personnelMap[col.itemIds[1]], ...updates } : personnelMap[col.itemIds[1]];
+                    const p1 = col.itemIds[0] === id ? { ...currentPersonnelMap[col.itemIds[0]], ...updates } : currentPersonnelMap[col.itemIds[0]];
+                    const p2 = col.itemIds[1] === id ? { ...currentPersonnelMap[col.itemIds[1]], ...updates } : currentPersonnelMap[col.itemIds[1]];
                     const newTitle = `สลับ: ${p1?.fullName || '?'} ↔ ${p2?.fullName || '?'}`;
                     return { ...col, title: newTitle };
                 } else if (isThreeWayLane && col.itemIds.length >= 2) {
                     const nextMap: Record<string, Personnel> = {
-                        ...personnelMap,
-                        [id]: { ...personnelMap[id], ...updates },
+                        ...currentPersonnelMap,
+                        [id]: { ...currentPersonnelMap[id], ...updates },
                     };
                     const newTitle = getCircularSwapTitle(col.itemIds, nextMap);
                     return { ...col, title: newTitle };
                 } else if (isTransferLane) {
                     const nextMap: Record<string, Personnel> = {
-                        ...personnelMap,
-                        [id]: { ...personnelMap[id], ...updates },
+                        ...currentPersonnelMap,
+                        [id]: { ...currentPersonnelMap[id], ...updates },
                     };
                     const newTitle = getTransferLaneTitle(col, col.itemIds, nextMap);
                     return { ...col, title: newTitle };
@@ -2239,8 +2283,10 @@ export default function PersonnelBoardV2Page() {
             }));
         }
 
-        setHasUnsavedChanges(true);
-    }, [commitAction]);
+        if (boardHasMatch) {
+            setHasUnsavedChanges(true);
+        }
+    }, [commitAction, getTransferLaneTitle]);
 
     // Toggle lane completion status
     const handleToggleComplete = useCallback((columnId: string) => {
@@ -4019,6 +4065,7 @@ export default function PersonnelBoardV2Page() {
                                                 columns={columns}
                                                 personnelMap={personnelMap}
                                                 onAddToLane={handleAddToLane}
+                                                onUpdatePersonnel={handleUpdatePersonnel}
                                                 searchTerm={searchTerm}
                                             />
                                         ))}

@@ -4,6 +4,9 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
 import * as XLSX from '@e965/xlsx';
 
+const PERSON_IMPORT_BATCH_SIZE = 1000;
+const IMPORT_TRANSACTION_TIMEOUT_MS = 240000;
+
 // ฟังก์ชันสำหรับแปลง Excel Serial Number เป็นวันที่ไทย
 function convertExcelDateToThai(value: any): string | null {
   if (!value) return null;
@@ -197,8 +200,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
     console.log(`[Import] Job ${jobId}: ${isUpdateMode ? 'UPSERT' : 'INSERT'} mode (${existingRecordsCount} existing records)`);
 
     // นำเข้าข้อมูลแบบ batch เพื่อความเร็ว
-    // ลด batch size ลงเพื่อป้องกัน connection timeout บน production
-    const batchSize = 500; // ลดจาก 1000 เป็น 500 records ต่อ batch
+    const batchSize = PERSON_IMPORT_BATCH_SIZE;
     const totalBatches = Math.ceil(data.length / batchSize);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -375,7 +377,7 @@ async function processImportJob(jobId: string, file: File, importYear: number, u
             }
           }, {
             maxWait: 30000,
-            timeout: 120000, // เพิ่ม timeout เป็น 120 วินาที (UPSERT ช้ากว่า)
+            timeout: IMPORT_TRANSACTION_TIMEOUT_MS,
           });
         }
 

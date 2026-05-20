@@ -9,6 +9,10 @@ type ExcelRow = Record<string, any>;
 type UploadType = 'personFile' | 'positionFile' | 'requestFile' | 'fullFile';
 type UploadFiles = Partial<Record<UploadType, File>>;
 
+const PERSON_IMPORT_BATCH_SIZE = 1000;
+const POSITION_IMPORT_BATCH_SIZE = 1000;
+const IMPORT_TRANSACTION_TIMEOUT_MS = 240000;
+
 function text(value: any): string | null {
   if (value === undefined || value === null) return null;
   const normalized = String(value).trim();
@@ -382,7 +386,46 @@ async function processImportBundleJob(
       });
     }
 
-    const batchSize = 300;
+    const batchSize = PERSON_IMPORT_BATCH_SIZE;
+    const existingVacantPositionsByNumber = new Map<string, {
+      id: string;
+      posCodeId: number | null;
+      position: string | null;
+      positionNumber: string | null;
+      actingAs: string | null;
+      unit: string | null;
+      notes: string | null;
+      positionNotes: string | null;
+    }>();
+
+    if (personRows.length > 0) {
+      const existingVacantPositions = await prisma.policePersonnel.findMany({
+        where: {
+          year: importYear,
+          isActive: true,
+          positionNumber: { not: null },
+          OR: [
+            { nationalId: null },
+            { nationalId: '' },
+          ],
+        },
+        select: {
+          id: true,
+          posCodeId: true,
+          position: true,
+          positionNumber: true,
+          actingAs: true,
+          unit: true,
+          notes: true,
+          positionNotes: true,
+        },
+      });
+
+      existingVacantPositions.forEach((record) => {
+        const positionNumber = positionNumberText(record.positionNumber);
+        if (positionNumber) existingVacantPositionsByNumber.set(positionNumber, record);
+      });
+    }
 
     if (personRows.length > 0) {
       const totalBatches = Math.ceil(personRows.length / batchSize);
@@ -439,30 +482,7 @@ async function processImportBundleJob(
                 unit: text(positionDataRow['หน่วย']),
               }
               : null;
-            const existingPositionRecords = await tx.policePersonnel.findMany({
-                where: {
-                  year: importYear,
-                  isActive: true,
-                  positionNumber: { not: null },
-                  OR: [
-                    { nationalId: null },
-                    { nationalId: '' },
-                  ],
-                },
-                select: {
-                  id: true,
-                  posCodeId: true,
-                  position: true,
-                  positionNumber: true,
-                  actingAs: true,
-                  unit: true,
-                  notes: true,
-                  positionNotes: true,
-                },
-              });
-            const existingPositionRecord = existingPositionRecords.find(
-              record => positionNumberText(record.positionNumber) === positionNumber
-            ) || null;
+            const existingPositionRecord = existingVacantPositionsByNumber.get(positionNumber) || null;
             const existingPositionNote = existingPositionRecord
               ? getLegacyPositionNote(existingPositionRecord.notes) || existingPositionRecord.positionNotes || null
               : null;
@@ -535,6 +555,7 @@ async function processImportBundleJob(
                   updatedAt: new Date(),
                 },
               });
+              existingVacantPositionsByNumber.delete(positionNumber);
               success++;
               updated++;
             } else {
@@ -550,7 +571,7 @@ async function processImportBundleJob(
         }
       }, {
         maxWait: 30000,
-        timeout: 120000,
+        timeout: IMPORT_TRANSACTION_TIMEOUT_MS,
       });
 
         processed += batchRows.length;
@@ -559,79 +580,102 @@ async function processImportBundleJob(
     }
 
     if (positionRows.length > 0 && personRows.length === 0) {
-      for (let index = 0; index < positionRows.length; index++) {
-        const row = positionRows[index];
-        const positionNumber = positionNumberText(row['เลขตำแหน่ง']);
+      const matchedPeopleCandidates = await prisma.policePersonnel.findMany({
+        where: {
+          year: importYear,
+          isActive: true,
+          positionNumber: { not: null },
+        },
+        select: { id: true, positionNumber: true, notes: true, positionNotes: true },
+      });
+      const peopleByPositionNumber = new Map<string, typeof matchedPeopleCandidates>();
 
-        if (!positionNumber) {
-          failed++;
-          errors.push(`ไฟล์ตำแหน่ง แถวที่ ${index + 2}: ไม่พบเลขตำแหน่ง`);
-          processed++;
-          continue;
-        }
+      matchedPeopleCandidates.forEach((person) => {
+        const positionNumber = positionNumberText(person.positionNumber);
+        if (!positionNumber) return;
+        const people = peopleByPositionNumber.get(positionNumber) || [];
+        people.push(person);
+        peopleByPositionNumber.set(positionNumber, people);
+      });
 
-        const positionNote = firstText(row, ['หมายเหตุตำแหน่ง', 'หมายเหตุ']);
-        const updateData: any = {
-          posCodeId: intValue(row['POSCODE']),
-          position: text(row['ตำแหน่ง']),
-          actingAs: text(row['ทำหน้าที่']),
-          unit: text(row['หน่วย']),
-          updatedBy: username,
-          updatedAt: new Date(),
-        };
+      const totalBatches = Math.ceil(positionRows.length / POSITION_IMPORT_BATCH_SIZE);
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIndex = batchIndex * POSITION_IMPORT_BATCH_SIZE;
+        const endIndex = Math.min(startIndex + POSITION_IMPORT_BATCH_SIZE, positionRows.length);
+        const batchRows = positionRows.slice(startIndex, endIndex);
 
-        Object.keys(updateData).forEach((key) => {
-          if (updateData[key] === undefined || updateData[key] === null || updateData[key] === '') {
-            delete updateData[key];
-          }
-        });
+        await prisma.$transaction(async (tx) => {
+          for (let i = 0; i < batchRows.length; i++) {
+            const row = batchRows[i];
+            const rowNumber = startIndex + i + 2;
+            const positionNumber = positionNumberText(row['เลขตำแหน่ง']);
 
-        const matchedPeopleCandidates = await prisma.policePersonnel.findMany({
-          where: {
-            year: importYear,
-            isActive: true,
-            positionNumber: { not: null },
-          },
-          select: { id: true, positionNumber: true, notes: true, positionNotes: true },
-        });
-        const matchedPeople = matchedPeopleCandidates.filter(
-          person => positionNumberText(person.positionNumber) === positionNumber
-        );
+            if (!positionNumber) {
+              failed++;
+              errors.push(`ไฟล์ตำแหน่ง แถวที่ ${rowNumber}: ไม่พบเลขตำแหน่ง`);
+              continue;
+            }
 
-        if (matchedPeople.length > 0) {
-          for (const person of matchedPeople) {
-            await prisma.policePersonnel.update({
-              where: { id: person.id },
-              data: {
-                ...updateData,
-                positionNotes: positionNote || getLegacyPositionNote(person.notes) || person.positionNotes || null,
-              },
-            });
-          }
-          success += matchedPeople.length;
-          updated += matchedPeople.length;
-        } else {
-          await prisma.policePersonnel.create({
-            data: {
-              year: importYear,
-              isActive: true,
-              positionNumber,
-              posCodeId: updateData.posCodeId,
-              position: updateData.position,
-              actingAs: updateData.actingAs,
-              unit: updateData.unit,
-              positionNotes: positionNote || undefined,
-              createdBy: username,
+            const positionNote = firstText(row, ['หมายเหตุตำแหน่ง', 'หมายเหตุ']);
+            const updateData: any = {
+              posCodeId: intValue(row['POSCODE']),
+              position: text(row['ตำแหน่ง']),
+              actingAs: text(row['ทำหน้าที่']),
+              unit: text(row['หน่วย']),
               updatedBy: username,
-            },
-          });
-          success++;
-        }
+              updatedAt: new Date(),
+            };
 
-        processed++;
-        if (index % 100 === 0) await updateJobProgress();
+            Object.keys(updateData).forEach((key) => {
+              if (updateData[key] === undefined || updateData[key] === null || updateData[key] === '') {
+                delete updateData[key];
+              }
+            });
+
+            const matchedPeople = peopleByPositionNumber.get(positionNumber) || [];
+
+            if (matchedPeople.length > 0) {
+              for (const person of matchedPeople) {
+                await tx.policePersonnel.update({
+                  where: { id: person.id },
+                  data: {
+                    ...updateData,
+                    positionNotes: positionNote || getLegacyPositionNote(person.notes) || person.positionNotes || null,
+                  },
+                });
+              }
+              success += matchedPeople.length;
+              updated += matchedPeople.length;
+            } else {
+              const createdPosition = await tx.policePersonnel.create({
+                data: {
+                  year: importYear,
+                  isActive: true,
+                  positionNumber,
+                  posCodeId: updateData.posCodeId,
+                  position: updateData.position,
+                  actingAs: updateData.actingAs,
+                  unit: updateData.unit,
+                  positionNotes: positionNote || undefined,
+                  createdBy: username,
+                  updatedBy: username,
+                },
+                select: { id: true, positionNumber: true, notes: true, positionNotes: true },
+              });
+              const people = peopleByPositionNumber.get(positionNumber) || [];
+              people.push(createdPosition);
+              peopleByPositionNumber.set(positionNumber, people);
+              success++;
+            }
+          }
+        }, {
+          maxWait: 30000,
+          timeout: IMPORT_TRANSACTION_TIMEOUT_MS,
+        });
+
+        processed += batchRows.length;
+        await updateJobProgress();
       }
-      await updateJobProgress();
     }
 
     if (requestRows.length > 0 && personRows.length === 0) {
@@ -669,8 +713,17 @@ async function processImportBundleJob(
           success += result.count;
           updated += result.count;
         } else {
-          failed++;
-          errors.push(`ไฟล์คำร้อง แถวที่ ${index + 2}: ไม่พบเลขประจำตัวประชาชน ${nationalId} ในปี ${importYear}`);
+          await prisma.policePersonnel.create({
+            data: {
+              year: importYear,
+              isActive: true,
+              nationalId,
+              ...updateData,
+              createdBy: username,
+              updatedBy: username,
+            },
+          });
+          success++;
         }
 
         processed++;

@@ -18,13 +18,14 @@ import PersonnelDetailModal from '@/components/PersonnelDetailModal';
 import { Personnel, Column } from '../types';
 import MoveToLaneButton from './MoveToLaneButton';
 import { highlightWildcardText } from '@/lib/highlightWildcardText';
-import { getResolvedPersonNote } from '@/utils/personnelNotes';
+import { getResolvedPersonNote, getResolvedPositionNote } from '@/utils/personnelNotes';
 
 interface DraggablePersonnelItemProps {
     person: Personnel;
     columns: Column[];
     personnelMap: Record<string, Personnel>;
     onAddToLane: (person: Personnel, laneId: string) => void;
+    onUpdatePersonnel?: (id: string, updates: Partial<Personnel>) => void;
     searchTerm?: string;
 }
 
@@ -33,12 +34,14 @@ const DraggablePersonnelItem = memo(({
     columns,
     personnelMap,
     onAddToLane,
+    onUpdatePersonnel,
     searchTerm = ''
 }: DraggablePersonnelItemProps) => {
     const ref = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const personNote = getResolvedPersonNote(person.notes);
+    const positionNote = getResolvedPositionNote(person.notes, person.positionNotes);
 
     useEffect(() => {
         const el = ref.current;
@@ -211,6 +214,46 @@ const DraggablePersonnelItem = memo(({
                             </Typography>
                         </Box>
                     )}
+                    {positionNote && (
+                        <Box
+                            sx={{
+                                mt: 0.75,
+                                px: 0.75,
+                                py: 0.5,
+                                borderRadius: 1,
+                                bgcolor: alpha('#0ea5e9', 0.08),
+                                border: '1px solid',
+                                borderColor: alpha('#0ea5e9', 0.2),
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    display: 'block',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    color: '#0369a1',
+                                    mb: 0.25,
+                                }}
+                            >
+                                หมายเหตุตำแหน่ง
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                display="block"
+                                sx={{
+                                    fontSize: '0.75rem',
+                                    lineHeight: 1.4,
+                                    whiteSpace: 'normal',
+                                    overflowWrap: 'anywhere',
+                                    wordBreak: 'break-word',
+                                }}
+                            >
+                                {highlightWildcardText(positionNote, searchTerm)}
+                            </Typography>
+                        </Box>
+                    )}
                     {(person.requestedPosition || person.supporterName || person.supportReason) && (
                         <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700, fontSize: '0.72rem' }}>
@@ -260,6 +303,18 @@ const DraggablePersonnelItem = memo(({
                 open={isDetailOpen}
                 onClose={() => setIsDetailOpen(false)}
                 personnel={person}
+                onSupporterUpdate={(requestedPosition, supporterName, supportReason) => {
+                    onUpdatePersonnel?.(person.id, { requestedPosition, supporterName, supportReason });
+                }}
+                onPositionUpdate={(actingAs) => {
+                    onUpdatePersonnel?.(person.id, { actingAs });
+                }}
+                onNotesUpdate={(notes) => {
+                    onUpdatePersonnel?.(person.id, { notes });
+                }}
+                onPositionNotesUpdate={(positionNotes) => {
+                    onUpdatePersonnel?.(person.id, { positionNotes });
+                }}
             />
         </>
     );

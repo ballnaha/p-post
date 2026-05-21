@@ -2716,34 +2716,29 @@ export default function PersonnelBoardV2Page() {
 
         if (mode !== 'move' && canTryBulkLaneSwap) {
             const sourceLane = sourceLanes[0];
-            const movingByPosCode = new Map<number, string>();
-            const targetByPosCode = new Map<number, string>();
-            let canPairByPosCode = true;
+            
+            const movingList = movingIds
+                .map(id => ({ id, posCode: Number(personnelMap[id]?.posCodeId) }))
+                .filter(item => Number.isFinite(item.posCode));
 
-            movingIds.forEach(id => {
-                const posCode = Number(personnelMap[id]?.posCodeId);
-                if (!Number.isFinite(posCode) || movingByPosCode.has(posCode)) {
-                    canPairByPosCode = false;
-                    return;
-                }
-                movingByPosCode.set(posCode, id);
-            });
+            const targetList = targetSwapIds
+                .map(id => ({ id, posCode: Number(personnelMap[id]?.posCodeId) }))
+                .filter(item => Number.isFinite(item.posCode));
 
-            targetSwapIds.forEach(id => {
-                const posCode = Number(personnelMap[id]?.posCodeId);
-                if (!Number.isFinite(posCode) || !movingByPosCode.has(posCode)) {
-                    return;
-                }
-                if (targetByPosCode.has(posCode)) {
-                    canPairByPosCode = false;
-                    return;
-                }
-                targetByPosCode.set(posCode, id);
-            });
+            let samePosCodeSet = false;
+            if (movingList.length === targetList.length && movingList.length > 0) {
+                movingList.sort((a, b) => a.posCode - b.posCode);
+                targetList.sort((a, b) => a.posCode - b.posCode);
 
-            const samePosCodeSet = canPairByPosCode
-                && movingByPosCode.size === targetByPosCode.size
-                && [...movingByPosCode.keys()].every(posCode => targetByPosCode.has(posCode));
+                let isMatch = true;
+                for (let i = 0; i < movingList.length; i++) {
+                    if (movingList[i].posCode !== targetList[i].posCode) {
+                        isMatch = false;
+                        break;
+                    }
+                }
+                samePosCodeSet = isMatch;
+            }
 
             if (samePosCodeSet) {
                 if (mode === 'auto') {
@@ -2762,12 +2757,10 @@ export default function PersonnelBoardV2Page() {
                 const movingToTarget = new Map<string, string>();
                 const targetToMoving = new Map<string, string>();
 
-                movingByPosCode.forEach((movingId, posCode) => {
-                    const targetId = targetByPosCode.get(posCode);
-                    if (!targetId) return;
-                    movingToTarget.set(movingId, targetId);
-                    targetToMoving.set(targetId, movingId);
-                });
+                for (let i = 0; i < movingList.length; i++) {
+                    movingToTarget.set(movingList[i].id, targetList[i].id);
+                    targetToMoving.set(targetList[i].id, movingList[i].id);
+                }
 
                 const nextPersonnelMap = { ...personnelMap };
                 movingToTarget.forEach((targetId, movingId) => {

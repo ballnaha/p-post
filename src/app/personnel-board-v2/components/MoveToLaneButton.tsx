@@ -180,6 +180,13 @@ const LaneItem = memo(({
 
 LaneItem.displayName = 'LaneItem';
 
+const getGroupDescription = (key: string) => {
+    if (key.includes('/WF')) return ' (ตำแหน่งว่าง)';
+    if (key.includes('/SWAP')) return ' (สลับตำแหน่ง 2 คน)';
+    if (key.includes('/THREE')) return ' (วงสลับ 3 คนขึ้นไป)';
+    return '';
+};
+
 export default function MoveToLaneButton({
     availableLanes,
     onMove,
@@ -291,7 +298,7 @@ export default function MoveToLaneButton({
                     groupKey = `กลุ่ม ${lane.groupNumber}`;
                 }
             }
-            
+
             if (!groups[groupKey]) groups[groupKey] = [];
             groups[groupKey].push(lane);
         });
@@ -647,7 +654,7 @@ export default function MoveToLaneButton({
                                             boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                                         }}>
                                             <Typography variant="caption" sx={{ color: '#475569', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                                {groupKey}
+                                                {groupKey}{getGroupDescription(groupKey)}
                                             </Typography>
                                             <Chip
                                                 label={`${lanesInGroup.length} รายการ`}

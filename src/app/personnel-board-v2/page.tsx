@@ -321,6 +321,13 @@ export default function PersonnelBoardV2Page() {
         targetLaneTitle: string;
         kind: 'single' | 'bulk';
         targetMatchCount?: number;
+        targetCandidateIds?: string[];
+        selectedTargetId?: string;
+        ambiguousMatches?: Array<{
+            movingId: string;
+            candidateIds: string[];
+        }>;
+        selectedTargetIdsByMovingId?: Record<string, string>;
     } | null>(null);
 
     // Clear Board Dialog State
@@ -2577,7 +2584,16 @@ export default function PersonnelBoardV2Page() {
     }, [recalculateColumnToPositions]);
 
     // Add new lane
-    const handleMovePersonToLane = useCallback((personId: string, targetLaneId: string, requestedIds?: string[], mode: 'auto' | 'move' | 'swap' = 'auto') => {
+    const handleMovePersonToLane = useCallback((
+        personId: string,
+        targetLaneId: string,
+        requestedIds?: string[],
+        mode: 'auto' | 'move' | 'swap' = 'auto',
+        options?: {
+            swapTargetId?: string;
+            swapTargetIdsByMovingId?: Record<string, string>;
+        }
+    ) => {
         commitAction();
         const candidateIds = requestedIds && requestedIds.length > 0
             ? requestedIds
@@ -2640,7 +2656,9 @@ export default function PersonnelBoardV2Page() {
         if (mode !== 'move' && canTrySingleLaneSwap) {
             const sourceLane = sourceLanes[0];
             const movingId = movingIds[0];
-            const targetId = singleTargetSwapIds[0];
+            const targetId = options?.swapTargetId && singleTargetSwapIds.includes(options.swapTargetId)
+                ? options.swapTargetId
+                : singleTargetSwapIds[0];
             const movingPerson = personnelMap[movingId];
             const targetPerson = personnelMap[targetId];
 
@@ -2655,6 +2673,8 @@ export default function PersonnelBoardV2Page() {
                         targetLaneTitle: targetLane.title,
                         kind: 'single',
                         targetMatchCount: singleTargetSwapIds.length,
+                        targetCandidateIds: singleTargetSwapIds,
+                        selectedTargetId: singleTargetSwapIds[0],
                     });
                     return;
                 }
@@ -2716,7 +2736,7 @@ export default function PersonnelBoardV2Page() {
 
         if (mode !== 'move' && canTryBulkLaneSwap) {
             const sourceLane = sourceLanes[0];
-            
+
             const movingList = movingIds
                 .map(id => ({ id, posCode: Number(personnelMap[id]?.posCodeId) }))
                 .filter(item => Number.isFinite(item.posCode));
@@ -2725,23 +2745,59 @@ export default function PersonnelBoardV2Page() {
                 .map(id => ({ id, posCode: Number(personnelMap[id]?.posCodeId) }))
                 .filter(item => Number.isFinite(item.posCode));
 
-            let samePosCodeSet = false;
-            if (movingList.length === targetList.length && movingList.length > 0) {
-                movingList.sort((a, b) => a.posCode - b.posCode);
-                targetList.sort((a, b) => a.posCode - b.posCode);
+            const sortedMovingList = [...movingList].sort((a, b) => a.posCode - b.posCode);
+            const availableTargetList = [...targetList].sort((a, b) => a.posCode - b.posCode);
+            const matchedTargetList: typeof targetList = [];
+            const ambiguousMatches = sortedMovingList
+                .map(movingItem => ({
+                    movingId: movingItem.id,
+                    candidateIds: targetList
+                        .filter(targetItem => targetItem.posCode === movingItem.posCode)
+                        .map(targetItem => targetItem.id),
+                }))
+                .filter(match => match.candidateIds.length > 1);
+            const selectedTargetIdsByMovingId = options?.swapTargetIdsByMovingId || {};
 
-                let isMatch = true;
-                for (let i = 0; i < movingList.length; i++) {
-                    if (movingList[i].posCode !== targetList[i].posCode) {
-                        isMatch = false;
-                        break;
-                    }
+            if (mode === 'swap') {
+                const selectedTargetIds = Object.values(selectedTargetIdsByMovingId).filter(Boolean);
+                const uniqueSelectedTargetIds = new Set(selectedTargetIds);
+                if (selectedTargetIds.length !== uniqueSelectedTargetIds.size) {
+                    setSnackbar({
+                        open: true,
+                        message: '❌ กรุณาเลือกคู่สลับปลายทางไม่ให้ซ้ำกัน',
+                        severity: 'error'
+                    });
+                    return;
                 }
-                samePosCodeSet = isMatch;
             }
 
-            if (samePosCodeSet) {
+            for (const movingItem of sortedMovingList) {
+                const selectedTargetId = selectedTargetIdsByMovingId[movingItem.id];
+                const targetIndex = selectedTargetId
+                    ? availableTargetList.findIndex(targetItem => targetItem.id === selectedTargetId && targetItem.posCode === movingItem.posCode)
+                    : availableTargetList.findIndex(targetItem => targetItem.posCode === movingItem.posCode);
+                if (targetIndex === -1) {
+                    matchedTargetList.length = 0;
+                    break;
+                }
+
+                const [matchedTarget] = availableTargetList.splice(targetIndex, 1);
+                matchedTargetList.push(matchedTarget);
+            }
+
+            const hasMatchingTargetSubset = sortedMovingList.length === movingIds.length
+                && sortedMovingList.length > 0
+                && matchedTargetList.length === sortedMovingList.length;
+
+            if (hasMatchingTargetSubset) {
                 if (mode === 'auto') {
+                    const defaultSelectedTargets = ambiguousMatches.reduce<Record<string, string>>((acc, match) => {
+                        const matchedIndex = sortedMovingList.findIndex(item => item.id === match.movingId);
+                        const matchedTargetId = matchedIndex >= 0 ? matchedTargetList[matchedIndex]?.id : undefined;
+                        if (matchedTargetId) acc[match.movingId] = matchedTargetId;
+                        return acc;
+                    }, {});
+
                     setBulkSwapChoice({
                         open: true,
                         personId,
@@ -2750,6 +2806,8 @@ export default function PersonnelBoardV2Page() {
                         count: movingIds.length,
                         targetLaneTitle: targetLane.title,
                         kind: 'bulk',
+                        ambiguousMatches,
+                        selectedTargetIdsByMovingId: defaultSelectedTargets,
                     });
                     return;
                 }
@@ -2757,9 +2815,9 @@ export default function PersonnelBoardV2Page() {
                 const movingToTarget = new Map<string, string>();
                 const targetToMoving = new Map<string, string>();
 
-                for (let i = 0; i < movingList.length; i++) {
-                    movingToTarget.set(movingList[i].id, targetList[i].id);
-                    targetToMoving.set(targetList[i].id, movingList[i].id);
+                for (let i = 0; i < sortedMovingList.length; i++) {
+                    movingToTarget.set(sortedMovingList[i].id, matchedTargetList[i].id);
+                    targetToMoving.set(matchedTargetList[i].id, sortedMovingList[i].id);
                 }
 
                 const nextPersonnelMap = { ...personnelMap };
@@ -2814,6 +2872,15 @@ export default function PersonnelBoardV2Page() {
                     open: true,
                     message: `สลับกลุ่ม ${movingIds.length} คนกับเลน "${targetLane.title}" ตาม PosCode แล้ว`,
                     severity: 'success'
+                });
+                return;
+            }
+
+            if (mode === 'swap') {
+                setSnackbar({
+                    open: true,
+                    message: '❌ ไม่สามารถจับคู่สลับตาม PosCode ได้ กรุณาเลือกคู่สลับใหม่',
+                    severity: 'error'
                 });
                 return;
             }
@@ -5243,10 +5310,112 @@ export default function PersonnelBoardV2Page() {
                             ? 'เลือก “สลับ” ถ้าต้องการแลกคนระหว่างสองเลน หรือเลือก “ต่อท้าย” ถ้าต้องการเพิ่มคนที่เลือกเข้าเลนปลายทางตามปกติ'
                             : 'เลือก “สลับกลุ่ม” ถ้าต้องการแลกคนระหว่างสองเลน หรือเลือก “ย้ายไปเลน” ถ้าต้องการย้ายคนที่เลือกเข้าไปรวมในเลนปลายทางตามปกติ'}
                     </Typography>
-                    {bulkSwapChoice?.kind === 'single' && (bulkSwapChoice.targetMatchCount || 0) > 1 && (
-                        <Typography variant="caption" sx={{ display: 'block', color: '#b45309', mt: 1 }}>
-                            พบคน PosCode เดียวกันมากกว่า 1 คน ระบบจะสลับกับคนแรกในเลนปลายทาง
-                        </Typography>
+                    {bulkSwapChoice?.kind === 'single' && (bulkSwapChoice.targetCandidateIds?.length || 0) > 1 && (
+                        <Box sx={{ mt: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 900, color: '#0f172a', mb: 1 }}>
+                                เลือกคนในเลนปลายทางที่จะสลับด้วย
+                            </Typography>
+                            <Box sx={{ display: 'grid', gap: 1 }}>
+                                {bulkSwapChoice.targetCandidateIds?.map(candidateId => {
+                                    const candidate = personnelMap[candidateId];
+                                    const selected = bulkSwapChoice.selectedTargetId === candidateId;
+
+                                    return (
+                                        <Button
+                                            key={candidateId}
+                                            fullWidth
+                                            variant={selected ? 'contained' : 'outlined'}
+                                            color={selected ? 'primary' : 'inherit'}
+                                            onClick={() => setBulkSwapChoice(prev => prev ? ({ ...prev, selectedTargetId: candidateId }) : prev)}
+                                            sx={{
+                                                justifyContent: 'flex-start',
+                                                borderRadius: 2,
+                                                py: 1,
+                                                textAlign: 'left',
+                                                fontWeight: 800,
+                                            }}
+                                        >
+                                            <Box sx={{ minWidth: 0 }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
+                                                    {candidate?.rank || ''} {candidate?.fullName || 'ไม่ทราบชื่อ'}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ display: 'block', opacity: 0.8 }}>
+                                                    PosCode {candidate?.posCodeId || '-'} | {candidate?.position || '-'} | {candidate?.unit || '-'}
+                                                </Typography>
+                                            </Box>
+                                        </Button>
+                                    );
+                                })}
+                            </Box>
+                        </Box>
+                    )}
+                    {bulkSwapChoice?.kind === 'bulk' && (bulkSwapChoice.ambiguousMatches?.length || 0) > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 900, color: '#0f172a', mb: 1 }}>
+                                พบ PosCode ซ้ำ กรุณาเลือกคู่สลับ
+                            </Typography>
+                            <Box sx={{ display: 'grid', gap: 1.5 }}>
+                                {bulkSwapChoice.ambiguousMatches?.map(match => {
+                                    const movingPerson = personnelMap[match.movingId];
+                                    const selectedTargetId = bulkSwapChoice.selectedTargetIdsByMovingId?.[match.movingId] || match.candidateIds[0];
+
+                                    return (
+                                        <Paper
+                                            key={match.movingId}
+                                            elevation={0}
+                                            sx={{
+                                                p: 1.25,
+                                                borderRadius: 2,
+                                                border: '1px solid #e2e8f0',
+                                                bgcolor: '#f8fafc',
+                                            }}
+                                        >
+                                            <Typography variant="caption" sx={{ display: 'block', fontWeight: 900, color: '#475569', mb: 1 }}>
+                                                {movingPerson?.rank || ''} {movingPerson?.fullName || 'ไม่ทราบชื่อ'} | PosCode {movingPerson?.posCodeId || '-'}
+                                            </Typography>
+                                            <Box sx={{ display: 'grid', gap: 0.75 }}>
+                                                {match.candidateIds.map(candidateId => {
+                                                    const candidate = personnelMap[candidateId];
+                                                    const selected = selectedTargetId === candidateId;
+
+                                                    return (
+                                                        <Button
+                                                            key={candidateId}
+                                                            fullWidth
+                                                            variant={selected ? 'contained' : 'outlined'}
+                                                            color={selected ? 'primary' : 'inherit'}
+                                                            onClick={() => setBulkSwapChoice(prev => prev ? ({
+                                                                ...prev,
+                                                                selectedTargetIdsByMovingId: {
+                                                                    ...(prev.selectedTargetIdsByMovingId || {}),
+                                                                    [match.movingId]: candidateId,
+                                                                }
+                                                            }) : prev)}
+                                                            sx={{
+                                                                justifyContent: 'flex-start',
+                                                                borderRadius: 2,
+                                                                py: 0.75,
+                                                                textAlign: 'left',
+                                                                fontWeight: 800,
+                                                            }}
+                                                        >
+                                                            <Box sx={{ minWidth: 0 }}>
+                                                                <Typography variant="body2" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
+                                                                    {candidate?.rank || ''} {candidate?.fullName || 'ไม่ทราบชื่อ'}
+                                                                </Typography>
+                                                                <Typography variant="caption" sx={{ display: 'block', opacity: 0.8 }}>
+                                                                    {candidate?.position || '-'} | {candidate?.unit || '-'}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Button>
+                                                    );
+                                                })}
+                                            </Box>
+                                        </Paper>
+                                    );
+                                })}
+                            </Box>
+                        </Box>
                     )}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 3, gap: 1, flexWrap: 'wrap' }}>
@@ -5276,7 +5445,10 @@ export default function PersonnelBoardV2Page() {
                         onClick={() => {
                             const choice = bulkSwapChoice;
                             if (!choice) return;
-                            handleMovePersonToLane(choice.personId, choice.targetLaneId, choice.requestedIds, 'swap');
+                            handleMovePersonToLane(choice.personId, choice.targetLaneId, choice.requestedIds, 'swap', {
+                                swapTargetId: choice.selectedTargetId,
+                                swapTargetIdsByMovingId: choice.selectedTargetIdsByMovingId,
+                            });
                         }}
                         sx={{ borderRadius: 2, fontWeight: 900 }}
                     >

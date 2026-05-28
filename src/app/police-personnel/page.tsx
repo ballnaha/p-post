@@ -141,13 +141,14 @@ const fullImportExportColumns = [
   'หมายเหตุตัวคน',
   'POSCODE',
   'ตำแหน่ง',
+  'ลำดับตำแหน่ง',
   'เลขตำแหน่ง',
   'ทำหน้าที่',
   'หน่วย',
   'หมายเหตุตำแหน่ง',
   'ตำแหน่งที่ร้องขอ',
   'ชื่อผู้สนับสนุน',
-  'เหตุผลที่สนันสุนน',
+  'เหตุผลที่สนับสนุน',
 ] as const;
 
 const fullImportExportTextColumns = new Set<string>([
@@ -178,13 +179,14 @@ const buildFullImportExportRow = (person: PolicePersonnel) => ({
   หมายเหตุตัวคน: getResolvedPersonNote(person.notes) || '',
   POSCODE: person.posCodeId || '',
   ตำแหน่ง: person.position || '',
+  ลำดับตำแหน่ง: person.noId || '',
   เลขตำแหน่ง: formatPositionNumber(person.positionNumber),
   ทำหน้าที่: person.actingAs || '',
   หน่วย: person.unit || '',
   หมายเหตุตำแหน่ง: getResolvedPositionNote(person.notes, person.positionNotes) || '',
   ตำแหน่งที่ร้องขอ: person.requestedPosition || '',
   ชื่อผู้สนับสนุน: person.supporterName || '',
-  เหตุผลที่สนันสุนน: person.supportReason || '',
+  เหตุผลที่สนับสนุน: person.supportReason || '',
 });
 
 export default function PolicePersonnelPage() {

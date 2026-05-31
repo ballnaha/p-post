@@ -285,8 +285,8 @@ export async function GET(request: NextRequest) {
       debugLog += `Removed Keys: ${JSON.stringify(removedKeys)}\n`;
       debugLog += `True Unassigned Count: ${trueUnassignedCount}\n`;
       
-      const fs = require('fs');
-      fs.writeFileSync('debug-vacant.txt', debugLog);
+      // const fs = require('fs');
+      // fs.writeFileSync('debug-vacant.txt', debugLog);
     } else {
       trueUnassignedCount = allMatchingKeys.length;
     }

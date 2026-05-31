@@ -30,6 +30,7 @@ export interface InOutRecord {
         posCodeId: number | null;
         age: string | null;
         img?: string | null;
+        lastAppointment?: string | null;
     } | null;
     vacantPosition: {
         position: string | null;
@@ -81,7 +82,7 @@ const normalizePositionNumber = (posNum: string | null | undefined): string => {
 };
 
 const buildNestedContainsCondition = (path: string[], term: string): any => {
-    return path.reduceRight((acc, key) => ({ [key]: acc }), { contains: term });
+    return path.reduceRight<any>((acc, key) => ({ [key]: acc }), { contains: term });
 };
 
 const buildWildcardNestedOrConditions = (paths: string[][], rawSearch: string): any[] => {
@@ -525,6 +526,7 @@ export async function GET(request: NextRequest) {
                     posCodeId: person.posCodeId,
                     age: person.age,
                     img: person.avatarUrl,
+                    lastAppointment: person.lastAppointment, 
                 },
                 vacantPosition: (isVacant || isReserved) ? {
                     position: person.position,

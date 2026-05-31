@@ -25,8 +25,6 @@ import {
     Collapse,
     Pagination,
     Autocomplete,
-    Tabs,
-    Tab,
     Drawer,
     Divider,
     Slide,
@@ -62,6 +60,11 @@ import {
     Print as PrintIcon,
     ViewKanban as KanbanIcon,
     ViewList as ListIcon,
+    BusinessCenter as VacantTabIcon,
+    SwapHoriz as SwapTabIcon,
+    Hub as ThreeWayTabIcon,
+    ArrowRightAlt as TransferTabIcon,
+    EditNote as CustomTabIcon,
 } from '@mui/icons-material';
 
 const Transition = React.forwardRef(function Transition(
@@ -105,6 +108,14 @@ import { formatPositionNumber } from '@/utils/positionNumber';
 const CIRCULAR_SWAP_MIN_PERSONNEL = 3;
 const CIRCULAR_SWAP_MAX_PERSONNEL = 10;
 const DEFAULT_POS_CODE_ORDER = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12];
+type AddLaneTab = 'vacant' | 'swap' | 'three-way' | 'transfer' | 'custom';
+const ADD_LANE_TAB_OPTIONS: Array<{ value: AddLaneTab; label: string; icon: React.ElementType; color: string }> = [
+    { value: 'vacant', label: 'ตำแหน่งว่าง', icon: VacantTabIcon, color: '#64748b' },
+    { value: 'swap', label: 'สลับตำแหน่ง', icon: SwapTabIcon, color: '#4f46e5' },
+    { value: 'three-way', label: 'วงสลับ', icon: ThreeWayTabIcon, color: '#0f766e' },
+    { value: 'transfer', label: 'ย้ายหน่วย', icon: TransferTabIcon, color: '#2563eb' },
+    { value: 'custom', label: 'สร้างเอง', icon: CustomTabIcon, color: '#7c3aed' },
+];
 
 const sortColumnsForBoard = (cols: Column[]) => {
     const activePinned = cols.filter(col => !col.isCompleted && col.isPinned);
@@ -238,10 +249,21 @@ export default function PersonnelBoardV2Page() {
     // Dialog State
     const [isNewLaneDialogOpen, setIsNewLaneDialogOpen] = useState(false);
     const [newLaneTitle, setNewLaneTitle] = useState('');
-    const [addLaneTab, setAddLaneTab] = useState(0); // 0: Manual, 1: Vacant Position
+    const [addLaneTab, setAddLaneTab] = useState<AddLaneTab>('vacant');
+    const addLaneTabRef = useRef<AddLaneTab>('vacant');
+    addLaneTabRef.current = addLaneTab;
     const [selectedVacantPosition, setSelectedVacantPosition] = useState<any | null>(null);
     const [isNewLaneDrawerOpen, setIsNewLaneDrawerOpen] = useState(false);
     const [drawerOpenCounter, setDrawerOpenCounter] = useState(0); // Force re-fetch เมื่อเปิด Drawer ใหม่
+
+    const selectAddLaneTab = useCallback((value: AddLaneTab, options?: { forceRefresh?: boolean }) => {
+        const previousTab = addLaneTabRef.current;
+        addLaneTabRef.current = value;
+        setAddLaneTab(value);
+        if (value === 'vacant' && (options?.forceRefresh || previousTab !== 'vacant')) {
+            setDrawerOpenCounter(c => c + 1);
+        }
+    }, []);
 
     // เปิด Drawer พร้อม reset filters + force re-fetch ทุกครั้ง
     const openNewLaneDrawer = useCallback(() => {
@@ -254,10 +276,11 @@ export default function PersonnelBoardV2Page() {
         setVacantPage(0);
         setIsVacantFilterCollapsed(true);
         setNewLaneTitle('');
+        selectAddLaneTab('vacant', { forceRefresh: true });
         // Open drawer + bump counter to force re-fetch
         setIsNewLaneDrawerOpen(true);
-        setDrawerOpenCounter(c => c + 1);
-    }, []);
+    }, [selectAddLaneTab]);
+
     const [forceAvailableIds, setForceAvailableIds] = useState<string[]>([]);
     const [forceAvailablePersonnelIds, setForceAvailablePersonnelIds] = useState<string[]>([]);
     const [forceAvailablePersonnelNoIds, setForceAvailablePersonnelNoIds] = useState<string[]>([]);
@@ -781,7 +804,10 @@ export default function PersonnelBoardV2Page() {
             if (forceAvailableIds.length > 0) params.set('includeIds', forceAvailableIds.join(','));
 
             const res = await fetch(`/api/vacant-position/available?${params.toString()}`);
-            if (!res.ok) throw new Error('API Error');
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`API Error (${res.status}): ${errText || res.statusText}`);
+            }
             const data = await res.json();
 
             // Flatten all positions from groups
@@ -799,20 +825,33 @@ export default function PersonnelBoardV2Page() {
             }
             setVacantPositions(allPositions);
             setVacantTotal(data.total || allPositions.length);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error fetching vacant positions:', err);
+            setSnackbar({
+                open: true,
+                message: `ไม่สามารถดึงข้อมูลตำแหน่งว่างได้: ${err.message || String(err)}`,
+                severity: 'error'
+            });
         } finally {
             setLoadingVacantPositions(false);
         }
     }, [selectedYear, vacantPage, vacantRowsPerPage, debouncedVacantSearch, vacantFilterPosCode, vacantFilterUnit, vacantFilterStatus, forceAvailableIds]);
 
+    // Use a ref to always hold the latest fetchVacantPositions without causing dependency cascades
+    const fetchVacantPositionsRef = useRef(fetchVacantPositions);
+    useEffect(() => {
+        fetchVacantPositionsRef.current = fetchVacantPositions;
+    });
+
     // Fetch vacant positions when drawer is open or filters change
     // drawerOpenCounter ensures fresh data on every drawer open
+    // NOTE: fetchVacantPositions is accessed via ref to avoid dependency cascade after save (which caused tab switching to break)
     useEffect(() => {
-        if (isNewLaneDrawerOpen && addLaneTab === 0) {
-            fetchVacantPositions();
+        if (isNewLaneDrawerOpen && addLaneTab === 'vacant') {
+            fetchVacantPositionsRef.current();
         }
-    }, [isNewLaneDrawerOpen, addLaneTab, fetchVacantPositions, drawerOpenCounter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isNewLaneDrawerOpen, addLaneTab, drawerOpenCounter, vacantPage, vacantRowsPerPage, debouncedVacantSearch, vacantFilterPosCode, vacantFilterUnit, vacantFilterStatus]);
 
     // Fetch swap transactions
     const fetchSwapTransactions = useCallback(async () => {
@@ -882,7 +921,8 @@ export default function PersonnelBoardV2Page() {
         } finally {
             setLoadingBoard(false);
         }
-    }, [fetchVacantPositions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
 
     // Save board data to API
@@ -3146,7 +3186,7 @@ export default function PersonnelBoardV2Page() {
                 posCodeMaster: data.posCodeMaster,
                 actingAs: data.actingAs
             };
-        } else if (addLaneTab === 4) {
+        } else if (addLaneTab === 'custom') {
             // Manual mode (สร้างเอง - Tab index 4)
             if (!newLaneTitle.trim()) return;
             laneTitle = newLaneTitle.trim();
@@ -3884,6 +3924,236 @@ export default function PersonnelBoardV2Page() {
         });
         return map;
     }, [filteredColumns, personnelMap]);
+
+    // Vacant tab state lives in this parent component, so the content can be mounted only
+    // when active. This avoids hidden drawer content interfering with tab clicks.
+    const vacantTabContent = (
+        <Box
+            sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+            }}
+        >
+                    {/* Filter Toggle */}
+                    <Box
+                        onClick={() => setIsVacantFilterCollapsed(!isVacantFilterCollapsed)}
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.5,
+                            py: 1,
+                            cursor: 'pointer',
+                            bgcolor: '#f8fafc',
+                            borderBottom: '1px solid #e2e8f0',
+                            '&:hover': { bgcolor: 'grey.100' }
+                        }}
+                    >
+                        <FilterListIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                            ค้นหา / ตัวกรอง
+                        </Typography>
+                        {isVacantFilterCollapsed ?
+                            <ExpandMoreIcon sx={{ fontSize: 18, color: 'text.secondary' }} /> :
+                            <ExpandLessIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                        }
+                        {/* Show active filter count */}
+                        {(vacantSearch || vacantFilterUnit !== 'all' || vacantFilterStatus !== 'all' || vacantFilterPosCode !== 'all') && (
+                            <Chip
+                                label={[
+                                    vacantSearch ? 1 : 0,
+                                    vacantFilterUnit !== 'all' ? 1 : 0,
+                                    vacantFilterStatus !== 'all' ? 1 : 0,
+                                    vacantFilterPosCode !== 'all' ? 1 : 0
+                                ].reduce((a, b) => a + b, 0)}
+                                size="small"
+                                color="primary"
+                                sx={{ height: 18, fontSize: '0.7rem', ml: 0.5, '& .MuiChip-label': { px: 0.75 } }}
+                            />
+                        )}
+                    </Box>
+
+                    {/* Collapsible Filters */}
+                    <Collapse in={!isVacantFilterCollapsed}>
+                        <Box sx={{ px: 2, py: 2, bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                            {/* Search Box */}
+                            <TextField
+                                fullWidth
+                                size="small"
+                                placeholder="ค้นหาตำแหน่ง/หน่วยงาน/เลขตำแหน่ง เช่น สว*สอบ"
+                                value={vacantSearch}
+                                onChange={(e) => setVacantSearch(e.target.value)}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon sx={{ fontSize: 20 }} color="action" />
+                                        </InputAdornment>
+                                    ),
+                                    sx: { bgcolor: 'white' }
+                                }}
+                                sx={{ mb: 2 }}
+                            />
+
+                            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
+                                <FormControl fullWidth size="small">
+                                    <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>หน่วยงาน</Typography>
+                                    <Select
+                                        value={vacantFilterUnit}
+                                        onChange={(e) => setVacantFilterUnit(e.target.value)}
+                                        sx={{ bgcolor: 'white' }}
+                                    >
+                                        <MenuItem value="all">ทั้งหมด</MenuItem>
+                                        {allUnits.map(unit => (
+                                            <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+
+                                <FormControl fullWidth size="small">
+                                    <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>สถานะ</Typography>
+                                    <Select
+                                        value={vacantFilterStatus}
+                                        onChange={(e) => setVacantFilterStatus(e.target.value)}
+                                        sx={{ bgcolor: 'white' }}
+                                    >
+                                        <MenuItem value="all">ทั้งหมด</MenuItem>
+                                        <MenuItem value="vacant">ว่างปกติ</MenuItem>
+                                        <MenuItem value="reserved">กันตำแหน่ง</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </Box>
+
+                            <FormControl fullWidth size="small">
+                                <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>รหัส - ตำแหน่ง</Typography>
+                                <Select
+                                    value={vacantFilterPosCode}
+                                    onChange={(e) => setVacantFilterPosCode(e.target.value)}
+                                    sx={{ bgcolor: 'white' }}
+                                >
+                                    <MenuItem value="all">ทุกรหัส</MenuItem>
+                                    {posCodeOptions.map(pc => (
+                                        <MenuItem key={pc.id} value={String(pc.id)}>{pc.id} - {pc.name}</MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        </Box>
+                    </Collapse>
+
+                    <Typography variant="caption" sx={{ px: 2, py: 1, my: 1, mx: 2, bgcolor: alpha('#3b82f6', 0.05), color: 'primary.dark', fontWeight: 700, borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        🔍 พบ {Math.max(0, vacantTotal - assignedVacantIds.length)} ตำแหน่งว่าง {allAssignedVacantIds.length > 0 && `(บนบอร์ดแล้ว ${allAssignedVacantIds.length})`}
+                    </Typography>
+
+                    {/* Vacant List */}
+                    <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 2 }}>
+                        {loadingVacantPositions ?
+                            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress size={24} /></Box>
+                         : vacantPositions.filter(pos => !allAssignedVacantIds.includes(String(pos.id))).length === 0 ? 
+                            <Box sx={{ textAlign: 'center', py: 8, opacity: 0.5 }}>
+                                <Typography variant="body2">ไม่พบตำแหน่งที่ตรงตามเงื่อนไข (หรือถูกจัดลงบอร์ดแล้ว)</Typography>
+                            </Box>
+                         : 
+                            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                            {vacantPositions
+                                .filter(pos => !allAssignedVacantIds.includes(String(pos.id)))
+                                .map((pos) => (
+                                    <Paper
+                                        key={pos.id}
+                                        elevation={0}
+                                        sx={{
+                                            p: 1,
+                                            mb: 1,
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: 1.5,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            overflow: 'hidden',
+                                            '&:hover': {
+                                                borderColor: 'primary.main',
+                                                bgcolor: alpha('#3b82f6', 0.02),
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                                            }
+                                        }}
+                                    >
+                                        {/* Content - Click to open detail */}
+                                        <Box
+                                            sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                                            onClick={() => handleOpenVacantDetail(pos)}
+                                        >
+                                            {/* Row 1: Position Name + Position Number */}
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                                                <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b', flex: 1 }}>
+                                                    {renderHighlightedVacant(pos.position || pos.posCodeMaster?.name || 'ตำแหน่งว่าง')}
+                                                </Typography>
+                                                <Chip
+                                                    label={renderHighlightedVacant(`#${formatPositionNumber(pos.positionNumber)}`)}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, '& .MuiChip-label': { px: 0.5 } }}
+                                                />
+                                            </Box>
+
+                                            {/* Row 2: Acting As (ทำหน้าที่) - if available */}
+                                            {pos.actingAs && (
+                                                <Typography variant="caption" noWrap sx={{ display: 'block', fontSize: '0.7rem', color: '#059669', fontWeight: 600, mb: 0.25 }}>
+                                                    📋 {renderHighlightedVacant(pos.actingAs)}
+                                                </Typography>
+                                            )}
+
+                                            {/* Row 3: Compact chips row - PosCode + Unit + Status */}
+                                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <Chip
+                                                    label={renderHighlightedVacant(pos.posCodeId ? `${pos.posCodeId} - ${pos.posCodeMaster?.name}` : '-')}
+                                                    size="small"
+                                                    sx={{ height: 16, fontSize: '0.7rem', fontWeight: 700, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', '& .MuiChip-label': { px: 0.5 } }}
+                                                />
+                                                <Typography variant="caption" noWrap sx={{ fontSize: '0.75rem', color: '#64748b', maxWidth: 120 }}>
+                                                    หน่วย: {renderHighlightedVacant(pos.unit || 'ไม่ระบุหน่วย')}
+                                                </Typography>
+                                                {(pos.fullName || '').includes('กันตำแหน่ง') && (
+                                                    <Chip label="กันตำแหน่ง" size="small" color="warning" sx={{ height: 16, fontSize: '0.65rem', fontWeight: 400, '& .MuiChip-label': { px: 0.5 } }} />
+                                                )}
+                                            </Box>
+                                        </Box>
+
+                                        {/* Add Button - Smaller */}
+                                        <IconButton
+                                            color="primary"
+                                            size="small"
+                                            onClick={(e) => { e.stopPropagation(); handleAddLane(pos); }}
+                                            sx={{
+                                                width: 32,
+                                                height: 32,
+                                                bgcolor: alpha('#3b82f6', 0.08),
+                                                '&:hover': { bgcolor: alpha('#3b82f6', 0.15) }
+                                            }}
+                                        >
+                                            <AddIcon sx={{ fontSize: 18 }} />
+                                        </IconButton>
+                                    </Paper>
+                                ))}
+                            </Box>
+                        }
+                    </Box>
+
+                    {/* Pagination */}
+                    {vacantTotal > vacantRowsPerPage && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2, borderTop: '1px solid #e2e8f0' }}>
+                            <Pagination
+                                count={Math.ceil(vacantTotal / vacantRowsPerPage)}
+                                page={vacantPage + 1}
+                                onChange={(e, newPage) => setVacantPage(newPage - 1)}
+                                size="small"
+                                color="primary"
+                            />
+                        </Box>
+                    )}
+                </Box>
+    );
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
@@ -4876,248 +5146,80 @@ export default function PersonnelBoardV2Page() {
                         </IconButton>
                     </Box>
 
-                    <Tabs
-                        value={addLaneTab}
-                        onChange={(e, v) => setAddLaneTab(v)}
-                        variant="scrollable"
-                        scrollButtons="auto"
+                    <Box
+                        role="tablist"
+                        aria-label="เพิ่มเลนใหม่"
                         sx={{
-                            borderBottom: 1,
-                            borderColor: 'divider',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            overflowX: 'auto',
                             mb: 2,
-                            px: 0.5,
-                            minHeight: 40,
-                            '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
-                            '& .MuiTab-root': { minHeight: 40, py: 1, fontSize: '0.9rem', fontWeight: 700, textTransform: 'none', color: 'text.secondary' }
+                            p: 0.5,
+                            minHeight: 48,
+                            flexShrink: 0,
+                            position: 'relative',
+                            zIndex: 20,
+                            bgcolor: 'white',
+                            border: '1px solid',
+                            borderColor: '#e2e8f0',
+                            borderRadius: 2,
+                            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+                            scrollbarWidth: 'thin',
                         }}
                     >
-                        <Tab label="ตำแหน่งว่าง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5 }} />
-                        <Tab label="🔄 สลับตำแหน่ง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#f59e0b' }} />
-                        <Tab label="🔄 วงสลับ" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#f43f5e' }} />
-                        <Tab label="📦 ย้ายหน่วย" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5, color: '#3b82f6' }} />
-                        <Tab label="สร้างเอง" sx={{ fontWeight: 700, textTransform: 'none', fontSize: '0.8rem', minWidth: 'auto', px: 1.5 }} />
-                    </Tabs>
+                        {ADD_LANE_TAB_OPTIONS.map((tab) => {
+                            const selected = addLaneTab === tab.value;
+                            const activeColor = tab.color;
+                            const TabIcon = tab.icon;
+                            return (
+                                <Button
+                                    key={tab.value}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={selected}
+                                    variant="text"
+                                    disableElevation
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        selectAddLaneTab(tab.value, { forceRefresh: tab.value === 'vacant' });
+                                    }}
+                                    sx={{
+                                        flexShrink: 0,
+                                        minHeight: 38,
+                                        px: 1.35,
+                                        borderRadius: 1.5,
+                                        fontWeight: 800,
+                                        fontSize: '0.8rem',
+                                        textTransform: 'none',
+                                        bgcolor: selected ? alpha(activeColor, 0.1) : 'transparent',
+                                        color: selected ? activeColor : '#64748b',
+                                        border: '1px solid',
+                                        borderColor: selected ? alpha(activeColor, 0.28) : alpha(activeColor, 0.12),
+                                        boxShadow: selected ? `inset 0 -2px 0 ${activeColor}` : 'none',
+                                        '& .MuiButton-startIcon': {
+                                            mr: 0.65,
+                                            ml: 0,
+                                            color: activeColor,
+                                            opacity: selected ? 1 : 0.8,
+                                        },
+                                        '&:hover': {
+                                            bgcolor: alpha(activeColor, selected ? 0.14 : 0.07),
+                                            color: activeColor,
+                                            borderColor: alpha(activeColor, 0.28),
+                                        },
+                                    }}
+                                    startIcon={<TabIcon sx={{ fontSize: 18 }} />}
+                                >
+                                    {tab.label}
+                                </Button>
+                            );
+                        })}
+                    </Box>
 
-                    {addLaneTab === 0 ? (
-                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                            {/* Filter Toggle */}
-                            <Box
-                                onClick={() => setIsVacantFilterCollapsed(!isVacantFilterCollapsed)}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 0.5,
-                                    py: 1,
-                                    cursor: 'pointer',
-                                    bgcolor: '#f8fafc',
-                                    borderBottom: '1px solid #e2e8f0',
-                                    '&:hover': { bgcolor: 'grey.100' }
-                                }}
-                            >
-                                <FilterListIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                                    ค้นหา / ตัวกรอง
-                                </Typography>
-                                {isVacantFilterCollapsed ?
-                                    <ExpandMoreIcon sx={{ fontSize: 18, color: 'text.secondary' }} /> :
-                                    <ExpandLessIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                                }
-                                {/* Show active filter count */}
-                                {(vacantSearch || vacantFilterUnit !== 'all' || vacantFilterStatus !== 'all' || vacantFilterPosCode !== 'all') && (
-                                    <Chip
-                                        label={[
-                                            vacantSearch ? 1 : 0,
-                                            vacantFilterUnit !== 'all' ? 1 : 0,
-                                            vacantFilterStatus !== 'all' ? 1 : 0,
-                                            vacantFilterPosCode !== 'all' ? 1 : 0
-                                        ].reduce((a, b) => a + b, 0)}
-                                        size="small"
-                                        color="primary"
-                                        sx={{ height: 18, fontSize: '0.7rem', ml: 0.5, '& .MuiChip-label': { px: 0.75 } }}
-                                    />
-                                )}
-                            </Box>
-
-                            {/* Collapsible Filters */}
-                            <Collapse in={!isVacantFilterCollapsed}>
-                                <Box sx={{ px: 2, py: 2, bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                    {/* Search Box */}
-                                    <TextField
-                                        fullWidth
-                                        size="small"
-                                        placeholder="ค้นหาตำแหน่ง/หน่วยงาน/เลขตำแหน่ง เช่น สว*สอบ"
-                                        value={vacantSearch}
-                                        onChange={(e) => setVacantSearch(e.target.value)}
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <SearchIcon sx={{ fontSize: 20 }} color="action" />
-                                                </InputAdornment>
-                                            ),
-                                            sx: { bgcolor: 'white' }
-                                        }}
-                                        sx={{ mb: 2 }}
-                                    />
-
-                                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 1.5 }}>
-                                        <FormControl fullWidth size="small">
-                                            <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>หน่วยงาน</Typography>
-                                            <Select
-                                                value={vacantFilterUnit}
-                                                onChange={(e) => setVacantFilterUnit(e.target.value)}
-                                                sx={{ bgcolor: 'white' }}
-                                            >
-                                                <MenuItem value="all">ทั้งหมด</MenuItem>
-                                                {allUnits.map(unit => (
-                                                    <MenuItem key={unit} value={unit}>{unit}</MenuItem>
-                                                ))}
-                                            </Select>
-                                        </FormControl>
-
-                                        <FormControl fullWidth size="small">
-                                            <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>สถานะ</Typography>
-                                            <Select
-                                                value={vacantFilterStatus}
-                                                onChange={(e) => setVacantFilterStatus(e.target.value)}
-                                                sx={{ bgcolor: 'white' }}
-                                            >
-                                                <MenuItem value="all">ทั้งหมด</MenuItem>
-                                                <MenuItem value="vacant">ว่างปกติ</MenuItem>
-                                                <MenuItem value="reserved">กันตำแหน่ง</MenuItem>
-                                            </Select>
-                                        </FormControl>
-                                    </Box>
-
-                                    <FormControl fullWidth size="small">
-                                        <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>รหัส - ตำแหน่ง</Typography>
-                                        <Select
-                                            value={vacantFilterPosCode}
-                                            onChange={(e) => setVacantFilterPosCode(e.target.value)}
-                                            sx={{ bgcolor: 'white' }}
-                                        >
-                                            <MenuItem value="all">ทุกรหัส</MenuItem>
-                                            {posCodeOptions.map(pc => (
-                                                <MenuItem key={pc.id} value={String(pc.id)}>{pc.id} - {pc.name}</MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                </Box>
-                            </Collapse>
-
-                            <Typography variant="caption" sx={{ px: 2, py: 1, my: 1, mx: 2, bgcolor: alpha('#3b82f6', 0.05), color: 'primary.dark', fontWeight: 700, borderRadius: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                🔍 พบ {Math.max(0, vacantTotal - assignedVacantIds.length)} ตำแหน่งว่าง {allAssignedVacantIds.length > 0 && `(บนบอร์ดแล้ว ${allAssignedVacantIds.length})`}
-                            </Typography>
-
-                            {/* Vacant List */}
-                            <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 2 }}>
-                                {loadingVacantPositions ?
-                                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress size={24} /></Box>
-                                 : vacantPositions.filter(pos => !allAssignedVacantIds.includes(String(pos.id))).length === 0 ? 
-                                    <Box sx={{ textAlign: 'center', py: 8, opacity: 0.5 }}>
-                                        <Typography variant="body2">ไม่พบตำแหน่งที่ตรงตามเงื่อนไข (หรือถูกจัดลงบอร์ดแล้ว)</Typography>
-                                    </Box>
-                                 : 
-                                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
-                                    {vacantPositions
-                                        .filter(pos => !allAssignedVacantIds.includes(String(pos.id)))
-                                        .map((pos) => (
-                                            <Paper
-                                                key={pos.id}
-                                                elevation={0}
-                                                sx={{
-                                                    p: 1,
-                                                    mb: 1,
-                                                    border: '1px solid #e2e8f0',
-                                                    borderRadius: 1.5,
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.15s ease',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 1,
-                                                    overflow: 'hidden',
-                                                    '&:hover': {
-                                                        borderColor: 'primary.main',
-                                                        bgcolor: alpha('#3b82f6', 0.02),
-                                                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-                                                    }
-                                                }}
-                                            >
-                                                {/* Content - Click to open detail */}
-                                                <Box
-                                                    sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
-                                                    onClick={() => handleOpenVacantDetail(pos)}
-                                                >
-                                                    {/* Row 1: Position Name + Position Number */}
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-                                                        <Typography variant="subtitle2" noWrap sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b', flex: 1 }}>
-                                                            {renderHighlightedVacant(pos.position || pos.posCodeMaster?.name || 'ตำแหน่งว่าง')}
-                                                        </Typography>
-                                                        <Chip
-                                                            label={renderHighlightedVacant(`#${formatPositionNumber(pos.positionNumber)}`)}
-                                                            size="small"
-                                                            variant="outlined"
-                                                            sx={{ height: 16, fontSize: '0.6rem', fontWeight: 600, '& .MuiChip-label': { px: 0.5 } }}
-                                                        />
-                                                    </Box>
-
-                                                    {/* Row 2: Acting As (ทำหน้าที่) - if available */}
-                                                    {pos.actingAs && (
-                                                        <Typography variant="caption" noWrap sx={{ display: 'block', fontSize: '0.7rem', color: '#059669', fontWeight: 600, mb: 0.25 }}>
-                                                            📋 {renderHighlightedVacant(pos.actingAs)}
-                                                        </Typography>
-                                                    )}
-
-                                                    {/* Row 3: Compact chips row - PosCode + Unit + Status */}
-                                                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
-                                                        <Chip
-                                                            label={renderHighlightedVacant(pos.posCodeId ? `${pos.posCodeId} - ${pos.posCodeMaster?.name}` : '-')}
-                                                            size="small"
-                                                            sx={{ height: 16, fontSize: '0.7rem', fontWeight: 700, bgcolor: alpha('#3b82f6', 0.1), color: 'primary.main', '& .MuiChip-label': { px: 0.5 } }}
-                                                        />
-                                                        <Typography variant="caption" noWrap sx={{ fontSize: '0.75rem', color: '#64748b', maxWidth: 120 }}>
-                                                            หน่วย: {renderHighlightedVacant(pos.unit || 'ไม่ระบุหน่วย')}
-                                                        </Typography>
-                                                        {(pos.fullName || '').includes('กันตำแหน่ง') && (
-                                                            <Chip label="กันตำแหน่ง" size="small" color="warning" sx={{ height: 16, fontSize: '0.65rem', fontWeight: 400, '& .MuiChip-label': { px: 0.5 } }} />
-                                                        )}
-                                                    </Box>
-                                                </Box>
-
-                                                {/* Add Button - Smaller */}
-                                                <IconButton
-                                                    color="primary"
-                                                    size="small"
-                                                    onClick={(e) => { e.stopPropagation(); handleAddLane(pos); }}
-                                                    sx={{
-                                                        width: 32,
-                                                        height: 32,
-                                                        bgcolor: alpha('#3b82f6', 0.08),
-                                                        '&:hover': { bgcolor: alpha('#3b82f6', 0.15) }
-                                                    }}
-                                                >
-                                                    <AddIcon sx={{ fontSize: 18 }} />
-                                                </IconButton>
-                                            </Paper>
-                                        ))}
-                                    </Box>
-                                }
-                            </Box>
-
-                            {/* Pagination */}
-                            {vacantTotal > vacantRowsPerPage && (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2, borderTop: '1px solid #e2e8f0' }}>
-                                    <Pagination
-                                        count={Math.ceil(vacantTotal / vacantRowsPerPage)}
-                                        page={vacantPage + 1}
-                                        onChange={(e, newPage) => setVacantPage(newPage - 1)}
-                                        size="small"
-                                        color="primary"
-                                    />
-                                </Box>
-                            )}
-                        </Box>
-                    ) : addLaneTab === 1 ? (
+                    {addLaneTab === 'vacant' ? vacantTabContent : null}
+                    {addLaneTab === 'swap' ? (
                         /* Create Swap Lane (Index 1) */
                         <CreateSwapLaneTab
                             selectedYear={selectedYear}
@@ -5130,7 +5232,7 @@ export default function PersonnelBoardV2Page() {
                             onCreate={handleCreateSwapLane}
                             loading={isCreatingLane}
                         />
-                    ) : addLaneTab === 2 ? (
+                    ) : addLaneTab === 'three-way' ? (
                         /* Create Three-way Lane (Index 2) */
                         <CreateThreeWayLaneTab
                             selectedYear={selectedYear}
@@ -5143,7 +5245,7 @@ export default function PersonnelBoardV2Page() {
                             onCreate={handleCreateThreeWayLane}
                             loading={isCreatingLane}
                         />
-                    ) : addLaneTab === 3 ? (
+                    ) : addLaneTab === 'transfer' ? (
                         /* Create Transfer Lane (Index 3) */
                         <CreateTransferLaneTab
                             selectedYear={selectedYear}
@@ -5156,7 +5258,7 @@ export default function PersonnelBoardV2Page() {
                             onCreate={handleCreateTransferLane}
                             loading={isCreatingLane}
                         />
-                    ) : addLaneTab === 4 ? (
+                    ) : addLaneTab === 'custom' ? (
                         /* Manual mode (Index 4) */
                         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                             <Box sx={{ px: 2, py: 2, bgcolor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>

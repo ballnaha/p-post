@@ -71,6 +71,7 @@ export const GlobalSnackbar: React.FC = () => {
         mt: { xs: 1.5, sm: 3 },
         px: { xs: 2, sm: 0 },
         zIndex: 20100,
+        pointerEvents: 'none',
       }}
     >
       <Box
@@ -93,6 +94,7 @@ export const GlobalSnackbar: React.FC = () => {
           backdropFilter: 'blur(16px)',
           position: 'relative',
           overflow: 'hidden',
+          pointerEvents: 'none',
           '&::before': {
             content: '""',
             position: 'absolute',
@@ -140,6 +142,7 @@ export const GlobalSnackbar: React.FC = () => {
           onClick={hideSnackbar}
           aria-label="ปิดข้อความแจ้งเตือน"
           sx={{
+            pointerEvents: 'auto',
             width: 26,
             height: 26,
             flexShrink: 0,

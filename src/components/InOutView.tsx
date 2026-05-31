@@ -35,6 +35,7 @@ import {
 import InOutTable, { InOutRecord } from '@/components/InOutTable';
 import PersonnelDetailModal, { PersonnelData } from '@/components/PersonnelDetailModal';
 import { formatPositionNumber } from '@/utils/positionNumber';
+import { formatBuddhistDate } from '@/utils/dateFormat';
 
 interface ApiResponse {
     success: boolean;
@@ -424,6 +425,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                 'คนครอง',
                 'ตำแหน่งปัจจุบัน',
                 'ลำดับตำแหน่ง',
+                'ดำรงตำแหน่งครั้งสุดท้าย',
                 'เลขที่ตำแหน่ง',
                 'รหัสตำแหน่ง',
                 'อายุ',
@@ -438,7 +440,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
             ];
 
             // ปรับความกว้างคอลัมน์
-            const colWidths = [28, 35, 22, 28, 35, 12, 15, 22, 8, 12, 35, 15, 22, 28, 28, 35, 35];
+            const colWidths = [28, 35, 22, 28, 35, 12, 20, 15, 22, 8, 12, 35, 15, 22, 28, 28, 35, 35];
             ws.columns = headers.map((header, i) => ({
                 header,
                 key: `col${i}`,
@@ -448,8 +450,8 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
             // --- Header color per section ---
             const getHeaderColor = (colIdx: number): string => {
                 if (colIdx <= 2) return '1B5E20';       // คนเข้า: deep green
-                if (colIdx <= 9) return 'E65100';       // คนครอง: deep orange
-                if (colIdx <= 14) return 'B71C1C';      // คนออก: deep red
+                if (colIdx <= 10) return 'E65100';      // คนครอง: deep orange
+                if (colIdx <= 15) return 'B71C1C';      // คนออก: deep red
                 return '37474F';                         // หมายเหตุ: blue-grey
             };
 
@@ -495,6 +497,9 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                         : '-');
                 const currentPosition = record.currentHolder?.position || record.vacantPosition?.position || '-';
                 const positionOrder = record.noId || '-';
+                const lastAppointment = (!isVacant && record.currentHolder?.lastAppointment)
+                    ? formatBuddhistDate(record.currentHolder.lastAppointment)
+                    : '-';
                 const positionNumber = formatPositionNumber(record.positionNumber) || '-';
                 const currentPosCode = (() => {
                     const posCodeId = record.currentHolder?.posCodeId || record.vacantPosition?.posCodeId;
@@ -517,7 +522,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
 
                 ws.addRow([
                     incomingName, incomingFromPositionWithPosCode, incomingSupporter,
-                    currentName, currentPosition, positionOrder, positionNumber, currentPosCode, age, group,
+                    currentName, currentPosition, positionOrder, lastAppointment, positionNumber, currentPosCode, age, group,
                     outgoingPosition, outgoingPositionNumber, outgoingPosCode, outgoingUnit,
                     requestedPosition, personRemark, positionRemark
                 ]);
@@ -526,15 +531,15 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
             // --- Section color palettes (even row / odd row) ---
             const getSectionFill = (colIdx: number, isEven: boolean): { argb: string } => {
                 if (colIdx <= 2) return { argb: isEven ? 'FFE8F5E9' : 'FFC8E6C9' };       // เขียวอ่อน
-                if (colIdx <= 9) return { argb: isEven ? 'FFFFF8E1' : 'FFFFECB3' };       // เหลืองอำพัน
-                if (colIdx <= 14) return { argb: isEven ? 'FFFBE9E7' : 'FFFFCCBC' };      // แดง/ส้มอ่อน
+                if (colIdx <= 10) return { argb: isEven ? 'FFFFF8E1' : 'FFFFECB3' };      // เหลืองอำพัน
+                if (colIdx <= 15) return { argb: isEven ? 'FFFBE9E7' : 'FFFFCCBC' };      // แดง/ส้มอ่อน
                 return { argb: isEven ? 'FFF5F5F5' : 'FFEEEEEE' };                         // เทาอ่อน
             };
 
             const getSectionBorder = (colIdx: number): string => {
                 if (colIdx <= 2) return 'FFA5D6A7';
-                if (colIdx <= 9) return 'FFFFE082';
-                if (colIdx <= 14) return 'FFEF9A9A';
+                if (colIdx <= 10) return 'FFFFE082';
+                if (colIdx <= 15) return 'FFEF9A9A';
                 return 'FFBDBDBD';
             };
 
@@ -555,7 +560,7 @@ export default function InOutView({ initialYear }: InOutViewProps = {}) {
                         fgColor: getSectionFill(colIdx, isEven),
                     };
                     cell.alignment = {
-                        horizontal: (colIdx === 5 || colIdx === 6 || colIdx === 8 || colIdx === 9 || colIdx === 11) ? 'center' : 'left',
+                        horizontal: (colIdx === 5 || colIdx === 6 || colIdx === 7 || colIdx === 9 || colIdx === 10 || colIdx === 12) ? 'center' : 'left',
                         vertical: 'middle',
                         wrapText: true,
                     };

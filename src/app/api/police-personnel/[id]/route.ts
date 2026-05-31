@@ -118,10 +118,49 @@ export async function PUT(
     const body = await request.json();
     const username = session?.user?.username || 'system';
 
+    // Fetch the existing record first to get its year and active status
+    const existing = await prisma.policePersonnel.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: 'ไม่พบข้อมูลบุคลากร' },
+        { status: 404 }
+      );
+    }
+
+    const normalizedBody = normalizeUpdateBody(body);
+
+    // Check if isActive will be true (either set in update, or currently true in database)
+    const isActive = 'isActive' in normalizedBody ? normalizedBody.isActive : existing.isActive;
+
+    // If active and noId is provided and not null, verify that it isn't a duplicate in the same year
+    if (isActive && 'noId' in normalizedBody && normalizedBody.noId !== null) {
+      const targetNoId = normalizedBody.noId;
+
+      const duplicateRecord = await prisma.policePersonnel.findFirst({
+        where: {
+          year: existing.year,
+          isActive: true,
+          noId: targetNoId,
+          id: { not: id },
+        },
+      });
+
+      if (duplicateRecord) {
+        const namePart = [duplicateRecord.rank, duplicateRecord.fullName].filter(Boolean).join(' ') || 'ตำแหน่งว่าง';
+        return NextResponse.json(
+          { success: false, error: `ลำดับตำแหน่ง ${targetNoId} ถูกใช้งานแล้วโดย ${namePart}` },
+          { status: 400 }
+        );
+      }
+    }
+
     const personnel = await prisma.policePersonnel.update({
       where: { id },
       data: {
-        ...normalizeUpdateBody(body),
+        ...normalizedBody,
         updatedBy: username,
       },
     });

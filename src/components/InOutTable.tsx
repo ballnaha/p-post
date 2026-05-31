@@ -30,6 +30,7 @@ import {
     Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { formatPositionNumber } from '@/utils/positionNumber';
+import { formatBuddhistDate } from '@/utils/dateFormat';
 
 // Interface สำหรับข้อมูลการ In-Out
 export interface InOutRecord {
@@ -53,6 +54,7 @@ export interface InOutRecord {
         posCode: string | null;
         posCodeId: number | null;
         age: string | null;
+        lastAppointment?: string | null;
     } | null;
     // Position info for vacant/reserved positions
     vacantPosition?: {
@@ -309,6 +311,17 @@ const InOutRow = memo(({
                             color: theme.palette.warning.dark,
                         }}
                     />
+                ) : (
+                    <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
+                )}
+            </TableCell>
+
+            {/* ดำรงตำแหน่งครั้งสุดท้าย */}
+            <TableCell sx={{ py: 1.25, px: 1, textAlign: 'center', borderRight: `1px solid ${theme.palette.divider}` }}>
+                {record.currentHolder?.lastAppointment ? (
+                    <Typography sx={{ fontSize: '0.78rem', color: theme.palette.text.primary, lineHeight: 1.2 }}>
+                        {formatBuddhistDate(record.currentHolder.lastAppointment)}
+                    </Typography>
                 ) : (
                     <Typography sx={{ fontSize: '0.8rem', color: theme.palette.grey[400] }}>—</Typography>
                 )}
@@ -575,6 +588,13 @@ export default function InOutTable({
             headerBg: theme.palette.warning.main,
         },
         {
+            id: 'lastAppointment',
+            label: 'ดำรงตำแหน่งครั้งสุดท้าย',
+            minWidth: 140,
+            align: 'center' as const,
+            headerBg: theme.palette.warning.main,
+        },
+        {
             id: 'age',
             label: 'อายุ',
             minWidth: 60,
@@ -631,7 +651,7 @@ export default function InOutTable({
     return (
         <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
             <TableContainer sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ minWidth: 1500 }}>
+                <Table size="small" sx={{ minWidth: 1640 }}>
                     <TableHead>
                         <TableRow>
                             {columns.map((col, idx) => (

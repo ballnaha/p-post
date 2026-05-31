@@ -400,12 +400,30 @@ export async function POST(request: NextRequest) {
     const currentYear = new Date().getFullYear() + 543;
     const username = authCheck.session?.user?.username || 'system';
 
+    const noId = nullableInt(body.noId);
+    if (noId !== null) {
+      const existingNoId = await prisma.policePersonnel.findFirst({
+        where: {
+          year: currentYear,
+          isActive: true,
+          noId: noId,
+        },
+      });
+      if (existingNoId) {
+        const namePart = [existingNoId.rank, existingNoId.fullName].filter(Boolean).join(' ') || 'ตำแหน่งว่าง';
+        return NextResponse.json(
+          { success: false, error: `ลำดับตำแหน่ง ${noId} ถูกใช้งานแล้วโดย ${namePart}` },
+          { status: 400 }
+        );
+      }
+    }
+
     // สร้างข้อมูลใหม่
     const newPersonnel = await prisma.policePersonnel.create({
       data: {
         year: currentYear,
         isActive: true,
-        noId: nullableInt(body.noId),
+        noId: noId,
         address: nullableText(body.address),
         phoneNumber: nullableText(body.phoneNumber),
         posCodeId: body.posCodeId,

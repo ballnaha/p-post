@@ -3232,7 +3232,7 @@ export default function PersonnelBoardV2Page() {
             setPersonnelMap(prev => ({ ...prev, ...newPersonnel }));
         }
 
-        setColumns(prev => [newColumn, ...prev]);
+        setColumns(prev => sortColumnsForBoard([newColumn, ...prev]));
         setIsNewLaneDrawerOpen(false);
         setNewLaneTitle('');
         setSelectedVacantPosition(null);
@@ -3442,7 +3442,7 @@ export default function PersonnelBoardV2Page() {
             }));
 
             // Add column
-            setColumns(prev => [newColumn, ...prev]);
+            setColumns(prev => sortColumnsForBoard([newColumn, ...prev]));
 
             setIsNewLaneDrawerOpen(false);
             setHasUnsavedChanges(true); // เปลี่ยนเป็น true เพื่อให้ user กด save อีกที หรือ autosave ทำงาน
@@ -3662,7 +3662,7 @@ export default function PersonnelBoardV2Page() {
             };
 
             setPersonnelMap(prev => ({ ...prev, ...newPersonnel }));
-            setColumns(prev => [newColumn, ...prev]);
+            setColumns(prev => sortColumnsForBoard([newColumn, ...prev]));
             setIsNewLaneDrawerOpen(false);
             setHasUnsavedChanges(true);
             setSnackbar({ open: true, message: `สร้างเลน "วงสลับ" สำเร็จ`, severity: 'success' });
@@ -3769,7 +3769,7 @@ export default function PersonnelBoardV2Page() {
             };
 
             setPersonnelMap(prev => ({ ...prev, ...newPersonnel }));
-            setColumns(prev => [newColumn, ...prev]);
+            setColumns(prev => sortColumnsForBoard([newColumn, ...prev]));
             setIsNewLaneDrawerOpen(false);
             setHasUnsavedChanges(true);
             setSnackbar({ open: true, message: `สร้างเลน "ย้ายหน่วย" สำเร็จ`, severity: 'success' });

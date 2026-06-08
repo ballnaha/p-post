@@ -545,6 +545,7 @@ export default function HomePage() {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: {
         display: false,
@@ -794,11 +795,6 @@ export default function HomePage() {
           mb: 4,
           flexWrap: 'wrap',
           gap: 3,
-          animation: 'slideDown 0.6s ease-out',
-          '@keyframes slideDown': {
-            '0%': { opacity: 0, transform: 'translateY(-20px)' },
-            '100%': { opacity: 1, transform: 'translateY(0)' }
-          }
         }}>
           <Box>
             <Typography
@@ -844,11 +840,6 @@ export default function HomePage() {
             display: 'flex',
             gap: 2,
             flexWrap: 'wrap',
-            animation: 'slideLeft 0.6s ease-out 0.2s backwards',
-            '@keyframes slideLeft': {
-              '0%': { opacity: 0, transform: 'translateX(20px)' },
-              '100%': { opacity: 1, transform: 'translateX(0)' }
-            }
           }}>
             <FormControl
               size="small"
@@ -857,7 +848,7 @@ export default function HomePage() {
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   bgcolor: 'white',
-                  transition: 'all 0.3s ease',
+                  transition: 'box-shadow 0.2s ease',
                   '&:hover': {
                     boxShadow: '0 4px 12px rgba(29, 233, 182, 0.15)',
                   },
@@ -890,7 +881,7 @@ export default function HomePage() {
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   bgcolor: 'white',
-                  transition: 'all 0.3s ease',
+                  transition: 'box-shadow 0.2s ease',
                   '&:hover': {
                     boxShadow: '0 4px 12px rgba(66, 165, 245, 0.15)',
                   },
@@ -927,11 +918,6 @@ export default function HomePage() {
           gap: 3,
           mb: 4,
           position: 'relative',
-          animation: 'fadeInUp 0.8s ease-out 0.3s backwards',
-          '@keyframes fadeInUp': {
-            '0%': { opacity: 0, transform: 'translateY(30px)' },
-            '100%': { opacity: 1, transform: 'translateY(0)' }
-          }
         }}>
           {/* Vacant Position Summary Card */}
           <Card
@@ -943,7 +929,7 @@ export default function HomePage() {
               color: 'common.white',
               boxShadow: '0 18px 35px rgba(29, 233, 182, 0.32)',
               overflow: 'hidden',
-              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-8px)',
                 boxShadow: '0 24px 48px rgba(29, 233, 182, 0.4)',
@@ -1071,8 +1057,7 @@ export default function HomePage() {
               color: 'common.white',
               boxShadow: '0 18px 36px rgba(66, 165, 245, 0.32)',
               overflow: 'hidden',
-              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-              animation: 'fadeInUp 0.8s ease-out 0.4s backwards',
+              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-8px)',
                 boxShadow: '0 24px 48px rgba(66, 165, 245, 0.4)',
@@ -1183,8 +1168,7 @@ export default function HomePage() {
               color: 'common.white',
               boxShadow: '0 18px 36px rgba(255, 152, 0, 0.32)',
               overflow: 'hidden',
-              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-              animation: 'fadeInUp 0.8s ease-out 0.5s backwards',
+              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-8px)',
                 boxShadow: '0 24px 48px rgba(255, 152, 0, 0.4)',
@@ -1295,8 +1279,7 @@ export default function HomePage() {
               color: 'common.white',
               boxShadow: '0 18px 36px rgba(124, 93, 250, 0.32)',
               overflow: 'hidden',
-              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-              animation: 'fadeInUp 0.8s ease-out 0.6s backwards',
+              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
               '&:hover': {
                 transform: 'translateY(-8px)',
                 boxShadow: '0 24px 48px rgba(124, 93, 250, 0.4)',
@@ -1414,8 +1397,7 @@ export default function HomePage() {
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
           border: '1px solid',
           borderColor: 'divider',
-          transition: 'all 0.3s ease',
-          animation: 'fadeInUp 0.8s ease-out 0.6s backwards',
+          transition: 'box-shadow 0.2s ease',
           '&:hover': {
             boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
           }
@@ -1555,8 +1537,7 @@ export default function HomePage() {
             boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
             border: '1px solid',
             borderColor: 'divider',
-            transition: 'all 0.3s ease',
-            animation: 'fadeInUp 0.8s ease-out 0.7s backwards',
+            transition: 'box-shadow 0.2s ease',
             position: 'relative',
             '&:hover': {
               boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
@@ -1690,7 +1671,7 @@ export default function HomePage() {
                         hover
                         sx={{
                           '&:hover': { bgcolor: 'rgba(124, 93, 250, 0.08)' },
-                          transition: 'all 0.2s',
+                          transition: 'background-color 0.2s ease',
                           borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
                         }}
                       >
@@ -1779,7 +1760,7 @@ export default function HomePage() {
                                 width: `${position.assignmentRate}%`,
                                 background: 'linear-gradient(90deg, #1DE9B6 0%, #00BFA5 100%)',
                                 borderRadius: 2,
-                                transition: 'width 0.3s ease'
+                                transition: 'none'
                               }} />
                             </Box>
                             <Typography variant="body2" fontWeight={700} fontSize="0.8rem" sx={{ minWidth: 42, color: '#00BFA5' }}>
@@ -1804,7 +1785,6 @@ export default function HomePage() {
           gap: 3,
           mb: 4,
           position: 'relative',
-          animation: 'fadeInUp 0.8s ease-out 0.8s backwards',
         }}>
           {/* Matching Progress Status */}
           {stats.transactionStatusSummary && stats.transactionStatusSummary.length > 0 && (
@@ -1814,7 +1794,7 @@ export default function HomePage() {
               border: '1px solid',
               borderColor: 'divider',
               overflow: 'hidden',
-              transition: 'all 0.3s ease',
+              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
@@ -1873,23 +1853,14 @@ export default function HomePage() {
               <CardContent sx={{ p: 1.25, bgcolor: 'white', flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
                   {stats.transactionStatusSummary.map((status, index) => (
-                    <Box
-                      key={`${status.label}-${index}`}
-                      sx={{
-                        animation: `slideInLeft 0.5s ease-out ${index * 0.1}s backwards`,
-                        '@keyframes slideInLeft': {
-                          '0%': { opacity: 0, transform: 'translateX(-20px)' },
-                          '100%': { opacity: 1, transform: 'translateX(0)' }
-                        }
-                      }}
-                    >
+                    <Box key={`${status.label}-${index}`}>
                       <Box sx={{
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         p: 0.5,
                         borderRadius: 1.5,
-                        transition: 'all 0.3s ease',
+                        transition: 'background-color 0.2s ease, transform 0.2s ease',
                         cursor: status.transactions && status.transactions.length > 0 ? 'pointer' : 'default',
                         '&:hover': {
                           bgcolor: 'rgba(29, 233, 182, 0.05)',
@@ -1973,7 +1944,7 @@ export default function HomePage() {
               border: '1px solid',
               borderColor: 'divider',
               overflow: 'hidden',
-              transition: 'all 0.3s ease',
+              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
               height: '100%',
               display: 'flex',
               flexDirection: 'column',

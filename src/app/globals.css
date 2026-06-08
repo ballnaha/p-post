@@ -116,17 +116,25 @@ body {
 }
 
 
-/* Re-enable specific transitions that should work */
+/* Keep lightweight transitions for interactive overlays and controls only. */
 .MuiDrawer-root,
 .MuiBackdrop-root,
 .MuiDialog-root,
 .MuiMenu-root,
-.MuiPopover-root,
-.MuiCard-root,
-.MuiPaper-root,
+.MuiPopover-root {
+  transition-property: opacity, transform;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+
 button,
 a {
-  transition: all 0.2s ease !important;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
 /* Ensure smooth scrolling on mobile */
